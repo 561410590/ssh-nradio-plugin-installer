@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.0.35"
+SCRIPT_VERSION="V2.0.40"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-06"
+SCRIPT_RELEASE_DATE="2026-05-08"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -2085,9 +2085,13 @@ cleanup_easytier_route_runtime_state() {
     lan_if="$3"
     tun_if="$4"
 
+    [ -n "$lan_if" ] || lan_if='br-lan'
+    [ -n "$tun_if" ] || tun_if='tun0'
     command -v ip >/dev/null 2>&1 || return 0
     [ -n "$remote_subnet" ] && ip route del "$remote_subnet" 2>/dev/null || true
-    [ -n "$remote_subnet" ] && ip rule del to "$remote_subnet" lookup main priority 110 2>/dev/null || true
+    [ -n "$remote_subnet" ] && ip rule del to "$remote_subnet" lookup main priority 60 2>/dev/null || true
+    [ -n "$remote_subnet" ] && ip rule del iif "$lan_if" to "$remote_subnet" lookup main priority 70 2>/dev/null || true
+    [ -n "$local_subnet" ] && [ -n "$remote_subnet" ] && ip rule del from "$local_subnet" to "$remote_subnet" lookup main priority 196 2>/dev/null || true
     [ -n "$local_subnet" ] && [ -n "$remote_subnet" ] && [ -n "$tun_if" ] && command -v iptables >/dev/null 2>&1 && {
         while iptables -t nat -C POSTROUTING -s "$local_subnet" -d "$remote_subnet" -o "$tun_if" -j MASQUERADE >/dev/null 2>&1; do
             iptables -t nat -D POSTROUTING -s "$local_subnet" -d "$remote_subnet" -o "$tun_if" -j MASQUERADE >/dev/null 2>&1 || break
@@ -8626,8 +8630,8 @@ install_openclash() {
 }
 
 write_adguard_wrapper_files() {
-    mkdir -p /usr/lib/lua/luci/controller /usr/lib/lua/luci/view/AdGuardHome
-    cat > /usr/lib/lua/luci/controller/AdGuardHome.lua <<'EOF'
+    mkdir -p /usr/lib/lua/luci/controller /usr/lib/lua/luci/view/AdGuardHome /usr/lib/lua/luci/model/cbi/AdGuardHome
+    cat > /usr/lib/lua/luci/controller/AdGuardHome.lua <<'EOF_ADG_CONTROLLER'
 module("luci.controller.AdGuardHome",package.seeall)
 local fs=require"nixio.fs"
 local http=require"luci.http"
@@ -8640,12 +8644,167 @@ entry({"admin","services","AdGuardHome","base"},cbi("AdGuardHome/base"),_("Base 
 entry({"admin","services","AdGuardHome","log"},form("AdGuardHome/log"),_("Log"),2).leaf = true
 entry({"admin","services","AdGuardHome","manual"},cbi("AdGuardHome/manual"),_("Manual Config"),3).leaf = true
 entry({"admin", "services", "AdGuardHome", "status"},call("act_status")).leaf=true
+entry({"admin", "services", "AdGuardHome", "dashboard_stats"},call("act_dashboard_stats")).leaf=true
+entry({"admin", "services", "AdGuardHome", "dashboard_runtime"},call("act_dashboard_runtime")).leaf=true
 entry({"admin", "services", "AdGuardHome", "check"}, call("check_update"))
 entry({"admin", "services", "AdGuardHome", "doupdate"}, call("do_update"))
 entry({"admin", "services", "AdGuardHome", "getlog"}, call("get_log"))
 entry({"admin", "services", "AdGuardHome", "dodellog"}, call("do_dellog"))
 entry({"admin", "services", "AdGuardHome", "reloadconfig"}, call("reload_config"))
 entry({"admin", "services", "AdGuardHome", "gettemplateconfig"}, call("get_template_config"))
+end
+
+local function adg_is_leap_year(year)
+return (year % 4 == 0 and year % 100 ~= 0) or (year % 400 == 0)
+end
+
+local function adg_days_before_month(year, month)
+local days = {0,31,59,90,120,151,181,212,243,273,304,334}
+local total = days[month] or 0
+if month > 2 and adg_is_leap_year(year) then
+total = total + 1
+end
+return total
+end
+
+local function adg_iso8601_to_epoch(iso8601)
+local year, month, day, hour, min, sec = iso8601:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
+if not year then
+return nil
+end
+year = tonumber(year)
+month = tonumber(month)
+day = tonumber(day)
+hour = tonumber(hour)
+min = tonumber(min)
+sec = tonumber(sec)
+if not year or not month or not day or not hour or not min or not sec then
+return nil
+end
+local leap_days = math.floor((year - 1) / 4) - math.floor((year - 1) / 100) + math.floor((year - 1) / 400)
+local base_leap_days = math.floor(1969 / 4) - math.floor(1969 / 100) + math.floor(1969 / 400)
+local days = (year - 1970) * 365 + (leap_days - base_leap_days)
+days = days + adg_days_before_month(year, month) + (day - 1)
+return days * 86400 + hour * 3600 + min * 60 + sec
+end
+
+local function adg_json_escape(value)
+value = tostring(value or "")
+value = value:gsub("\\", "\\\\")
+value = value:gsub('"', '\\"')
+value = value:gsub("\r", "\\r")
+value = value:gsub("\n", "\\n")
+value = value:gsub("\t", "\\t")
+return value
+end
+
+local function adg_shell_quote(value)
+value = tostring(value or "")
+return "'" .. value:gsub("'", "'\\''") .. "'"
+end
+
+local function adg_read_primary_user(configpath)
+local f = io.open(configpath, "r")
+local in_users = false
+if not f then
+return ""
+end
+for line in f:lines() do
+if line:match("^users:%s*$") then
+in_users = true
+elseif in_users and line:match("^[^%s]") then
+break
+elseif in_users then
+local name = line:match("^%s*%-%s*name:%s*(.-)%s*$") or line:match("^%s*name:%s*(.-)%s*$")
+if name and name ~= "" then
+f:close()
+return name
+end
+end
+end
+f:close()
+return ""
+end
+
+local function adg_read_local_dns_runtime(configpath)
+local hosts = {}
+local port = ""
+local f = io.open(configpath, "r")
+local in_dns = false
+local in_bind_hosts = false
+if not f then
+return hosts, port
+end
+for line in f:lines() do
+if line:match("^dns:%s*$") then
+in_dns = true
+in_bind_hosts = false
+elseif in_dns and line:match("^[^%s]") then
+break
+elseif in_dns then
+if line:match("^%s*bind_hosts:%s*$") then
+in_bind_hosts = true
+else
+local found_port = line:match("^%s*port:%s*(%S+)")
+local host = line:match("^%s*%-%s*(.-)%s*$")
+if found_port then
+port = found_port
+in_bind_hosts = false
+elseif in_bind_hosts and host and host ~= "" then
+table.insert(hosts, host)
+elseif line:match("^%s*[A-Za-z0-9_]+:%s*") then
+in_bind_hosts = false
+end
+end
+end
+end
+f:close()
+return hosts, port
+end
+
+local function adg_fetch_dashboard_json(path)
+local configpath = uci:get("AdGuardHome", "AdGuardHome", "configpath") or "/etc/AdGuardHome.yaml"
+local user = uci:get("AdGuardHome", "AdGuardHome", "dashboard_user") or ""
+local pass = uci:get("AdGuardHome", "AdGuardHome", "dashboard_password") or ""
+local cookiefile = "/tmp/adg_dashboard_cookie.txt"
+local login_body
+local login_cmd
+local login_out
+local data
+
+if user == "" then
+user = adg_read_primary_user(configpath)
+end
+if user == "" then
+user = "admin"
+end
+if pass == "" then
+return nil, "dashboard auth password missing"
+end
+
+login_body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
+login_cmd = "rm -f " .. cookiefile ..
+	" ; wget -q --save-cookies=" .. cookiefile ..
+	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
+	" --post-data=" .. adg_shell_quote(login_body) ..
+	" -O - http://127.0.0.1:3000/control/login 2>/dev/null"
+login_out = sys.exec(login_cmd)
+if not login_out:find("OK", 1, true) then
+sys.exec("rm -f " .. cookiefile)
+return nil, "dashboard login failed"
+end
+
+data = sys.exec(
+	"wget -q --load-cookies=" .. cookiefile ..
+	" -O - http://127.0.0.1:3000" .. path .. " 2>/dev/null"
+)
+sys.exec("rm -f " .. cookiefile)
+
+if data == nil or data == "" then
+return nil, "dashboard fetch failed"
+end
+
+return data
 end
 function get_template_config()
 local b
@@ -8692,10 +8851,49 @@ end
 function act_status()
 local e={}
 local binpath=uci:get("AdGuardHome","AdGuardHome","binpath")
+local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
+local httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
+local redirect=uci:get("AdGuardHome","AdGuardHome","redirect") or "none"
+local version=uci:get("AdGuardHome","AdGuardHome","version") or ""
+local coreversion=uci:get("AdGuardHome","AdGuardHome","coreversion") or ""
+local listen_hosts, dnsport = adg_read_local_dns_runtime(configpath)
+if dnsport == "" then
+dnsport=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..configpath.." 2>/dev/null")
+end
     e.running=sys.call("pgrep "..binpath.." >/dev/null")==0
 e.redirect=(fs.readfile("/var/run/AdGredir")=="1")
+e.redirect_mode=redirect
+e.httpport=httpport
+e.dnsport=dnsport
+e.listen_hosts=listen_hosts
+e.listen_text=table.concat(listen_hosts, " / ")
+e.version=version
+e.coreversion=coreversion
+e.config_ok=fs.access(configpath) and true or false
+e.bin_ok=fs.access(binpath) and true or false
+e.dashboard_auth_ready=((uci:get("AdGuardHome","AdGuardHome","dashboard_password") or "") ~= "")
 http.prepare_content("application/json")
 http.write_json(e)
+end
+
+function act_dashboard_stats()
+local data, err = adg_fetch_dashboard_json("/control/stats")
+http.prepare_content("application/json")
+if not data then
+http.write_json({ ok = false, error = err })
+return
+end
+http.write(data)
+end
+
+function act_dashboard_runtime()
+local data, err = adg_fetch_dashboard_json("/control/status")
+http.prepare_content("application/json")
+if not data then
+http.write_json({ ok = false, error = err })
+return
+end
+http.write(data)
 end
 function do_update()
 fs.writefile("/var/run/lucilogpos","0")
@@ -8744,7 +8942,7 @@ e.coreversion=uci:get("AdGuardHome","AdGuardHome","coreversion") or ""
 http.prepare_content("application/json")
 http.write_json(e)
 end
-EOF
+EOF_ADG_CONTROLLER
 
     cat > /usr/lib/lua/luci/view/AdGuardHome/oem_wrapper.htm <<'EOF'
 <%
@@ -8820,6 +9018,905 @@ function adgAfterLoad() {
 </script>
 <%+footer%>
 EOF
+
+    cat > /usr/lib/lua/luci/view/AdGuardHome/AdGuardHome_status.htm <<'EOF_ADG_STATUS'
+<script type="text/javascript">//<![CDATA[
+function adgFormatNumber(value) {
+	var text = String(value || 0);
+	return text.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function adgStatusText(running) {
+	return running ? "运行中" : "未运行";
+}
+
+function adgProtectText(enabled) {
+	return enabled ? "已启用" : "已暂停";
+}
+
+function adgRedirectText(mode, redirected) {
+	if (redirected) {
+		switch (mode || "") {
+		case "dnsmasq-upstream":
+			return "dnsmasq 上游";
+		case "redirect":
+			return "53 重定向";
+		case "exchange":
+			return "替换 53 端口";
+		default:
+			return "已接管";
+		}
+	}
+	if (mode && mode !== "none") {
+		return mode;
+	}
+	return "未启用";
+}
+
+function adgListenText(addresses) {
+	if (!addresses || !addresses.length) {
+		return "未读取";
+	}
+	if (addresses.length <= 2) {
+		return addresses.join(" / ");
+	}
+	return addresses[0] + " / " + addresses[1] + " +" + (addresses.length - 2);
+}
+
+function adgHasRuntimePayload(runtime) {
+	return !!(runtime && runtime.ok !== false && (
+		typeof runtime.running !== "undefined" ||
+		typeof runtime.protection_enabled !== "undefined" ||
+		typeof runtime.http_port !== "undefined" ||
+		typeof runtime.dns_port !== "undefined" ||
+		(runtime.dns_addresses && runtime.dns_addresses.length)
+	));
+}
+
+function adgSetRefreshState(loading) {
+	var button = document.getElementById("adg-stats-refresh");
+	if (!button) {
+		return;
+	}
+	button.disabled = !!loading;
+	button.value = loading ? "刷新中..." : "刷新统计数据";
+}
+
+function adgOpenOriginalDashboard() {
+	window.open("http://" + window.location.hostname + ":3000/", "_blank");
+}
+
+function adgApplyRuntime(runtime, status) {
+	var runNode = document.getElementById("adg-runtime-running");
+	var protectNode = document.getElementById("adg-runtime-protect");
+	var redirectNode = document.getElementById("adg-runtime-redirect");
+	var listenNode = document.getElementById("adg-runtime-listen");
+	var portNode = document.getElementById("adg-runtime-port");
+	var coreNode = document.getElementById("adg-runtime-core");
+	var shellNode = document.getElementById("adg-dashboard-shell");
+	var runtimeOk = adgHasRuntimePayload(runtime);
+	var running = runtimeOk ? !!runtime.running : !!(status && status.running);
+	var tone = running ? "ok" : "bad";
+	var httpPort = (runtimeOk && runtime.http_port) || (status && status.httpport) || "3000";
+	var dnsPort = (runtimeOk && runtime.dns_port) || (status && status.dnsport) || "?";
+	var redirectText = adgRedirectText(status && status.redirect_mode, status && status.redirect);
+	var coreText = (status && status.version) || (status && status.coreversion) || (runtime && runtime.version) || "-";
+	var listenText = (runtimeOk && runtime.dns_addresses && runtime.dns_addresses.length)
+		? adgListenText(runtime.dns_addresses)
+		: ((status && status.listen_hosts && status.listen_hosts.length)
+			? adgListenText(status.listen_hosts)
+			: ((status && status.listen_text) || "未读取"));
+	var protectText = runtimeOk
+		? adgProtectText(runtime && runtime.protection_enabled)
+		: ((status && status.dashboard_auth_ready) ? "未读取" : "需填密码");
+
+	if (shellNode) {
+		shellNode.className = "adg-dashboard-shell adg-tone-" + tone;
+	}
+	if (runNode) {
+		runNode.textContent = adgStatusText(running);
+	}
+	if (protectNode) {
+		protectNode.textContent = protectText;
+	}
+	if (redirectNode) {
+		redirectNode.textContent = redirectText;
+	}
+	if (listenNode) {
+		listenNode.textContent = listenText;
+	}
+	if (portNode) {
+		portNode.textContent = ":" + httpPort + " / " + dnsPort;
+	}
+	if (coreNode) {
+		coreNode.textContent = coreText;
+	}
+}
+
+function adgApplyDashboardStats(data) {
+	var totalNode = document.getElementById("adg-stats-total");
+	var blockedNode = document.getElementById("adg-stats-blocked");
+	var ratioNode = document.getElementById("adg-stats-ratio");
+	var metaNode = document.getElementById("adg-stats-meta");
+
+	if (data && data.ok === false) {
+		if (totalNode) {
+			totalNode.textContent = "—";
+		}
+		if (blockedNode) {
+			blockedNode.textContent = "—";
+		}
+		if (ratioNode) {
+			ratioNode.textContent = "—";
+		}
+		if (metaNode) {
+			metaNode.textContent = data.error === "dashboard auth password missing"
+				? "请先在设置页填写 Dashboard API password"
+				: "统计读取失败";
+		}
+		return;
+	}
+
+	var total = Number(data && data.num_dns_queries || 0);
+	var blocked = Number(data && data.num_blocked_filtering || 0);
+	var ratio = total > 0 ? (blocked / total * 100) : 0;
+
+	if (totalNode) {
+		totalNode.textContent = adgFormatNumber(total);
+	}
+	if (blockedNode) {
+		blockedNode.textContent = adgFormatNumber(blocked);
+	}
+	if (ratioNode) {
+		ratioNode.textContent = ratio > 0 ? ratio.toFixed(2) + "%" : "0%";
+	}
+	if (metaNode) {
+		metaNode.textContent = "最近 24 小时";
+	}
+}
+
+function adgApplyPageSkin() {
+	var map = document.querySelector(".cbi-map");
+	var sections = document.querySelectorAll(".cbi-section");
+	var values = document.querySelectorAll(".cbi-value");
+	var buttons = document.querySelectorAll("input[type='button'], input[type='submit'], .cbi-button");
+	var i;
+
+	if (map && map.className.indexOf(" adg-themed-map") === -1) {
+		map.className += " adg-themed-map";
+	}
+
+	for (i = 0; i < sections.length; i++) {
+		if (sections[i].id === "AdGuardHome_status_fieldset") {
+			continue;
+		}
+		if (sections[i].className.indexOf(" adg-themed-section") === -1) {
+			sections[i].className += " adg-themed-section";
+		}
+	}
+
+	for (i = 0; i < values.length; i++) {
+		if (values[i].className.indexOf(" adg-themed-value") === -1) {
+			values[i].className += " adg-themed-value";
+		}
+	}
+
+	for (i = 0; i < buttons.length; i++) {
+		if (buttons[i].value && buttons[i].value.indexOf("AdGuardHome Web:") === 0 && buttons[i].className.indexOf(" adg-origin-button") === -1) {
+			buttons[i].className += " adg-origin-button";
+		}
+	}
+}
+
+function adgRefreshAll() {
+	adgSetRefreshState(true);
+	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtime]])%>', { _: Date.now() }, function(x, runtime) {
+		XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', { _: Date.now() }, function(y, status) {
+			adgApplyRuntime(runtime || {}, status || {});
+			adgApplyPageSkin();
+		});
+	});
+	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', { _: Date.now() }, function(x, data) {
+		adgSetRefreshState(false);
+		adgApplyDashboardStats(data || {});
+		adgApplyPageSkin();
+	});
+}
+
+XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtime]])%>', null, function(x, runtime) {
+	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', { _: Date.now() }, function(y, status) {
+		adgApplyRuntime(runtime || {}, status || {});
+		adgApplyPageSkin();
+	});
+});
+
+XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', null, function(x, data) {
+	adgApplyDashboardStats(data || {});
+	adgApplyPageSkin();
+});
+
+window.setTimeout(adgApplyPageSkin, 60);
+window.setTimeout(adgApplyPageSkin, 260);
+window.setTimeout(adgApplyPageSkin, 860);
+window.setTimeout(adgRefreshAll, 120);
+//]]>
+</script>
+<style>
+	#AdGuardHome_status_fieldset.cbi-section {
+		margin: 0 0 18px;
+		padding: 0;
+		border: 1px solid #35394b;
+		border-radius: 12px;
+		background: linear-gradient(180deg, rgba(35, 39, 53, 0.98), rgba(28, 31, 42, 0.98));
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 18px 42px rgba(0,0,0,0.22);
+		overflow: hidden;
+	}
+
+	.adg-dashboard-shell {
+		--adg-accent: #23c8e4;
+		padding: 20px 22px 18px;
+	}
+
+	.adg-tone-ok {
+		--adg-accent: #22c55e;
+	}
+
+	.adg-tone-bad {
+		--adg-accent: #ef4444;
+	}
+
+	.adg-runtime-bar {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+		margin: 0 0 14px;
+	}
+
+	.adg-action-group {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		justify-content: flex-end;
+	}
+
+	.adg-runtime-wrap {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px 12px;
+	}
+
+	.adg-runtime-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 12px;
+		border-radius: 999px;
+		background: rgba(255,255,255,0.05);
+		color: #eef4ff;
+		font-size: 12px;
+		font-weight: 700;
+	}
+
+	.adg-runtime-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--adg-accent);
+		box-shadow: 0 0 0 5px rgba(255,255,255,0.08);
+	}
+
+	.adg-runtime-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 7px 12px;
+		border-radius: 999px;
+		background: rgba(255,255,255,0.03);
+		color: #d4e2fa;
+		font-size: 12px;
+	}
+
+	.adg-runtime-key {
+		color: #8fa4c7;
+	}
+
+	.adg-runtime-value {
+		color: #f7fbff;
+		font-weight: 700;
+	}
+
+	.adg-dashboard-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+		margin: 0 0 12px;
+	}
+
+	.adg-dashboard-meta {
+		color: #9cb0ce;
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
+
+	.adg-dashboard-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 14px;
+		margin: 0;
+	}
+
+	.adg-dashboard-card {
+		position: relative;
+		min-height: 168px;
+		padding: 22px 22px 18px;
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 12px;
+		background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)), rgba(15, 18, 27, 0.7);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+		overflow: hidden;
+	}
+
+	.adg-dashboard-card::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 2px;
+		opacity: 0.9;
+	}
+
+	.adg-card-queries::after {
+		background: #4b83da;
+	}
+
+	.adg-card-blocked::after {
+		background: #e33434;
+	}
+
+	.adg-dashboard-label {
+		color: #7f96bb;
+		font-size: 14px;
+		font-weight: 700;
+	}
+
+	.adg-dashboard-number {
+		margin-top: 22px;
+		font-size: 54px;
+		line-height: 1;
+		font-weight: 300;
+		letter-spacing: -0.03em;
+	}
+
+	.adg-card-queries .adg-dashboard-number {
+		color: #70a3ff;
+	}
+
+	.adg-card-blocked .adg-dashboard-number {
+		color: #ff6e6e;
+	}
+
+	.adg-dashboard-sub {
+		margin-top: 10px;
+		color: #89a0c4;
+		font-size: 13px;
+	}
+
+	.adg-dashboard-ratio {
+		position: absolute;
+		top: 18px;
+		right: 18px;
+		color: #ff8d8d;
+		font-size: 20px;
+		font-weight: 500;
+	}
+
+	.cbi-map.adg-themed-map {
+		margin-top: 0;
+		margin-bottom: 0;
+		border: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.cbi-map.adg-themed-map > h2,
+	.cbi-map.adg-themed-map > .cbi-map-descr {
+		display: none;
+	}
+
+	.cbi-map .adg-themed-section {
+		margin: 0 0 18px;
+		padding: 22px 24px;
+		border: 1px solid #35394b;
+		border-radius: 12px;
+		background: linear-gradient(180deg, rgba(37, 40, 53, 0.96), rgba(30, 33, 44, 0.96));
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 16px 34px rgba(0,0,0,0.18);
+	}
+
+	.cbi-map .adg-themed-section legend,
+	.cbi-map .adg-themed-section h3 {
+		padding-left: 0;
+		color: #eef4ff;
+		font-size: 18px;
+		font-weight: 800;
+	}
+
+	.cbi-map .adg-themed-value {
+		display: grid;
+		grid-template-columns: 190px minmax(0, 1fr);
+		gap: 18px;
+		align-items: start;
+		padding: 14px 0;
+		border-top: 1px solid rgba(255,255,255,0.06);
+		text-align: left;
+	}
+
+	.cbi-map .adg-themed-value:first-child {
+		border-top: 0;
+		padding-top: 4px;
+	}
+
+	.cbi-map .cbi-value-title {
+		display: block;
+		padding-top: 10px;
+		color: #d5e2f7;
+		font-size: 13px;
+		font-weight: 700;
+		text-align: left;
+	}
+
+	.cbi-map .cbi-value-field {
+		min-width: 0;
+		text-align: left;
+	}
+
+	.cbi-map .cbi-value-field .checkbox {
+		display: flex;
+		align-items: center;
+		min-height: 44px;
+	}
+
+	.cbi-map .cbi-value-description {
+		margin-top: 8px;
+		color: #90a0ba;
+		font-size: 12px;
+		line-height: 1.6;
+	}
+
+	.cbi-map input[type="text"],
+	.cbi-map input[type="password"],
+	.cbi-map textarea,
+	.cbi-map select {
+		width: 100%;
+		min-height: 44px;
+		padding: 10px 14px;
+		border: 1px solid #46506a;
+		border-radius: 8px;
+		background: #202533;
+		color: #eef4ff;
+		box-sizing: border-box;
+	}
+
+	.cbi-map textarea {
+		min-height: 132px;
+	}
+
+	.cbi-map input[type="text"]:focus,
+	.cbi-map input[type="password"]:focus,
+	.cbi-map textarea:focus,
+	.cbi-map select:focus {
+		border-color: #2fd3ee;
+		box-shadow: 0 0 0 3px rgba(47, 211, 238, 0.14);
+		outline: 0;
+	}
+
+	.cbi-map input[type="submit"],
+	.cbi-map input[type="button"],
+	.cbi-map .cbi-button {
+		min-height: 42px;
+		padding: 0 18px;
+		border: 1px solid #2fd3ee;
+		border-radius: 8px;
+		background: linear-gradient(180deg, #16b9db, #1098bb);
+		color: #ecfbff;
+		font-size: 13px;
+		font-weight: 800;
+		box-shadow: 0 12px 24px rgba(16, 152, 187, 0.18);
+		cursor: pointer;
+	}
+
+	.cbi-map .adg-origin-button {
+		min-width: 240px;
+		background: linear-gradient(180deg, rgba(47, 211, 238, 0.18), rgba(47, 211, 238, 0.12));
+		color: #8ef3ff;
+		box-shadow: none;
+	}
+
+	.cbi-map input[type="submit"]:hover,
+	.cbi-map input[type="button"]:hover,
+	.cbi-map .cbi-button:hover {
+		filter: brightness(1.05);
+	}
+
+	.cbi-map input[type="checkbox"] {
+		transform: scale(1.05);
+	}
+
+	.cbi-map .cbi-optionals {
+		margin-top: 18px;
+		padding-top: 14px;
+		border-top: 1px solid rgba(255,255,255,0.06);
+	}
+
+	.cbi-map .cbi-button-reset,
+	.cbi-map .cbi-button-remove,
+	.cbi-map .cbi-input-remove {
+		border-color: #6a738c;
+		background: linear-gradient(180deg, #3f4558, #343949);
+		color: #e7eefc;
+		box-shadow: none;
+	}
+
+	.cbi-map .cbi-section-node {
+		overflow: visible;
+	}
+
+	@media (max-width: 900px) {
+		.adg-dashboard-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 720px) {
+		.adg-runtime-bar,
+		.adg-dashboard-head {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.cbi-map .adg-themed-value {
+			grid-template-columns: 1fr;
+			gap: 10px;
+		}
+
+		.cbi-map .cbi-value-title {
+			padding-top: 0;
+		}
+	}
+</style>
+<fieldset id="AdGuardHome_status_fieldset" class="cbi-section">
+	<div id="adg-dashboard-shell" class="adg-dashboard-shell">
+		<div class="adg-runtime-bar">
+			<div class="adg-runtime-wrap">
+				<div class="adg-runtime-pill"><span class="adg-runtime-dot"></span><span id="adg-runtime-running">读取中</span></div>
+				<div class="adg-runtime-item"><span class="adg-runtime-key">保护</span><span id="adg-runtime-protect" class="adg-runtime-value">读取中</span></div>
+				<div class="adg-runtime-item"><span class="adg-runtime-key">重定向</span><span id="adg-runtime-redirect" class="adg-runtime-value">读取中</span></div>
+				<div class="adg-runtime-item"><span class="adg-runtime-key">监听</span><span id="adg-runtime-listen" class="adg-runtime-value">读取中</span></div>
+				<div class="adg-runtime-item"><span class="adg-runtime-key">端口</span><span id="adg-runtime-port" class="adg-runtime-value">读取中</span></div>
+				<div class="adg-runtime-item"><span class="adg-runtime-key">核心</span><span id="adg-runtime-core" class="adg-runtime-value">读取中</span></div>
+			</div>
+			<div class="adg-action-group">
+				<input class="cbi-button" type="button" value="打开 3000 原版完整版" onclick="adgOpenOriginalDashboard()" />
+				<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计数据" onclick="adgRefreshAll()" />
+			</div>
+		</div>
+		<div class="adg-dashboard-head">
+			<div id="adg-stats-meta" class="adg-dashboard-meta">最近 24 小时</div>
+		</div>
+		<div class="adg-dashboard-grid">
+			<div class="adg-dashboard-card adg-card-queries">
+				<div class="adg-dashboard-label">DNS 查询</div>
+				<div id="adg-stats-total" class="adg-dashboard-number">0</div>
+				<div class="adg-dashboard-sub">与 3000 原版仪表盘同步</div>
+			</div>
+			<div class="adg-dashboard-card adg-card-blocked">
+				<div id="adg-stats-ratio" class="adg-dashboard-ratio">0%</div>
+				<div class="adg-dashboard-label">已被过滤器拦截</div>
+				<div id="adg-stats-blocked" class="adg-dashboard-number">0</div>
+				<div class="adg-dashboard-sub">直接读取 3000 真统计接口</div>
+			</div>
+		</div>
+	</div>
+</fieldset>
+EOF_ADG_STATUS
+
+    cat > /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua <<'EOF_ADG_BASE'
+require("luci.sys")
+require("luci.util")
+require("io")
+local m,s,o,o1
+local fs=require"nixio.fs"
+local uci=require"luci.model.uci".cursor()
+local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
+local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
+httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
+m = Map("AdGuardHome", "AdGuard Home")
+m.description = translate("Free and open source, powerful network-wide ads & trackers blocking DNS server.")
+m:section(SimpleSection).template  = "AdGuardHome/AdGuardHome_status"
+
+s = m:section(TypedSection, "AdGuardHome")
+s.anonymous=true
+s.addremove=false
+---- enable
+o = s:option(Flag, "enabled", translate("Enable"))
+o.default = 0
+o.optional = false
+---- httpport
+o =s:option(Value,"httpport",translate("Browser management port"))
+o.placeholder=3000
+o.default=3000
+o.datatype="port"
+o.optional = false
+o.description = translate("<input type=\"button\" style=\"width:210px;border-color:Teal; text-align:center;font-weight:bold;color:Green;\" value=\"AdGuardHome Web:"..httpport.."\" onclick=\"window.open('http://'+window.location.hostname+':"..httpport.."/')\"/>")
+---- dashboard user
+o = s:option(Value, "dashboard_user", translate("Dashboard API user"), translate("Fill the same username used by the AdGuardHome 3000 original dashboard login"))
+o.default = "admin"
+o.datatype = "string"
+o.optional = false
+o.rmempty = false
+---- dashboard password
+o = s:option(Value, "dashboard_password", translate("Dashboard API password"), translate("Fill the same password used by the AdGuardHome 3000 original dashboard login"))
+o.password = true
+o.datatype = "string"
+o.optional = false
+o.rmempty = false
+---- update warning not safe
+local binmtime=uci:get("AdGuardHome","AdGuardHome","binmtime") or "0"
+local e=""
+if not fs.access(configpath) then
+	e=e.." "..translate("no config")
+end
+if not fs.access(binpath) then
+	e=e.." "..translate("no core")
+else
+	local version
+	local testtime=fs.stat(binpath,"mtime")
+	if testtime~=tonumber(binmtime) then
+		local tmp=luci.sys.exec("touch /var/run/AdGfakeconfig;"..binpath.." -c /var/run/AdGfakeconfig --check-config 2>&1| grep -m 1 -E 'v[0-9.]+' -o ;rm /var/run/AdGfakeconfig")
+		version=string.sub(tmp, 1, -2)
+		uci:set("AdGuardHome","AdGuardHome","version",version)
+		uci:set("AdGuardHome","AdGuardHome","binmtime",testtime)
+		uci:save("AdGuardHome")
+		uci:commit("AdGuardHome")
+	else
+		version=uci:get("AdGuardHome","AdGuardHome","version")
+	end
+	e=version..e
+end
+o=s:option(Button,"restart",translate("Update"))
+o.inputtitle=translate("Update core version")
+o.template = "AdGuardHome/AdGuardHome_check"
+o.showfastconfig=(not fs.access(configpath))
+o.description=string.format(translate("core version:").."<strong><font id=\"updateversion\" color=\"green\">%s </font></strong>",e)
+---- port warning not safe
+local port=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..configpath.." 2>/dev/null")
+if (port=="") then port="?" end
+---- Redirect
+o = s:option(ListValue, "redirect", port..translate("Redirect"), translate("AdGuardHome redirect mode"))
+o.placeholder = "none"
+o:value("none", translate("none"))
+o:value("dnsmasq-upstream", translate("Run as dnsmasq upstream server"))
+o:value("redirect", translate("Redirect 53 port to AdGuardHome"))
+o:value("exchange", translate("Use port 53 replace dnsmasq"))
+o.default     = "none"
+o.optional = true
+---- bin path
+o = s:option(Value, "binpath", translate("Bin Path"), translate("AdGuardHome Bin path if no bin will auto download"))
+o.default     = "/usr/bin/AdGuardHome/AdGuardHome"
+o.datatype    = "string"
+o.optional = false
+o.rmempty=false
+o.validate=function(self, value)
+if value=="" then return nil end
+if fs.stat(value,"type")=="dir" then
+	fs.rmdir(value)
+end
+if fs.stat(value,"type")=="dir" then
+	if (m.message) then
+	m.message =m.message.."\nerror!bin path is a dir"
+	else
+	m.message ="error!bin path is a dir"
+	end
+	return nil
+end 
+return value
+end
+--- upx
+o = s:option(ListValue, "upxflag", translate("use upx to compress bin after download"))
+o:value("", translate("none"))
+o:value("-1", translate("compress faster"))
+o:value("-9", translate("compress better"))
+o:value("--best", translate("compress best(can be slow for big files)"))
+o:value("--brute", translate("try all available compression methods & filters [slow]"))
+o:value("--ultra-brute", translate("try even more compression variants [very slow]"))
+o.default     = ""
+o.description=translate("bin use less space,but may have compatibility issues")
+o.rmempty = true
+---- config path
+o = s:option(Value, "configpath", translate("Config Path"), translate("AdGuardHome config path"))
+o.default     = "/etc/AdGuardHome.yaml"
+o.datatype    = "string"
+o.optional = false
+o.rmempty=false
+o.validate=function(self, value)
+if value==nil then return nil end
+if fs.stat(value,"type")=="dir" then
+	fs.rmdir(value)
+end
+if fs.stat(value,"type")=="dir" then
+	if m.message then
+	m.message =m.message.."\nerror!config path is a dir"
+	else
+	m.message ="error!config path is a dir"
+	end
+	return nil
+end 
+return value
+end
+---- work dir
+o = s:option(Value, "workdir", translate("Work dir"), translate("AdGuardHome work dir include rules,audit log and database"))
+o.default     = "/usr/bin/AdGuardHome"
+o.datatype    = "string"
+o.optional = false
+o.rmempty=false
+o.validate=function(self, value)
+if value=="" then return nil end
+if fs.stat(value,"type")=="reg" then
+	if m.message then
+	m.message =m.message.."\nerror!work dir is a file"
+	else
+	m.message ="error!work dir is a file"
+	end
+	return nil
+end 
+if string.sub(value, -1)=="/" then
+	return string.sub(value, 1, -2)
+else
+	return value
+end
+end
+---- log file
+o = s:option(Value, "logfile", translate("Runtime log file"), translate("AdGuardHome runtime Log file if 'syslog': write to system log;if empty no log"))
+o.datatype    = "string"
+o.rmempty = true
+o.validate=function(self, value)
+if fs.stat(value,"type")=="dir" then
+	fs.rmdir(value)
+end
+if fs.stat(value,"type")=="dir" then
+	if m.message then
+	m.message =m.message.."\nerror!log file is a dir"
+	else
+	m.message ="error!log file is a dir"
+	end
+	return nil
+end 
+return value
+end
+---- debug
+o = s:option(Flag, "verbose", translate("Verbose log"))
+o.default = 0
+o.optional = true
+---- gfwlist 
+local a=luci.sys.call("grep -m 1 -q programadd "..configpath)
+if (a==0) then
+a="Added"
+else
+a="Not added"
+end
+o=s:option(Button,"gfwdel",translate("Del gfwlist"),translate(a))
+o.optional = false
+o.inputtitle=translate("Del")
+o.write=function()
+	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh del 2>&1")
+	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
+end
+o=s:option(Button,"gfwadd",translate("Add gfwlist"),translate(a))
+o.optional = false
+o.inputtitle=translate("Add")
+o.write=function()
+	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh 2>&1")
+	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
+end
+o = s:option(Value, "gfwupstream", translate("Gfwlist upstream dns server"), translate("Gfwlist domain upstream dns service")..translate(a))
+o.default     = "tcp://208.67.220.220:5353"
+o.datatype    = "string"
+o.optional = false
+---- chpass
+o = s:option(Value, "hashpass", translate("Change browser management password"), translate("Press load culculate model and culculate finally save/apply"))
+o.default     = ""
+o.datatype    = "string"
+o.template = "AdGuardHome/AdGuardHome_chpass"
+o.optional = false
+---- database protect
+o = s:option(Flag, "keepdb", translate("Keep database when system upgrade"))
+o.default = 0
+o.optional = true
+---- wait net on boot
+o = s:option(Flag, "waitonboot", translate("Boot delay until network ok"))
+o.default = 1
+o.optional = true
+---- backup workdir on shutdown
+local workdir=uci:get("AdGuardHome","AdGuardHome","workdir") or "/usr/bin/AdGuardHome"
+o = s:option(MultiValue, "backupfile", translate("Backup workdir files when shutdown"))
+o1 = s:option(Value, "backupwdpath", translate("Backup workdir path"))
+local name
+o:value("filters","filters")
+o:value("stats.db","stats.db")
+o:value("querylog.json","querylog.json")
+o1:depends ("backupfile", "filters")
+o1:depends ("backupfile", "stats.db")
+o1:depends ("backupfile", "querylog.json")
+for name in fs.glob(workdir.."/data/*")
+do
+	name=fs.basename (name)
+	if name~="filters" and name~="stats.db" and name~="querylog.json" then
+		o:value(name,name)
+		o1:depends ("backupfile", name)
+	end
+end
+o.widget = "checkbox"
+o.default = nil
+o.optional=false
+o.description=translate("Will be restore when workdir/data is empty")
+----backup workdir path
+
+o1.default     = "/usr/bin/AdGuardHome"
+o1.datatype    = "string"
+o1.optional = false
+o1.validate=function(self, value)
+if fs.stat(value,"type")=="reg" then
+	if m.message then
+	m.message =m.message.."\nerror!backup dir is a file"
+	else
+	m.message ="error!backup dir is a file"
+	end
+	return nil
+end 
+if string.sub(value,-1)=="/" then
+	return string.sub(value, 1, -2)
+else
+	return value
+end
+end
+
+----Crontab
+o = s:option(MultiValue, "crontab", translate("Crontab task"),translate("Please change time and args in crontab"))
+o:value("autoupdate",translate("Auto update core"))
+o:value("cutquerylog",translate("Auto tail querylog"))
+o:value("cutruntimelog",translate("Auto tail runtime log"))
+o:value("autohost",translate("Auto update ipv6 hosts and restart adh"))
+o:value("autogfw",translate("Auto update gfwlist and restart adh"))
+o.widget = "checkbox"
+o.default = nil
+o.optional=false
+
+----downloadpath
+o = s:option(TextValue, "downloadlinks",translate("Download links for update"))
+o.optional = false
+o.rows = 4
+o.wrap = "soft"
+o.size=111
+o.cfgvalue = function(self, section)
+	return fs.readfile("/usr/share/AdGuardHome/links.txt")
+end
+o.write = function(self, section, value)
+	fs.writefile("/usr/share/AdGuardHome/links.txt", value:gsub("\r\n", "\n"))
+end
+fs.writefile("/var/run/lucilogpos","0")
+function m.on_commit(map)
+	local enabled=uci:get("AdGuardHome","AdGuardHome","enabled")
+	if enabled=="1" then
+		io.popen("/etc/init.d/AdGuardHome enable >/dev/null 2>&1; /etc/init.d/AdGuardHome restart >/dev/null 2>&1 &")
+	else
+		io.popen("/etc/init.d/AdGuardHome disable >/dev/null 2>&1; /etc/init.d/AdGuardHome stop >/dev/null 2>&1 &")
+	end
+end
+return m
+EOF_ADG_BASE
 }
 
 patch_adguard_enable_hook() {
@@ -8881,6 +9978,69 @@ cleanup_adguard_placeholder_config() {
     backup_file "$configpath"
     rm -f "$configpath"
     log "备注:     已移除占位 AdGuardHome 配置，保留首次启动向导"
+}
+
+read_adguard_primary_user_from_config() {
+    configpath="$(get_adguard_configpath)"
+    [ -s "$configpath" ] || return 1
+
+    awk '
+        /^users:[[:space:]]*$/ { in_users=1; next }
+        in_users && /^[^[:space:]]/ { exit }
+        in_users {
+            if ($0 ~ /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/) {
+                sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", $0)
+                print
+                exit
+            }
+            if ($0 ~ /^[[:space:]]*name:[[:space:]]*/) {
+                sub(/^[[:space:]]*name:[[:space:]]*/, "", $0)
+                print
+                exit
+            }
+        }
+    ' "$configpath" 2>/dev/null | sed -n '1p'
+}
+
+ensure_adguard_dashboard_auth_defaults() {
+    dashboard_user="$(uci -q get AdGuardHome.AdGuardHome.dashboard_user 2>/dev/null || true)"
+    dashboard_password="$(uci -q get AdGuardHome.AdGuardHome.dashboard_password 2>/dev/null || true)"
+    adg_dashboard_changed='0'
+
+    if [ -z "$dashboard_user" ]; then
+        dashboard_user="$(read_adguard_primary_user_from_config 2>/dev/null || true)"
+        [ -n "$dashboard_user" ] || dashboard_user='admin'
+        uci set AdGuardHome.AdGuardHome.dashboard_user="$dashboard_user" >/dev/null 2>&1 || true
+        adg_dashboard_changed='1'
+    fi
+
+    if [ "$adg_dashboard_changed" = '1' ]; then
+        uci commit AdGuardHome >/dev/null 2>&1 || true
+    fi
+
+    if [ -z "$dashboard_password" ] && { [ -t 0 ] || can_use_ui_tty; }; then
+        if confirm_default_yes "是否现在写入 AdGuardHome 3000 仪表盘密码供应用商店页读取统计？"; then
+            prompt_with_default "Dashboard API user" "$dashboard_user"
+            dashboard_user="$PROMPT_RESULT"
+            printf 'Dashboard API password（与 3000 登录密码一致）: '
+            ui_read_secret || die "input cancelled"
+            dashboard_password="$UI_READ_RESULT"
+
+            if [ -n "$dashboard_password" ]; then
+                uci set AdGuardHome.AdGuardHome.dashboard_user="$dashboard_user" >/dev/null 2>&1 || true
+                uci set AdGuardHome.AdGuardHome.dashboard_password="$dashboard_password" >/dev/null 2>&1 || true
+                uci commit AdGuardHome >/dev/null 2>&1 || true
+                log "备注:     已写入 AdGuardHome 应用商店页统计认证信息"
+                return 0
+            fi
+
+            log "备注:     未输入 Dashboard API password，应用商店页将仅显示本地运行态与监听"
+        fi
+    fi
+
+    if [ -z "$dashboard_password" ]; then
+        log "备注:     AdGuardHome 应用商店页已可读取本地运行态与监听；如需同步 3000 原版统计，请在设置页填写 Dashboard API password（与 3000 登录密码一致）"
+    fi
 }
 
 fix_adguard_runtime_if_possible() {
@@ -9301,11 +10461,14 @@ install_adguardhome() {
     log_stage 3 5 "写入 LuCI 包装页与运行时文件"
     backup_file /usr/lib/lua/luci/controller/AdGuardHome.lua
     backup_file /usr/lib/lua/luci/view/AdGuardHome/oem_wrapper.htm
+    backup_file /usr/lib/lua/luci/view/AdGuardHome/AdGuardHome_status.htm
+    backup_file /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua
 
     write_adguard_wrapper_files
     patch_adguard_enable_hook
     fix_adguard_start_order
     cleanup_adguard_placeholder_config
+    ensure_adguard_dashboard_auth_defaults
 
     adg_ver="$(opkg status luci-app-adguardhome 2>/dev/null | awk -F': ' '/Version: /{print $2; exit}')"
     [ -n "$adg_ver" ] || adg_ver="$ADGUARDHOME_VERSION"
@@ -9903,7 +11066,8 @@ download_mosdns_core() {
     zip_path="$WORKDIR/mosdns/$MOSDNS_ASSET_NAME"
     download_from_urls "$zip_path" $MOSDNS_DOWNLOAD_URLS || die "MosDNS 核心下载失败"
     actual="$(sha256sum "$zip_path" 2>/dev/null | awk '{print $1}')"
-    [ -n "$actual" ] && [ "$actual" != "$MOSDNS_SHA256" ] && die "MosDNS SHA256 不匹配"
+    [ -n "$actual" ] || die "MosDNS SHA256 读取失败"
+    [ "$actual" = "$MOSDNS_SHA256" ] || die "MosDNS SHA256 不匹配"
 
     mkdir -p "$WORKDIR/mosdns/unpack"
     unzip -o "$zip_path" -d "$WORKDIR/mosdns/unpack" >/dev/null 2>&1 || die "MosDNS 解压失败"
@@ -9933,13 +11097,14 @@ FOREIGN_DNS="$(uci -q get mosdns.main.foreign_dns 2>/dev/null || echo 'https://1
 FALLBACK_DNS="$(uci -q get mosdns.main.fallback_dns 2>/dev/null || echo 114.114.114.114:53)"
 CACHE_SIZE="$(uci -q get mosdns.main.cache_size 2>/dev/null || echo 10240)"
 CACHE_TTL="$(uci -q get mosdns.main.cache_ttl 2>/dev/null || echo 600)"
+LOG_FILE="$(uci -q get mosdns.main.log_file 2>/dev/null || echo /tmp/mosdns.log)"
 LOG_LEVEL="$(uci -q get mosdns.main.log_level 2>/dev/null || echo info)"
 mkdir -p "$(dirname "$CFG")"
 {
 cat <<YAML
 log:
   level: ${LOG_LEVEL}
-  file: /tmp/mosdns.log
+  file: ${LOG_FILE}
 plugins:
   - tag: cache
     type: cache

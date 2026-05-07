@@ -2,9 +2,9 @@
 
 NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.0.35`
+- 当前版本：`V2.0.40`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
-- Release：[v2.0.30](https://github.com/561410590/ssh-nradio-plugin-installer/releases/tag/v2.0.30)
+- 最近已确认 Release：[v2.0.35](https://github.com/561410590/ssh-nradio-plugin-installer/releases/tag/v2.0.35)
 
 ## 适用设备
 
@@ -48,17 +48,18 @@ sh ssh-nradio-plugin-installer.sh
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | swap、自检、通用卸载链、风扇控制 |
 
-## V2.0.35 更新
+## V2.0.40 更新
 
-- 新增 **MosDNS** 插件（常用插件菜单第 6 项）：轻量 DNS 分流，支持国内外 DNS 分流/缓存，UCI 配置页 + 保存自动同步 YAML + 日志页。
-- 雷神加速器卸载链保留 V2.0.30 成果：补删 `/etc/config/acc_version.ini` 和 `/tmp/leigod-plugin-install.sh`。
-- 公网页同步 V2.0.35 版本口径，新增 MosDNS 说明。
-- 应用商店与页面美化菜单保留"还原应用商店"入口。
-- OpenVPN 控制台界面升级（Mk3）。
-- 脚本 SHA256：`b62aaeebb1d22edfc4a0e80d3a6cd3cb46cefbe0704c428f08f588b43f58176e`（大小 1001725 字节）。
+- 保留 `V2.0.35` 的 **MosDNS** 插件能力，并继续修复 MosDNS 同步器日志路径和 SHA256 校验兜底。
+- 修复 EasyTier 应用商店卸载后路由规则残留，清理链覆盖 `priority 60 / 70 / 196`。
+- AdGuardHome 应用商店内页重新美化，首页打开即可直接看到 DNS 查询和拦截统计数，并补齐监听、运行态和 `3000` 仪表盘认证链路。
+- C2000MAX 实机补录 AdGuardHome `dashboard_user / dashboard_password` 后，应用商店内页已恢复显示真统计。
+- 修复 AdGuardHome `base.lua` heredoc 中残留的 Linux 空设备重定向问题：`2>nul` 改为 `2>/dev/null`。
+- 当前脚本 SHA256：`0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188`（大小 1037112 字节）。
 
 ## 版本记录
 
+- `V2.0.40`：EasyTier / MosDNS 修复，AdGuardHome 内页重新美化并补齐监听和统计链路。
 - `V2.0.35`：新增 MosDNS 插件。
 - `V2.0.30`：雷神卸载残留清理。
 - `V2.0.25`：应用商店原厂还原入口与版本头更新。
@@ -76,7 +77,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.35 正式脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.40 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -89,8 +90,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  40327b4a808b4440b785b1d662222121e3ad6f67581e1c55017040d8597a17d3
-Bytes   988115
+SHA256  0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188
+Bytes   1037112
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

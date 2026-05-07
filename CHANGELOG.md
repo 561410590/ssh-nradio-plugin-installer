@@ -1,5 +1,18 @@
 # Changelog
 
+## V2.0.40 - 2026-05-08
+
+- `SCRIPT_VERSION` 更新为 `V2.0.40`。
+- `SCRIPT_RELEASE_DATE` 更新为 `2026-05-08`。
+- 修复 EasyTier 应用商店卸载后路由规则残留，清理链覆盖 `priority 60 / 70 / 196`。
+- 修复 MosDNS 同步器日志路径写死问题，改为读取 `mosdns.main.log_file`。
+- 修复 MosDNS 下载后 SHA256 为空时仍可能放行的问题。
+- AdGuardHome 应用商店内页重新美化，首页打开即可直接看到 DNS 查询和拦截统计数。
+- AdGuardHome 内页新增本地运行态/监听回退，未填 `Dashboard API password` 时也能显示运行中、监听地址和端口。
+- 安装链补入 AdGuardHome `dashboard_user / dashboard_password` 录入逻辑，便于直接读取 `3000` 原版仪表盘统计。
+- 修复 AdGuardHome `base.lua` heredoc 中残留的 Linux 空设备重定向问题：`2>nul` 改为 `2>/dev/null`。
+- 公网页同步到 V2.0.40 当前主线口径，并加入 AdGuardHome 内页重新美化说明。
+
 ## V2.0.35 - 2026-05-06
 
 - `SCRIPT_VERSION` 更新为 `V2.0.35`。
