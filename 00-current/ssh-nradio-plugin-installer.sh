@@ -215,12 +215,26 @@ LAST_DOWNLOAD_SOURCE=''
 LAST_DOWNLOAD_TOOL=''
 LAST_DOWNLOAD_RC='0'
 OPENLIST_RESOLVED_DOWNLOAD_URLS=''
+OPENLIST_RESOLVED_ASSET_NAME=''
+OPENLIST_ACTIVE_WORKDIR=''
 EASYTIER_RESOLVED_DOWNLOAD_URLS=''
 ABORTING='0'
+
+cleanup_openlist_active_workdir() {
+    [ -n "${OPENLIST_ACTIVE_WORKDIR:-}" ] || return 0
+
+    case "$OPENLIST_ACTIVE_WORKDIR" in
+        /tmp/storage/*/nradio-openlist-work.*|/mnt/app_data/nradio-openlist-work.*)
+            rm -rf "$OPENLIST_ACTIVE_WORKDIR" 2>/dev/null || true
+            ;;
+    esac
+    OPENLIST_ACTIVE_WORKDIR=''
+}
 
 cleanup() {
     terminate_active_download
     terminate_registered_background_jobs
+    cleanup_openlist_active_workdir
     release_script_lock
     rm -rf "$WORKDIR"
 }
@@ -1902,6 +1916,39 @@ download_from_urls() {
         fi
         if [ "$url_index" -lt "$url_count" ]; then
             log "提示: 当前下载地址未完成，准备切换到下一个地址..."
+        fi
+    done
+
+    return 1
+}
+
+download_openlist_from_urls() {
+    out="$1"
+    shift
+
+    [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000MAX' ] || {
+        download_from_urls "$out" "$@"
+        return "$?"
+    }
+
+    url_count=0
+    url_index=0
+    LAST_DOWNLOAD_SOURCE=''
+
+    for url in "$@"; do
+        url_count=$((url_count + 1))
+    done
+
+    for url in "$@"; do
+        url_index=$((url_index + 1))
+        rm -f "$out.tmp" 2>/dev/null || true
+        if download_file "$url" "$out"; then
+            LAST_DOWNLOAD_SOURCE="$url"
+            return 0
+        fi
+        rm -f "$out.tmp" 2>/dev/null || true
+        if [ "$url_index" -lt "$url_count" ]; then
+            log "提示: 当前下载地址未完成，已清理临时续传文件，准备切换到下一个地址..."
         fi
     done
 
@@ -3971,18 +4018,32 @@ resolve_github_release_asset_cdn_url() {
     return 1
 }
 
+get_openlist_active_asset_name() {
+    if [ -n "${OPENLIST_RESOLVED_ASSET_NAME:-}" ]; then
+        printf '%s\n' "$OPENLIST_RESOLVED_ASSET_NAME"
+    else
+        printf '%s\n' "$OPENLIST_ASSET_NAME"
+    fi
+}
+
+build_openlist_official_probe_urls() {
+    openlist_probe_asset="$(get_openlist_active_asset_name)"
+    printf '%s %s %s\n' "https://github.com/OpenListTeam/OpenList/releases/latest/download/${openlist_probe_asset}" "https://api.github.com/repos/OpenListTeam/OpenList/releases/latest" "https://release-assets.githubusercontent.com/"
+}
+
 build_openlist_download_urls() {
     if [ -n "${OPENLIST_RESOLVED_DOWNLOAD_URLS:-}" ]; then
         printf '%s\n' "$OPENLIST_RESOLVED_DOWNLOAD_URLS"
         return 0
     fi
 
-    openlist_official_latest_url="https://github.com/OpenListTeam/OpenList/releases/latest/download/$OPENLIST_ASSET_NAME"
+    openlist_asset_name="$(get_openlist_active_asset_name)"
+    openlist_official_latest_url="https://github.com/OpenListTeam/OpenList/releases/latest/download/$openlist_asset_name"
     openlist_api_latest_url="https://api.github.com/repos/OpenListTeam/OpenList/releases/latest"
     openlist_urls=""
 
-    openlist_browser_url="$(get_github_release_asset_browser_url "$openlist_api_latest_url" "$OPENLIST_ASSET_NAME" 2>/dev/null || true)"
-    openlist_asset_api_url="$(get_github_release_asset_api_url "$openlist_api_latest_url" "$OPENLIST_ASSET_NAME" 2>/dev/null || true)"
+    openlist_browser_url="$(get_github_release_asset_browser_url "$openlist_api_latest_url" "$openlist_asset_name" 2>/dev/null || true)"
+    openlist_asset_api_url="$(get_github_release_asset_api_url "$openlist_api_latest_url" "$openlist_asset_name" 2>/dev/null || true)"
     [ -n "$openlist_browser_url" ] || openlist_browser_url="$openlist_official_latest_url"
 
     openlist_resolved_api_cdn_url="$(resolve_github_release_asset_cdn_url "$openlist_asset_api_url" 2>/dev/null || true)"
@@ -3995,7 +4056,7 @@ build_openlist_download_urls() {
     openlist_urls="$(append_unique_list_item "$openlist_urls" "$openlist_browser_url")"
     openlist_urls="$(append_unique_list_item "$openlist_urls" "$openlist_official_latest_url")"
 
-    for openlist_extra_url in $(build_urls_from_base_list "$OPENLIST_ASSET_NAME" "$OPENLIST_GITHUB_CDN_BASES" 2>/dev/null || true); do
+    for openlist_extra_url in $(build_urls_from_base_list "$openlist_asset_name" "$OPENLIST_GITHUB_CDN_BASES" 2>/dev/null || true); do
         openlist_urls="$(append_unique_list_item "$openlist_urls" "$openlist_extra_url")"
     done
 
@@ -14917,14 +14978,30 @@ install_ddnsgo() {
 install_openlist() {
     require_nradio_oem_appcenter
 
-    mkdir -p "$WORKDIR/openlist"
-    openlist_archive="$WORKDIR/openlist/$OPENLIST_ASSET_NAME"
-    openlist_unpack="$WORKDIR/openlist/unpack"
+    openlist_asset_name="$OPENLIST_ASSET_NAME"
+    openlist_workdir="$WORKDIR/openlist"
+    openlist_c2000max_mode='0'
+    if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000MAX' ]; then
+        openlist_storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+        [ -n "$openlist_storage_mount" ] || die "未检测到 C2000MAX 存储卡，无法把 OpenList 下载到存储卡"
+        ensure_dir_writable "$openlist_storage_mount" "C2000MAX 存储卡"
+        openlist_asset_name="openlist-linux-musl-arm64-lite.tar.gz"
+        openlist_workdir="$openlist_storage_mount/nradio-openlist-work.$$"
+        OPENLIST_ACTIVE_WORKDIR="$openlist_workdir"
+        openlist_c2000max_mode='1'
+    fi
+
+    OPENLIST_RESOLVED_ASSET_NAME="$openlist_asset_name"
     OPENLIST_RESOLVED_DOWNLOAD_URLS=''
+    mkdir -p "$openlist_workdir"
+    ensure_dir_writable "$openlist_workdir" "OpenList 临时工作目录"
+    openlist_archive="$openlist_workdir/$openlist_asset_name"
+    openlist_unpack="$openlist_workdir/unpack"
 
     log_stage 1 5 "OpenList GitHub 官方 CDN 安装规划"
     openlist_official_ping_hosts=""
-    rank_url_list_hosts "openlist-official" "OpenList GitHub 官方" "$OPENLIST_GITHUB_OFFICIAL_PROBE_URLS"
+    openlist_official_probe_urls="$(build_openlist_official_probe_urls)"
+    rank_url_list_hosts "openlist-official" "OpenList GitHub 官方" "$openlist_official_probe_urls"
     openlist_official_ping_hosts="$RANKED_URL_HOSTS"
     [ -n "$openlist_official_ping_hosts" ] || openlist_official_ping_hosts="$OPENLIST_STABLE_HOST_ORDER"
     if [ "${OPENLIST_FAST_DOWNLOAD_MODE:-1}" = '1' ]; then
@@ -14943,6 +15020,12 @@ install_openlist() {
     fi
     openlist_official_ping_hosts="$(printf '%s\n' "$openlist_official_ping_hosts" | sed 's/[[:space:]][[:space:]]*/ /g; s/^[[:space:]]*//; s/[[:space:]]*$//')"
     log "提示: OpenList 下载主机优先级: $openlist_official_ping_hosts"
+    if [ "$openlist_c2000max_mode" = '1' ]; then
+        log "提示: 检测到 C2000MAX，OpenList 官方完整包体积较大，低内存设备可能在下载或解压阶段被系统 Killed"
+        log "提示: 本次将自动改用 OpenList lite 安装包，并把下载包与解压目录放到存储卡"
+        log "提示: C2000MAX 使用存储卡临时目录: $openlist_workdir"
+        log "说明: 这样可以减少 /tmp 内存占用，降低因文件过大导致安装失败的概率"
+    fi
     log "说明: 将下载 OpenList 官方发布包，并自动接入 OEM 应用商店"
     confirm_or_exit "确认继续安装 OpenList 并修改系统吗？"
 
@@ -14964,14 +15047,18 @@ install_openlist() {
     DOWNLOAD_KEEP_PARTIAL=1
     DOWNLOAD_SKIP_CONTENT_LENGTH=1
     openlist_download_url=""
-    if download_from_urls "$openlist_archive" $openlist_package_urls; then
+    if download_openlist_from_urls "$openlist_archive" $openlist_package_urls; then
         openlist_download_url="$LAST_DOWNLOAD_SOURCE"
     fi
     if [ -z "$openlist_download_url" ]; then
         log "提示: 首轮下载未完成，正在放宽速度阈值后重试..."
         DOWNLOAD_STALL_TIME="$OPENLIST_PACKAGE_RETRY_STALL_TIME"
         DOWNLOAD_STALL_SPEED="$OPENLIST_PACKAGE_RETRY_STALL_SPEED"
-        if download_from_urls "$openlist_archive" $openlist_package_urls; then
+        if [ "$openlist_c2000max_mode" = '1' ]; then
+            rm -f "$openlist_archive" "$openlist_archive.tmp" 2>/dev/null || true
+            log "提示: C2000MAX 已清理 OpenList 临时下载文件，将重新完整下载"
+        fi
+        if download_openlist_from_urls "$openlist_archive" $openlist_package_urls; then
             openlist_download_url="$LAST_DOWNLOAD_SOURCE"
         else
             openlist_download_url=""

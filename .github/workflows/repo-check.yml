@@ -57,6 +57,10 @@ jobs:
           grep -q 'configure_ddnsgo_web_login' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'seed_ddnsgo_config_yaml' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'ddnsgo_yaml_has_password' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'download_openlist_from_urls' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'openlist-linux-musl-arm64-lite.tar.gz' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'C2000MAX 使用存储卡临时目录' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '文件过大导致安装失败' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '$2 != "noarch"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'UNINSTALL_LOG_FILE' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'opkg_wait_unlock' 00-current/ssh-nradio-plugin-installer.sh
@@ -116,7 +120,8 @@ jobs:
           grep -q 'V2.0.50' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.50 已发布' 40-server-web/mayebano-support/index.html
           grep -q '脚本集成 DDNS-GO 安装' 40-server-web/mayebano-support/index.html
-          grep -q '应用商店和 AdGuardHome 页面重新美化' 40-server-web/mayebano-support/index.html
+          grep -q 'OpenList C2000MAX 安装链降内存' 40-server-web/mayebano-support/index.html
+          grep -q 'C2000MAX 安装 OpenList 时改用 lite 包' 40-server-web/mayebano-support/index.html
           grep -q '脚本新增 DDNS-GO 安装入口' 40-server-web/mayebano-support/index.html
           grep -q 'AdGuardHome 内页二次重新美化' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.40' 40-server-web/mayebano-support/index.html
@@ -165,12 +170,12 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f' CHECKSUMS.txt
-          grep -q '1159695  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q '5a3e976a1e0678f9837bd7334fc312fbab1002edee3694622778ab471d4ec47a' CHECKSUMS.txt
-          grep -q '233686  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
-          printf '%s  %s\n' 'f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' '5a3e976a1e0678f9837bd7334fc312fbab1002edee3694622778ab471d4ec47a' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          grep -q 'e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a' CHECKSUMS.txt
+          grep -q '1163194  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q 'd206161380c5c6482a62010c93d2b28c9f4f6f1f657216e969b341103d40ecc8' CHECKSUMS.txt
+          grep -q '233691  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          printf '%s  %s\n' 'e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' 'd206161380c5c6482a62010c93d2b28c9f4f6f1f657216e969b341103d40ecc8' '40-server-web/mayebano-support/index.html' | sha256sum -c -
 
       - name: Verify license
         run: |
@@ -184,10 +189,12 @@ jobs:
           grep -q 'V2.0.50' CHANGELOG.md
           grep -q 'DDNS-GO' README.md
           grep -q 'DDNS-GO' CHANGELOG.md
+          grep -q 'OpenList C2000MAX' README.md
+          grep -q 'OpenList lite 包' CHANGELOG.md
           grep -q 'AdGuardHome' README.md
           grep -q 'AdGuardHome' CHANGELOG.md
-          grep -q 'f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f' README.md
-          grep -q '1159695' README.md
+          grep -q 'e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a' README.md
+          grep -q '1163194' README.md
           grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
           grep -q 'Only the current public script is maintained' SECURITY.md
           grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml

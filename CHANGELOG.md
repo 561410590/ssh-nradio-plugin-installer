@@ -10,6 +10,8 @@
 - 补强 DDNS-GO 应用商店 `package_list` 路由校验，避免命中 package 主条目后误报 route mismatch。
 - 补强应用商店异步卸载链：任务日志写入当前插件日志、同插件并发锁、opkg 锁等待和失败反馈。
 - 修复 appcenter cfg 口径下旧路由清理、section 类型识别、DDNS-GO YAML user/password 补齐和权限一致性问题。
+- 修复 C2000MAX 安装 OpenList 时下载包和解压目录占用 `/tmp` 的 OOM 风险：C2000MAX 自动改用 OpenList lite 包，并把下载包与解压目录放到存储卡临时目录。
+- OpenList C2000MAX 下载失败兜底改为清理损坏续传临时文件后切换源或完整重下，避免坏 `.tmp` 反复参与续传。
 - 公网页同步 V2.0.50 已发布口径，补入 DDNS-GO、应用商店卡片布局和 AdGuardHome 内页二次重新美化说明。
 
 ## V2.0.40 - 2026-05-08
