@@ -1,5 +1,17 @@
 # Changelog
 
+## V2.0.50 - 2026-05-10
+
+- `SCRIPT_VERSION` 更新为 `V2.0.50`。
+- `SCRIPT_RELEASE_DATE` 更新为 `2026-05-10`。
+- 新增 **DDNS-GO** 插件（常用插件菜单第 7 项），安装链覆盖下载校验、三件套安装、OEM 包装页、图标、应用商店注册、异步卸载链和虚拟内存接入。
+- DDNS-GO 首次安装流程新增 Web 登录账号密码设置，启动服务前初始化并写入 `/etc/ddns-go/ddns-go-config.yaml`。
+- 修复 `opkg print-architecture` 中 `noarch` 排在前面时导致 DDNS-GO 架构校验误判的问题。
+- 补强 DDNS-GO 应用商店 `package_list` 路由校验，避免命中 package 主条目后误报 route mismatch。
+- 补强应用商店异步卸载链：任务日志写入当前插件日志、同插件并发锁、opkg 锁等待和失败反馈。
+- 修复 appcenter cfg 口径下旧路由清理、section 类型识别、DDNS-GO YAML user/password 补齐和权限一致性问题。
+- 公网页同步 V2.0.50 已发布口径，补入 DDNS-GO、应用商店卡片布局和 AdGuardHome 内页二次重新美化说明。
+
 ## V2.0.40 - 2026-05-08
 
 - `SCRIPT_VERSION` 更新为 `V2.0.40`。

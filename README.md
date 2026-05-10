@@ -2,9 +2,9 @@
 
 NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.0.40`
+- 当前版本：`V2.0.50`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
-- 最近已确认 Release：[v2.0.35](https://github.com/561410590/ssh-nradio-plugin-installer/releases/tag/v2.0.35)
+- GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 适用设备
 
@@ -42,23 +42,24 @@ sh ssh-nradio-plugin-installer.sh
 
 | 功能分类 | 内容 |
 | --- | --- |
-| 常用插件安装 | Web SSH、OpenList、AdGuardHome、哈基米 |
+| 常用插件安装 | swap、哈基米、Web SSH、AdGuardHome、OpenList、MosDNS、DDNS-GO |
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | swap、自检、通用卸载链、风扇控制 |
 
-## V2.0.40 更新
+## V2.0.50 更新
 
-- 保留 `V2.0.35` 的 **MosDNS** 插件能力，并继续修复 MosDNS 同步器日志路径和 SHA256 校验兜底。
-- 修复 EasyTier 应用商店卸载后路由规则残留，清理链覆盖 `priority 60 / 70 / 196`。
-- AdGuardHome 应用商店内页重新美化，首页打开即可直接看到 DNS 查询和拦截统计数，并补齐监听、运行态和 `3000` 仪表盘认证链路。
-- C2000MAX 实机补录 AdGuardHome `dashboard_user / dashboard_password` 后，应用商店内页已恢复显示真统计。
-- 修复 AdGuardHome `base.lua` heredoc 中残留的 Linux 空设备重定向问题：`2>nul` 改为 `2>/dev/null`。
-- 当前脚本 SHA256：`0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188`（大小 1037112 字节）。
+- 新增 **DDNS-GO** 插件（常用插件菜单第 7 项），包含三件套安装、OEM 包装页、图标、应用商店注册、异步卸载链和虚拟内存接入。
+- DDNS-GO 首次安装会在启动服务前设置 Web 登录账号密码，并初始化 `/etc/ddns-go/ddns-go-config.yaml`。
+- 修复 `opkg print-architecture` 中 `noarch` 排在前面时导致 DDNS-GO 架构误判的问题。
+- 补强应用商店 `package_list` 路由校验、旧路由清理、异步卸载日志、同插件并发锁和 opkg 锁等待。
+- 公网页同步 V2.0.50 已发布口径，补入 DDNS-GO、应用商店卡片布局和 AdGuardHome 内页二次重新美化说明。
+- 当前脚本 SHA256：`f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f`（大小 1159695 字节）。
 
 ## 版本记录
 
+- `V2.0.50`：DDNS-GO 集成，应用商店和 AdGuardHome 页面重新美化，卸载链和校验链补强。
 - `V2.0.40`：EasyTier / MosDNS 修复，AdGuardHome 内页重新美化并补齐监听和统计链路。
 - `V2.0.35`：新增 MosDNS 插件。
 - `V2.0.30`：雷神卸载残留清理。
@@ -77,7 +78,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.40 当前主线脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.50 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -90,8 +91,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188
-Bytes   1037112
+SHA256  f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f
+Bytes   1159695
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

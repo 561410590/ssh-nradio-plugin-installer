@@ -392,7 +392,7 @@
     }
 
     .hero-copy::after {
-        content: "V2.0.40";
+        content: "V2.0.50";
       position: absolute;
       right: 28px;
       bottom: 2px;
@@ -2865,7 +2865,7 @@
     }
 
     .hero-copy::after {
-      content: "V2.0.40";
+      content: "V2.0.50";
       color: rgba(226, 58, 126, 0.08);
     }
 
@@ -6866,7 +6866,7 @@
       }
     }
 
-    /* V2.0.40 release polish */
+    /* V2.0.50 release polish */
     .floating-nav {
       gap: 8px;
       padding: 10px 12px;
@@ -6905,7 +6905,7 @@
     }
 
     .hero-latest::before {
-      content: "V2.0.40";
+      content: "V2.0.50";
       top: auto;
       right: clamp(18px, 4vw, 38px);
       bottom: clamp(8px, 2vw, 18px);
@@ -7192,6 +7192,410 @@
       }
     }
 
+    /* V2.0.50 card wall compact pass */
+    .floating-nav a,
+    .floating-nav span,
+    .hero-latest-label,
+    .hero-latest-version,
+    .release-cards > .release-card b {
+      letter-spacing: 0 !important;
+    }
+
+    .hero-copy {
+      gap: clamp(16px, 1.45vw, 20px);
+    }
+
+    .hero-latest {
+      gap: 12px;
+      padding: clamp(18px, 1.7vw, 22px);
+      border-radius: 24px;
+      overflow: hidden;
+    }
+
+    .hero-latest::before {
+      right: clamp(16px, 3vw, 30px);
+      bottom: 7px;
+      font-size: clamp(46px, 5.8vw, 82px);
+      letter-spacing: 0 !important;
+    }
+
+    .hero-latest-top {
+      gap: 10px;
+    }
+
+    .hero-latest-version {
+      min-width: 116px;
+      min-height: 34px;
+      padding-inline: 13px;
+    }
+
+    .hero-latest strong {
+      max-width: 24ch;
+      font-size: clamp(21px, 1.8vw, 25px);
+      line-height: 1.24;
+      text-wrap: balance;
+    }
+
+    .hero-latest p {
+      max-width: 70ch;
+      padding: 13px 15px;
+      border-left: 1px solid rgba(236, 62, 144, 0.18) !important;
+      border-radius: 16px;
+      font-size: clamp(13px, 1.2vw, 14.5px);
+      line-height: 1.66;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 246, 251, 0.64)),
+        rgba(255, 249, 252, 0.72);
+    }
+
+    .release-cards {
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) !important;
+      align-items: stretch;
+      gap: clamp(9px, 0.9vw, 13px) !important;
+      margin-top: 0;
+      padding-bottom: 8px;
+    }
+
+    .release-cards > .release-card,
+    .release-cards > .release-card:nth-child(-n+3),
+    .release-cards > .release-card:nth-child(-n+4),
+    .release-cards > .release-card:nth-child(-n+5),
+    .release-cards > .release-card:nth-child(n+9),
+    .release-cards > .release-card:nth-child(n+13),
+    .release-cards > .release-card:nth-child(6),
+    .release-cards > .release-card:nth-child(7),
+    .release-cards > .release-card:nth-child(8) {
+      min-height: 120px !important;
+      padding: 14px !important;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 7px;
+      overflow: hidden !important;
+      border-color: rgba(236, 62, 144, 0.16) !important;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 251, 0.86)),
+        rgba(255, 249, 252, 0.94) !important;
+      box-shadow:
+        0 10px 24px rgba(184, 37, 95, 0.070),
+        inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+    }
+
+    .release-cards > .release-card:first-child {
+      border-color: rgba(236, 62, 144, 0.24) !important;
+      background:
+        radial-gradient(circle at 96% 0, rgba(236, 62, 144, 0.12), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 242, 249, 0.90)),
+        rgba(255, 249, 252, 0.96) !important;
+    }
+
+    .release-cards > .release-card::before,
+    .release-cards > .release-card::after {
+      content: none !important;
+      display: none !important;
+    }
+
+    .release-cards > .release-card b {
+      align-self: start;
+      margin: 0;
+      min-height: 26px;
+      padding-inline: 9px;
+      font-size: 12.5px;
+    }
+
+    .release-cards > .release-card strong {
+      margin: 0;
+      line-height: 1.22;
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    .release-cards > .release-card p,
+    .release-cards > .release-card:nth-child(-n+3) p,
+    .release-cards > .release-card:nth-child(-n+4) p,
+    .release-cards > .release-card:nth-child(-n+5) p,
+    .release-cards > .release-card:nth-child(n+9) p,
+    .release-cards > .release-card:nth-child(n+13) p,
+    .release-cards > .release-card:nth-child(6) p,
+    .release-cards > .release-card:nth-child(7) p,
+    .release-cards > .release-card:nth-child(8) p {
+      margin: 0;
+      align-self: start;
+      -webkit-line-clamp: 3 !important;
+      line-height: 1.52 !important;
+    }
+
+    .feature-tags {
+      gap: 7px;
+    }
+
+    .feature-tags span {
+      max-width: 100%;
+      white-space: normal;
+      line-height: 1.2;
+    }
+
+    .download-card,
+    .support-panel {
+      border-radius: 24px;
+    }
+
+    .download-card {
+      gap: 12px;
+      padding: clamp(16px, 1.4vw, 19px);
+    }
+
+    .download-main {
+      align-items: start;
+      gap: 11px;
+    }
+
+    .download-main strong {
+      font-size: clamp(21px, 1.75vw, 24px);
+    }
+
+    .download-facts {
+      gap: 7px;
+    }
+
+    .download-facts span {
+      min-height: 54px;
+      padding: 9px 10px;
+    }
+
+    .download-facts b,
+    .download-facts em {
+      line-height: 1.22;
+    }
+
+    .download-tutorial {
+      gap: 9px;
+      padding-top: 12px;
+    }
+
+    .download-section,
+    .path-card,
+    .route-code-card {
+      border-radius: 18px;
+    }
+
+    .download-section {
+      gap: 7px;
+      padding: 13px 12px 12px;
+    }
+
+    .download-code {
+      padding: 15px 16px 15px 18px;
+      line-height: 1.66;
+    }
+
+    .support-panel {
+      padding: 18px;
+    }
+
+    @media (min-width: 1121px) {
+      .hero-shell {
+        grid-template-columns: minmax(0, 1.05fr) minmax(378px, 0.41fr) !important;
+        gap: clamp(22px, 2vw, 30px);
+        align-items: start;
+      }
+
+      .support-side {
+        max-width: 430px;
+        justify-self: stretch;
+        gap: 14px;
+      }
+    }
+
+    @media (min-width: 1440px) {
+      .release-cards {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      }
+    }
+
+    @media (min-width: 1760px) {
+      .hero-shell {
+        grid-template-columns: minmax(0, 1fr) 426px !important;
+      }
+
+      .release-cards {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .hero-latest {
+        gap: 10px;
+        padding: 16px;
+      }
+
+      .hero-latest::before {
+        right: 12px;
+        bottom: 7px;
+        font-size: 46px;
+      }
+
+      .hero-latest strong {
+        max-width: none;
+      }
+
+      .hero-latest p {
+        padding: 12px;
+      }
+
+      .release-cards {
+        grid-template-columns: 1fr !important;
+      }
+
+      .release-cards > .release-card,
+      .release-cards > .release-card:nth-child(6),
+      .release-cards > .release-card:nth-child(7),
+      .release-cards > .release-card:nth-child(8) {
+        min-height: 0 !important;
+      }
+    }
+
+    /* V2.0.50 published polish pass */
+    .floating-nav {
+      align-items: center;
+      max-width: min(900px, calc(100% - 28px));
+    }
+
+    .floating-nav a,
+    .floating-nav span {
+      min-height: 38px;
+      padding-inline: 14px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .floating-nav span {
+      background:
+        linear-gradient(135deg, rgba(244, 95, 162, 0.98), rgba(199, 20, 112, 0.98)),
+        #d71978;
+      border-color: rgba(255, 255, 255, 0.45);
+      color: #fff;
+      box-shadow:
+        0 12px 28px rgba(199, 20, 112, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.38);
+    }
+
+    .hero-tags span,
+    .hero-status span,
+    .hero-summary div,
+    .feature-tile,
+    .compat-item,
+    .download-facts span {
+      min-width: 0;
+    }
+
+    .hero-tags,
+    .hero-status,
+    .hero-summary {
+      gap: 9px;
+    }
+
+    .hero-status span {
+      min-height: 44px;
+      padding: 9px 11px;
+      overflow-wrap: anywhere;
+    }
+
+    .hero-summary div {
+      min-height: 72px;
+      padding: 13px 14px;
+    }
+
+    .hero-latest strong {
+      max-width: 34ch;
+      overflow-wrap: anywhere;
+    }
+
+    .hero-latest p {
+      max-width: none;
+    }
+
+    .release-cards {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+    }
+
+    .release-cards > .release-card,
+    .release-cards > .release-card:nth-child(-n+3),
+    .release-cards > .release-card:nth-child(-n+4),
+    .release-cards > .release-card:nth-child(-n+5),
+    .release-cards > .release-card:nth-child(n+9),
+    .release-cards > .release-card:nth-child(n+13),
+    .release-cards > .release-card:nth-child(6),
+    .release-cards > .release-card:nth-child(7),
+    .release-cards > .release-card:nth-child(8) {
+      min-height: 124px !important;
+      padding: 14px 15px !important;
+    }
+
+    .release-cards > .release-card strong,
+    .feature-tile strong,
+    .compat-item b {
+      overflow-wrap: anywhere;
+    }
+
+    .download-card a.download-primary,
+    .route-code-card a {
+      min-height: 42px;
+      padding-inline: 16px;
+    }
+
+    .download-code {
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    @media (min-width: 1440px) and (max-width: 1759px) {
+      .release-cards {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .floating-nav {
+        justify-content: flex-start;
+        gap: 6px;
+        padding: 7px;
+        overflow-x: auto;
+      }
+
+      .floating-nav a,
+      .floating-nav span {
+        min-height: 34px;
+        padding-inline: 11px;
+        font-size: 12px;
+      }
+
+      .hero-tags,
+      .hero-status,
+      .hero-summary {
+        gap: 8px;
+      }
+
+      .hero-latest-top {
+        align-items: flex-start;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .hero-latest-version {
+        min-width: 104px;
+      }
+
+      .hero-latest strong {
+        font-size: 20px;
+      }
+
+      .download-code {
+        font-size: 11.5px;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -7203,7 +7607,7 @@
       <a href="#history">更新记录</a>
       <a href="#install">安装教程</a>
       <a href="#wechat">微信支持</a>
-      <span>V2.0.40 已发布</span>
+      <span>V2.0.50 已发布</span>
     </nav>
 
     <section class="hero">
@@ -7214,11 +7618,11 @@
           <h1>NRadio<br>插件工具</h1>
           <p class="lead">
             NRadio NROS2.0 设备 SSH 插件安装脚本。
-            当前主线 <strong>V2.0.40</strong>，通过 SSH 在路由器执行。
+            当前已发布版本 <strong>V2.0.50</strong>，通过 SSH 在路由器执行。
           </p>
 
           <div class="hero-tags">
-            <span>V2.0.40</span>
+            <span>V2.0.50</span>
             <span>SSH 执行</span>
             <span>单一脚本入口</span>
             <span>NROS2.0 设备</span>
@@ -7229,7 +7633,7 @@
           </div>
 
           <div class="hero-status" aria-label="当前维护状态">
-            <span><b>版本</b>V2.0.40</span>
+            <span><b>版本</b>V2.0.50</span>
             <span><b>文件</b>ssh-nradio-plugin-installer.sh</span>
             <span><b>方式</b>SSH 终端执行</span>
             <span><b>入口</b>单一下载入口</span>
@@ -7252,17 +7656,22 @@
 
           <section class="hero-latest" aria-label="当前里程碑说明">
             <div class="hero-latest-top">
-              <div class="hero-latest-label">本地主线</div>
-              <div class="hero-latest-version">V2.0.40</div>
+              <div class="hero-latest-label">已发布</div>
+              <div class="hero-latest-version">V2.0.50</div>
             </div>
-            <strong>V2.0.40</strong>
+            <strong>脚本集成 DDNS-GO 安装，应用商店和 AdGuardHome 页面重新美化</strong>
             <p>
-              AdGuardHome 应用商店内页重新美化，首页打开即可直接看到 DNS 查询和拦截统计数；
-              同步补齐 C2000MAX 的监听、统计和 3000 仪表盘认证链路。
+              脚本集成 DDNS-GO 安装入口，并把 DDNS-GO 接入应用商店卡片、包装页、图标和卸载链；
+              应用商店完成重新美化，卡片标题、简介、版本和状态区域布局同步收口；AdGuardHome 内页二次重新美化。
             </p>
           </section>
 
           <div class="release-cards" id="history" aria-label="最新更新摘要">
+            <article class="release-card">
+              <b>V2.0.40</b>
+              <strong>AdGuardHome 内页重新美化</strong>
+              <p>AdGuardHome 应用商店内页改成统一风格，首页打开即可看到 DNS 查询和拦截统计数。</p>
+            </article>
             <article class="release-card">
               <b>V2.0.35</b>
               <strong>MosDNS 集成</strong>
@@ -7418,10 +7827,10 @@
                 <article class="feature-tile" data-code="01">
                   <strong>常用插件安装</strong>
                   <div class="feature-tags">
+                    <span>DDNS-GO</span>
                     <span>Web SSH</span>
                     <span>OpenList</span>
                     <span>AdGuardHome</span>
-                    <span>哈基米</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="02">
@@ -7433,11 +7842,12 @@
                   </div>
                 </article>
                 <article class="feature-tile" data-code="03">
-                  <strong>应用商店美化</strong>
+                  <strong>应用商店重新美化</strong>
                   <div class="feature-tags">
-                    <span>AdGuard 首页统计</span>
+                    <span>卡片布局修复</span>
+                    <span>DDNS-GO 卡片</span>
+                    <span>AdGuardHome 内页</span>
                     <span>状态徽标</span>
-                    <span>卡片视觉</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="04">
@@ -7627,7 +8037,7 @@ sh ssh-nradio-plugin-installer.sh</code>
             <div class="history-kicker">版本时间线</div>
             <h3>版本变化按阶段收好</h3>
             <p>
-              时间线按公开版本阶段整理，当前正式版放在最后。
+              时间线按版本阶段整理，当前已发布版本放在最后。
             </p>
 
             <div class="history-facts">
@@ -7637,7 +8047,7 @@ sh ssh-nradio-plugin-installer.sh</code>
               </div>
               <div>
                 <strong>持续更新</strong>
-                <span>当前本地主线整理到 V2.0.40，最近公开 Release 仍为 V2.0.35。</span>
+                <span>当前已发布版本整理到 V2.0.50。</span>
               </div>
             </div>
           </section>
@@ -7967,11 +8377,18 @@ sh ssh-nradio-plugin-installer.sh</code>
                     <p>脚本新增 MosDNS 插件。</p>
                   </div>
                 </article>
-                <article class="timeline-entry is-current">
+                <article class="timeline-entry">
                   <div class="version">V2.0.40</div>
                   <div class="entry-copy">
                     <strong>AdGuardHome 内页重新美化 / 首页直接显示统计数</strong>
                     <p>AdGuardHome 应用商店内页改成统一风格，首页打开即可直接看到 DNS 查询和拦截统计数；同时补齐 C2000MAX 的监听、统计和 3000 仪表盘认证链路，并修正 Linux 空设备重定向写法。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry is-current">
+                  <div class="version">V2.0.50</div>
+                  <div class="entry-copy">
+                    <strong>DDNS-GO 集成、应用商店与 AdGuardHome 页面重新美化</strong>
+                    <p>脚本新增 DDNS-GO 安装入口，并接入应用商店卡片、包装页、图标和异步卸载链；应用商店卡片标题、简介、版本和状态区域重新收口；AdGuardHome 内页完成二次重新美化，卸载任务日志与 opkg 锁等待同步修复。</p>
                   </div>
                 </article>
               </div>

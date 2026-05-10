@@ -36,19 +36,30 @@ jobs:
           printf '%s  %s\n' '754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua' | sha256sum -c -
           printf '%s  %s\n' 'c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm' | sha256sum -c -
 
-      - name: Verify V2.0.40 script state
+      - name: Verify V2.0.50 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.0.40"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-05-08"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.0.50"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-05-10"' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q '测试中' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '3. 游戏加速器" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '1. 奇游联机宝" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '2. 雷神加速器" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '6. MosDNS" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "printf '7. DDNS-GO" 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'install_mosdns' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'cleanup_mosdns' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'MOSDNS_VERSION' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'MosDNS 核心下载失败' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'install_ddnsgo' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'cleanup_ddnsgo' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'DDNSGO_ARCHIVE_SHA256' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'luci-i18n-ddns-go-zh-cn' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'configure_ddnsgo_web_login' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'seed_ddnsgo_config_yaml' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'ddnsgo_yaml_has_password' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '$2 != "noarch"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'UNINSTALL_LOG_FILE' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'opkg_wait_unlock' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C8-668' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HC-WT9108' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C8-688|NRadio_C2000MAX' 00-current/ssh-nradio-plugin-installer.sh
@@ -102,9 +113,14 @@ jobs:
 
       - name: Verify support page state
         run: |
+          grep -q 'V2.0.50' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.0.50 已发布' 40-server-web/mayebano-support/index.html
+          grep -q '脚本集成 DDNS-GO 安装' 40-server-web/mayebano-support/index.html
+          grep -q '应用商店和 AdGuardHome 页面重新美化' 40-server-web/mayebano-support/index.html
+          grep -q '脚本新增 DDNS-GO 安装入口' 40-server-web/mayebano-support/index.html
+          grep -q 'AdGuardHome 内页二次重新美化' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.40' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.40 已发布' 40-server-web/mayebano-support/index.html
-          grep -q 'AdGuardHome 应用商店内页重新美化' 40-server-web/mayebano-support/index.html
+          grep -q 'AdGuardHome 内页重新美化' 40-server-web/mayebano-support/index.html
           grep -q '首页打开即可直接看到 DNS 查询和拦截统计数' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.35' 40-server-web/mayebano-support/index.html
           grep -q 'MosDNS' 40-server-web/mayebano-support/index.html
@@ -149,12 +165,12 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q '0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188' CHECKSUMS.txt
-          grep -q '1037112  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q '51ca17918a64257416f740936223a1626977406814f8860ff87c48f7d2322d4a' CHECKSUMS.txt
-          grep -q '223297  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
-          printf '%s  %s\n' '0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' '51ca17918a64257416f740936223a1626977406814f8860ff87c48f7d2322d4a' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          grep -q 'f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f' CHECKSUMS.txt
+          grep -q '1159695  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q '5a3e976a1e0678f9837bd7334fc312fbab1002edee3694622778ab471d4ec47a' CHECKSUMS.txt
+          grep -q '233686  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          printf '%s  %s\n' 'f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' '5a3e976a1e0678f9837bd7334fc312fbab1002edee3694622778ab471d4ec47a' '40-server-web/mayebano-support/index.html' | sha256sum -c -
 
       - name: Verify license
         run: |
@@ -164,12 +180,14 @@ jobs:
 
       - name: Verify repository docs
         run: |
-          grep -q 'V2.0.40' README.md
-          grep -q 'V2.0.40' CHANGELOG.md
+          grep -q 'V2.0.50' README.md
+          grep -q 'V2.0.50' CHANGELOG.md
+          grep -q 'DDNS-GO' README.md
+          grep -q 'DDNS-GO' CHANGELOG.md
           grep -q 'AdGuardHome' README.md
           grep -q 'AdGuardHome' CHANGELOG.md
-          grep -q '0eeb26c254d8c97fa1ed4bc3addc44e2674eb9d07cdae07361c06b52f47b8188' README.md
-          grep -q '1037112' README.md
+          grep -q 'f11ac1942be54e49dc856b6bd7c2cdefbd3e8fa74ae6e88d7587489882a7de0f' README.md
+          grep -q '1159695' README.md
           grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
           grep -q 'Only the current public script is maintained' SECURITY.md
           grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml

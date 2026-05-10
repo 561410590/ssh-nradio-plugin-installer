@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.0.40"
+SCRIPT_VERSION="V2.0.50"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-08"
+SCRIPT_RELEASE_DATE="2026-05-10"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -142,6 +142,39 @@ MOSDNS_ICON_NAME="${MOSDNS_ICON_NAME:-mosdns.svg}"
 MOSDNS_APP_NAME="${MOSDNS_APP_NAME:-MosDNS}"
 MOSDNS_PORT="${MOSDNS_PORT:-553}"
 MOSDNS_UCI_CONFIG="${MOSDNS_UCI_CONFIG:-/etc/config/mosdns}"
+DDNSGO_APP_NAME="${DDNSGO_APP_NAME:-DDNS-GO}"
+DDNSGO_VERSION="${DDNSGO_VERSION:-6.16.2}"
+DDNSGO_PACKAGE_VERSION="${DDNSGO_PACKAGE_VERSION:-6.16.2-r1}"
+DDNSGO_LUCI_VERSION="${DDNSGO_LUCI_VERSION:-1.6.8-r20260323}"
+DDNSGO_I18N_VERSION="${DDNSGO_I18N_VERSION:-26.070.29481~e400fc5}"
+DDNSGO_RELEASE_VERSION="${DDNSGO_RELEASE_VERSION:-1.6.8}"
+DDNSGO_PACKAGE_ARCH="${DDNSGO_PACKAGE_ARCH:-aarch64_cortex-a53}"
+DDNSGO_ARCHIVE_NAME="${DDNSGO_ARCHIVE_NAME:-openwrt-24.10-${DDNSGO_PACKAGE_ARCH}.tar.gz}"
+DDNSGO_ARCHIVE_SHA256="${DDNSGO_ARCHIVE_SHA256:-f0716d78099925a0f2b8f772f0e6957849d7c886460de824738c7063a0dc056e}"
+DDNSGO_GITHUB_REL="${DDNSGO_GITHUB_REL:-sirpdboy/luci-app-ddns-go/releases/download/v${DDNSGO_RELEASE_VERSION}/${DDNSGO_ARCHIVE_NAME}}"
+DDNSGO_DOWNLOAD_URLS="${DDNSGO_DOWNLOAD_URLS:-https://mirror.ghproxy.com/https://github.com/${DDNSGO_GITHUB_REL} https://ghproxy.net/https://github.com/${DDNSGO_GITHUB_REL} https://gh-proxy.com/https://github.com/${DDNSGO_GITHUB_REL} https://github.com/${DDNSGO_GITHUB_REL}}"
+DDNSGO_PACKAGE_NAME="${DDNSGO_PACKAGE_NAME:-ddns-go}"
+DDNSGO_LUCI_PACKAGE_NAME="${DDNSGO_LUCI_PACKAGE_NAME:-luci-app-ddns-go}"
+DDNSGO_I18N_PACKAGE_NAME="${DDNSGO_I18N_PACKAGE_NAME:-luci-i18n-ddns-go-zh-cn}"
+DDNSGO_ROUTE="${DDNSGO_ROUTE:-nradioadv/system/ddnsgo}"
+DDNSGO_LEGACY_ROUTE="${DDNSGO_LEGACY_ROUTE:-admin/services/ddns-go}"
+DDNSGO_CONTROLLER="${DDNSGO_CONTROLLER:-/usr/lib/lua/luci/controller/nradio_adv/ddnsgo.lua}"
+DDNSGO_VIEW="${DDNSGO_VIEW:-/usr/lib/lua/luci/view/nradio_adv/ddnsgo.htm}"
+DDNSGO_ICON_NAME="${DDNSGO_ICON_NAME:-ddns-go-nradio.svg}"
+DDNSGO_CONFIG_FILE="${DDNSGO_CONFIG_FILE:-/etc/config/ddns-go}"
+DDNSGO_CONFIG_DIR="${DDNSGO_CONFIG_DIR:-/etc/ddns-go}"
+DDNSGO_CONFIG_YAML="${DDNSGO_CONFIG_YAML:-$DDNSGO_CONFIG_DIR/ddns-go-config.yaml}"
+DDNSGO_INIT_FILE="${DDNSGO_INIT_FILE:-/etc/init.d/ddns-go}"
+DDNSGO_BIN_PATH="${DDNSGO_BIN_PATH:-/usr/bin/ddns-go}"
+DDNSGO_DESCRIPTION="${DDNSGO_DESCRIPTION:-动态 DNS 解析与公网地址同步}"
+DDNSGO_CORE_SIZE="${DDNSGO_CORE_SIZE:-10726088}"
+DDNSGO_LUCI_SIZE="${DDNSGO_LUCI_SIZE:-3092}"
+DDNSGO_I18N_SIZE="${DDNSGO_I18N_SIZE:-801}"
+DDNSGO_PACKAGE_STALL_TIME="${DDNSGO_PACKAGE_STALL_TIME:-35}"
+DDNSGO_PACKAGE_STALL_SPEED="${DDNSGO_PACKAGE_STALL_SPEED:-2048}"
+DDNSGO_PACKAGE_RETRY_STALL_TIME="${DDNSGO_PACKAGE_RETRY_STALL_TIME:-60}"
+DDNSGO_PACKAGE_RETRY_STALL_SPEED="${DDNSGO_PACKAGE_RETRY_STALL_SPEED:-1024}"
+DDNSGO_PACKAGE_MAX_TIME="${DDNSGO_PACKAGE_MAX_TIME:-900}"
 WEBSSH_ICON_NAME="${WEBSSH_ICON_NAME:-webssh.svg}"
 WEBSSH_ICON_URLS="${WEBSSH_ICON_URLS:-https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/svgs/solid/terminal.svg https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/svgs/solid/terminal.svg https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/svgs/solid/terminal.svg}"
 OPENVPN_ICON_NAME="${OPENVPN_ICON_NAME:-openvpn.svg}"
@@ -1923,6 +1956,8 @@ set -eu
 plugin="${1:-}"
 STATE_DIR="/root/.nradio-plugin-menu"
 WORKDIR="/tmp/nradio-plugin-uninstall.$$"
+UNINSTALL_LOG_FILE="${UNINSTALL_LOG_FILE:-/tmp/nradio-plugin-uninstall.log}"
+OPKG_LOCK_FILE="/var/lock/opkg.lock"
 APP_ICON_DIR="/www/luci-static/nradio/images/icon"
 OPENCLASH_ICON_NAME="openclash.svg"
 ADGUARDHOME_ICON_NAME="adguard.svg"
@@ -1981,6 +2016,15 @@ LEIGOD_VIEW="/usr/lib/lua/luci/view/nradiobridge_leigod/leigod.htm"
 LEIGOD_ICON_NAME="leigod.svg"
 LEIGOD_DIR="/usr/sbin/leigod"
 LEIGOD_INIT="/etc/init.d/acc"
+DDNSGO_APP_NAME="DDNS-GO"
+DDNSGO_PACKAGE_NAME="ddns-go"
+DDNSGO_LUCI_PACKAGE_NAME="luci-app-ddns-go"
+DDNSGO_I18N_PACKAGE_NAME="luci-i18n-ddns-go-zh-cn"
+DDNSGO_ROUTE="nradioadv/system/ddnsgo"
+DDNSGO_LEGACY_ROUTE="admin/services/ddns-go"
+DDNSGO_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/ddnsgo.lua"
+DDNSGO_VIEW="/usr/lib/lua/luci/view/nradio_adv/ddnsgo.htm"
+DDNSGO_ICON_NAME="ddns-go-nradio.svg"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
 EASYTIER_ROUTE_APPLY_SCRIPT="/etc/easytier/route-apply.sh"
 
@@ -1997,16 +2041,39 @@ kill_name() {
     killall "$proc_name" >/dev/null 2>&1 || true
 }
 
+opkg_wait_unlock() {
+    wait_left="${1:-60}"
+
+    while [ -e "$OPKG_LOCK_FILE" ]; do
+        if [ "$wait_left" -le 0 ] 2>/dev/null; then
+            printf 'ERROR: opkg lock wait timeout: %s\n' "$OPKG_LOCK_FILE" >>"$UNINSTALL_LOG_FILE"
+            return 1
+        fi
+        sleep 1
+        wait_left=$((wait_left - 1))
+    done
+
+    return 0
+}
+
 remove_pkg_if_present() {
     pkg_name="$1"
     pkg_has_record='0'
+
+    opkg_wait_unlock 60 || return 1
     opkg status "$pkg_name" >/dev/null 2>&1 && pkg_has_record='1'
     [ "$pkg_has_record" = '1' ] || opkg files "$pkg_name" >/dev/null 2>&1 && pkg_has_record='1'
     [ "$pkg_has_record" = '1' ] || [ -f "/usr/lib/opkg/info/$pkg_name.control" ] && pkg_has_record='1'
     [ "$pkg_has_record" = '1' ] || [ -f "/usr/lib/opkg/info/$pkg_name.list" ] && pkg_has_record='1'
     [ "$pkg_has_record" = '1' ] || return 0
-    opkg remove "$pkg_name" >>/tmp/nradio-plugin-uninstall.log 2>&1 || \
-        opkg remove "$pkg_name" --force-depends >>/tmp/nradio-plugin-uninstall.log 2>&1 || true
+
+    opkg_wait_unlock 60 || return 1
+    if opkg remove "$pkg_name" >>"$UNINSTALL_LOG_FILE" 2>&1; then
+        return 0
+    fi
+
+    opkg_wait_unlock 10 || true
+    opkg remove "$pkg_name" --force-depends >>"$UNINSTALL_LOG_FILE" 2>&1 || return 1
 }
 
 remove_app_icon_file() {
@@ -2388,19 +2455,6 @@ cleanup_adguardhome() {
     cleanup_appcenter_entry "luci-app-adguardhome" "luci-app-adguardhome" "admin/services/AdGuardHome"
 }
 
-cleanup_mosdns() {
-    stop_disable /etc/init.d/mosdns
-    kill_name mosdns
-    rm -f /usr/bin/mosdns /etc/init.d/mosdns /etc/config/mosdns /usr/libexec/mosdns-sync-config
-    rm -rf /etc/mosdns
-    rm -f /usr/lib/lua/luci/controller/nradio_adv/mosdns.lua \
-        /usr/lib/lua/luci/model/cbi/nradio_adv/mosdns_basic.lua \
-        /usr/lib/lua/luci/view/nradio_adv/mosdns_logs.htm
-    rm -f /www/luci-static/nradio/images/icon/mosdns.svg /usr/libexec/nradio-mosdns-uninstall
-    remove_app_icon_file "mosdns.svg"
-    cleanup_appcenter_entry "MosDNS" "MosDNS" "nradioadv/system/mosdns/basic"
-}
-
 cleanup_openvpn() {
     stop_disable /etc/init.d/openvpn
     kill_name openvpn
@@ -2634,7 +2688,7 @@ cleanup_leigod() {
         "$LEIGOD_INIT" stop >/dev/null 2>&1 || true
     fi
     if [ -f "$LEIGOD_DIR/leigod_uninstall.sh" ]; then
-        ( cd "$LEIGOD_DIR" && sh ./leigod_uninstall.sh ) >>/tmp/nradio-plugin-uninstall.log 2>&1 || true
+        ( cd "$LEIGOD_DIR" && sh ./leigod_uninstall.sh ) >>"$UNINSTALL_LOG_FILE" 2>&1 || true
     fi
     kill_name acc-gw.router.arm64
     kill_name acc-gw.router.aarch64
@@ -2645,6 +2699,45 @@ cleanup_leigod() {
     remove_app_icon_file "$LEIGOD_ICON_NAME"
     cleanup_appcenter_entry "$LEIGOD_APP_NAME" "$LEIGOD_PACKAGE_NAME" "$LEIGOD_ROUTE"
     cleanup_appcenter_entry "$LEIGOD_PACKAGE_NAME" "$LEIGOD_PACKAGE_NAME" "$LEIGOD_ROUTE"
+}
+
+cleanup_ddnsgo() {
+    stop_disable /etc/init.d/ddns-go
+    kill_name ddns-go
+    remove_pkg_if_present "$DDNSGO_I18N_PACKAGE_NAME"
+    remove_pkg_if_present "$DDNSGO_LUCI_PACKAGE_NAME"
+    remove_pkg_if_present "$DDNSGO_PACKAGE_NAME"
+    rm -f \
+        /usr/bin/ddns-go \
+        /etc/init.d/ddns-go \
+        /etc/config/ddns-go \
+        "$DDNSGO_CONTROLLER" \
+        "$DDNSGO_VIEW" \
+        /usr/lib/lua/luci/controller/ddns-go.lua \
+        /usr/lib/lua/luci/controller/ddnsgo.lua \
+        /usr/lib/lua/luci/model/cbi/ddns-go.lua \
+        /usr/lib/lua/luci/model/cbi/ddnsgo.lua \
+        /usr/lib/lua/luci/i18n/ddns-go.zh-cn.lmo \
+        /usr/lib/lua/luci/i18n/ddnsgo.zh-cn.lmo \
+        /usr/share/rpcd/acl.d/luci-app-ddns-go.json \
+        /usr/lib/opkg/info/ddns-go.* \
+        /usr/lib/opkg/info/luci-app-ddns-go.* \
+        /usr/lib/opkg/info/luci-i18n-ddns-go-zh-cn.* \
+        2>/dev/null || true
+    rm -rf /etc/ddns-go /usr/share/ddns-go /usr/lib/lua/luci/view/ddns-go /usr/lib/lua/luci/view/ddnsgo 2>/dev/null || true
+    remove_app_icon_file "$DDNSGO_ICON_NAME"
+    remove_app_icon_file "ddns-go.svg"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_LUCI_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_I18N_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_LEGACY_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_LUCI_PACKAGE_NAME" "$DDNSGO_LEGACY_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_I18N_PACKAGE_NAME" "$DDNSGO_LEGACY_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_PACKAGE_NAME" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_LUCI_PACKAGE_NAME" "$DDNSGO_LUCI_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_I18N_PACKAGE_NAME" "$DDNSGO_I18N_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "DDNS-Go" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "ddns-go" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
 }
 
 case "$plugin" in
@@ -2680,6 +2773,9 @@ case "$plugin" in
         ;;
     mosdns)
         cleanup_mosdns
+        ;;
+    ddnsgo)
+        cleanup_ddnsgo
         ;;
     *)
         exit 1
@@ -2717,6 +2813,7 @@ function index()
     entry({"nradioadv", "system", "plugin_uninstall", "qiyou"}, call("uninstall_qiyou"), nil, 105).leaf = true
     entry({"nradioadv", "system", "plugin_uninstall", "leigod"}, call("uninstall_leigod"), nil, 106).leaf = true
     entry({"nradioadv", "system", "plugin_uninstall", "mosdns"}, call("uninstall_mosdns"), nil, 107).leaf = true
+    entry({"nradioadv", "system", "plugin_uninstall", "ddnsgo"}, call("uninstall_ddnsgo"), nil, 108).leaf = true
 end
 
 local function json_response(code, msg, detail)
@@ -2782,6 +2879,8 @@ local function plugin_from_name(name)
         return "leigod"
     elseif name == "MosDNS" or name == "mosdns" then
         return "mosdns"
+    elseif name == "DDNS-GO" or name == "DDNS-Go" or name == "ddns-go" or name == "luci-app-ddns-go" or name == "luci-i18n-ddns-go-zh-cn" then
+        return "ddnsgo"
     end
 
     return nil
@@ -2793,9 +2892,19 @@ local function task_paths(plugin)
         TASK_DIR .. "/" .. plugin .. ".log"
 end
 
+local function task_lock_path(plugin)
+    return TASK_DIR .. "/" .. plugin .. ".lock"
+end
+
+local function os_ok(rc)
+    return rc == true or rc == 0
+end
+
 local function start_plugin(plugin)
     local status_file, rc_file, log_file = task_paths(plugin)
+    local lock_dir = task_lock_path(plugin)
     local helper_test = io.open(HELPER, "r")
+    local status
 
     if not helper_test then
         json_response(CODE_FAILED, "卸载失败", "缺少卸载助手：" .. HELPER)
@@ -2804,13 +2913,38 @@ local function start_plugin(plugin)
     helper_test:close()
 
     os.execute("/bin/mkdir -p " .. shell_quote(TASK_DIR) .. " >/dev/null 2>&1")
+    status = trim(read_file(status_file, 64))
+    if status == "running" then
+        json_response(CODE_RUNNING, "正在卸载")
+        return
+    end
+
+    if not os_ok(os.execute("/bin/mkdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")) then
+        status = trim(read_file(status_file, 64))
+        if status ~= "running" then
+            os.execute("/bin/rmdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")
+        end
+        if not os_ok(os.execute("/bin/mkdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")) then
+            json_response(CODE_RUNNING, "正在卸载")
+            return
+        end
+    end
+
+    status = trim(read_file(status_file, 64))
+    if status == "running" then
+        os.execute("/bin/rmdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")
+        json_response(CODE_RUNNING, "正在卸载")
+        return
+    end
+
     os.execute("/bin/rm -f " .. shell_quote(status_file) .. " " .. shell_quote(rc_file) .. " " .. shell_quote(log_file) .. " >/dev/null 2>&1")
 
     local cmd = "(" ..
         "/bin/echo running > " .. shell_quote(status_file) .. "; " ..
-        shell_quote(HELPER) .. " " .. shell_quote(plugin) .. " > " .. shell_quote(log_file) .. " 2>&1; " ..
+        "UNINSTALL_LOG_FILE=" .. shell_quote(log_file) .. " " .. shell_quote(HELPER) .. " " .. shell_quote(plugin) .. " > " .. shell_quote(log_file) .. " 2>&1; " ..
         "rc=$?; /bin/echo $rc > " .. shell_quote(rc_file) .. "; " ..
-        "if [ $rc -eq 0 ]; then /bin/echo ok > " .. shell_quote(status_file) .. "; else /bin/echo fail > " .. shell_quote(status_file) .. "; fi" ..
+        "if [ $rc -eq 0 ]; then /bin/echo ok > " .. shell_quote(status_file) .. "; else /bin/echo fail > " .. shell_quote(status_file) .. "; fi; " ..
+        "/bin/rmdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1" ..
         ") >/dev/null 2>&1 &"
 
     os.execute(cmd)
@@ -2903,6 +3037,10 @@ end
 
 function uninstall_mosdns()
     start_plugin("mosdns")
+end
+
+function uninstall_ddnsgo()
+    start_plugin("ddnsgo")
 end
 EOF_PLUGIN_UNINSTALL_CONTROLLER
 }
@@ -3402,9 +3540,17 @@ extract_ipk_archive() {
 
 get_primary_arch() {
     opkg print-architecture 2>/dev/null | awk '
-        $1 == "arch" && $2 != "all" {
-            print $2
-            exit
+        $1 == "arch" && $2 != "all" && $2 != "noarch" {
+            prio = ($3 ~ /^[0-9]+$/) ? $3 : 0
+            if (!found || prio > best_prio) {
+                best = $2
+                best_prio = prio
+                found = 1
+            }
+        }
+        END {
+            if (found)
+                print best
         }
     '
 }
@@ -3448,8 +3594,24 @@ verify_appcenter_route() {
         esac
     done)"
 
+    if [ "$plugin_name" = "${DDNSGO_APP_NAME:-DDNS-GO}" ]; then
+        parent_sec_list="$(uci show appcenter 2>/dev/null | while IFS= read -r line; do
+            case "$line" in
+                "appcenter.@package_list"*".parent='${plugin_name}'"|"appcenter.cfg"*".parent='${plugin_name}'")
+                    sec="${line#appcenter.}"
+                    sec="${sec%%.*}"
+                    printf '%s\n' "$sec"
+                ;;
+            esac
+        done)"
+        if [ -n "$parent_sec_list" ]; then
+            sec_list="$(printf '%s\n%s\n' "$sec_list" "$parent_sec_list" | sed '/^$/d' | sort -u)"
+        fi
+    fi
+
     for sec in $sec_list; do
         [ -n "$sec" ] || continue
+        [ "$(uci -q get "appcenter.$sec" 2>/dev/null || true)" = "package_list" ] || continue
         found_sec='1'
         actual_route="$(uci -q get appcenter.$sec.luci_module_route 2>/dev/null || true)"
         [ -n "$first_actual_route" ] || first_actual_route="$actual_route"
@@ -3469,6 +3631,9 @@ verify_appcenter_route() {
                 ;;
             MosDNS)
                 [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/mosdns.lua" ] && return 0
+                ;;
+            DDNS-GO)
+                [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && return 0
                 ;;
         esac
     done
@@ -3876,8 +4041,10 @@ find_uci_section() {
             "appcenter.@${sec_type}"*".name='${pkg_name}'"|"appcenter.cfg"*".name='${pkg_name}'")
                 sec="${line#appcenter.}"
                 sec="${sec%%.*}"
-                printf '%s\n' "$sec"
-                break
+                if [ "$(uci -q get "appcenter.$sec" 2>/dev/null || true)" = "$sec_type" ]; then
+                    printf '%s\n' "$sec"
+                    break
+                fi
                 ;;
         esac
     done
@@ -3887,11 +4054,15 @@ cleanup_appcenter_route_entries() {
     target_route="$1"
 
     uci show appcenter 2>/dev/null | awk -v route="$target_route" '
-        /^appcenter\.@package_list\[[0-9]+\]=package_list$/ {
-            sec=$1
+        /^appcenter\.[^.]+=package_list$/ {
+            sec=$0
             sub(/^appcenter\./, "", sec)
             sub(/=.*/, "", sec)
             current=sec
+            next
+        }
+        /^appcenter\.[^.]+=/ {
+            current=""
             next
         }
         current != "" && $0 == ("appcenter." current ".luci_module_route='"'"'" route "'"'"'") {
@@ -4329,6 +4500,35 @@ EOF_OPENLIST_ICON
     return 0
 }
 
+install_ddnsgo_embedded_icon() {
+    ensure_app_icon_dir
+    backup_file "$APP_ICON_DIR/$DDNSGO_ICON_NAME"
+    cat > "$APP_ICON_DIR/$DDNSGO_ICON_NAME" <<'EOF_DDNSGO_ICON'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <defs>
+    <linearGradient id="bg" x1="12" y1="8" x2="86" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e3a5f"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="line" x1="18" y1="18" x2="78" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset=".58" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="80" height="80" rx="22" fill="url(#bg)"/>
+  <rect x="11" y="11" width="74" height="74" rx="19" fill="none" stroke="#8ddcf5" stroke-opacity=".24" stroke-width="2"/>
+  <circle cx="48" cy="48" r="26" fill="#0ea5e9" fill-opacity=".12" stroke="url(#line)" stroke-width="5"/>
+  <path d="M27 47c5-12 12-18 21-18s16 6 21 18M27 50c5 12 12 18 21 18s16-6 21-18" fill="none" stroke="#22d3ee" stroke-width="5" stroke-linecap="round"/>
+  <path d="M48 24v48M20 48h56" fill="none" stroke="#93c5fd" stroke-width="5" stroke-linecap="round"/>
+  <path d="m69 22 7 1.5-1.5 7M27 74l-7-1.5 1.5-7" fill="none" stroke="#a7f3d0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+EOF_DDNSGO_ICON
+    chmod 644 "$APP_ICON_DIR/$DDNSGO_ICON_NAME" 2>/dev/null || true
+    log "图标:   内置 DDNS-GO SVG 卡片"
+    return 0
+}
+
 install_unified_appcenter_icons() {
     install_webssh_embedded_icon || return 1
     install_openclash_embedded_icon || return 1
@@ -4337,6 +4537,7 @@ install_unified_appcenter_icons() {
     install_openlist_embedded_icon || return 1
     install_zerotier_embedded_icon || return 1
     install_easytier_embedded_icon || return 1
+    install_ddnsgo_embedded_icon || return 1
     return 0
 }
 
@@ -4387,6 +4588,66 @@ set_appcenter_entry() {
     else
         uci -q delete "appcenter.$list_sec.icon" >/dev/null 2>&1 || true
     fi
+}
+
+set_ddnsgo_appcenter_entry() {
+    ddnsgo_core_size="$1"
+    ddnsgo_luci_size="$2"
+    ddnsgo_i18n_size="$3"
+    ddnsgo_icon_name="${4:-}"
+
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_LUCI_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_I18N_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "$DDNSGO_APP_NAME" "$DDNSGO_LUCI_PACKAGE_NAME" "$DDNSGO_LEGACY_ROUTE"
+    cleanup_appcenter_entry "DDNS-Go" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_entry "ddns-go" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+    cleanup_appcenter_route_entries "$DDNSGO_ROUTE"
+    cleanup_appcenter_route_entries "$DDNSGO_LEGACY_ROUTE"
+
+    ddnsgo_pkg_sec="$(uci add appcenter package)"
+    ddnsgo_core_sec="$(uci add appcenter package_list)"
+    ddnsgo_luci_sec="$(uci add appcenter package_list)"
+    ddnsgo_i18n_sec="$(uci add appcenter package_list)"
+
+    uci set "appcenter.$ddnsgo_pkg_sec.name=$DDNSGO_APP_NAME"
+    uci set "appcenter.$ddnsgo_pkg_sec.version=$DDNSGO_VERSION"
+    if [ -n "$ddnsgo_icon_name" ]; then
+        uci set "appcenter.$ddnsgo_pkg_sec.icon=$ddnsgo_icon_name"
+    else
+        uci -q delete "appcenter.$ddnsgo_pkg_sec.icon" >/dev/null 2>&1 || true
+    fi
+    uci set "appcenter.$ddnsgo_pkg_sec.des=$DDNSGO_DESCRIPTION"
+    uci set "appcenter.$ddnsgo_pkg_sec.size=$ddnsgo_core_size"
+    uci set "appcenter.$ddnsgo_pkg_sec.status=1"
+    uci set "appcenter.$ddnsgo_pkg_sec.has_luci=1"
+    uci set "appcenter.$ddnsgo_pkg_sec.open=1"
+
+    uci set "appcenter.$ddnsgo_core_sec.name=$DDNSGO_PACKAGE_NAME"
+    uci set "appcenter.$ddnsgo_core_sec.pkg_name=$DDNSGO_PACKAGE_NAME"
+    uci set "appcenter.$ddnsgo_core_sec.parent=$DDNSGO_APP_NAME"
+    uci set "appcenter.$ddnsgo_core_sec.size=$ddnsgo_core_size"
+    uci set "appcenter.$ddnsgo_core_sec.version=$DDNSGO_PACKAGE_VERSION"
+    uci set "appcenter.$ddnsgo_core_sec.has_luci=0"
+    uci set "appcenter.$ddnsgo_core_sec.type=1"
+
+    uci set "appcenter.$ddnsgo_luci_sec.name=$DDNSGO_LUCI_PACKAGE_NAME"
+    uci set "appcenter.$ddnsgo_luci_sec.pkg_name=$DDNSGO_LUCI_PACKAGE_NAME"
+    uci set "appcenter.$ddnsgo_luci_sec.parent=$DDNSGO_APP_NAME"
+    uci set "appcenter.$ddnsgo_luci_sec.size=$ddnsgo_luci_size"
+    uci set "appcenter.$ddnsgo_luci_sec.version=$DDNSGO_LUCI_VERSION"
+    uci set "appcenter.$ddnsgo_luci_sec.has_luci=1"
+    uci set "appcenter.$ddnsgo_luci_sec.type=1"
+    uci set "appcenter.$ddnsgo_luci_sec.luci_module_file=$DDNSGO_CONTROLLER"
+    uci set "appcenter.$ddnsgo_luci_sec.luci_module_route=$DDNSGO_ROUTE"
+
+    uci set "appcenter.$ddnsgo_i18n_sec.name=$DDNSGO_I18N_PACKAGE_NAME"
+    uci set "appcenter.$ddnsgo_i18n_sec.pkg_name=$DDNSGO_I18N_PACKAGE_NAME"
+    uci set "appcenter.$ddnsgo_i18n_sec.parent=$DDNSGO_APP_NAME"
+    uci set "appcenter.$ddnsgo_i18n_sec.size=$ddnsgo_i18n_size"
+    uci set "appcenter.$ddnsgo_i18n_sec.version=$DDNSGO_I18N_VERSION"
+    uci set "appcenter.$ddnsgo_i18n_sec.has_luci=0"
+    uci set "appcenter.$ddnsgo_i18n_sec.type=1"
 }
 
 patch_common_template() {
@@ -4444,7 +4705,7 @@ EOF
             if (!frame || !frame.src)
                 return;
 
-            if (frame.src.indexOf('/admin/services/openclash') === -1 && frame.src.indexOf('/admin/services/AdGuardHome') === -1 && frame.src.indexOf('/nradioadv/system/openvpnfull') === -1 && frame.src.indexOf('/nradioadv/system/openlist') === -1 && frame.src.indexOf('/nradioadv/system/zerotier') === -1 && frame.src.indexOf('/admin/vpn/easytier') === -1 && frame.src.indexOf('/nradioadv/system/webssh') === -1)
+            if (frame.src.indexOf('/admin/services/openclash') === -1 && frame.src.indexOf('/admin/services/AdGuardHome') === -1 && frame.src.indexOf('/nradioadv/system/openvpnfull') === -1 && frame.src.indexOf('/nradioadv/system/openlist') === -1 && frame.src.indexOf('/nradioadv/system/zerotier') === -1 && frame.src.indexOf('/admin/vpn/easytier') === -1 && frame.src.indexOf('/nradioadv/system/webssh') === -1 && frame.src.indexOf('/nradioadv/system/ddnsgo') === -1)
                 return;
 
             var d = frame.contentWindow.document;
@@ -4572,6 +4833,10 @@ EOF
             return "easytier";
         if(app_name == "FanControl Plus" || app_name == "fanctrl-plus" || app_name == "FanControl" || app_name == "fanctrl")
             return "fanctrl";
+        if(app_name == "MosDNS" || app_name == "mosdns")
+            return "mosdns";
+        if(app_name == "DDNS-GO" || app_name == "DDNS-Go" || app_name == "ddns-go" || app_name == "luci-app-ddns-go" || app_name == "luci-i18n-ddns-go-zh-cn")
+            return "ddnsgo";
         if(app_name == "奇游联机宝" || app_name == "QiYou" || app_name == "qiyou" || app_name == "nradio-qiyou")
             return "qiyou";
         if(app_name == "雷神加速器" || app_name == "Leigod" || app_name == "LeigodAcc" || app_name == "leigod" || app_name == "nradio-leigod")
@@ -4789,14 +5054,16 @@ EOF
     need_fanctrl_route='1'
     need_qiyou_route='1'
     need_leigod_route='1'
+    need_ddnsgo_route='1'
     grep -q 'db.name == "OpenList"' "$tmp3" && need_openlist_route='0'
     grep -q 'db.name == "ZeroTier"' "$tmp3" && need_zerotier_route='0'
     grep -q 'open_route = "nradioadv/system/fanctrl";' "$tmp3" && need_fanctrl_route='0'
     grep -q 'db.name == "奇游联机宝"' "$tmp3" && need_qiyou_route='0'
     grep -q 'db.name == "雷神加速器"' "$tmp3" && need_leigod_route='0'
-    if [ "$need_openlist_route$need_zerotier_route$need_fanctrl_route$need_qiyou_route$need_leigod_route" != '00000' ]; then
+    grep -q 'db.name == "DDNS-GO"' "$tmp3" && need_ddnsgo_route='0'
+    if [ "$need_openlist_route$need_zerotier_route$need_fanctrl_route$need_qiyou_route$need_leigod_route$need_ddnsgo_route" != '000000' ]; then
         tmp4="$WORKDIR/appcenter.4"
-        awk -v need_openlist="$need_openlist_route" -v need_zerotier="$need_zerotier_route" -v need_fanctrl="$need_fanctrl_route" -v need_qiyou="$need_qiyou_route" -v need_leigod="$need_leigod_route" '
+        awk -v need_openlist="$need_openlist_route" -v need_zerotier="$need_zerotier_route" -v need_fanctrl="$need_fanctrl_route" -v need_qiyou="$need_qiyou_route" -v need_leigod="$need_leigod_route" -v need_ddnsgo="$need_ddnsgo_route" '
             BEGIN { inserted = 0 }
             {
                 print
@@ -4820,6 +5087,10 @@ EOF
                     if (need_leigod == "1") {
                         print "            else if (db.name == \"雷神加速器\" || db.name == \"Leigod\" || db.name == \"LeigodAcc\" || db.name == \"leigod\" || db.name == \"nradio-leigod\")"
                         print "                open_route = \"nradioadv/system/leigod\";"
+                    }
+                    if (need_ddnsgo == "1") {
+                        print "            else if (db.name == \"DDNS-GO\" || db.name == \"DDNS-Go\" || db.name == \"ddns-go\" || db.name == \"luci-app-ddns-go\" || db.name == \"luci-i18n-ddns-go-zh-cn\")"
+                        print "                open_route = \"nradioadv/system/ddnsgo\";"
                     }
                     inserted = 1
                 }
@@ -4881,8 +5152,10 @@ EOF
     verify_template_marker 'open_route = "nradioadv/system/openlist/basic";' 'OpenList 打开路由'
     verify_template_marker 'open_route = "nradioadv/system/zerotier/basic";' 'ZeroTier 打开路由'
     verify_template_marker 'open_route = "nradioadv/system/fanctrl";' 'FanControl 打开路由'
+    verify_template_marker 'open_route = "nradioadv/system/ddnsgo";' 'DDNS-GO 打开路由'
     verify_template_marker "frame.src.indexOf('/admin/vpn/easytier') === -1" 'EasyTier iframe 白名单'
     verify_template_marker "frame.src.indexOf('/nradioadv/system/webssh') === -1" 'Web SSH iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/ddnsgo') === -1" 'DDNS-GO iframe 白名单'
     verify_template_marker "action == 'uninstall' && nradio_plugin_uninstall_action(app_name)" '脚本插件异步卸载入口'
     verify_template_marker 'plugin_uninstall/start' '脚本插件异步卸载启动接口'
     verify_template_marker 'plugin_uninstall/check' '脚本插件异步卸载检查接口'
@@ -5062,9 +5335,11 @@ patch_appcenter_card_polish() {
     tmp_status="$WORKDIR/appcenter-card-polish.status.tmp"
     tmp_compose="$WORKDIR/appcenter-card-polish.compose.tmp"
     tmp_panel="$WORKDIR/appcenter-card-polish.panel.tmp"
+    tmp_mount="$WORKDIR/appcenter-card-polish.mount.tmp"
     tmp_ready="$WORKDIR/appcenter-card-polish.ready.tmp"
     tmp_icon="$WORKDIR/appcenter-card-polish.icon.tmp"
     tmp_desc="$WORKDIR/appcenter-card-polish.desc.tmp"
+    tmp_name="$WORKDIR/appcenter-card-polish.name.tmp"
     status_js_file="$WORKDIR/appcenter-card-polish.status-panel.js"
     empty_js_file="$WORKDIR/appcenter-card-polish.empty-state.js"
 
@@ -5072,93 +5347,289 @@ patch_appcenter_card_polish() {
     /* NRadio appcenter card polish: visual-only layer */
     /* NRadio appcenter card polish V2.0.25 full repair layer */
     /* NRadio appcenter visual polish 1-5 safe refinement */
-    /* Keep appcontainer/container_left/app_top_menu/container_right layout owned by NRadio OEM CSS. */
+    /* Keep container_left/app_top_menu layout owned by NRadio OEM CSS. */
+    .appcontainer{
+        position: relative;
+        --nr-status-rail: 25%;
+        --nr-status-reserve: 19.5%;
+        --nr-status-gap: 14px;
+        --nr-status-edge: -5%;
+    }
+    #app_top_menu{
+        display: block;
+        max-width: 100%;
+        overflow: hidden !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        white-space: nowrap;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none;
+    }
+    #app_top_menu::-webkit-scrollbar{
+        width: 0 !important;
+        height: 0 !important;
+        display: none !important;
+    }
+    #app_top_menu .top_menu{
+        color: #9be5f2;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0;
+        line-height: 1.2;
+        text-shadow: none;
+        white-space: nowrap;
+    }
+    #app_top_menu .top_menu_active{
+        color: #eefcff;
+        border-bottom-color: #6ed8e9;
+        box-shadow: 0 7px 12px -14px rgba(103,215,232,.42);
+    }
+    #app_top_menu .top_menu_inner{
+        display: inline-flex !important;
+        align-items: center;
+        gap: 7px;
+        white-space: nowrap;
+    }
+    #app_top_menu .top_menu_inner_icon{
+        top: -2px;
+        margin-left: 0;
+        opacity: .36;
+        transition: opacity .16s ease, transform .16s ease;
+    }
+    #app_top_menu .top_menu_inner:hover .top_menu_inner_icon{
+        opacity: .56;
+        transform: scale(1.04);
+    }
+    .app_btn_box{
+        align-items: center;
+        gap: 8px 10px;
+        margin-bottom: 14px;
+        padding-right: calc(var(--nr-status-reserve) + var(--nr-status-gap));
+        box-sizing: border-box;
+        flex-wrap: nowrap;
+    }
+    .app_btn_box .mem_track{
+        flex: 0 1 280px;
+        min-width: 220px;
+        max-width: 280px;
+    }
+    .app_btn_box .app_btn_group{
+        position: absolute;
+        right: calc(var(--nr-status-reserve) + var(--nr-status-gap));
+        top: 0;
+        z-index: 4;
+        isolation: isolate;
+        overflow: hidden;
+        flex: 0 0 auto;
+        width: 212px;
+        min-height: 38px;
+        padding: 3px;
+        box-sizing: border-box;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(148,163,184,.16);
+        border-radius: 12px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(125,211,252,.14), transparent 58%),
+            linear-gradient(180deg, rgba(44,50,65,.76), rgba(29,36,50,.66));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), inset 0 0 0 1px rgba(255,255,255,.022), 0 6px 12px rgba(0,0,0,.085);
+        -webkit-backdrop-filter: blur(8px) saturate(1.06);
+        backdrop-filter: blur(8px) saturate(1.06);
+    }
+    #app_status_mount{
+        display: block;
+        position: absolute;
+        right: var(--nr-status-edge);
+        top: 0;
+        z-index: 3;
+        width: var(--nr-status-rail);
+        max-width: none;
+        min-height: 0;
+        min-width: 0;
+    }
+    #app_status_mount:empty{
+        display: none;
+    }
+    .container_left .app_menu{
+        display: block;
+        width: calc(100% - 14px);
+        height: 36px;
+        line-height: 36px;
+        margin: 0 7px 9px 0;
+        padding: 0 12px;
+        box-sizing: border-box;
+        border: 1px solid rgba(148,163,184,0);
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(255,255,255,.024), rgba(255,255,255,0));
+        background-clip: border-box;
+        -webkit-background-clip: border-box;
+        -webkit-text-fill-color: #deebff;
+        color: #deebff;
+        text-shadow: 0 1px 1px rgba(0,0,0,.22);
+        white-space: nowrap;
+        transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .container_left .app_menu:hover{
+        border-color: rgba(125,211,252,.16);
+        background: linear-gradient(180deg, rgba(125,211,252,.074), rgba(96,165,250,.030));
+        -webkit-text-fill-color: #ffffff;
+        color: #ffffff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+    }
+    .container_left .app_menu.menu_active{
+        border-color: rgba(34,211,238,.22);
+        background:
+            radial-gradient(circle at 0% 50%, rgba(34,211,238,.16), transparent 58%),
+            linear-gradient(180deg, rgba(34,211,238,.120), rgba(59,130,246,.052));
+        -webkit-background-clip: border-box;
+        background-clip: border-box;
+        -webkit-text-fill-color: #f8fbff;
+        color: #f8fbff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 5px 12px rgba(14,165,233,.055);
+    }
+    .container_right{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 26px 14px;
+        align-content: start;
+        align-items: stretch;
+        padding-right: calc(var(--nr-status-reserve) + var(--nr-status-gap)) !important;
+        box-sizing: border-box;
+    }
     .container_right .app_box{
         /* NRadio appcenter card surface safe polish */
+        --nr-card-pad: 20px;
+        --nr-action-height: 36px;
+        --nr-desc-gap: 14px;
         position: relative;
-        min-height: 172px;
-        padding: 14px 12px;
+        isolation: isolate;
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        grid-template-areas:
+            "icon info"
+            "desc desc";
+        grid-auto-flow: row;
+        column-gap: 14px;
+        row-gap: 7px;
+        align-items: start;
+        float: none !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 194px;
+        margin: 0 !important;
+        padding: var(--nr-card-pad) var(--nr-card-pad) 64px;
         overflow: hidden;
         box-sizing: border-box;
-        border: 1px solid rgba(255,255,255,.11);
+        border: 1px solid rgba(108,130,172,.58);
         border-radius: 14px;
         background:
-            radial-gradient(circle at 18% 18%, rgba(34,211,238,.10), transparent 30%),
-            radial-gradient(circle at 92% 0%, rgba(59,130,246,.09), transparent 34%),
-            linear-gradient(145deg, rgba(255,255,255,.050), rgba(255,255,255,.024));
-        background-blend-mode: screen, screen, normal;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 10px 24px rgba(0,0,0,.10);
+            radial-gradient(circle at 100% 0%, rgba(34,211,238,.135), transparent 32%),
+            radial-gradient(circle at 0% 0%, rgba(108,162,255,.112), transparent 34%),
+            linear-gradient(180deg, rgba(37,44,61,.935), rgba(22,29,42,.90)),
+            rgba(12,16,24,.66);
+        background-blend-mode: screen, screen, normal, normal;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.078), inset 0 0 0 1px rgba(255,255,255,.026), 0 18px 34px rgba(0,0,0,.18);
+        -webkit-backdrop-filter: blur(10px) saturate(1.10);
+        backdrop-filter: blur(10px) saturate(1.10);
         transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
     }
     .container_right .app_box:focus-within{
-        border-color: rgba(96,165,250,.42);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 0 0 2px rgba(96,165,250,.12), 0 14px 26px rgba(0,0,0,.14);
+        border-color: rgba(125,186,255,.36);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), 0 0 0 2px rgba(125,211,252,.075), 0 16px 28px rgba(0,0,0,.14);
     }
     .container_right .app_box::before{
         content: "";
         position: absolute;
-        inset: 0 0 auto 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0,213,255,.62), transparent);
-        opacity: .44;
-        box-shadow: 0 0 12px rgba(34,211,238,.18);
+        inset: 0;
+        height: auto;
+        background:
+            linear-gradient(135deg, rgba(255,255,255,.086), transparent 42%),
+            linear-gradient(180deg, rgba(255,255,255,.042), transparent 28%),
+            radial-gradient(circle at 50% 100%, rgba(59,130,246,.048), transparent 58%);
+        opacity: .88;
+        pointer-events: none;
+        z-index: 0;
     }
     .container_right .app_box::after{
         content: "";
         position: absolute;
-        right: -35px;
-        top: -38px;
-        width: 92px;
-        height: 92px;
-        border-radius: 50%;
-        background: rgba(0,213,255,.06);
-        filter: blur(8px);
-        opacity: 0;
+        left: 18px;
+        right: 18px;
+        top: auto;
+        bottom: 0;
+        width: auto;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(114,180,255,.72), rgba(47,211,238,.46), rgba(47,211,238,0));
+        filter: none;
+        display: block;
+        opacity: .74;
         transition: opacity .18s ease;
         pointer-events: none;
+        z-index: 0;
     }
     .container_right .app_box:hover{
-        transform: translateY(-2px);
-        border-color: rgba(0,213,255,.34);
+        transform: none;
+        border-color: rgba(132,194,255,.42);
         background:
-            radial-gradient(circle at 18% 18%, rgba(34,211,238,.14), transparent 30%),
-            radial-gradient(circle at 92% 0%, rgba(59,130,246,.12), transparent 34%),
-            linear-gradient(145deg, rgba(255,255,255,.066), rgba(255,255,255,.030));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 14px 26px rgba(0,0,0,.14), 0 0 0 1px rgba(0,213,255,.05);
+            radial-gradient(circle at 100% 0%, rgba(34,211,238,.160), transparent 32%),
+            radial-gradient(circle at 0% 0%, rgba(108,162,255,.132), transparent 34%),
+            linear-gradient(180deg, rgba(40,49,68,.955), rgba(24,32,47,.92)),
+            rgba(12,16,24,.70);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.084), inset 0 0 0 1px rgba(255,255,255,.028), 0 20px 38px rgba(0,0,0,.20);
     }
     .container_right .app_box:hover::after{
-        opacity: 1;
+        opacity: .78;
     }
     .container_right .app_box:hover::before{
-        opacity: .70;
+        opacity: .84;
     }
     .container_right .app_icon{
         position: relative;
-        float: left;
-        width: 35%;
-        margin: 10px 0 0 5px;
+        grid-area: icon;
+        grid-column: auto;
+        grid-row: auto;
+        float: none;
+        width: 72px;
+        margin: 0;
         text-align: center;
         z-index: 1;
     }
-    .container_right .app_icon_img{
-        /* NRadio appcenter icon safe polish */
-        width: 58px;
-        height: 58px;
-        padding: 7px;
-        object-fit: contain;
-        box-sizing: border-box;
+    .container_right .app_icon::before{
+        content: "";
+        position: absolute;
+        inset: 6px 7px 7px 7px;
         border-radius: 16px;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.08));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 18px rgba(0,0,0,.18);
-        filter: saturate(1.08) contrast(1.02);
+            radial-gradient(circle at 50% 20%, rgba(125,211,252,.18), transparent 52%),
+            linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0));
+        opacity: .76;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .container_right .app_icon_img{
+        /* NRadio appcenter icon safe polish */
+        position: relative;
+        z-index: 1;
+        width: 58px;
+        height: 58px;
+        padding: 6px;
+        object-fit: contain;
+        box-sizing: border-box;
+        border-radius: 13px;
+        background:
+            radial-gradient(circle at 70% 18%, rgba(255,255,255,.34), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.10));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 0 rgba(255,255,255,.068), 0 12px 20px rgba(0,0,0,.18);
+        filter: saturate(1.01) contrast(1.018);
         transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
         will-change: transform;
     }
     .container_right .app_box:hover .app_icon_img{
-        transform: translateY(-1px) scale(1.035);
-        filter: saturate(1.16) contrast(1.04);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 12px 20px rgba(0,0,0,.20), 0 0 0 1px rgba(34,211,238,.06);
+        transform: none;
+        filter: saturate(1.06) contrast(1.028);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(255,255,255,.055), 0 10px 16px rgba(0,0,0,.15);
     }
     .container_right .app_icon_img.nr_app_default_icon{
         padding: 10px;
@@ -5169,178 +5640,298 @@ patch_appcenter_card_polish() {
         opacity: .92;
     }
     .container_right .app_info{
+        grid-area: auto;
+        grid-column: auto;
+        grid-row: auto;
         position: relative;
         z-index: 1;
-        float: right;
-        width: 60%;
+        display: contents;
         min-width: 0;
-        margin: 10px 0 0;
-        padding-right: 0;
+        width: 100%;
+        overflow: visible;
+    }
+    .container_right .app_info::after{
+        content: "";
+        display: none;
+        width: 100%;
+        height: 1px;
+        margin-top: 9px;
+        background: linear-gradient(90deg, rgba(125,211,252,.16), rgba(148,163,184,.050), transparent);
+        opacity: .55;
+    }
+    .container_right .app_title{
+        grid-area: info;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        float: none;
+        min-width: 0;
+        width: 100%;
+        min-inline-size: 0;
+        gap: 3px;
+        overflow: hidden;
+        z-index: 1;
+        align-self: start;
+        text-rendering: geometricPrecision;
     }
     .container_right .app_name{
         /* NRadio appcenter text safe polish */
+        grid-column: auto;
+        grid-row: auto;
+        inline-size: 100%;
+        min-width: 0;
         float: none;
         width: 100%;
+        min-inline-size: 0;
         height: auto;
+        min-height: 0;
         max-height: 40px;
         color: #f8fbff;
-        font-size: 13px;
-        font-weight: 900;
-        line-height: 1.38;
+        font-size: 14.5px;
+        font-weight: 850;
+        line-height: 1.32;
         letter-spacing: 0;
         overflow: hidden;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        text-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 10px rgba(148,163,184,.08);
+        max-width: 100%;
+        overflow-wrap: normal;
+        word-break: normal;
+        hyphens: none;
+        display: block;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        text-align: left !important;
+        text-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 10px rgba(125,211,252,.075);
         transition: color .18s ease, text-shadow .18s ease;
+    }
+    .container_right .app_name,
+    .container_right .app_version,
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        max-width: 100%;
     }
     .container_right .app_box:hover .app_name{
         color: #ffffff;
-        text-shadow: 0 1px 1px rgba(0,0,0,.26), 0 0 12px rgba(125,211,252,.14);
+        text-shadow: 0 1px 1px rgba(0,0,0,.22);
     }
     .container_right .app_version{
+        grid-column: auto;
+        grid-row: auto;
         float: none;
         display: inline-flex;
+        min-inline-size: 0;
+        align-items: center;
+        justify-content: flex-start;
         width: auto;
         max-width: 100%;
         height: auto;
-        margin-top: 4px;
-        padding: 2px 0;
-        color: #f8fafc;
-        font-size: 10px;
-        font-weight: 800;
+        margin-top: 0;
+        padding: 2px 7px;
+        color: #f0f6ff;
+        font-size: 13px;
+        font-weight: 700;
         line-height: 1.2;
-        opacity: .95;
+        opacity: .84;
+        border: 1px solid rgba(148,163,184,.10);
+        border-radius: 999px;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(125,211,252,.095), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.024));
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        justify-self: start;
+        text-align: left !important;
         text-shadow: 0 1px 1px rgba(0,0,0,.20);
         transition: color .18s ease, opacity .18s ease;
     }
     .container_right .app_box:hover .app_version{
         color: #e0f2fe;
         opacity: 1;
+        border-color: rgba(125,211,252,.15);
     }
     .container_right .app_meta_row{
+        grid-column: auto;
+        grid-row: auto;
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto;
+        z-index: 1;
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
-        margin-top: 6px;
+        gap: 5px;
+        margin: .08em 0 0;
+        align-items: center !important;
+        justify-content: flex-start;
+        justify-self: start;
+        width: 100%;
+        min-inline-size: 0;
+        max-width: 100%;
+        min-width: 0;
+        overflow: visible;
     }
     .container_right .app_state_badge,
     .container_right .app_open_badge{
         /* NRadio appcenter button badge safe polish */
         display: inline-flex;
+        flex: 0 1 auto;
         align-items: center;
-        gap: 4px;
+        justify-content: center;
+        gap: 5px;
         max-width: 100%;
-        min-height: 19px;
-        padding: 2px 7px;
+        min-height: 18px;
+        padding: 2px 6px;
         box-sizing: border-box;
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,.10);
-        background: rgba(255,255,255,.055);
-        color: #cbd5e1;
-        font-size: 10px;
-        font-weight: 900;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(255,255,255,.090), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.052), rgba(255,255,255,.024));
+        color: #c7d0dc;
+        font-size: 9px;
+        font-weight: 800;
         line-height: 1;
-        text-shadow: 0 1px 1px rgba(0,0,0,.18);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 4px 9px rgba(0,0,0,.08);
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        overflow: visible !important;
+        writing-mode: horizontal-tb !important;
+        text-orientation: mixed !important;
+        text-shadow: none;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.060), 0 3px 6px rgba(0,0,0,.050);
+    }
+    .container_right .app_open_badge{
+        min-width: 0;
     }
     .container_right .app_state_badge::before,
     .container_right .app_open_badge::before{
         content: "";
+        flex: 0 0 auto;
         width: 5px;
         height: 5px;
         border-radius: 50%;
         background: currentColor;
-        box-shadow: 0 0 8px currentColor;
+        box-shadow: none;
     }
     .container_right .app_state_1{
-        color: #bbf7d0;
-        border-color: rgba(74,222,128,.30);
-        background: linear-gradient(180deg, rgba(34,197,94,.18), rgba(21,128,61,.12));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 0 0 1px rgba(34,197,94,.04), 0 5px 11px rgba(21,128,61,.10);
+        color: #b8eccc;
+        border-color: rgba(74,222,128,.28);
+        background:
+            radial-gradient(circle at 50% 0%, rgba(187,247,208,.12), transparent 62%),
+            linear-gradient(180deg, rgba(34,197,94,.118), rgba(21,128,61,.072));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(21,128,61,.045);
     }
     .container_right .app_state_2{
-        color: #fde68a;
-        border-color: rgba(251,191,36,.32);
-        background: linear-gradient(180deg, rgba(245,158,11,.20), rgba(180,83,9,.12));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 0 0 1px rgba(245,158,11,.05), 0 5px 11px rgba(180,83,9,.10);
+        color: #eadb99;
+        border-color: rgba(251,191,36,.29);
+        background:
+            radial-gradient(circle at 50% 0%, rgba(253,230,138,.13), transparent 62%),
+            linear-gradient(180deg, rgba(245,158,11,.118), rgba(180,83,9,.072));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(180,83,9,.045);
     }
     .container_right .app_state_0{
-        color: #bae6fd;
-        border-color: rgba(56,189,248,.30);
-        background: linear-gradient(180deg, rgba(14,165,233,.18), rgba(2,132,199,.12));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 0 0 1px rgba(14,165,233,.04), 0 5px 11px rgba(2,132,199,.10);
+        color: #b8ddec;
+        border-color: rgba(56,189,248,.28);
+        background:
+            radial-gradient(circle at 50% 0%, rgba(186,230,253,.12), transparent 62%),
+            linear-gradient(180deg, rgba(14,165,233,.118), rgba(2,132,199,.072));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(2,132,199,.045);
     }
     .container_right .app_open_1{
-        color: #a5f3fc;
-        border-color: rgba(34,211,238,.34);
-        background: linear-gradient(180deg, rgba(34,211,238,.18), rgba(8,145,178,.12));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 0 0 1px rgba(34,211,238,.05), 0 5px 11px rgba(8,145,178,.10);
+        color: #a9dfe8;
+        border-color: rgba(34,211,238,.28);
+        background:
+            radial-gradient(circle at 50% 0%, rgba(165,243,252,.12), transparent 62%),
+            linear-gradient(180deg, rgba(34,211,238,.118), rgba(8,145,178,.072));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(8,145,178,.045);
     }
     .container_right .app_des{
+        grid-area: desc;
+        grid-column: 1 / -1;
         position: static;
-        float: left;
+        float: none;
+        z-index: 1;
+        inline-size: 100%;
         width: 100%;
-        height: 34px;
-        margin-top: 8px;
-        color: #d4d8e7;
-        font-size: 12px;
+        min-width: 0;
+        min-inline-size: 0;
+        max-width: 100%;
+        height: auto;
+        margin-top: 12px;
+        padding: 0;
+        box-sizing: border-box;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #d6dfec;
+        font-size: 13px;
         line-height: 1.42;
-        opacity: .92;
+        opacity: .86;
         overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
+        display: block;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        text-align: left !important;
         text-shadow: 0 1px 1px rgba(0,0,0,.18);
         transition: color .18s ease, opacity .18s ease;
     }
     .container_right .app_box:hover .app_des{
-        color: #e2e8f0;
-        opacity: .98;
+        color: #dce5f0;
+        opacity: .88;
     }
     .container_right .app_des_empty{
-        display: none;
+        display: block;
+        font-size: 0;
+        color: #aeb9c9;
+        opacity: .62;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .container_right .app_des_empty::before{
+        content: "应用功能与运行入口";
+        font-size: 13px;
+        line-height: 1.42;
     }
     .container_right .app_action{
-        position: relative;
+        position: absolute;
         z-index: 2;
-        float: left;
-        width: 100%;
-        margin: 10px 0 0;
-        padding: 0 2px;
+        left: 19px;
+        right: 19px;
+        bottom: 20px;
+        float: none;
+        width: auto;
+        margin: 0;
+        padding: 0;
         box-sizing: border-box;
     }
     .container_right .action_list{
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 7px;
+        gap: 8px;
         float: none;
         margin: 0;
         padding: 0;
     }
     .container_right .action_list_li,
     .app_btn_class{
-        min-width: 54px;
-        height: 30px;
-        padding: 0 12px;
+        min-width: 52px;
+        height: 36px;
+        padding: 0 13px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(255,255,255,.10);
-        border-radius: 9px;
-        color: #dce4f2;
-        background: linear-gradient(180deg, rgba(255,255,255,.090), rgba(255,255,255,.052));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 12px rgba(0,0,0,.10);
+        border: 1px solid rgba(255,255,255,.105);
+        border-radius: 8px;
+        color: #e2e9f4;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(255,255,255,.090), transparent 58%),
+            linear-gradient(180deg, rgba(255,255,255,.068), rgba(255,255,255,.038));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), inset 0 -1px 0 rgba(255,255,255,.018), 0 5px 9px rgba(0,0,0,.075);
         box-sizing: border-box;
-        font-size: 12px;
-        font-weight: 800;
+        font-size: 14px;
+        font-weight: 760;
         line-height: 1;
         white-space: nowrap;
         cursor: pointer;
@@ -5358,21 +5949,25 @@ patch_appcenter_card_polish() {
     }
     .container_right .action_list_li:hover,
     .app_btn_class:hover{
-        transform: translateY(-1px);
-        border-color: rgba(34,211,238,.42);
-        color: #06111f;
-        background: linear-gradient(135deg, #67e8f9, #38bdf8 54%, #60a5fa);
+        transform: none;
+        border-color: rgba(125,211,252,.28);
+        color: #eef8fb;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(255,255,255,.12), transparent 58%),
+            linear-gradient(180deg, rgba(125,211,252,.110), rgba(96,165,250,.075));
         -webkit-text-fill-color: currentColor;
-        box-shadow: 0 10px 18px rgba(34,211,238,.14);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), inset 0 -1px 0 rgba(255,255,255,.020), 0 5px 10px rgba(0,0,0,.075);
     }
     .app_btn_group{
-        gap: 10px;
+        gap: 6px;
     }
     .app_btn_class{
-        min-width: 84px;
-        height: 32px;
-        color: #cbd5e1;
-        background: rgba(255,255,255,.065);
+        min-width: 96px;
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 10px;
+        color: #dfe7f2;
+        background: linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,.042));
     }
     .mem_track{
         max-width: 280px;
@@ -5385,16 +5980,18 @@ patch_appcenter_card_polish() {
         /* NRadio appcenter memory bar safe polish */
         height: 8px;
         border-radius: 999px;
-        background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.10));
-        box-shadow: inset 0 1px 2px rgba(0,0,0,.22);
+        background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.08));
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
         overflow: hidden;
     }
     .mem_progress_inner{
         position: relative;
         height: 100%;
         border-radius: inherit;
-        background: linear-gradient(90deg, #67e8f9, #38bdf8 50%, #60a5fa);
-        box-shadow: 0 0 12px rgba(34,211,238,.28);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 42%),
+            linear-gradient(90deg, #67d7e8, #45bfe4 52%, #6da5df);
+        box-shadow: none;
         transition: width .25s ease;
     }
     .mem_progress_inner::after{
@@ -5408,18 +6005,55 @@ patch_appcenter_card_polish() {
         pointer-events: none;
     }
     .app_status_panel{
-        clear: both;
-        width: calc(100% - 20px);
-        margin: 12px 10px 0;
-        padding: 12px 12px 11px;
+        position: relative;
+        right: auto;
+        top: auto;
+        clear: none;
+        isolation: isolate;
+        overflow: hidden;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        min-height: 312px;
+        margin: 0;
+        padding: 18px 18px 20px;
         box-sizing: border-box;
-        border-radius: 14px;
-        border: 1px solid rgba(34,211,238,.16);
+        border-radius: 16px;
+        border: 1px solid rgba(112,190,224,.26);
         background:
-            radial-gradient(circle at 12% 12%, rgba(34,211,238,.11), transparent 34%),
-            radial-gradient(circle at 88% 0%, rgba(59,130,246,.11), transparent 36%),
-            linear-gradient(160deg, rgba(24,32,50,.92), rgba(16,22,36,.78));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 12px 24px rgba(0,0,0,.14);
+            radial-gradient(circle at 0% 0%, rgba(56,189,248,.18), transparent 48%),
+            radial-gradient(circle at 100% 0%, rgba(99,102,241,.12), transparent 44%),
+            linear-gradient(180deg, rgba(23,42,64,.972), rgba(10,23,39,.952));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.096), inset 0 0 0 1px rgba(255,255,255,.024), 0 14px 26px rgba(0,0,0,.14);
+        -webkit-backdrop-filter: blur(10px) saturate(1.07);
+        backdrop-filter: blur(10px) saturate(1.07);
+    }
+    .app_status_panel::before{
+        content: "";
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        top: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(103,215,232,.60), transparent);
+        opacity: .54;
+        pointer-events: none;
+        z-index: -1;
+    }
+    .app_status_panel::after{
+        content: "";
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(96,165,250,.36), rgba(34,211,238,.28), transparent);
+        opacity: .72;
+        pointer-events: none;
+        z-index: -1;
+    }
+    #app_status_mount .app_status_panel{
+        margin-top: 0;
     }
     .app_status_panel *{
         box-sizing: border-box;
@@ -5442,98 +6076,119 @@ patch_appcenter_card_polish() {
         font-size: 14px;
         font-weight: 900;
     }
-    .app_empty_state span{
-        display: block;
-        margin-top: 4px;
-        color: #b9c6d8;
-        font-size: 12px;
-    }
     .app_status_head{
         /* NRadio appcenter status panel safe polish */
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 9px;
-        padding-bottom: 8px;
-        border-bottom-color: rgba(255,255,255,.10);
-        color: #7dd3fc;
-        text-shadow: 0 0 10px rgba(34,211,238,.16);
+        gap: 12px;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,.10);
+        color: #91dff2;
+        font-size: 12.5px;
+        font-weight: 850;
+        white-space: nowrap;
+        text-shadow: none;
     }
     .app_status_head span{
         display: inline-flex;
         align-items: center;
-        gap: 7px;
+        flex: 0 0 auto;
+        gap: 6px;
+        white-space: nowrap;
     }
     .app_status_head span::before{
         content: "";
-        width: 7px;
-        height: 7px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background: #22d3ee;
-        box-shadow: 0 0 14px rgba(34,211,238,.8);
+        box-shadow: none;
     }
     .app_status_grid{
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-        margin-bottom: 8px;
+        gap: 10px;
+        margin-bottom: 14px;
     }
     .app_status_time{
         color: #cbd5e1;
         font-weight: 800;
         font-style: italic;
+        font-size: 9.5px;
+        white-space: nowrap;
     }
     .app_status_tile{
-        min-height: 46px;
-        padding: 8px 9px;
-        border-radius: 10px;
-        border-color: rgba(255,255,255,.10);
+        min-height: 64px;
+        padding: 12px 13px 11px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 12px;
         background:
-            radial-gradient(circle at 10% 0%, rgba(34,211,238,.12), transparent 42%),
-            linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 6px 14px rgba(0,0,0,.08);
+            radial-gradient(circle at 50% 0%, rgba(125,211,252,.095), transparent 58%),
+            linear-gradient(180deg, rgba(255,255,255,.084), rgba(255,255,255,.036));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.068), inset 0 -1px 0 rgba(255,255,255,.016), 0 5px 10px rgba(0,0,0,.075);
         transition: border-color .18s ease, box-shadow .18s ease;
     }
     .app_status_tile:hover{
-        border-color: rgba(34,211,238,.20);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 8px 16px rgba(0,0,0,.10);
+        border-color: rgba(34,211,238,.25);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.075), inset 0 -1px 0 rgba(255,255,255,.018), 0 5px 10px rgba(0,0,0,.080);
     }
     .app_status_tile strong{
         color: #ffffff;
-        font-size: 18px;
-        line-height: 20px;
-        text-shadow: 0 0 10px rgba(125,211,252,.18);
+        font-size: 24px;
+        line-height: 26px;
+        text-shadow: none;
     }
     .app_status_tile span{
+        display: block;
+        margin-top: 6px;
         color: #d8dfec;
+        font-size: 10.5px;
         font-weight: 800;
         opacity: .96;
+        white-space: nowrap;
     }
     .app_status_metric{
-        padding: 8px 0;
-        border-top-color: rgba(255,255,255,.095);
+        padding: 11px 0 12px;
+        border-top: 1px solid rgba(255,255,255,.095);
     }
     .app_status_metric_row{
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 5px;
+        gap: 12px;
+        margin-bottom: 7px;
         color: #cbd5e1;
-        font-weight: 800;
+        font-size: 12.5px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .app_status_metric_row span,
+    .app_status_metric_row strong{
+        min-width: 0;
+        white-space: nowrap;
+    }
+    .app_status_metric_row span{
+        flex: 1 1 auto;
     }
     .app_status_metric_row strong{
+        flex: 0 1 auto;
         color: #f8fafc;
+        max-width: 70%;
+        overflow: hidden;
+        text-align: right;
+        text-overflow: ellipsis;
+        font-size: 12px;
         font-weight: 900;
         text-shadow: 0 0 8px rgba(148,163,184,.16);
     }
     .app_status_bar{
         position: relative;
-        height: 6px;
+        height: 8px;
         border-radius: 999px;
         background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.10));
-        box-shadow: inset 0 1px 2px rgba(0,0,0,.20);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.22);
         overflow: hidden;
     }
     .app_status_bar::after{
@@ -5552,8 +6207,10 @@ patch_appcenter_card_polish() {
         height: 100%;
         width: 0;
         border-radius: inherit;
-        background: linear-gradient(90deg, #22d3ee, #38bdf8 50%, #60a5fa);
-        box-shadow: 0 0 12px rgba(34,211,238,.36);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,0) 46%),
+            linear-gradient(90deg, #4fcbdc, #4aaee5 55%, #6b96db);
+        box-shadow: none;
         transition: width .25s ease;
     }
     .app_status_temp_bar{
@@ -5565,21 +6222,46 @@ patch_appcenter_card_polish() {
     .app_status_mem_bar{
         background: linear-gradient(90deg, #2dd4bf, #38bdf8 58%, #60a5fa) !important;
     }
-    .app_status_hint{
-        margin-top: 7px;
-        padding: 7px 8px 0;
-        color: #b9c6d8;
-        border-top-color: rgba(255,255,255,.095);
-    }
     @media (max-width: 760px){
+        #app_status_mount{
+            position: relative;
+            right: auto;
+            top: auto;
+            z-index: auto;
+            flex: 1 1 100%;
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            margin-left: 0;
+        }
+        .app_btn_box{
+            padding-right: 0;
+            flex-wrap: wrap;
+        }
+        .app_btn_box .app_btn_group{
+            position: static;
+            right: auto;
+            top: auto;
+            width: auto;
+            min-height: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+        .container_right{
+            padding-right: 0 !important;
+        }
         .container_right .app_box{
             min-height: 168px;
         }
-        .container_right .app_info{
-            width: 62%;
-        }
-        .container_right .app_icon{
-            width: 34%;
+        .app_status_panel{
+            position: relative;
+            right: auto;
+            top: auto;
+            width: calc(100% - 20px);
+            margin: 12px 10px 0;
         }
         .app_status_head{
             align-items: flex-start;
@@ -5617,6 +6299,13 @@ EOF_APPCENTER_CARD_POLISH_CSS
     ' "$TPL" > "$tmp_css"
     cp "$tmp_css" "$TPL"
 
+    awk '
+        /app_status_hint/ { next }
+        /刷新/ && /安装卸载/ { next }
+        { print }
+    ' "$TPL" > "$tmp_panel"
+    cp "$tmp_panel" "$TPL"
+
     cat > "$status_js_file" <<'EOF_APPCENTER_STATUS_PANEL_JS'
     var APP_STATUS_LAST = null;
 
@@ -5638,11 +6327,22 @@ EOF_APPCENTER_CARD_POLISH_CSS
         return build_app_status_panel(installed_count, open_count, all_count);
     }
 
-    function build_app_empty_state(title, detail){
+    function ensure_app_status_mount(){
+        if(!$("#app_status_mount").length)
+            $(".app_btn_box").after('<div id="app_status_mount"></div>');
+    }
+
+    function render_app_status_panel(data){
+        ensure_app_status_mount();
+        $("#app_status_mount").html(build_app_status_panel_from_data(data));
+        if(APP_STATUS_LAST)
+            update_app_status_panel(APP_STATUS_LAST);
+    }
+
+    function build_app_empty_state(title){
         return ''+
         '<div class="app_empty_state">'+
         '    <strong>'+title+'</strong>'+
-        '    <span>'+detail+'</span>'+
         '</div>';
     }
 
@@ -5667,7 +6367,6 @@ EOF_APPCENTER_CARD_POLISH_CSS
         '        <div class="app_status_metric_row"><span>内存占用</span><strong class="app_status_mem">--</strong></div>'+
         '        <div class="app_status_bar"><span class="app_status_mem_bar"></span></div>'+
         '    </div>'+
-        '    <div class="app_status_hint">只读状态 · 5 秒刷新 · 不参与安装卸载</div>'+
         '</aside>';
     }
 
@@ -5729,54 +6428,99 @@ EOF_APPCENTER_CARD_POLISH_CSS
 EOF_APPCENTER_STATUS_PANEL_JS
 
     cat > "$empty_js_file" <<'EOF_APPCENTER_EMPTY_STATE_JS'
-    function build_app_empty_state(title, detail){
+    function build_app_empty_state(title){
         return ''+
         '<div class="app_empty_state">'+
         '    <strong>'+title+'</strong>'+
-        '    <span>'+detail+'</span>'+
         '</div>';
     }
 
 EOF_APPCENTER_EMPTY_STATE_JS
 
     awk '
-        /function appcenter_has_any_app\(data\)\{/ {
-            skip_func = 1
+        /^[[:space:]]*<div id="app_status_mount"><\/div>[[:space:]]*$/ { next }
+        /^[[:space:]]*var APP_STATUS_LAST = null;[[:space:]]*$/ {
+            skip_status = 1
             next
         }
-        /function appcenter_has_installed_app\(data\)\{/ {
-            skip_func = 1
+        skip_status {
+            if ($0 ~ /^[[:space:]]*var loading_htm = /) {
+                skip_status = 0
+                print
+            }
             next
         }
-        /function show_appcenter_all_view\(\)\{/ {
-            skip_func = 1
+        /^[[:space:]]*function build_app_empty_state\(title/ {
+            skip_empty_func = 1
             next
         }
-        skip_func {
+        skip_empty_func {
             if ($0 ~ /^    }$/)
-                skip_func = 0
+                skip_empty_func = 0
             next
         }
-        /var has_any_app = appcenter_has_any_app\(data\);/ {
+        /var status_panel = build_app_status_panel_from_data\(data\);/ { next }
+        /var status_panel = build_app_status_panel\(installed_count, open_count, all_count\);/ { next }
+        /^[[:space:]]*if\(!htm_installed\)[[:space:]]*$/ {
+            skip_installed_empty = 1
             next
         }
-        /var has_installed_app = appcenter_has_installed_app\(data\);/ {
+        skip_installed_empty && /htm_installed[[:space:]]*=[[:space:]]*build_app_empty_state/ {
+            skip_installed_empty = 0
             next
         }
-        /if\(!has_installed_app && has_any_app\)/ {
-            skip_auto_switch = 1
+        /^[[:space:]]*if\(!htm\)[[:space:]]*$/ {
+            skip_all_empty = 1
             next
         }
-        skip_auto_switch && /show_appcenter_all_view\(\);/ {
-            skip_auto_switch = 0
+        skip_all_empty && /htm[[:space:]]*=[[:space:]]*build_app_empty_state/ {
+            skip_all_empty = 0
+            next
+        }
+        /\$\("\.app_all"\)\.html\(htm \+ status_panel\);/ {
+            print "        $(\".app_all\").html(htm);"
+            next
+        }
+        /\$\("\.app_installed"\)\.html\(htm_installed \+ status_panel\);/ {
+            print "        $(\".app_installed\").html(htm_installed);"
+            next
+        }
+        /^[[:space:]]*if\(APP_STATUS_LAST\)[[:space:]]*$/ {
+            skip_last_update = 1
+            next
+        }
+        skip_last_update && /update_app_status_panel\(APP_STATUS_LAST\);/ {
+            skip_last_update = 0
             next
         }
         {
-            gsub(/当前设备还没有可显示的已安装应用，已自动切换到所有应用。/, "当前分类没有可显示的已安装应用，可切换到所有应用查看。")
+            if (skip_installed_empty || skip_all_empty || skip_last_update) {
+                skip_installed_empty = 0
+                skip_all_empty = 0
+                skip_last_update = 0
+            }
             print
         }
     ' "$TPL" > "$tmp_panel"
     cp "$tmp_panel" "$TPL"
+
+    if ! grep -q 'id="app_status_mount"' "$TPL" 2>/dev/null; then
+        awk '
+            /<div class="app_btn_box">/ {
+                in_app_btn = 1
+                print
+                next
+            }
+            in_app_btn && /^    <\/div>[[:space:]]*$/ {
+                print
+                print "        <div id=\"app_status_mount\"></div>"
+                in_app_btn = 0
+                next
+            }
+            { print }
+        ' "$TPL" > "$tmp_mount"
+        cp "$tmp_mount" "$TPL"
+    fi
 
     if ! grep -q '<div class="app_meta_row"' "$TPL" 2>/dev/null; then
         awk '
@@ -5939,6 +6683,139 @@ EOF_APPCENTER_EMPTY_STATE_JS
     ' "$TPL" > "$tmp_desc"
     cp "$tmp_desc" "$TPL"
 
+    if ! grep -q 'function nr_appcenter_desc_fallback' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                print
+                if ($0 ~ /^[[:space:]]*var des_class = "app_des_empty";[[:space:]]*$/) {
+                    print "            function nr_appcenter_desc_fallback(name){"
+                    print "                var key = (name || \"\").toLowerCase();"
+                    print "                if (key.indexOf(\"openclash\") >= 0) return \"代理规则与网络分流管理\";"
+                    print "                if (key.indexOf(\"openvpn\") >= 0) return \"VPN 隧道连接与远程访问\";"
+                    print "                if (key.indexOf(\"adguardhome\") >= 0 || key.indexOf(\"adguard\") >= 0) return \"DNS 广告过滤与查询统计\";"
+                    print "                if (key.indexOf(\"web ssh\") >= 0 || key.indexOf(\"ttyd\") >= 0) return \"浏览器 SSH 终端入口\";"
+                    print "                if (key.indexOf(\"openlist\") >= 0) return \"文件列表与网络存储访问\";"
+                    print "                if (key.indexOf(\"zerotier\") >= 0) return \"异地组网与虚拟局域网\";"
+                    print "                if (key.indexOf(\"easytier\") >= 0) return \"点对点异地组网服务\";"
+                    print "                if (key.indexOf(\"fan\") >= 0) return \"风扇温控与散热策略\";"
+                    print "                if (key.indexOf(\"qiyou\") >= 0 || key.indexOf(\"奇游\") >= 0) return \"游戏联机加速入口\";"
+                    print "                if (key.indexOf(\"leigod\") >= 0 || key.indexOf(\"雷神\") >= 0) return \"游戏网络加速入口\";"
+                    print "                if (key.indexOf(\"ddns-go\") >= 0 || key.indexOf(\"ddnsgo\") >= 0) return \"动态 DNS 解析与公网地址同步\";"
+                    print "                return \"应用功能与运行入口\";"
+                    print "            }"
+                }
+                if ($0 ~ /^[[:space:]]*if\(db\.des && db\.des\.length\)\{[[:space:]]*$/)
+                    in_des = 1
+                else if (in_des && $0 ~ /^[[:space:]]*}[[:space:]]*$/) {
+                    print "            if (des_class == \"app_des_empty\") {"
+                    print "                des_info = nr_appcenter_desc_fallback(db.name);"
+                    print "                if (des_info && des_info.length)"
+                    print "                    des_class = \"\";"
+                    print "            }"
+                    in_des = 0
+                }
+            }
+        ' "$TPL" > "$tmp_desc"
+        cp "$tmp_desc" "$TPL"
+    fi
+
+    if ! grep -q 'function nr_appcenter_display_name' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                if ($0 ~ /^[[:space:]]*function nr_appcenter_desc_fallback\(name\)\{[[:space:]]*$/) {
+                    print "            function nr_appcenter_display_name(name){"
+                    print "                var raw = name || \"\";"
+                    print "                var key = raw.toLowerCase();"
+                    print "                if (key.indexOf(\"openclash\") >= 0) return \"哈基米\";"
+                    print "                if (key.indexOf(\"adguardhome\") >= 0 || key.indexOf(\"adguard\") >= 0) return \"AdGuard Home\";"
+                    print "                if (key.indexOf(\"openvpn\") >= 0) return \"OpenVPN\";"
+                    print "                if (key.indexOf(\"web ssh\") >= 0 || key.indexOf(\"ttyd\") >= 0) return \"Web SSH\";"
+                    print "                if (key.indexOf(\"openlist\") >= 0) return \"OpenList\";"
+                    print "                if (key.indexOf(\"zerotier\") >= 0) return \"ZeroTier\";"
+                    print "                if (key.indexOf(\"easytier\") >= 0) return \"EasyTier\";"
+                    print "                if (key.indexOf(\"fan\") >= 0) return \"FanControl Plus\";"
+                    print "                if (key.indexOf(\"qiyou\") >= 0 || key.indexOf(\"奇游\") >= 0) return \"奇游联机宝\";"
+                    print "                if (key.indexOf(\"leigod\") >= 0 || key.indexOf(\"雷神\") >= 0) return \"雷神加速器\";"
+                    print "                if (key.indexOf(\"ddns-go\") >= 0 || key.indexOf(\"ddnsgo\") >= 0) return \"DDNS-GO\";"
+                    print "                return raw;"
+                    print "            }"
+                }
+                print
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
+    awk '
+        {
+            gsub(/return "AdGuardHome";/, "return \"AdGuard Home\";")
+            print
+        }
+    ' "$TPL" > "$tmp_name"
+    cp "$tmp_name" "$TPL"
+
+    if ! grep -q 'display_name: nr_appcenter_display_name' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                print
+                if ($0 ~ /^[[:space:]]*name:[[:space:]]*db\.name,[[:space:]]*$/) {
+                    prefix = substr($0, 1, index($0, "name:") - 1)
+                    print prefix "display_name: nr_appcenter_display_name(db.name),"
+                }
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
+    if ! grep -q '{{display_name}}' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                if ($0 ~ /<div class="app_name"/) {
+                    in_app_name = 1
+                    print
+                    next
+                }
+                if (in_app_name && $0 ~ /\{\{[[:space:]]*name[[:space:]]*\}\}/) {
+                    gsub(/\{\{[[:space:]]*name[[:space:]]*\}\}/, "{{display_name}}")
+                    in_app_name = 0
+                }
+                if (in_app_name && $0 ~ /<\/div>/)
+                    in_app_name = 0
+                print
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
+    awk '
+        {
+            if ($0 ~ /<div class="app_name"/) {
+                in_app_name = 1
+                print
+                next
+            }
+            if (in_app_name && $0 ~ /\{\{[[:space:]]*name[[:space:]]*\}\}/) {
+                gsub(/\{\{[[:space:]]*name[[:space:]]*\}\}/, "{{display_name}}")
+                in_app_name = 0
+            }
+            if (in_app_name && $0 ~ /<\/div>/)
+                in_app_name = 0
+            print
+        }
+    ' "$TPL" > "$tmp_name"
+    cp "$tmp_name" "$TPL"
+
+    if ! grep -q '{{display_name}}' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                if ($0 ~ /app_name/ && $0 ~ /\{\{[[:space:]]*name[[:space:]]*\}\}/)
+                    gsub(/\{\{[[:space:]]*name[[:space:]]*\}\}/, "{{display_name}}")
+                print
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
     if grep -q 'icon_fallback: icon_fallback' "$TPL" 2>/dev/null && grep -q 'des_class: des_class' "$TPL" 2>/dev/null; then
         :
     else
@@ -5955,7 +6832,7 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_compose" "$TPL"
     fi
 
-    if ! grep -q 'build_app_status_panel_from_data' "$TPL" 2>/dev/null; then
+    if ! grep -q 'function render_app_status_panel(data)' "$TPL" 2>/dev/null; then
         awk -v js_file="$status_js_file" '
             /^    var loading_htm = / && !inserted {
                 while ((getline extra < js_file) > 0) print extra
@@ -5967,45 +6844,16 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_panel" "$TPL"
     fi
 
-    if ! grep -q 'function build_app_empty_state' "$TPL" 2>/dev/null; then
-        awk -v js_file="$empty_js_file" '
-            /^    function build_app_status_panel\(/ && !inserted {
-                while ((getline extra < js_file) > 0) print extra
-                close(js_file)
-                print ""
-                inserted = 1
-            }
-            /^    var loading_htm = / && !inserted {
-                while ((getline extra < js_file) > 0) print extra
-                close(js_file)
-                print ""
-                inserted = 1
-            }
-            { print }
-        ' "$TPL" > "$tmp_panel"
-        cp "$tmp_panel" "$TPL"
-    fi
-
-    if ! grep -q 'var status_panel = build_app_status_panel_from_data(data);' "$TPL" 2>/dev/null; then
+    if ! grep -q 'render_app_status_panel(data);' "$TPL" 2>/dev/null; then
         awk '
             {
                 if ($0 ~ /\$\("#app_top_menu"\)\.html\(top_menu_ht\);/) {
                     print
-                    print "        var status_panel = build_app_status_panel_from_data(data);"
                     print "        if(!htm_installed)"
-                    print "            htm_installed = build_app_empty_state(\"暂无已安装应用\", \"当前分类没有可显示的已安装应用，可切换到所有应用查看。\");"
+                    print "            htm_installed = build_app_empty_state(\"暂无已安装应用\");"
                     print "        if(!htm)"
-                    print "            htm = build_app_empty_state(\"暂无应用\", \"应用商店当前没有返回应用列表。\");"
-                    next
-                }
-                if ($0 ~ /\$\("\.app_all"\)\.html\(htm\);/) {
-                    print "        $(\".app_all\").html(htm + status_panel);"
-                    next
-                }
-                if ($0 ~ /\$\("\.app_installed"\)\.html\(htm_installed\);/) {
-                    print "        $(\".app_installed\").html(htm_installed + status_panel);"
-                    print "        if(APP_STATUS_LAST)"
-                    print "            update_app_status_panel(APP_STATUS_LAST);"
+                    print "            htm = build_app_empty_state(\"暂无应用\");"
+                    print "        render_app_status_panel(data);"
                     next
                 }
                 print
@@ -6014,14 +6862,15 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_panel" "$TPL"
     fi
 
-    if ! grep -q '当前分类没有可显示的已安装应用' "$TPL" 2>/dev/null; then
+    if ! grep -q 'build_app_empty_state("暂无已安装应用")' "$TPL" 2>/dev/null; then
         awk '
             {
-                if ($0 ~ /var status_panel = build_app_status_panel_from_data\(data\);/ || $0 ~ /var status_panel = build_app_status_panel\(installed_count, open_count, all_count\);/) {
+                if ($0 ~ /render_app_status_panel\(data\);/) {
                     print "        if(!htm_installed)"
-                    print "            htm_installed = build_app_empty_state(\"暂无已安装应用\", \"当前分类没有可显示的已安装应用，可切换到所有应用查看。\");"
+                    print "            htm_installed = build_app_empty_state(\"暂无已安装应用\");"
                     print "        if(!htm)"
-                    print "            htm = build_app_empty_state(\"暂无应用\", \"应用商店当前没有返回应用列表。\");"
+                    print "            htm = build_app_empty_state(\"暂无应用\");"
+                    print
                     next
                 }
                 print
@@ -6030,18 +6879,26 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_panel" "$TPL"
     fi
 
-    if ! grep -q 'window.setInterval(get_system_status, 5000)' "$TPL" 2>/dev/null; then
+    if ! grep -q 'window.setInterval(get_system_status, 1000)' "$TPL" 2>/dev/null; then
         awk '
             {
                 print
                 if ($0 ~ /^[[:space:]]*get_memory\(\);[[:space:]]*$/)
                     print "        get_system_status();"
                 if ($0 ~ /^[[:space:]]*window\.setInterval\(get_memory, 4000\);[[:space:]]*$/)
-                    print "        window.setInterval(get_system_status, 5000);"
+                    print "        window.setInterval(get_system_status, 1000);"
             }
         ' "$TPL" > "$tmp_ready"
         cp "$tmp_ready" "$TPL"
     fi
+
+    awk '
+        {
+            gsub(/window\.setInterval\(get_system_status, 5000\)/, "window.setInterval(get_system_status, 1000)")
+            print
+        }
+    ' "$TPL" > "$tmp_ready"
+    cp "$tmp_ready" "$TPL"
 
     verify_template_marker 'NRadio appcenter card polish: visual-only layer' '应用商店卡片美化 CSS'
     verify_template_marker 'NRadio appcenter card polish V2.0.25 full repair layer' '应用商店 V2.0.25 修复美化 CSS'
@@ -6052,17 +6909,15 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'var icon_fallback = ' '应用商店破图兜底变量'
     verify_template_marker 'onerror="{{icon_fallback}}"' '应用商店破图兜底挂载'
     verify_template_marker 'des_class: des_class' '应用商店空描述隐藏'
+    verify_template_marker 'function nr_appcenter_display_name' '应用商店显示名映射'
+    verify_template_marker 'display_name: nr_appcenter_display_name(db.name)' '应用商店显示名数据'
+    verify_template_marker '{{display_name}}' '应用商店卡片显示名挂载'
     verify_template_marker 'build_app_status_panel_from_data' '应用商店右侧系统状态面板'
-    verify_template_marker 'var status_panel = build_app_status_panel_from_data(data);' '应用商店右侧系统状态面板挂载'
+    verify_template_marker 'id="app_status_mount"' '应用商店右侧系统状态面板挂载点'
+    verify_template_marker 'render_app_status_panel(data);' '应用商店右侧系统状态面板挂载'
     verify_template_marker 'function build_app_empty_state' '应用商店空列表提示'
-    verify_template_marker '当前分类没有可显示的已安装应用' '应用商店已安装空列表提示文案'
-    verify_template_marker 'window.setInterval(get_system_status, 5000)' '应用商店系统状态刷新定时器'
-    if grep -q 'show_appcenter_all_view' "$TPL" 2>/dev/null; then
-        die "appcenter template verify failed: unexpected auto switch to all apps"
-    fi
-    if grep -q '已自动切换到所有应用' "$TPL" 2>/dev/null; then
-        die "appcenter template verify failed: old empty-state auto switch text remains"
-    fi
+    verify_template_marker 'build_app_empty_state("暂无已安装应用")' '应用商店已安装空列表提示'
+    verify_template_marker 'window.setInterval(get_system_status, 1000)' '应用商店系统状态刷新定时器'
 }
 
 install_appcenter_polish() {
@@ -6070,7 +6925,7 @@ install_appcenter_polish() {
     require_nradio_oem_appcenter
     verify_file_exists "$TPL" "NRadio 应用商店模板"
 
-    log_stage 2 5 "写入应用商店模板与只读状态接口"
+    log_stage 2 5 "写入应用商店模板与系统状态接口"
     write_plugin_uninstall_assets
     patch_common_template
     patch_appcenter_status_controller
@@ -6787,6 +7642,7 @@ selfcheck_appcenter_route_matches() {
 
     for sec in $sec_list; do
         [ -n "$sec" ] || continue
+        [ "$(uci -q get "appcenter.$sec" 2>/dev/null || true)" = "package_list" ] || continue
         actual_route="$(uci -q get appcenter.$sec.luci_module_route 2>/dev/null || true)"
         [ "$actual_route" = "$expect_route" ] && return 0
         actual_controller="$(uci -q get appcenter.$sec.luci_module_file 2>/dev/null || true)"
@@ -8764,13 +9620,28 @@ end
 
 local function adg_fetch_dashboard_json(path)
 local configpath = uci:get("AdGuardHome", "AdGuardHome", "configpath") or "/etc/AdGuardHome.yaml"
+local httpport = uci:get("AdGuardHome", "AdGuardHome", "httpport") or "3000"
 local user = uci:get("AdGuardHome", "AdGuardHome", "dashboard_user") or ""
 local pass = uci:get("AdGuardHome", "AdGuardHome", "dashboard_password") or ""
-local cookiefile = "/tmp/adg_dashboard_cookie.txt"
+local dashboard_base
+local cookiefile = sys.exec("mktemp /tmp/adg_dashboard_cookie.XXXXXX 2>/dev/null"):gsub("%s+$", "")
 local login_body
 local login_cmd
 local login_out
 local data
+
+if not tostring(httpport):match("^%d+$") then
+httpport = "3000"
+end
+dashboard_base = "http://127.0.0.1:" .. httpport
+
+if cookiefile == "" then
+local nonce = sys.exec("date +%s%N 2>/dev/null || date +%s 2>/dev/null"):gsub("%s+$", "")
+if nonce == "" then
+nonce = "fallback"
+end
+cookiefile = "/tmp/adg_dashboard_cookie." .. nonce
+end
 
 if user == "" then
 user = adg_read_primary_user(configpath)
@@ -8783,22 +9654,22 @@ return nil, "dashboard auth password missing"
 end
 
 login_body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
-login_cmd = "rm -f " .. cookiefile ..
-	" ; wget -q --save-cookies=" .. cookiefile ..
+login_cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
+	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
 	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
 	" --post-data=" .. adg_shell_quote(login_body) ..
-	" -O - http://127.0.0.1:3000/control/login 2>/dev/null"
+	" -O - " .. dashboard_base .. "/control/login 2>/dev/null"
 login_out = sys.exec(login_cmd)
 if not login_out:find("OK", 1, true) then
-sys.exec("rm -f " .. cookiefile)
+sys.exec("rm -f " .. adg_shell_quote(cookiefile))
 return nil, "dashboard login failed"
 end
 
 data = sys.exec(
-	"wget -q --load-cookies=" .. cookiefile ..
-	" -O - http://127.0.0.1:3000" .. path .. " 2>/dev/null"
+	"wget -q --load-cookies=" .. adg_shell_quote(cookiefile) ..
+	" -O - " .. dashboard_base .. path .. " 2>/dev/null"
 )
-sys.exec("rm -f " .. cookiefile)
+sys.exec("rm -f " .. adg_shell_quote(cookiefile))
 
 if data == nil or data == "" then
 return nil, "dashboard fetch failed"
@@ -8850,7 +9721,7 @@ http.write('')
 end
 function act_status()
 local e={}
-local binpath=uci:get("AdGuardHome","AdGuardHome","binpath")
+local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
 local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
 local httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
 local redirect=uci:get("AdGuardHome","AdGuardHome","redirect") or "none"
@@ -8858,9 +9729,9 @@ local version=uci:get("AdGuardHome","AdGuardHome","version") or ""
 local coreversion=uci:get("AdGuardHome","AdGuardHome","coreversion") or ""
 local listen_hosts, dnsport = adg_read_local_dns_runtime(configpath)
 if dnsport == "" then
-dnsport=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..configpath.." 2>/dev/null")
+dnsport=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..adg_shell_quote(configpath).." 2>/dev/null")
 end
-    e.running=sys.call("pgrep "..binpath.." >/dev/null")==0
+e.running=(binpath ~= "" and sys.call("pgrep -f " .. adg_shell_quote(binpath) .. " >/dev/null")==0) or false
 e.redirect=(fs.readfile("/var/run/AdGredir")=="1")
 e.redirect_mode=redirect
 e.httpport=httpport
@@ -8900,6 +9771,7 @@ fs.writefile("/var/run/lucilogpos","0")
 http.prepare_content("application/json")
 http.write('')
 local arg
+local update_script="/usr/share/AdGuardHome/update_core.sh"
 if luci.http.formvalue("force") == "1" then
 arg="force"
 else
@@ -8907,10 +9779,10 @@ arg=""
 end
 if fs.access("/var/run/update_core") then
 if arg=="force" then
-    sys.exec("kill $(pgrep /usr/share/AdGuardHome/update_core.sh) ; sh /usr/share/AdGuardHome/update_core.sh "..arg.." >/tmp/AdGuardHome_update.log 2>&1 &")
+    sys.exec("for pid in $(pgrep -f " .. adg_shell_quote(update_script) .. " 2>/dev/null); do kill \"$pid\" 2>/dev/null || true; done; sh " .. adg_shell_quote(update_script) .. " " .. arg .. " >/tmp/AdGuardHome_update.log 2>&1 &")
 end
 else
-    sys.exec("sh /usr/share/AdGuardHome/update_core.sh "..arg.." >/tmp/AdGuardHome_update.log 2>&1 &")
+    sys.exec("sh " .. adg_shell_quote(update_script) .. " " .. arg .. " >/tmp/AdGuardHome_update.log 2>&1 &")
 end
 end
 function get_log()
@@ -9078,12 +9950,299 @@ function adgSetRefreshState(loading) {
 	if (!button) {
 		return;
 	}
+	button.className = button.className.replace(/\s*adg-button-loading\b/g, "");
+	if (loading) {
+		button.className += " adg-button-loading";
+	}
 	button.disabled = !!loading;
 	button.value = loading ? "刷新中..." : "刷新统计数据";
 }
 
+window.adgDashboardHttpPort = "";
+
 function adgOpenOriginalDashboard() {
-	window.open("http://" + window.location.hostname + ":3000/", "_blank");
+	var port = window.adgDashboardHttpPort || "";
+	if (!port) {
+		return;
+	}
+	window.open("http://" + window.location.hostname + ":" + port + "/", "_blank");
+}
+
+function adgBuildLinePath(values, width, height, padding) {
+	var i;
+	var max = 0;
+	var min = null;
+	var step;
+	var x;
+	var y;
+	var path = "";
+
+	if (!values || !values.length) {
+		return "";
+	}
+
+	for (i = 0; i < values.length; i++) {
+		values[i] = Number(values[i] || 0);
+		if (values[i] > max) {
+			max = values[i];
+		}
+		if (min === null || values[i] < min) {
+			min = values[i];
+		}
+	}
+
+	if (max === 0) {
+		max = 1;
+	}
+	if (min === null) {
+		min = 0;
+	}
+
+	step = values.length > 1 ? (width - padding * 2) / (values.length - 1) : 0;
+
+	for (i = 0; i < values.length; i++) {
+		x = padding + step * i;
+		y = height - padding - ((values[i] - min) / (max - min || 1)) * (height - padding * 2);
+		path += (i === 0 ? "M" : " L") + x.toFixed(2) + " " + y.toFixed(2);
+	}
+
+	return path;
+}
+
+function adgBuildAreaPath(values, width, height, padding) {
+	var line = adgBuildLinePath(values, width, height, padding);
+	if (!line) {
+		return "";
+	}
+	return line + " L" + (width - padding).toFixed(2) + " " + (height - padding).toFixed(2) + " L" + padding.toFixed(2) + " " + (height - padding).toFixed(2) + " Z";
+}
+
+function adgApplyChart(lineId, areaId, values) {
+	var lineNode = document.getElementById(lineId);
+	var areaNode = document.getElementById(areaId);
+	var width = 360;
+	var height = 110;
+	var padding = 8;
+	var line = adgBuildLinePath(values, width, height, padding);
+	var area = adgBuildAreaPath(values, width, height, padding);
+
+	if (lineNode) {
+		lineNode.setAttribute("d", line || "");
+	}
+	if (areaNode) {
+		areaNode.setAttribute("d", area || "");
+	}
+}
+
+function adgSetInlineNote(message, tone) {
+	var note = document.getElementById("adg-inline-note");
+	if (!note) {
+		return;
+	}
+	note.className = "adg-inline-note adg-inline-note-" + (tone || "soft");
+	note.textContent = message;
+}
+
+function adgHasClass(node, className) {
+	return !!(node && (" " + node.className + " ").indexOf(" " + className + " ") !== -1);
+}
+
+function adgAddClass(node, className) {
+	if (!node || adgHasClass(node, className)) {
+		return;
+	}
+	node.className += (node.className ? " " : "") + className;
+}
+
+function adgLocalizeOuterTabs(root) {
+	root = root || document;
+	var nodes = root.querySelectorAll("a, span, li");
+	var map = {
+		"Overview": "总览",
+		"Base Setting": "基础设置",
+		"Manual Config": "手动配置",
+		"Log": "运行日志"
+	};
+	var text;
+	var i;
+	for (i = 0; i < nodes.length; i++) {
+		text = (nodes[i].textContent || "").replace(/^\s+|\s+$/g, "");
+		if (map[text]) {
+			nodes[i].textContent = map[text];
+		}
+	}
+}
+
+function adgPolishParentShell() {
+	var doc;
+	var style;
+	var css;
+	try {
+		if (!window.parent || !window.parent.document || window.parent === window) {
+			return;
+		}
+		doc = window.parent.document;
+		adgLocalizeOuterTabs(doc);
+		css = [
+			".modal.app_frame .modal-body,.modal.app_frame .bootstrap-dialog-message,.modal.app_frame .app_frame_box{background:#2e2e38!important;}",
+			".modal.app_frame .app_frame_nav{border-bottom-color:rgba(255,255,255,.12)!important;}",
+			".modal.app_frame iframe,.modal.app_frame #sub_frame,.modal.app_frame iframe[name='subpage']{display:block!important;border:0!important;background:#2e2e38!important;}"
+		].join(" ");
+		style = doc.getElementById("adg-parent-shell-polish");
+		if (!style) {
+			style = doc.createElement("style");
+			style.id = "adg-parent-shell-polish";
+			(doc.head || doc.documentElement).appendChild(style);
+		}
+		style.textContent = css;
+	} catch (e) {}
+}
+
+function adgUpdateLogNode() {
+	return document.getElementById("cbid.logview.1.conf") || document.querySelector("textarea[id*='logview']");
+}
+
+function adgUpdateLooksLikePageSource(text) {
+	text = String(text || "");
+	return text.indexOf("<![CDATA[") >= 0 ||
+		text.indexOf("document.getElementById") >= 0 ||
+		text.indexOf("AdGuardHome/AdGuardHome_check") >= 0 ||
+		text.indexOf("Dashboard API user") >= 0 ||
+		text.indexOf("仪表盘 API 用户") >= 0 ||
+		text.indexOf("<script") >= 0 ||
+		text.indexOf("cbi-map") >= 0;
+}
+
+function adgParseUpdateStatusText(text) {
+	var lines = String(text || "").split(/\r?\n/);
+	var last = null;
+	var item;
+	var i;
+	for (i = 0; i < lines.length; i++) {
+		item = lines[i].replace(/^\s+|\s+$/g, "");
+		if (!item) {
+			continue;
+		}
+		if (!/^\{[\s\S]*\}$/.test(item)) {
+			return null;
+		}
+		try {
+			last = JSON.parse(item);
+		} catch (e) {
+			return null;
+		}
+	}
+	return last && (typeof last.luciversion !== "undefined" || typeof last.coreversion !== "undefined") ? last : null;
+}
+
+function adgSetUpdateLog(text) {
+	var logNode = adgUpdateLogNode();
+	if (!logNode) {
+		return;
+	}
+	if ("value" in logNode) {
+		logNode.value = text;
+	}
+	logNode.textContent = text;
+	logNode.scrollTop = logNode.scrollHeight;
+}
+
+function adgAppendUpdateLog(text) {
+	var logNode = adgUpdateLogNode();
+	var current;
+	var next;
+	var status;
+	if (!logNode || text === null || typeof text === "undefined") {
+		return;
+	}
+	text = String(text);
+	if (adgUpdateLooksLikePageSource(text)) {
+		adgSetUpdateLog("更新接口返回了 LuCI 页面源码，已拦截异常输出。");
+		return;
+	}
+	status = adgParseUpdateStatusText(text);
+	if (status) {
+		adgSetUpdateLog("当前核心版本：" + (status.coreversion || "latest"));
+		return;
+	}
+	current = "value" in logNode ? logNode.value : logNode.textContent;
+	next = window.islogreverse ? text.split("\n").reverse().join("\n") + current : current + text;
+	adgSetUpdateLog(next);
+}
+
+function adgPollUpdateCheck() {
+	var tag = document.getElementById("logview");
+	if (tag) {
+		tag.style.display = "block";
+	}
+	if (window.adgUpdatePollActive) {
+		return;
+	}
+	window.adgUpdatePollActive = true;
+	XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[check]])%>', null, function(x) {
+		var updatebtn = document.getElementById("apply_update_button");
+		if (!x || typeof x.responseText === "undefined") {
+			return;
+		}
+		if (x.responseText === "\u0000") {
+			if (updatebtn) {
+				updatebtn.disabled = false;
+				updatebtn.value = "已更新";
+			}
+			window.adgUpdatePollActive = false;
+			return;
+		}
+		adgAppendUpdateLog(x.responseText);
+	});
+}
+
+function adgInstallUpdatePanelGuard() {
+	var updatebtn = document.getElementById("apply_update_button");
+	var forceupdatebtn = document.getElementById("apply_forceupdate_button");
+	var logNode = adgUpdateLogNode();
+	if (!updatebtn && !forceupdatebtn && !logNode) {
+		return;
+	}
+	if (logNode) {
+		adgAddClass(logNode, "adg-update-log");
+		if (adgUpdateLooksLikePageSource(("value" in logNode ? logNode.value : logNode.textContent))) {
+			adgSetUpdateLog("更新日志等待中。");
+		}
+	}
+	window.reverselog = function() {
+		var node = adgUpdateLogNode();
+		var text;
+		if (!node) {
+			return;
+		}
+		text = "value" in node ? node.value : node.textContent;
+		window.islogreverse = !window.islogreverse;
+		adgSetUpdateLog(text.split("\n").reverse().join("\n"));
+	};
+	window.poll_check = adgPollUpdateCheck;
+	window.apply_update = function() {
+		var btn = document.getElementById("apply_update_button");
+		var forcebtn = document.getElementById("apply_forceupdate_button");
+		XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[doupdate]])%>', null, function() {});
+		if (btn) {
+			btn.disabled = true;
+			btn.value = "检查中...";
+		}
+		if (forcebtn) {
+			forcebtn.style.display = "inline";
+		}
+		adgSetUpdateLog("");
+		adgPollUpdateCheck();
+	};
+	window.apply_forceupdate = function() {
+		var btn = document.getElementById("apply_update_button");
+		XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[doupdate]])%>', { force: 1 }, function() {});
+		if (btn) {
+			btn.disabled = true;
+		}
+		adgSetUpdateLog("");
+		adgPollUpdateCheck();
+	};
 }
 
 function adgApplyRuntime(runtime, status) {
@@ -9093,7 +10252,11 @@ function adgApplyRuntime(runtime, status) {
 	var listenNode = document.getElementById("adg-runtime-listen");
 	var portNode = document.getElementById("adg-runtime-port");
 	var coreNode = document.getElementById("adg-runtime-core");
+	var glanceModeNode = document.getElementById("adg-glance-mode");
+	var glanceAuthNode = document.getElementById("adg-glance-auth");
+	var glanceListenNode = document.getElementById("adg-glance-listen");
 	var shellNode = document.getElementById("adg-dashboard-shell");
+	var openButton = document.getElementById("adg-open-dashboard");
 	var runtimeOk = adgHasRuntimePayload(runtime);
 	var running = runtimeOk ? !!runtime.running : !!(status && status.running);
 	var tone = running ? "ok" : "bad";
@@ -9109,9 +10272,14 @@ function adgApplyRuntime(runtime, status) {
 	var protectText = runtimeOk
 		? adgProtectText(runtime && runtime.protection_enabled)
 		: ((status && status.dashboard_auth_ready) ? "未读取" : "需填密码");
+	window.adgDashboardHttpPort = String(httpPort || "3000");
 
 	if (shellNode) {
 		shellNode.className = "adg-dashboard-shell adg-tone-" + tone;
+	}
+	if (openButton) {
+		openButton.value = "打开 " + window.adgDashboardHttpPort + " 原版完整版";
+		openButton.disabled = false;
 	}
 	if (runNode) {
 		runNode.textContent = adgStatusText(running);
@@ -9131,13 +10299,29 @@ function adgApplyRuntime(runtime, status) {
 	if (coreNode) {
 		coreNode.textContent = coreText;
 	}
+	if (glanceModeNode) {
+		glanceModeNode.textContent = redirectText;
+	}
+	if (glanceAuthNode) {
+		glanceAuthNode.textContent = (status && status.dashboard_auth_ready) ? "已填写" : "待填写";
+	}
+	if (glanceListenNode) {
+		glanceListenNode.textContent = ":" + dnsPort;
+	}
 }
 
 function adgApplyDashboardStats(data) {
 	var totalNode = document.getElementById("adg-stats-total");
 	var blockedNode = document.getElementById("adg-stats-blocked");
-	var ratioNode = document.getElementById("adg-stats-ratio");
 	var metaNode = document.getElementById("adg-stats-meta");
+	var glanceTotalNode = document.getElementById("adg-glance-total");
+	var glanceRatioNode = document.getElementById("adg-glance-ratio");
+	var totalPercentNode = document.getElementById("adg-stats-total-percent");
+	var blockedPercentNode = document.getElementById("adg-stats-blocked-percent");
+	var total;
+	var blocked;
+	var ratio;
+	var ratioText;
 
 	if (data && data.ok === false) {
 		if (totalNode) {
@@ -9146,33 +10330,57 @@ function adgApplyDashboardStats(data) {
 		if (blockedNode) {
 			blockedNode.textContent = "—";
 		}
-		if (ratioNode) {
-			ratioNode.textContent = "—";
+		if (totalPercentNode) {
+			totalPercentNode.textContent = "—";
+		}
+		if (blockedPercentNode) {
+			blockedPercentNode.textContent = "—";
 		}
 		if (metaNode) {
-			metaNode.textContent = data.error === "dashboard auth password missing"
-				? "请先在设置页填写 Dashboard API password"
-				: "统计读取失败";
+			metaNode.textContent = "等待 3000 仪表盘认证";
 		}
+		if (glanceTotalNode) {
+			glanceTotalNode.textContent = "待认证";
+		}
+		if (glanceRatioNode) {
+			glanceRatioNode.textContent = "待认证";
+		}
+		adgSetInlineNote("未填写仪表盘 API 密码。", "warn");
+		adgApplyChart("adg-chart-total-line", "adg-chart-total-area", []);
+		adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", []);
 		return;
 	}
 
-	var total = Number(data && data.num_dns_queries || 0);
-	var blocked = Number(data && data.num_blocked_filtering || 0);
-	var ratio = total > 0 ? (blocked / total * 100) : 0;
+	total = Number(data && data.num_dns_queries || 0);
+	blocked = Number(data && data.num_blocked_filtering || 0);
+	ratio = total > 0 ? (blocked / total * 100) : 0;
+	ratioText = ratio.toFixed(2) + "%";
 
 	if (totalNode) {
 		totalNode.textContent = adgFormatNumber(total);
 	}
+	if (totalPercentNode) {
+		totalPercentNode.textContent = ratioText;
+	}
 	if (blockedNode) {
 		blockedNode.textContent = adgFormatNumber(blocked);
 	}
-	if (ratioNode) {
-		ratioNode.textContent = ratio > 0 ? ratio.toFixed(2) + "%" : "0%";
+	if (blockedPercentNode) {
+		blockedPercentNode.textContent = ratioText;
 	}
 	if (metaNode) {
 		metaNode.textContent = "最近 24 小时";
 	}
+	if (glanceTotalNode) {
+		glanceTotalNode.textContent = adgFormatNumber(total);
+	}
+	if (glanceRatioNode) {
+		glanceRatioNode.textContent = "拦截率 " + ratioText;
+	}
+
+	adgSetInlineNote("已同步 3000 仪表盘统计。", "ok");
+	adgApplyChart("adg-chart-total-line", "adg-chart-total-area", data && data.dns_queries ? data.dns_queries : []);
+	adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", data && data.blocked_filtering ? data.blocked_filtering : []);
 }
 
 function adgApplyPageSkin() {
@@ -9180,31 +10388,92 @@ function adgApplyPageSkin() {
 	var sections = document.querySelectorAll(".cbi-section");
 	var values = document.querySelectorAll(".cbi-value");
 	var buttons = document.querySelectorAll("input[type='button'], input[type='submit'], .cbi-button");
+	var optionals = document.querySelectorAll(".cbi-optionals");
+	var pageActions = document.querySelectorAll(".cbi-page-actions");
+	var themedSections = [];
+	var field;
 	var i;
+	var actionOnly;
+	var hasCheckbox;
+	var hasPassword;
+	var hasSelect;
+	var hasTextarea;
+	var hasDescription;
+	var hasButton;
+	var hasPlainInput;
 
-	if (map && map.className.indexOf(" adg-themed-map") === -1) {
-		map.className += " adg-themed-map";
-	}
+	adgAddClass(map, "adg-themed-map");
+	adgLocalizeOuterTabs(document);
+	adgPolishParentShell();
 
 	for (i = 0; i < sections.length; i++) {
 		if (sections[i].id === "AdGuardHome_status_fieldset") {
 			continue;
 		}
-		if (sections[i].className.indexOf(" adg-themed-section") === -1) {
-			sections[i].className += " adg-themed-section";
+		adgAddClass(sections[i], "adg-themed-section");
+		themedSections.push(sections[i]);
+	}
+
+	for (i = 0; i < themedSections.length; i++) {
+		if (i === 0) {
+			adgAddClass(themedSections[i], "adg-section-first");
+		}
+		if (i === themedSections.length - 1) {
+			adgAddClass(themedSections[i], "adg-section-last");
 		}
 	}
 
 	for (i = 0; i < values.length; i++) {
-		if (values[i].className.indexOf(" adg-themed-value") === -1) {
-			values[i].className += " adg-themed-value";
+		field = values[i];
+		hasCheckbox = !!field.querySelector(".checkbox, input[type='checkbox']");
+		hasPassword = !!field.querySelector("input[type='password']");
+		hasSelect = !!field.querySelector("select");
+		hasTextarea = !!field.querySelector("textarea");
+		hasDescription = !!field.querySelector(".cbi-value-description");
+		hasButton = !!field.querySelector("input[type='button'], input[type='submit'], .cbi-button");
+		hasPlainInput = !!field.querySelector("input[type='text'], input[type='password']");
+		actionOnly = !field.querySelector("input[type='text'], input[type='password'], textarea, select") &&
+			hasButton;
+
+		adgAddClass(field, "adg-themed-value");
+		if (hasCheckbox) {
+			adgAddClass(field, "adg-value-boolean");
+		}
+		if (hasPassword) {
+			adgAddClass(field, "adg-value-password");
+		}
+		if (hasSelect) {
+			adgAddClass(field, "adg-value-select");
+		}
+		if (hasTextarea) {
+			adgAddClass(field, "adg-value-textarea");
+		}
+		if (hasDescription) {
+			adgAddClass(field, "adg-value-described");
+		}
+		if (hasButton && (hasPlainInput || hasTextarea || hasSelect)) {
+			adgAddClass(field, "adg-value-combo");
+		}
+		if (actionOnly) {
+			adgAddClass(field, "adg-value-actions");
 		}
 	}
 
 	for (i = 0; i < buttons.length; i++) {
-		if (buttons[i].value && buttons[i].value.indexOf("AdGuardHome Web:") === 0 && buttons[i].className.indexOf(" adg-origin-button") === -1) {
-			buttons[i].className += " adg-origin-button";
+		if (buttons[i].value && buttons[i].value.indexOf("AdGuardHome Web:") === 0) {
+			adgAddClass(buttons[i], "adg-origin-button");
 		}
+		if (adgHasClass(buttons[i], "cbi-button-reset") || adgHasClass(buttons[i], "cbi-button-remove") || adgHasClass(buttons[i], "cbi-input-remove")) {
+			adgAddClass(buttons[i], "adg-button-muted");
+		}
+	}
+
+	for (i = 0; i < optionals.length; i++) {
+		adgAddClass(optionals[i], "adg-optionals-bar");
+	}
+
+	for (i = 0; i < pageActions.length; i++) {
+		adgAddClass(pageActions[i], "adg-page-actions");
 	}
 }
 
@@ -9238,81 +10507,188 @@ XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]
 window.setTimeout(adgApplyPageSkin, 60);
 window.setTimeout(adgApplyPageSkin, 260);
 window.setTimeout(adgApplyPageSkin, 860);
+window.setTimeout(adgApplyPageSkin, 1800);
+window.setTimeout(adgPolishParentShell, 2200);
 window.setTimeout(adgRefreshAll, 120);
+window.setTimeout(adgInstallUpdatePanelGuard, 180);
+window.setTimeout(adgInstallUpdatePanelGuard, 680);
+window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 //]]>
 </script>
 <style>
+	html,
+	body {
+		background: #2e2e38 !important;
+	}
+
 	#AdGuardHome_status_fieldset.cbi-section {
 		margin: 0 0 18px;
 		padding: 0;
-		border: 1px solid #35394b;
-		border-radius: 12px;
-		background: linear-gradient(180deg, rgba(35, 39, 53, 0.98), rgba(28, 31, 42, 0.98));
-		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 18px 42px rgba(0,0,0,0.22);
-		overflow: hidden;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+		overflow: visible;
 	}
 
 	.adg-dashboard-shell {
 		--adg-accent: #23c8e4;
-		padding: 20px 22px 18px;
+		--adg-accent-rgb: 35, 200, 228;
+		position: relative;
+		padding: 18px 22px 22px;
+		background: transparent;
+	}
+
+	.adg-dashboard-shell *,
+	.adg-settings-bridge * {
+		box-sizing: border-box;
+	}
+
+	.adg-dashboard-shell::before {
+		display: none;
+		content: none;
+	}
+
+	.adg-dashboard-shell::after {
+		display: none;
+		content: none;
 	}
 
 	.adg-tone-ok {
-		--adg-accent: #22c55e;
+		--adg-accent: #3ddc97;
+		--adg-accent-rgb: 61, 220, 151;
 	}
 
 	.adg-tone-bad {
-		--adg-accent: #ef4444;
+		--adg-accent: #ff7676;
+		--adg-accent-rgb: 255, 118, 118;
 	}
 
-	.adg-runtime-bar {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
+	.adg-hero-grid {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.9fr);
 		gap: 16px;
-		margin: 0 0 14px;
+		margin: 0 0 16px;
 	}
 
-	.adg-action-group {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 10px;
-		justify-content: flex-end;
+	.adg-runtime-panel,
+	.adg-action-panel {
+		position: relative;
+		overflow: hidden;
+		border: 1px solid rgba(92, 110, 146, 0.32);
+		border-radius: 16px;
+		background:
+			linear-gradient(180deg, rgba(255,255,255,0.038), rgba(255,255,255,0.012)),
+			rgba(12, 16, 24, 0.46);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.026), 0 14px 30px rgba(0,0,0,0.15);
+		transition: transform 0.18s ease-out, border-color 0.18s ease-out, box-shadow 0.18s ease-out, background 0.18s ease-out;
+	}
+
+	.adg-runtime-panel::before,
+	.adg-action-panel::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(135deg, rgba(255,255,255,0.035), transparent 42%);
+		opacity: 0.46;
+		pointer-events: none;
+	}
+
+	.adg-runtime-panel {
+		padding: 18px 20px 18px;
+		background:
+			radial-gradient(circle at 0% 0%, rgba(var(--adg-accent-rgb), 0.12), transparent 26%),
+			linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+			rgba(12, 16, 24, 0.48);
+	}
+
+	.adg-action-panel {
+		padding: 18px 20px;
+		background:
+			radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.15), transparent 28%),
+			linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+			rgba(12, 16, 24, 0.48);
+	}
+
+	.adg-runtime-panel:hover,
+	.adg-action-panel:hover {
+		transform: translateY(-1px);
+		border-color: rgba(255,255,255,0.10);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 36px rgba(0,0,0,0.20);
+	}
+
+	.adg-panel-kicker {
+		color: #88a0c7;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.11em;
+		text-transform: uppercase;
+	}
+
+	.adg-panel-title {
+		margin-top: 7px;
+		color: #f4f8ff;
+		font-size: 22px;
+		font-weight: 800;
+		line-height: 1.15;
+		letter-spacing: 0;
+	}
+
+	.adg-panel-sub {
+		max-width: 34ch;
+		margin-top: 8px;
+		color: #a5b6d1;
+		font-size: 13px;
+		line-height: 1.62;
 	}
 
 	.adg-runtime-wrap {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 10px 12px;
+		gap: 9px 10px;
+		margin-top: 16px;
 	}
 
 	.adg-runtime-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: 8px;
-		padding: 7px 12px;
+		gap: 10px;
+		min-height: 42px;
+		padding: 9px 15px;
+		border: 1px solid rgba(var(--adg-accent-rgb), 0.20);
 		border-radius: 999px;
-		background: rgba(255,255,255,0.05);
+		background:
+			linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025)),
+			rgba(var(--adg-accent-rgb), 0.08);
 		color: #eef4ff;
-		font-size: 12px;
-		font-weight: 700;
+		font-size: 13px;
+		font-weight: 800;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(0,0,0,0.12);
 	}
 
 	.adg-runtime-dot {
-		width: 8px;
-		height: 8px;
+		width: 10px;
+		height: 10px;
 		border-radius: 50%;
 		background: var(--adg-accent);
-		box-shadow: 0 0 0 5px rgba(255,255,255,0.08);
+		box-shadow: 0 0 0 6px rgba(var(--adg-accent-rgb), 0.14);
+		filter: drop-shadow(0 0 8px var(--adg-accent));
+		animation: adgDotPulse 1.9s ease-out infinite;
 	}
 
 	.adg-runtime-item {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		padding: 7px 12px;
+		gap: 7px;
+		min-height: 40px;
+		padding: 8px 13px;
+		border: 1px solid rgba(255,255,255,0.05);
 		border-radius: 999px;
-		background: rgba(255,255,255,0.03);
+		background:
+			linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.012)),
+			rgba(255,255,255,0.022);
 		color: #d4e2fa;
 		font-size: 12px;
 	}
@@ -9323,40 +10699,244 @@ window.setTimeout(adgRefreshAll, 120);
 
 	.adg-runtime-value {
 		color: #f7fbff;
+		font-weight: 800;
+	}
+
+	.adg-action-group {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 11px;
+		margin-top: 16px;
+	}
+
+	.adg-action-panel .cbi-button {
+		width: 100%;
+		height: 50px;
+		min-height: 50px;
+		line-height: 48px;
+		padding-top: 0;
+		padding-bottom: 0;
+		border-radius: 14px;
+		font-size: 14px;
+		font-weight: 800;
+	}
+
+	.adg-inline-note {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		min-height: 48px;
+		padding: 0 16px;
+		border-radius: 14px;
+		font-size: 13px;
 		font-weight: 700;
+		line-height: 1.52;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+		overflow: hidden;
+	}
+
+	.adg-inline-note::before {
+		content: "";
+		width: 8px;
+		height: 8px;
+		margin-right: 12px;
+		border-radius: 50%;
+		background: currentColor;
+		opacity: 0.85;
+		flex: 0 0 auto;
+	}
+
+	.adg-inline-note-ok {
+		border: 1px solid rgba(34, 197, 94, 0.18);
+		background: rgba(34, 197, 94, 0.09);
+		color: #d5ffe3;
+	}
+
+	.adg-inline-note-warn {
+		border: 1px solid rgba(245, 158, 11, 0.20);
+		background: rgba(245, 158, 11, 0.10);
+		color: #ffe3ac;
+	}
+
+	.adg-inline-note-soft {
+		border: 1px solid rgba(255,255,255,0.08);
+		background: rgba(255,255,255,0.03);
+		color: #d5e2f7;
+	}
+
+	.adg-glance-grid {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 12px;
+		margin-top: 14px;
+	}
+
+	.adg-glance-card {
+		position: relative;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		min-height: 126px;
+		padding: 15px 15px 13px;
+		border: 1px solid rgba(255,255,255,0.07);
+		border-radius: 14px;
+		background:
+			radial-gradient(circle at top right, rgba(63, 132, 255, 0.14), transparent 42%),
+			linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+			rgba(11, 14, 22, 0.52);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 22px rgba(0,0,0,0.13);
+		transition: transform 0.18s ease-out, box-shadow 0.18s ease-out, border-color 0.18s ease-out, background 0.18s ease-out;
+	}
+
+	.adg-glance-card::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(135deg, rgba(255,255,255,0.06), transparent 46%);
+		opacity: 0.7;
+		pointer-events: none;
+	}
+
+	.adg-glance-card::after {
+		content: "";
+		position: absolute;
+		left: 16px;
+		right: 16px;
+		bottom: 0;
+		height: 2px;
+		border-radius: 999px;
+		background: linear-gradient(90deg, rgba(108, 162, 255, 0), rgba(108, 162, 255, 0.86), rgba(47, 211, 238, 0));
+		opacity: 0.78;
+	}
+
+	.adg-glance-card:nth-child(2) {
+		background:
+			radial-gradient(circle at top right, rgba(47, 211, 238, 0.16), transparent 42%),
+			linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+			rgba(11, 14, 22, 0.52);
+	}
+
+	.adg-glance-card:nth-child(2)::after {
+		background: linear-gradient(90deg, rgba(47, 211, 238, 0), rgba(47, 211, 238, 0.88), rgba(108, 162, 255, 0));
+	}
+
+	.adg-glance-card:nth-child(3) {
+		background:
+			radial-gradient(circle at top right, rgba(134, 122, 255, 0.14), transparent 42%),
+			linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+			rgba(11, 14, 22, 0.52);
+	}
+
+	.adg-glance-card:nth-child(3)::after {
+		background: linear-gradient(90deg, rgba(134, 122, 255, 0), rgba(134, 122, 255, 0.86), rgba(108, 162, 255, 0));
+	}
+
+	.adg-glance-card:nth-child(4) {
+		background:
+			radial-gradient(circle at top right, rgba(255, 114, 114, 0.15), transparent 42%),
+			linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+			rgba(11, 14, 22, 0.52);
+	}
+
+	.adg-glance-card:nth-child(4)::after {
+		background: linear-gradient(90deg, rgba(255, 114, 114, 0), rgba(255, 114, 114, 0.86), rgba(255, 155, 155, 0));
+	}
+
+	.adg-glance-label {
+		color: #86a0c8;
+		font-size: 10px;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.adg-glance-value {
+		display: block;
+		margin-top: 12px;
+		color: #f4f8ff;
+		font-size: 24px;
+		font-weight: 800;
+		line-height: 1.1;
+		letter-spacing: -0.03em;
+		text-shadow: 0 10px 24px rgba(0,0,0,0.20);
+		word-break: break-word;
+	}
+
+	.adg-glance-sub {
+		margin-top: auto;
+		padding-top: 10px;
+		color: #94a7c2;
+		font-size: 12px;
+		line-height: 1.6;
 	}
 
 	.adg-dashboard-head {
+		position: relative;
+		z-index: 1;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
-		margin: 0 0 12px;
+		margin: 16px 0 12px;
 	}
 
 	.adg-dashboard-meta {
-		color: #9cb0ce;
-		font-size: 12px;
-		font-weight: 700;
-		letter-spacing: 0.04em;
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		color: #afc4e4;
+		font-size: 13px;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.adg-dashboard-meta::before {
+		content: "";
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: linear-gradient(180deg, #73a7ff, #34d3ee);
+		box-shadow: 0 0 0 6px rgba(115, 167, 255, 0.08);
+		flex: 0 0 auto;
 	}
 
 	.adg-dashboard-grid {
+		position: relative;
+		z-index: 1;
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 14px;
 		margin: 0;
 	}
 
-	.adg-dashboard-card {
-		position: relative;
-		min-height: 168px;
-		padding: 22px 22px 18px;
-		border: 1px solid rgba(255,255,255,0.08);
-		border-radius: 12px;
-		background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)), rgba(15, 18, 27, 0.7);
-		box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-		overflow: hidden;
+    .adg-dashboard-card {
+        position: relative;
+        display: grid;
+        grid-template-rows: auto auto auto auto minmax(92px, 1fr);
+        align-content: start;
+        min-height: 274px;
+        padding: 22px 24px 22px;
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at 88% 0%, rgba(108, 162, 255, 0.10), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.024)),
+            rgba(12, 16, 24, 0.76);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 15px 32px rgba(0,0,0,0.17);
+        overflow: hidden;
+        transition: transform 0.18s ease-out, box-shadow 0.18s ease-out, border-color 0.18s ease-out;
+    }
+
+	.adg-dashboard-card::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(135deg, rgba(255,255,255,0.04), transparent 42%);
+		pointer-events: none;
 	}
 
 	.adg-dashboard-card::after {
@@ -9365,53 +10945,233 @@ window.setTimeout(adgRefreshAll, 120);
 		left: 0;
 		right: 0;
 		bottom: 0;
-		height: 2px;
-		opacity: 0.9;
+		height: 3px;
+		opacity: 0.95;
 	}
 
 	.adg-card-queries::after {
-		background: #4b83da;
+		background: linear-gradient(90deg, rgba(115, 167, 255, 0), rgba(115, 167, 255, 0.72), rgba(47, 211, 238, 0.22));
 	}
 
 	.adg-card-blocked::after {
-		background: #e33434;
+		background: linear-gradient(90deg, rgba(255, 114, 114, 0), rgba(255, 114, 114, 0.70), rgba(255, 155, 155, 0.20));
+	}
+
+	.adg-card-blocked {
+		background:
+			radial-gradient(circle at 88% 0%, rgba(255, 114, 114, 0.10), transparent 32%),
+			linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.024)),
+			rgba(12, 16, 24, 0.76);
+	}
+
+	.adg-card-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		position: relative;
+		z-index: 1;
 	}
 
 	.adg-dashboard-label {
-		color: #7f96bb;
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		color: #a7bde0;
 		font-size: 14px;
-		font-weight: 700;
+		font-weight: 800;
 	}
 
-	.adg-dashboard-number {
-		margin-top: 22px;
-		font-size: 54px;
-		line-height: 1;
-		font-weight: 300;
-		letter-spacing: -0.03em;
+	.adg-dashboard-label::before {
+		content: "";
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: linear-gradient(180deg, #73a7ff, #34d3ee);
+		box-shadow: 0 0 0 6px rgba(115, 167, 255, 0.07);
+		flex: 0 0 auto;
 	}
+
+	.adg-card-blocked .adg-dashboard-label::before {
+		background: linear-gradient(180deg, #ff8f8f, #ff7272);
+		box-shadow: 0 0 0 6px rgba(255, 114, 114, 0.08);
+	}
+
+	.adg-dashboard-period {
+		color: #6f86aa;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+    .adg-dashboard-number {
+        position: relative;
+        z-index: 2;
+        margin-top: 20px;
+        font-size: 54px;
+        line-height: 1;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        text-shadow: 0 14px 30px rgba(0,0,0,0.34);
+    }
 
 	.adg-card-queries .adg-dashboard-number {
-		color: #70a3ff;
+		color: #73a7ff;
 	}
 
 	.adg-card-blocked .adg-dashboard-number {
-		color: #ff6e6e;
+		color: #ff7272;
 	}
 
-	.adg-dashboard-sub {
+    .adg-dashboard-sub {
+        position: relative;
+        z-index: 2;
+        margin-top: 10px;
+        color: #b6c8e6;
+        font-size: 13px;
+        opacity: 0.92;
+    }
+
+    .adg-dashboard-ratio {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        color: #ff8d8d;
+        font-size: 20px;
+        font-weight: 600;
+    }
+    /* 专用于放在 meta（24 小时）下方的百分比显示 */
+    #adg-stats-percent {
+        position: static;
+        margin-top: 6px;
+        font-size: 16px;
+        color: #ff8d8d;
+        text-align: right;
+    }
+    /* When the ratio is placed inside the blocked card as a normal flow element,
+       override the absolute positioning to avoid overlapping other content. */
+    .adg-card-blocked .adg-dashboard-ratio {
+        position: static;
+        margin-top: 8px;
+        font-size: 18px;
+        text-align: right;
+        color: #ff8d8d;
+    }
+    .adg-card-queries .adg-dashboard-ratio {
+        position: static;
+        margin-top: 4px;
+        font-size: 16px;
+        text-align: right;
+        color: #ff8d8d;
+    }
+    .adg-dashboard-sub-ratio {
+        /* 小字体百分比，紧随总数 */
+        font-weight: 600;
+    }
+    /* 统一的百分比样式 */
+	.adg-percentage {
+		position: relative;
+		z-index: 2;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: fit-content;
 		margin-top: 10px;
-		color: #89a0c4;
-		font-size: 13px;
+		padding: 5px 10px;
+		border: 1px solid rgba(255, 155, 155, 0.12);
+		border-radius: 999px;
+		background: linear-gradient(180deg, rgba(255, 155, 155, 0.11), rgba(255, 155, 155, 0.05));
+		font-size: 15px;
+		color: #ffadad;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 	}
 
-	.adg-dashboard-ratio {
+	.adg-card-queries .adg-percentage {
+		border-color: rgba(115, 167, 255, 0.12);
+		background: linear-gradient(180deg, rgba(115, 167, 255, 0.11), rgba(115, 167, 255, 0.045));
+		color: #a9ccff;
+	}
+
+	.adg-dashboard-card:hover {
+		transform: translateY(-2px);
+		border-color: rgba(108, 162, 255, 0.18);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 18px 36px rgba(0,0,0,0.24);
+	}
+
+	.adg-chart-shell {
+		position: relative;
+		left: auto;
+		right: auto;
+		bottom: auto;
+		width: 100%;
+		height: 98px;
+		margin-top: 14px;
+		padding-top: 10px;
+		border: 1px solid rgba(255,255,255,0.05);
+		border-radius: 14px;
+		overflow: hidden;
+		background:
+			linear-gradient(180deg, rgba(255,255,255,0.022), rgba(255,255,255,0.006)),
+			rgba(255,255,255,0.012);
+	}
+
+	.adg-chart-grid {
 		position: absolute;
-		top: 18px;
-		right: 18px;
-		color: #ff8d8d;
-		font-size: 20px;
-		font-weight: 500;
+		inset: 0;
+		background-image:
+			linear-gradient(to top, rgba(255,255,255,0.020) 1px, transparent 1px),
+			linear-gradient(to right, rgba(255,255,255,0.012) 1px, transparent 1px);
+		background-size: 100% 26px, 48px 100%;
+		mask-image: linear-gradient(180deg, transparent, #000 24%, #000 100%);
+		opacity: 0.42;
+	}
+
+	.adg-card-queries .adg-chart-grid {
+		background-image:
+			linear-gradient(to top, rgba(108, 162, 255, 0.075) 1px, transparent 1px),
+			linear-gradient(to right, rgba(108, 162, 255, 0.028) 1px, transparent 1px);
+	}
+
+	.adg-card-blocked .adg-chart-grid {
+		background-image:
+			linear-gradient(to top, rgba(255, 114, 114, 0.072) 1px, transparent 1px),
+			linear-gradient(to right, rgba(255, 114, 114, 0.026) 1px, transparent 1px);
+	}
+
+	.adg-chart {
+		position: relative;
+		z-index: 1;
+		width: 100%;
+		height: 100%;
+	}
+
+	.adg-chart path {
+		fill: none;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	#adg-chart-total-area {
+		fill: rgba(75, 131, 218, 0.14);
+		stroke: none;
+	}
+
+	#adg-chart-total-line {
+		stroke: #79adff;
+		stroke-width: 3.2;
+	}
+
+	#adg-chart-blocked-area {
+		fill: rgba(255, 102, 102, 0.14);
+		stroke: none;
+	}
+
+	#adg-chart-blocked-line {
+		stroke: #ff7d7d;
+		stroke-width: 3.2;
 	}
 
 	.cbi-map.adg-themed-map {
@@ -9427,31 +11187,249 @@ window.setTimeout(adgRefreshAll, 120);
 		display: none;
 	}
 
+	.cbi-tabmenu,
+	.tabs,
+	.nav-tabs {
+		display: flex !important;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin: 0 0 14px !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		list-style: none;
+	}
+
+	.cbi-tabmenu::before,
+	.cbi-tabmenu::after,
+	.tabs::before,
+	.tabs::after,
+	.nav-tabs::before,
+	.nav-tabs::after {
+		display: none !important;
+		content: none !important;
+	}
+
+	.cbi-tabmenu > li,
+	.tabs > li,
+	.nav-tabs > li {
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+	}
+
+	.cbi-tabmenu a,
+	.tabs a,
+	.nav-tabs a {
+		display: inline-flex !important;
+		align-items: center;
+		justify-content: center;
+		min-height: 38px;
+		padding: 0 15px !important;
+		border: 1px solid rgba(255,255,255,0.08) !important;
+		border-radius: 999px !important;
+		background:
+			linear-gradient(180deg, rgba(255,255,255,0.034), rgba(255,255,255,0.012)),
+			rgba(255,255,255,0.02) !important;
+		color: #a8bcdb !important;
+		font-size: 13px;
+		font-weight: 600;
+		text-decoration: none !important;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+	}
+
+	.cbi-tabmenu a:hover,
+	.tabs a:hover,
+	.nav-tabs a:hover {
+		border-color: rgba(47, 211, 238, 0.28) !important;
+		color: #e6f3ff !important;
+		background:
+			radial-gradient(circle at top right, rgba(47, 211, 238, 0.13), transparent 42%),
+			linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.016)),
+			rgba(255,255,255,0.025) !important;
+	}
+
+	.cbi-tabmenu .active a,
+	.cbi-tabmenu .cbi-tab a,
+	.tabs .active a,
+	.nav-tabs .active a,
+	.nav-tabs li.active a {
+		border-color: rgba(47, 211, 238, 0.45) !important;
+		background:
+			linear-gradient(180deg, rgba(42, 156, 255, 0.90), rgba(17, 119, 222, 0.88)),
+			rgba(255,255,255,0.03) !important;
+		color: #f5fbff !important;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 12px 22px rgba(17, 119, 222, 0.20);
+	}
+
 	.cbi-map .adg-themed-section {
+		position: relative;
+		isolation: isolate;
+		overflow: hidden;
 		margin: 0 0 18px;
-		padding: 22px 24px;
-		border: 1px solid #35394b;
-		border-radius: 12px;
-		background: linear-gradient(180deg, rgba(37, 40, 53, 0.96), rgba(30, 33, 44, 0.96));
-		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 16px 34px rgba(0,0,0,0.18);
+		padding: 28px 30px 24px;
+		border: 1px solid rgba(78, 96, 131, 0.78);
+		border-radius: 20px;
+		background:
+			radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.12), transparent 26%),
+			radial-gradient(circle at 0% 0%, rgba(100, 153, 255, 0.10), transparent 28%),
+			linear-gradient(180deg, rgba(34, 40, 55, 0.985), rgba(23, 28, 40, 0.985)),
+			rgba(16, 20, 29, 0.62);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 24px 56px rgba(0,0,0,0.24);
+		transition: border-color 0.16s ease-out, box-shadow 0.16s ease-out, transform 0.16s ease-out;
+	}
+
+	.cbi-map .adg-themed-section:first-of-type {
+		margin-top: 2px;
+	}
+
+	.cbi-map .adg-themed-section::before {
+		content: "";
+		position: absolute;
+		left: 24px;
+		right: 24px;
+		top: 0;
+		height: 1px;
+		background: linear-gradient(90deg, rgba(108, 162, 255, 0), rgba(108, 162, 255, 0.7), rgba(47, 211, 238, 0.7), rgba(47, 211, 238, 0));
+		opacity: 0.95;
+		pointer-events: none;
+	}
+
+	.cbi-map .adg-themed-section::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background:
+			radial-gradient(circle at top right, rgba(63, 132, 255, 0.08), transparent 34%),
+			linear-gradient(180deg, rgba(255,255,255,0.028), transparent 20%),
+			linear-gradient(135deg, rgba(255,255,255,0.02), transparent 42%);
+		pointer-events: none;
+	}
+
+	.cbi-map .adg-themed-section:hover {
+		border-color: rgba(108, 162, 255, 0.40);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 28px 60px rgba(0,0,0,0.28);
+		transform: translateY(-2px);
+	}
+
+	.cbi-map .adg-section-first {
+		border-color: rgba(72, 100, 148, 0.88);
+	}
+
+	.cbi-map .adg-section-last {
+		margin-bottom: 0;
 	}
 
 	.cbi-map .adg-themed-section legend,
 	.cbi-map .adg-themed-section h3 {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		gap: 11px;
 		padding-left: 0;
-		color: #eef4ff;
-		font-size: 18px;
+		padding-bottom: 14px;
+		color: #f3f7ff;
+		font-size: 19px;
 		font-weight: 800;
+		letter-spacing: -0.02em;
+	}
+
+	.cbi-map .adg-themed-section legend::before,
+	.cbi-map .adg-themed-section h3::before {
+		content: "";
+		width: 22px;
+		height: 22px;
+		border-radius: 8px;
+		background:
+			linear-gradient(135deg, rgba(47, 211, 238, 0.92), rgba(108, 162, 255, 0.72)),
+			rgba(255,255,255,0.04);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 8px 18px rgba(47, 211, 238, 0.16);
+		flex: 0 0 auto;
+	}
+
+	.cbi-map .adg-themed-section legend::after,
+	.cbi-map .adg-themed-section h3::after {
+		content: "";
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		width: 86px;
+		height: 1px;
+		background: linear-gradient(90deg, rgba(108, 162, 255, 0.95), rgba(47, 211, 238, 0));
 	}
 
 	.cbi-map .adg-themed-value {
-		display: grid;
-		grid-template-columns: 190px minmax(0, 1fr);
+		position: relative;
+		display: flex;
+		align-items: flex-start;
 		gap: 18px;
-		align-items: start;
-		padding: 14px 0;
-		border-top: 1px solid rgba(255,255,255,0.06);
+		padding: 18px 0 18px;
+		border-top: 1px solid rgba(255,255,255,0.05);
 		text-align: left;
+		transition: transform 0.14s ease-out;
+		clear: both;
+		overflow: visible;
+	}
+
+	.cbi-map .adg-themed-value + .adg-themed-value {
+		margin-top: 1px;
+	}
+
+	.cbi-map .adg-themed-value::before {
+		content: "";
+		position: absolute;
+		left: -16px;
+		right: -16px;
+		top: 6px;
+		bottom: 6px;
+		border: 1px solid rgba(255,255,255,0);
+		border-radius: 16px;
+		background:
+			linear-gradient(90deg, rgba(255,255,255,0.028), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.018) 100%);
+		opacity: 0.88;
+		pointer-events: none;
+		transition: border-color 0.14s ease-out, background 0.14s ease-out, box-shadow 0.14s ease-out;
+	}
+
+	.cbi-map .adg-themed-value:hover::before {
+		border-color: rgba(108, 162, 255, 0.18);
+		background:
+			radial-gradient(circle at 94% 18%, rgba(47, 211, 238, 0.08), transparent 38%),
+			linear-gradient(90deg, rgba(108, 162, 255, 0.055), rgba(255,255,255,0.016) 54%, rgba(255,255,255,0.028));
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 10px 20px rgba(0,0,0,0.11);
+	}
+
+	.cbi-map .adg-themed-value:hover .cbi-value-title {
+		color: #eef6ff;
+	}
+
+	.cbi-map .adg-themed-value:hover .cbi-value-description {
+		color: #b5c7e2;
+	}
+
+	.cbi-map .adg-value-boolean::before {
+		background: linear-gradient(90deg, rgba(47, 211, 238, 0.07), rgba(255,255,255,0.01));
+	}
+
+	.cbi-map .adg-value-password::before {
+		background: linear-gradient(90deg, rgba(255, 114, 114, 0.05), rgba(255,255,255,0.008) 58%, rgba(255,255,255,0.018));
+	}
+
+	.cbi-map .adg-value-textarea::before {
+		background: linear-gradient(90deg, rgba(108, 162, 255, 0.05), rgba(255,255,255,0.008) 58%, rgba(255,255,255,0.018));
+	}
+
+	.cbi-map .adg-value-actions::before {
+		left: -16px;
+		right: -16px;
+		width: auto;
+		max-width: none;
+		background:
+			radial-gradient(circle at 96% 14%, rgba(47, 211, 238, 0.08), transparent 34%),
+			linear-gradient(90deg, rgba(47, 211, 238, 0.045), rgba(108, 162, 255, 0.02), rgba(255,255,255,0.012));
 	}
 
 	.cbi-map .adg-themed-value:first-child {
@@ -9460,30 +11438,219 @@ window.setTimeout(adgRefreshAll, 120);
 	}
 
 	.cbi-map .cbi-value-title {
-		display: block;
-		padding-top: 10px;
-		color: #d5e2f7;
-		font-size: 13px;
-		font-weight: 700;
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		float: none !important;
+		clear: none !important;
+		width: 320px !important;
+		max-width: 320px;
+		flex: 0 0 320px;
+		margin: 0 !important;
+		min-height: 52px;
+		padding-top: 0;
+		color: #dce9fd;
+		font-size: 14px;
+		font-weight: 800;
+		letter-spacing: 0.015em;
+		line-height: 1.38;
 		text-align: left;
+		white-space: normal;
+		word-break: keep-all;
+		overflow-wrap: normal;
+	}
+
+	.cbi-map .adg-value-described .cbi-value-title,
+	.cbi-map .adg-value-textarea .cbi-value-title {
+		align-self: start;
+		align-items: center;
+	}
+
+	.cbi-map .cbi-value-title label {
+		width: auto !important;
+		max-width: 100%;
+		line-height: 1.38;
+		white-space: normal;
+		word-break: keep-all;
+		overflow-wrap: normal;
+	}
+
+	.cbi-map .cbi-value-title::before {
+		content: "";
+		width: 7px;
+		height: 7px;
+		margin-right: 10px;
+		border-radius: 50%;
+		background: linear-gradient(180deg, #62a8ff, #34d3ee);
+		box-shadow: 0 0 0 5px rgba(98, 168, 255, 0.08);
+		flex: 0 0 auto;
 	}
 
 	.cbi-map .cbi-value-field {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		gap: 10px;
+		align-items: start;
+		float: none !important;
+		clear: none !important;
+		width: min(100%, 640px) !important;
+		flex: 0 1 640px;
 		min-width: 0;
+		max-width: 640px;
+		margin: 0 !important;
+		padding: 0 !important;
 		text-align: left;
+	}
+
+	.cbi-map .adg-value-select .cbi-value-field,
+	.cbi-map .adg-value-described .cbi-value-field {
+		padding-top: 0;
+		max-width: 640px;
+	}
+
+	.cbi-map .adg-themed-value > .cbi-value-title,
+	.cbi-map .adg-themed-value > .cbi-value-field {
+		clear: none !important;
+		margin-left: 0 !important;
+		margin-right: 0 !important;
+	}
+
+	.cbi-map .cbi-value-field > input[type="text"],
+	.cbi-map .cbi-value-field > input[type="password"],
+	.cbi-map .cbi-value-field > select,
+	.cbi-map .cbi-value-field > textarea {
+		display: block !important;
+		align-self: start;
+		margin-left: 0 !important;
+		margin-right: 0 !important;
+	}
+
+	.cbi-map .cbi-value-field > * {
+		min-width: 0;
+	}
+
+	.cbi-map .adg-value-actions .cbi-value-field {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
+		width: fit-content;
+		max-width: 100%;
+	}
+
+	.cbi-map .adg-value-actions .cbi-value-field .cbi-button,
+	.cbi-map .adg-value-actions .cbi-value-field input[type="button"],
+	.cbi-map .adg-value-actions .cbi-value-field input[type="submit"] {
+		min-width: 220px;
+	}
+
+	.cbi-map .adg-value-combo .cbi-value-field {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+		column-gap: 12px;
+		row-gap: 10px;
+		width: min(100%, 760px);
+		max-width: 760px;
+		align-items: center;
+	}
+
+	.cbi-map .adg-value-combo input[type="text"],
+	.cbi-map .adg-value-combo input[type="password"],
+	.cbi-map .adg-value-combo select,
+	.cbi-map .adg-value-combo textarea {
+		width: 100%;
+		max-width: none;
+	}
+
+	.cbi-map .adg-value-combo .cbi-button,
+	.cbi-map .adg-value-combo input[type="button"],
+	.cbi-map .adg-value-combo input[type="submit"] {
+		width: auto;
+		min-width: 180px;
+		max-width: 220px;
+		justify-self: stretch;
+	}
+
+	.cbi-map .adg-value-combo .cbi-value-description {
+		grid-column: 1 / -1;
+		max-width: 760px;
+		margin-top: 4px;
+	}
+
+	.cbi-map .adg-value-combo .cbi-value-description input[type="button"],
+	.cbi-map .adg-value-combo .cbi-value-description .cbi-button {
+		width: auto;
+		min-width: 220px;
+		max-width: 100%;
+	}
+
+	.cbi-map .adg-value-actions.adg-value-textarea .cbi-value-field {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		width: 100%;
 	}
 
 	.cbi-map .cbi-value-field .checkbox {
 		display: flex;
 		align-items: center;
-		min-height: 44px;
+		gap: 10px;
+		min-height: 48px;
+		padding: 12px 14px;
+		border: 1px solid rgba(84, 101, 132, 0.76);
+		border-radius: 14px;
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.07), transparent 28%),
+			linear-gradient(180deg, rgba(35, 43, 60, 0.97), rgba(24, 30, 43, 0.97));
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 22px rgba(0,0,0,0.13);
+	}
+
+	.cbi-map .cbi-value-field .checkbox:hover {
+		border-color: rgba(47, 211, 238, 0.30);
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.10), transparent 30%),
+			linear-gradient(180deg, rgba(38, 47, 65, 0.98), rgba(25, 31, 44, 0.98));
+	}
+
+	.cbi-map .cbi-value-field .checkbox label,
+	.cbi-map .cbi-value-field label.checkbox {
+		display: inline-flex;
+		align-items: center;
+		gap: 9px;
+		margin: 0;
+		color: #dbe8fb;
+		font-size: 13px;
+		line-height: 1.45;
+	}
+
+	.cbi-map .adg-value-boolean .cbi-value-field {
+		align-self: center;
 	}
 
 	.cbi-map .cbi-value-description {
-		margin-top: 8px;
-		color: #90a0ba;
-		font-size: 12px;
-		line-height: 1.6;
+		display: block;
+		width: 100%;
+		max-width: 640px;
+		margin: 2px 0 0 !important;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: #9fb1cf;
+		font-size: 12.5px;
+		line-height: 1.66;
+		box-shadow: none;
+		box-sizing: border-box;
+		transition: color 0.14s ease-out, border-color 0.14s ease-out;
+	}
+
+	.cbi-map .adg-value-described .cbi-value-description {
+		position: relative;
+	}
+
+	.cbi-map .adg-value-described .cbi-value-description::before {
+		display: none;
 	}
 
 	.cbi-map input[type="text"],
@@ -9491,17 +11658,168 @@ window.setTimeout(adgRefreshAll, 120);
 	.cbi-map textarea,
 	.cbi-map select {
 		width: 100%;
-		min-height: 44px;
-		padding: 10px 14px;
-		border: 1px solid #46506a;
-		border-radius: 8px;
-		background: #202533;
+		min-height: 48px;
+		padding: 14px 16px;
+		border: 1px solid rgba(84, 100, 134, 0.9);
+		border-radius: 14px;
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 28%),
+			linear-gradient(180deg, rgba(34, 39, 54, 0.985), rgba(22, 27, 38, 0.985));
 		color: #eef4ff;
+		font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+		font-size: 14px;
+		line-height: 20px;
 		box-sizing: border-box;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 24px rgba(0,0,0,0.14);
+		transition: border-color 0.14s ease-out, box-shadow 0.14s ease-out, background 0.14s ease-out;
+	}
+
+	.cbi-map input[type="text"]::placeholder,
+	.cbi-map input[type="password"]::placeholder,
+	.cbi-map textarea::placeholder {
+		color: #72839e;
+	}
+
+	.cbi-map input[type="text"],
+	.cbi-map input[type="password"],
+	.cbi-map select {
+		height: 52px;
+		max-width: 640px;
+	}
+
+	.cbi-map .adg-value-password input[type="password"],
+	.cbi-map .adg-value-password input[type="text"] {
+		max-width: 560px;
 	}
 
 	.cbi-map textarea {
 		min-height: 132px;
+		line-height: 1.6;
+		font-family: Consolas, "Courier New", monospace;
+		resize: vertical;
+	}
+
+	.cbi-map select {
+		height: 52px;
+		min-height: 52px;
+		padding: 14px 42px 14px 16px;
+		line-height: 20px;
+		font-size: 14px;
+		appearance: none;
+		-webkit-appearance: none;
+		vertical-align: middle;
+		background-image:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 28%),
+			linear-gradient(180deg, rgba(34, 39, 54, 0.985), rgba(22, 27, 38, 0.985)),
+			linear-gradient(45deg, transparent 50%, #8fbaff 50%),
+			linear-gradient(135deg, #8fbaff 50%, transparent 50%);
+		background-repeat: no-repeat;
+		background-size: 100% 100%, 100% 100%, 6px 6px, 6px 6px;
+		background-position: 0 0, 0 0, calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px);
+		overflow: visible;
+	}
+
+	.cbi-map select option {
+		background: #182132;
+		color: #e9f2ff;
+	}
+
+	.cbi-map select option:checked {
+		background: #256fd6;
+		color: #f7fbff;
+	}
+
+	.cbi-map select option:disabled {
+		background: #20283a;
+		color: #7487a5;
+	}
+
+	.cbi-map .adg-value-select .cbi-value-field {
+		max-width: 640px;
+	}
+
+	.cbi-map .adg-value-select .cbi-value-description {
+		margin-top: 0;
+	}
+
+	.cbi-map .adg-value-boolean .cbi-value-field,
+	.cbi-map .adg-value-select .cbi-value-field {
+		min-height: 52px;
+	}
+
+	.cbi-map .adg-value-textarea textarea {
+		min-height: 152px;
+	}
+
+	.cbi-map textarea.adg-update-log {
+		min-height: 220px;
+		max-height: 340px;
+		overflow: auto;
+		border-color: rgba(47, 211, 238, 0.58);
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.09), transparent 30%),
+			linear-gradient(180deg, rgba(22, 27, 39, 0.98), rgba(16, 20, 30, 0.98)),
+			rgba(17, 22, 33, 0.98);
+		color: #dce9ff;
+		font-size: 13px;
+		line-height: 1.58;
+		white-space: pre-wrap;
+		word-break: break-word;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 0 0 1px rgba(47, 211, 238, 0.12), 0 10px 24px rgba(0,0,0,0.2);
+		scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
+	}
+
+	.cbi-map textarea.adg-update-log::-webkit-scrollbar {
+		width: 10px;
+	}
+
+	.cbi-map textarea.adg-update-log::-webkit-scrollbar-track {
+		background: rgba(18, 23, 34, 0.72);
+		border-radius: 999px;
+	}
+
+	.cbi-map textarea.adg-update-log::-webkit-scrollbar-thumb {
+		border: 2px solid rgba(18, 23, 34, 0.72);
+		border-radius: 999px;
+		background: rgba(92, 128, 178, 0.72);
+	}
+
+	.cbi-map textarea.adg-update-log:focus {
+		border-color: #34d3ee;
+		box-shadow: 0 0 0 3px rgba(47, 211, 238, 0.16), 0 16px 30px rgba(0,0,0,0.24);
+	}
+
+	.cbi-map .adg-value-password .cbi-value-title::before {
+		background: linear-gradient(180deg, #ff8a8a, #ffb36f);
+		box-shadow: 0 0 0 5px rgba(255, 138, 138, 0.08);
+	}
+
+	.cbi-map .adg-value-boolean .cbi-value-title::before {
+		background: linear-gradient(180deg, #34d3ee, #4cc9a6);
+		box-shadow: 0 0 0 5px rgba(52, 211, 238, 0.08);
+	}
+
+	.cbi-map .adg-value-actions .cbi-value-title::before {
+		background: linear-gradient(180deg, #62a8ff, #34d3ee);
+		box-shadow: 0 0 0 5px rgba(98, 168, 255, 0.08);
+	}
+
+	.cbi-map input[type="text"]:hover,
+	.cbi-map input[type="password"]:hover,
+	.cbi-map textarea:hover {
+		border-color: rgba(101, 116, 150, 0.98);
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.085), transparent 30%),
+			linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985));
+	}
+
+	.cbi-map select:hover {
+		border-color: rgba(101, 116, 150, 0.98);
+		background-image:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.085), transparent 30%),
+			linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985)),
+			linear-gradient(45deg, transparent 50%, #a9ccff 50%),
+			linear-gradient(135deg, #a9ccff 50%, transparent 50%);
 	}
 
 	.cbi-map input[type="text"]:focus,
@@ -9509,46 +11827,75 @@ window.setTimeout(adgRefreshAll, 120);
 	.cbi-map textarea:focus,
 	.cbi-map select:focus {
 		border-color: #2fd3ee;
-		box-shadow: 0 0 0 3px rgba(47, 211, 238, 0.14);
+		box-shadow: 0 0 0 3px rgba(47, 211, 238, 0.14), 0 10px 22px rgba(0,0,0,0.18);
 		outline: 0;
 	}
 
-	.cbi-map input[type="submit"],
-	.cbi-map input[type="button"],
-	.cbi-map .cbi-button {
-		min-height: 42px;
-		padding: 0 18px;
-		border: 1px solid #2fd3ee;
-		border-radius: 8px;
-		background: linear-gradient(180deg, #16b9db, #1098bb);
-		color: #ecfbff;
-		font-size: 13px;
-		font-weight: 800;
-		box-shadow: 0 12px 24px rgba(16, 152, 187, 0.18);
-		cursor: pointer;
+	.cbi-map select:focus {
+		background-image:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.11), transparent 30%),
+			linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985)),
+			linear-gradient(45deg, transparent 50%, #c2f8ff 50%),
+			linear-gradient(135deg, #c2f8ff 50%, transparent 50%);
 	}
+
+	.cbi-map input[type="submit"],
+    .cbi-map input[type="button"],
+    .cbi-map .cbi-button {
+        height: 46px;
+        min-height: 46px;
+        padding: 0 22px;
+        border: 1px solid #39a0ff;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #2a9cff, #1177de);
+        color: #f0faff;
+        font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 44px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 12px 24px rgba(26, 124, 215, 0.22);
+        cursor: pointer;
+        transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+    }
 
 	.cbi-map .adg-origin-button {
-		min-width: 240px;
-		background: linear-gradient(180deg, rgba(47, 211, 238, 0.18), rgba(47, 211, 238, 0.12));
-		color: #8ef3ff;
-		box-shadow: none;
+		min-width: 360px;
+		border-color: rgba(47, 211, 238, 0.36);
+		background: linear-gradient(180deg, rgba(47, 211, 238, 0.26), rgba(47, 211, 238, 0.13));
+		color: #b2fbff;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 12px 24px rgba(11, 48, 56, 0.22);
 	}
 
-	.cbi-map input[type="submit"]:hover,
-	.cbi-map input[type="button"]:hover,
-	.cbi-map .cbi-button:hover {
-		filter: brightness(1.05);
+    .cbi-map input[type="submit"]:hover,
+    .cbi-map input[type="button"]:hover,
+    .cbi-map .cbi-button:hover {
+        background: linear-gradient(180deg, #3bb0ff, #1a8fe0);
+        transform: translateY(-2px);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 14px 24px rgba(26, 124, 215, 0.24);
+    }
+
+	.cbi-map input[type="submit"]:active,
+	.cbi-map input[type="button"]:active,
+	.cbi-map .cbi-button:active {
+		transform: translateY(0);
+		box-shadow: inset 0 2px 4px rgba(0,0,0,0.18), 0 6px 12px rgba(26, 124, 215, 0.18);
 	}
 
 	.cbi-map input[type="checkbox"] {
-		transform: scale(1.05);
+		width: 16px;
+		height: 16px;
+		accent-color: #2fd3ee;
+		transform: none;
 	}
 
 	.cbi-map .cbi-optionals {
 		margin-top: 18px;
 		padding-top: 14px;
 		border-top: 1px solid rgba(255,255,255,0.06);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		justify-content: flex-end;
 	}
 
 	.cbi-map .cbi-button-reset,
@@ -9557,108 +11904,842 @@ window.setTimeout(adgRefreshAll, 120);
 		border-color: #6a738c;
 		background: linear-gradient(180deg, #3f4558, #343949);
 		color: #e7eefc;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 16px rgba(0,0,0,0.14);
+	}
+
+	.cbi-map .cbi-button-reset:hover,
+	.cbi-map .cbi-button-remove:hover,
+	.cbi-map .cbi-input-remove:hover {
+		background: linear-gradient(180deg, #4a5166, #3a4052);
+	}
+
+	.cbi-map .adg-button-muted {
+		border-color: #6a738c;
+		background: linear-gradient(180deg, #3f4558, #343949);
+		color: #e7eefc;
+	}
+
+	.cbi-map .adg-optionals-bar {
+		padding: 15px 16px 0;
+		border-radius: 16px;
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 30%),
+			linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.012));
+	}
+
+	.cbi-map .adg-page-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 10px;
+		margin-top: 18px;
+		padding: 18px 20px;
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 18px;
+		background:
+			radial-gradient(circle at 92% 0%, rgba(47, 211, 238, 0.11), transparent 30%),
+			linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+			rgba(16, 20, 29, 0.62);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 16px 32px rgba(0,0,0,0.15);
+	}
+
+	.cbi-map .adg-page-actions > * {
+		min-width: 0;
+	}
+
+	.cbi-map input[disabled],
+	.cbi-map textarea[disabled],
+	.cbi-map select[disabled],
+	.cbi-map .cbi-button[disabled] {
+		border-color: rgba(94, 105, 131, 0.68);
+		background: linear-gradient(180deg, rgba(44, 49, 64, 0.96), rgba(29, 34, 47, 0.96));
+		color: #8d9cb5;
 		box-shadow: none;
+		cursor: not-allowed;
+		opacity: 0.78;
+	}
+
+	.cbi-map .cbi-input-invalid,
+	.cbi-map input.cbi-input-invalid,
+	.cbi-map textarea.cbi-input-invalid,
+	.cbi-map select.cbi-input-invalid {
+		border-color: #ff7b7b;
+		box-shadow: 0 0 0 3px rgba(255, 114, 114, 0.14), 0 10px 20px rgba(0,0,0,0.14);
 	}
 
 	.cbi-map .cbi-section-node {
 		overflow: visible;
 	}
 
-	@media (max-width: 900px) {
+	.adg-settings-bridge {
+		position: relative;
+		overflow: hidden;
+		display: flex;
+		align-items: flex-end;
+		margin: 2px 0 18px;
+		padding: 16px 20px 15px;
+		border: 1px solid rgba(72, 88, 119, 0.72);
+		border-radius: 16px;
+		background:
+			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.075), transparent 28%),
+			radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.065), transparent 30%),
+			linear-gradient(180deg, rgba(27, 32, 45, 0.98), rgba(19, 23, 34, 0.98));
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 14px 30px rgba(0,0,0,0.16);
+	}
+
+	.adg-settings-bridge::before {
+		content: "";
+		position: absolute;
+		left: 22px;
+		right: 22px;
+		bottom: 0;
+		height: 1px;
+		background: linear-gradient(90deg, rgba(108, 162, 255, 0), rgba(108, 162, 255, 0.56), rgba(47, 211, 238, 0.42), rgba(47, 211, 238, 0));
+		opacity: 0.92;
+	}
+
+	.adg-settings-bridge::after {
+		content: "";
+		position: absolute;
+		left: 50%;
+		bottom: -12px;
+		width: 128px;
+		height: 24px;
+		transform: translateX(-50%);
+		border-radius: 999px;
+		background: radial-gradient(circle, rgba(108, 162, 255, 0.22), rgba(47, 211, 238, 0.04) 62%, transparent 100%);
+		filter: blur(4px);
+	}
+
+	.cbi-map .adg-button-loading {
+		background:
+			linear-gradient(110deg, rgba(255,255,255,0.00) 20%, rgba(255,255,255,0.20) 34%, rgba(255,255,255,0.00) 50%),
+			linear-gradient(180deg, #2a9cff, #1177de);
+		background-size: 220% 100%, 100% 100%;
+		animation: adgButtonLoading 1.05s linear infinite;
+	}
+
+    /* ==================== 响应式布局 ==================== */
+    @media (max-width: 640px) {
+        .adg-dashboard-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .adg-glance-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .adg-glance-card {
+            min-height: 120px;
+            padding: 14px;
+        }
+        .adg-action-group {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .cbi-map .cbi-button {
+            width: 100%;
+        }
+    }
+
+	.adg-dashboard-number {
+		transition: color 0.2s ease, transform 0.3s ease;
+	}
+
+	.adg-dashboard-number:hover {
+		transform: scale(1.03);
+		color: #fdfefe;
+	}
+
+	.adg-glance-card:hover {
+		border-color: rgba(108, 162, 255, 0.20);
+		background:
+			radial-gradient(circle at top right, rgba(63, 132, 255, 0.18), transparent 42%),
+			linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+			rgba(255,255,255,0.04);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 28px rgba(0,0,0,0.18);
+		transform: translateY(-3px);
+	}
+
+	.adg-settings-copy {
+		position: relative;
+		z-index: 1;
+		max-width: 760px;
+	}
+
+	.adg-settings-kicker {
+		display: inline-flex;
+		align-items: center;
+		min-height: 22px;
+		padding: 0 9px;
+		border: 1px solid rgba(108, 162, 255, 0.2);
+		border-radius: 999px;
+		background: rgba(108, 162, 255, 0.08);
+		color: #9fc8ff;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.adg-settings-title {
+		display: block;
+		margin-top: 8px;
+		color: #f2f7ff;
+		font-size: 20px;
+		font-weight: 800;
+		letter-spacing: 0;
+		line-height: 1.18;
+	}
+
+	.adg-settings-sub {
+		display: block;
+		margin-top: 6px;
+		color: #9eb2d0;
+		font-size: 13px;
+		line-height: 1.58;
+	}
+
+	@media (max-width: 980px) {
+		.adg-hero-grid,
 		.adg-dashboard-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.adg-glance-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.cbi-map .adg-themed-section {
+			padding: 20px 20px 18px;
+		}
+
+		.cbi-map .adg-themed-section::before {
+			left: 20px;
+			right: 20px;
+		}
+
+		.cbi-map .adg-themed-value {
+			gap: 16px;
+		}
+
+		.cbi-map .cbi-value-title {
+			width: 250px !important;
+			max-width: 250px;
+			flex-basis: 250px;
+		}
+
+		.cbi-map .cbi-value-field {
+			margin-left: 0 !important;
+		}
+
+		.adg-settings-bridge {
+			padding: 16px 18px 14px;
+		}
+
+		.cbi-map .adg-page-actions {
+			padding: 14px 16px;
 		}
 	}
 
 	@media (max-width: 720px) {
-		.adg-runtime-bar,
-		.adg-dashboard-head {
-			flex-direction: column;
-			align-items: stretch;
+		.adg-dashboard-shell {
+			padding: 22px 16px 18px;
+		}
+
+		.adg-hero-grid {
+			gap: 14px;
+		}
+
+		.adg-panel-title {
+			font-size: 21px;
+		}
+
+		.adg-panel-sub,
+		.adg-inline-note,
+		.adg-settings-sub {
+			font-size: 12px;
+		}
+
+		.adg-runtime-wrap {
+			gap: 8px 9px;
+		}
+
+		.adg-dashboard-number {
+			font-size: 48px;
+		}
+
+		.adg-glance-value {
+			font-size: 22px;
+		}
+
+		.adg-dashboard-card {
+			min-height: 262px;
+			padding: 22px 18px 18px;
+		}
+
+		.adg-chart-shell {
+			height: 96px;
+		}
+
+		.adg-glance-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 
 		.cbi-map .adg-themed-value {
+			display: grid;
 			grid-template-columns: 1fr;
 			gap: 10px;
 		}
 
+		.cbi-map .adg-themed-value::before {
+			left: -8px;
+			right: -8px;
+			top: 4px;
+			bottom: 4px;
+		}
+
+		.adg-settings-bridge {
+			padding: 14px 16px;
+			border-radius: 16px;
+		}
+
+		.adg-settings-title {
+			font-size: 18px;
+		}
+
 		.cbi-map .cbi-value-title {
+			float: none !important;
+			width: auto !important;
+			max-width: 100%;
+			flex-basis: auto;
+			min-height: 0;
 			padding-top: 0;
+		}
+
+		.cbi-map .cbi-value-field {
+			margin-left: 0 !important;
+		}
+
+		.cbi-map .cbi-value-description {
+			font-size: 11px;
+			line-height: 1.62;
+		}
+
+		.cbi-map .cbi-optionals {
+			justify-content: stretch;
+		}
+
+		.cbi-map .adg-value-actions .cbi-value-field {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.cbi-map .adg-value-actions .cbi-value-field .cbi-button,
+		.cbi-map .adg-value-actions .cbi-value-field input[type="button"],
+		.cbi-map .adg-value-actions .cbi-value-field input[type="submit"] {
+			width: 100%;
+			min-width: 0;
+		}
+
+		.cbi-map .adg-value-actions::before {
+			left: -8px;
+			right: -8px;
+			width: auto;
+			max-width: none;
+		}
+
+		.cbi-map .adg-page-actions {
+			justify-content: stretch;
+		}
+
+		.cbi-map .adg-page-actions .cbi-button,
+		.cbi-map .adg-page-actions input[type="button"],
+		.cbi-map .adg-page-actions input[type="submit"] {
+			width: 100%;
+		}
+	}
+
+	@keyframes adgButtonLoading {
+		from {
+			background-position: 180% 0, 0 0;
+		}
+		to {
+			background-position: -40% 0, 0 0;
+		}
+	}
+
+	@keyframes adgDotPulse {
+		0%,
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.16);
+			opacity: 0.78;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.adg-glance-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.adg-panel-title {
+			font-size: 18px;
+		}
+
+		.adg-runtime-pill,
+		.adg-runtime-item {
+			padding: 9px 11px;
+			font-size: 11px;
+		}
+
+		.adg-glance-label,
+		.adg-dashboard-meta,
+		.adg-settings-kicker {
+			font-size: 10px;
+		}
+
+		.adg-glance-value {
+			font-size: 18px;
+		}
+
+		.adg-dashboard-number {
+			font-size: 40px;
+		}
+
+		.adg-percentage {
+			font-size: 13px;
+			padding: 4px 9px;
+		}
+
+		.adg-dashboard-sub,
+		.adg-glance-sub {
+			font-size: 11px;
+		}
+
+		.adg-dashboard-card {
+			min-height: 238px;
+			padding: 18px 16px 16px;
+		}
+
+		.adg-glance-card {
+			min-height: 110px;
+		}
+
+		.adg-settings-bridge {
+			padding: 12px 14px;
+			border-radius: 14px;
+		}
+
+		.cbi-map .adg-themed-section {
+			padding: 16px 14px 14px;
+			border-radius: 12px;
+		}
+
+		.cbi-map .adg-themed-section::before {
+			left: 14px;
+			right: 14px;
+		}
+
+		.cbi-map .adg-themed-section legend,
+		.cbi-map .adg-themed-section h3 {
+			font-size: 16px;
+			padding-bottom: 10px;
+		}
+
+		.cbi-map .adg-themed-value {
+			padding: 12px 0;
+		}
+
+		.cbi-map .adg-themed-value::before {
+			left: -6px;
+			right: -6px;
+		}
+
+		.cbi-map .cbi-value-title {
+			font-size: 11px;
+		}
+
+		.cbi-map input[type="text"],
+		.cbi-map input[type="password"],
+		.cbi-map textarea,
+		.cbi-map select,
+		.cbi-map input[type="submit"],
+		.cbi-map input[type="button"],
+		.cbi-map .cbi-button {
+			min-height: 40px;
+			font-size: 13px;
+		}
+
+		.cbi-map input[type="text"],
+		.cbi-map input[type="password"],
+		.cbi-map textarea,
+		.cbi-map select {
+			padding: 9px 12px;
+		}
+
+		.cbi-map .cbi-optionals {
+			flex-direction: column;
+		}
+
+		.cbi-map .cbi-optionals > * {
+			width: 100%;
+		}
+
+		.cbi-map .adg-optionals-bar,
+		.cbi-map .adg-page-actions {
+			padding-left: 12px;
+			padding-right: 12px;
+			border-radius: 12px;
+		}
+
+		.cbi-map .adg-origin-button {
+			min-width: 0;
+			width: 100%;
+		}
+
+		.cbi-map .adg-value-textarea textarea {
+			min-height: 132px;
+		}
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+		display: grid !important;
+		grid-template-columns: minmax(220px, 300px) minmax(0, 680px) !important;
+		column-gap: 28px !important;
+		row-gap: 9px !important;
+		align-items: start !important;
+		clear: both !important;
+		padding-top: 20px !important;
+		padding-bottom: 20px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > .cbi-value-field {
+		float: none !important;
+		clear: none !important;
+		position: relative !important;
+		left: auto !important;
+		right: auto !important;
+		width: auto !important;
+		max-width: none !important;
+		min-width: 0 !important;
+		margin: 0 !important;
+		padding-left: 0 !important;
+		padding-right: 0 !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title {
+		grid-column: 1 !important;
+		display: flex !important;
+		align-items: center !important;
+		min-height: 52px !important;
+		padding-top: 0 !important;
+		line-height: 1.38 !important;
+		font-size: 15px !important;
+		letter-spacing: 0 !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > .cbi-value-field {
+		grid-column: 2 !important;
+		display: grid !important;
+		gap: 10px !important;
+		align-content: start !important;
+		align-items: start !important;
+		max-width: 680px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > textarea,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-text,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-password,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-textarea {
+		float: none !important;
+		display: block !important;
+		width: 100% !important;
+		max-width: 680px !important;
+		margin: 0 !important;
+		box-sizing: border-box !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > div,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > div > input,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > div > select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > div > textarea {
+		float: none !important;
+		max-width: 680px !important;
+		margin-left: 0 !important;
+		margin-right: 0 !important;
+		padding-left: 0 !important;
+		padding-right: 0 !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo > .cbi-value-field {
+		grid-template-columns: minmax(0, 1fr) minmax(190px, 230px) !important;
+		column-gap: 12px !important;
+		row-gap: 10px !important;
+		align-items: center !important;
+		max-width: 820px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-field > input[type="button"],
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-field > input[type="submit"],
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-field > .cbi-button {
+		width: auto !important;
+		min-width: 190px !important;
+		max-width: 230px !important;
+		justify-self: stretch !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-description {
+		display: block !important;
+		width: 100% !important;
+		max-width: 680px !important;
+		margin: 10px 0 0 !important;
+		padding: 0 !important;
+		text-align: left !important;
+		font-size: 13px !important;
+		line-height: 1.58 !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-description {
+		grid-column: 1 / -1 !important;
+		max-width: 820px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select {
+		height: 52px !important;
+		min-height: 52px !important;
+		padding-top: 0 !important;
+		padding-bottom: 0 !important;
+		line-height: 52px !important;
+		font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif !important;
+		font-size: 14px !important;
+		vertical-align: middle !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"] {
+		padding-left: 16px !important;
+		padding-right: 16px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select {
+		padding-left: 16px !important;
+		padding-right: 42px !important;
+		text-rendering: geometricPrecision;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password > .cbi-value-field,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password > .cbi-value-field > div {
+		display: flex !important;
+		align-items: center !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password > .cbi-value-field > div {
+		width: 100% !important;
+		height: 52px !important;
+		max-width: 600px !important;
+		margin: 0 !important;
+		padding: 0 !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field input[type="text"] {
+		height: 52px !important;
+		min-height: 52px !important;
+		padding: 0 16px !important;
+		line-height: 52px !important;
+		font-family: Arial, "Segoe UI", sans-serif !important;
+		font-size: 14px !important;
+		letter-spacing: 1px !important;
+		flex: 1 1 auto !important;
+		min-width: 0 !important;
+		max-width: none !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field button,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field .btn,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field .cbi-button {
+		width: 58px !important;
+		height: 52px !important;
+		min-height: 52px !important;
+		padding: 0 !important;
+		line-height: 52px !important;
+		display: inline-flex !important;
+		align-items: center !important;
+		justify-content: center !important;
+		flex: 0 0 58px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="button"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="submit"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-button {
+		height: 52px !important;
+		min-height: 52px !important;
+		line-height: 52px !important;
+		padding-top: 0 !important;
+		padding-bottom: 0 !important;
+	}
+
+	@media (max-width: 720px) {
+		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+			grid-template-columns: 1fr !important;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title,
+		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > .cbi-value-field {
+			grid-column: 1 !important;
 		}
 	}
 </style>
 <fieldset id="AdGuardHome_status_fieldset" class="cbi-section">
 	<div id="adg-dashboard-shell" class="adg-dashboard-shell">
-		<div class="adg-runtime-bar">
-			<div class="adg-runtime-wrap">
-				<div class="adg-runtime-pill"><span class="adg-runtime-dot"></span><span id="adg-runtime-running">读取中</span></div>
-				<div class="adg-runtime-item"><span class="adg-runtime-key">保护</span><span id="adg-runtime-protect" class="adg-runtime-value">读取中</span></div>
-				<div class="adg-runtime-item"><span class="adg-runtime-key">重定向</span><span id="adg-runtime-redirect" class="adg-runtime-value">读取中</span></div>
-				<div class="adg-runtime-item"><span class="adg-runtime-key">监听</span><span id="adg-runtime-listen" class="adg-runtime-value">读取中</span></div>
-				<div class="adg-runtime-item"><span class="adg-runtime-key">端口</span><span id="adg-runtime-port" class="adg-runtime-value">读取中</span></div>
-				<div class="adg-runtime-item"><span class="adg-runtime-key">核心</span><span id="adg-runtime-core" class="adg-runtime-value">读取中</span></div>
+		<div class="adg-hero-grid">
+			<div class="adg-runtime-panel">
+				<div class="adg-panel-kicker">状态</div>
+				<div class="adg-panel-title">AdGuardHome 状态</div>
+				<div class="adg-panel-sub">运行态、监听地址、端口、核心版本。</div>
+				<div class="adg-runtime-wrap">
+					<div class="adg-runtime-pill"><span class="adg-runtime-dot"></span><span id="adg-runtime-running">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">保护</span><span id="adg-runtime-protect" class="adg-runtime-value">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">重定向</span><span id="adg-runtime-redirect" class="adg-runtime-value">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">监听</span><span id="adg-runtime-listen" class="adg-runtime-value">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">端口</span><span id="adg-runtime-port" class="adg-runtime-value">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">核心</span><span id="adg-runtime-core" class="adg-runtime-value">读取中</span></div>
+				</div>
 			</div>
-			<div class="adg-action-group">
-				<input class="cbi-button" type="button" value="打开 3000 原版完整版" onclick="adgOpenOriginalDashboard()" />
-				<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计数据" onclick="adgRefreshAll()" />
+			<div class="adg-action-panel">
+				<div class="adg-panel-kicker">入口</div>
+				<div class="adg-panel-title">统计与原版入口</div>
+				<div class="adg-panel-sub">读取 3000 仪表盘统计，保留原版入口。</div>
+				<div class="adg-action-group">
+					<input id="adg-open-dashboard" class="cbi-button" type="button" value="打开原版页面" onclick="adgOpenOriginalDashboard()" disabled="disabled" />
+					<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计数据" onclick="adgRefreshAll()" />
+				</div>
+			</div>
+		</div>
+		<div id="adg-inline-note" class="adg-inline-note adg-inline-note-soft">正在读取统计…</div>
+		<div class="adg-glance-grid">
+			<div class="adg-glance-card">
+				<div class="adg-glance-label">当前模式</div>
+				<strong id="adg-glance-mode" class="adg-glance-value">读取中</strong>
+				<div class="adg-glance-sub">重定向方式</div>
+			</div>
+			<div class="adg-glance-card">
+				<div class="adg-glance-label">认证状态</div>
+				<strong id="adg-glance-auth" class="adg-glance-value">读取中</strong>
+				<div class="adg-glance-sub">仪表盘认证</div>
+			</div>
+			<div class="adg-glance-card">
+				<div class="adg-glance-label">24h 总查询</div>
+				<strong id="adg-glance-total" class="adg-glance-value">读取中</strong>
+				<div class="adg-glance-sub">24 小时统计</div>
+			</div>
+			<div class="adg-glance-card">
+				<div class="adg-glance-label">监听端口 / 拦截率</div>
+				<strong id="adg-glance-listen" class="adg-glance-value">读取中</strong>
+				<div id="adg-glance-ratio" class="adg-glance-sub">读取中</div>
 			</div>
 		</div>
 		<div class="adg-dashboard-head">
-			<div id="adg-stats-meta" class="adg-dashboard-meta">最近 24 小时</div>
+            <div id="adg-stats-meta" class="adg-dashboard-meta">最近 24 小时</div>
+
 		</div>
 		<div class="adg-dashboard-grid">
 			<div class="adg-dashboard-card adg-card-queries">
-				<div class="adg-dashboard-label">DNS 查询</div>
-				<div id="adg-stats-total" class="adg-dashboard-number">0</div>
-				<div class="adg-dashboard-sub">与 3000 原版仪表盘同步</div>
+				<div class="adg-card-head">
+					<div class="adg-dashboard-label">DNS 查询</div>
+				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
+				</div>
+                <div id="adg-stats-total" class="adg-dashboard-number">16,023</div>
+                <div id="adg-stats-total-percent" class="adg-dashboard-sub-ratio adg-percentage">31.60%</div>
+                <div class="adg-dashboard-sub">3000 仪表盘统计</div>
+				<div class="adg-chart-shell">
+					<div class="adg-chart-grid"></div>
+					<svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
+						<path id="adg-chart-total-area"></path>
+						<path id="adg-chart-total-line"></path>
+					</svg>
+				</div>
 			</div>
-			<div class="adg-dashboard-card adg-card-blocked">
-				<div id="adg-stats-ratio" class="adg-dashboard-ratio">0%</div>
-				<div class="adg-dashboard-label">已被过滤器拦截</div>
-				<div id="adg-stats-blocked" class="adg-dashboard-number">0</div>
-				<div class="adg-dashboard-sub">直接读取 3000 真统计接口</div>
-			</div>
+            <div class="adg-dashboard-card adg-card-blocked">
+                <div class="adg-card-head">
+                    <div class="adg-dashboard-label">已被过滤器拦截</div>
+				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
+                </div>
+                <div id="adg-stats-blocked" class="adg-dashboard-number">5,063</div>
+                <div id="adg-stats-blocked-percent" class="adg-dashboard-sub-ratio adg-percentage">31.60%</div>
+                <div class="adg-dashboard-sub">过滤器拦截统计</div>
+                <div class="adg-chart-shell">
+                    <div class="adg-chart-grid"></div>
+                    <svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
+                        <path id="adg-chart-blocked-area"></path>
+                        <path id="adg-chart-blocked-line"></path>
+                    </svg>
+                </div>
+            </div>
 		</div>
 	</div>
 </fieldset>
+<div class="adg-settings-bridge">
+	<div class="adg-settings-copy">
+		<div class="adg-settings-kicker">配置区</div>
+		<div class="adg-settings-title">基础配置区</div>
+		<div class="adg-settings-sub">把认证、端口、路径、日志和维护选项收进同一套暗色面板语言，和上方状态区统一。</div>
+	</div>
+</div>
 EOF_ADG_STATUS
 
     cat > /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua <<'EOF_ADG_BASE'
 require("luci.sys")
-require("luci.util")
 require("io")
 local m,s,o,o1
 local fs=require"nixio.fs"
 local uci=require"luci.model.uci".cursor()
+local function shellquote(value)
+	value = tostring(value or "")
+	return "'" .. value:gsub("'", "'\\''") .. "'"
+end
 local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
 local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
 httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
-m = Map("AdGuardHome", "AdGuard Home")
-m.description = translate("Free and open source, powerful network-wide ads & trackers blocking DNS server.")
+m = Map("AdGuardHome", "AdGuardHome")
+m.description = translate("全网广告与跟踪拦截 DNS 服务。")
 m:section(SimpleSection).template  = "AdGuardHome/AdGuardHome_status"
 
 s = m:section(TypedSection, "AdGuardHome")
 s.anonymous=true
 s.addremove=false
 ---- enable
-o = s:option(Flag, "enabled", translate("Enable"))
+o = s:option(Flag, "enabled", translate("启用"))
 o.default = 0
 o.optional = false
 ---- httpport
-o =s:option(Value,"httpport",translate("Browser management port"))
+o =s:option(Value,"httpport",translate("浏览器管理端口"))
 o.placeholder=3000
 o.default=3000
 o.datatype="port"
 o.optional = false
-o.description = translate("<input type=\"button\" style=\"width:210px;border-color:Teal; text-align:center;font-weight:bold;color:Green;\" value=\"AdGuardHome Web:"..httpport.."\" onclick=\"window.open('http://'+window.location.hostname+':"..httpport.."/')\"/>")
+o.description = translate("<input type=\"button\" style=\"width:240px;min-height:46px;border:1px solid #39a0ff;border-radius:14px;background:linear-gradient(180deg,#2a9cff,#1177de);text-align:center;font-weight:700;color:#eff7ff;box-shadow:0 12px 24px rgba(26,124,215,0.22);\" value=\"打开 "..httpport.." 原版页面\" onclick=\"window.open('http://'+window.location.hostname+':"..httpport.."/')\"/>")
 ---- dashboard user
-o = s:option(Value, "dashboard_user", translate("Dashboard API user"), translate("Fill the same username used by the AdGuardHome 3000 original dashboard login"))
+o = s:option(Value, "dashboard_user", translate("仪表盘 API 用户"), translate("用于应用商店页面读取 AdGuardHome 3000 仪表盘状态和统计数据"))
 o.default = "admin"
 o.datatype = "string"
 o.optional = false
 o.rmempty = false
 ---- dashboard password
-o = s:option(Value, "dashboard_password", translate("Dashboard API password"), translate("Fill the same password used by the AdGuardHome 3000 original dashboard login"))
+o = s:option(Value, "dashboard_password", translate("仪表盘 API 密码"), translate("用于应用商店页面读取 AdGuardHome 3000 仪表盘状态和统计数据"))
 o.password = true
 o.datatype = "string"
 o.optional = false
@@ -9667,15 +12748,15 @@ o.rmempty = false
 local binmtime=uci:get("AdGuardHome","AdGuardHome","binmtime") or "0"
 local e=""
 if not fs.access(configpath) then
-	e=e.." "..translate("no config")
+	e=e.." "..translate("缺少配置")
 end
 if not fs.access(binpath) then
-	e=e.." "..translate("no core")
+	e=e.." "..translate("缺少核心")
 else
 	local version
 	local testtime=fs.stat(binpath,"mtime")
 	if testtime~=tonumber(binmtime) then
-		local tmp=luci.sys.exec("touch /var/run/AdGfakeconfig;"..binpath.." -c /var/run/AdGfakeconfig --check-config 2>&1| grep -m 1 -E 'v[0-9.]+' -o ;rm /var/run/AdGfakeconfig")
+		local tmp=luci.sys.exec("touch /var/run/AdGfakeconfig;"..shellquote(binpath).." -c /var/run/AdGfakeconfig --check-config 2>&1| grep -m 1 -E 'v[0-9.]+' -o ;rm /var/run/AdGfakeconfig")
 		version=string.sub(tmp, 1, -2)
 		uci:set("AdGuardHome","AdGuardHome","version",version)
 		uci:set("AdGuardHome","AdGuardHome","binmtime",testtime)
@@ -9686,25 +12767,25 @@ else
 	end
 	e=version..e
 end
-o=s:option(Button,"restart",translate("Update"))
-o.inputtitle=translate("Update core version")
+o=s:option(Button,"restart",translate("更新"))
+o.inputtitle=translate("更新核心版本")
 o.template = "AdGuardHome/AdGuardHome_check"
 o.showfastconfig=(not fs.access(configpath))
-o.description=string.format(translate("core version:").."<strong><font id=\"updateversion\" color=\"green\">%s </font></strong>",e)
+o.description=string.format(translate("核心版本：").."<strong><font id=\"updateversion\" color=\"green\">%s </font></strong>",e)
 ---- port warning not safe
-local port=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..configpath.." 2>/dev/null")
+local port=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..shellquote(configpath).." 2>/dev/null")
 if (port=="") then port="?" end
 ---- Redirect
-o = s:option(ListValue, "redirect", port..translate("Redirect"), translate("AdGuardHome redirect mode"))
+o = s:option(ListValue, "redirect", port..translate(" 重定向"), translate("AdGuardHome 重定向模式"))
 o.placeholder = "none"
-o:value("none", translate("none"))
-o:value("dnsmasq-upstream", translate("Run as dnsmasq upstream server"))
-o:value("redirect", translate("Redirect 53 port to AdGuardHome"))
-o:value("exchange", translate("Use port 53 replace dnsmasq"))
+o:value("none", translate("不启用"))
+o:value("dnsmasq-upstream", translate("作为 dnsmasq 上游"))
+o:value("redirect", translate("将 53 端口重定向到 AdGuardHome"))
+o:value("exchange", translate("用 53 端口替换 dnsmasq"))
 o.default     = "none"
 o.optional = true
 ---- bin path
-o = s:option(Value, "binpath", translate("Bin Path"), translate("AdGuardHome Bin path if no bin will auto download"))
+o = s:option(Value, "binpath", translate("核心路径"), translate("AdGuardHome 核心文件路径，如不存在则自动下载"))
 o.default     = "/usr/bin/AdGuardHome/AdGuardHome"
 o.datatype    = "string"
 o.optional = false
@@ -9712,31 +12793,28 @@ o.rmempty=false
 o.validate=function(self, value)
 if value=="" then return nil end
 if fs.stat(value,"type")=="dir" then
-	fs.rmdir(value)
-end
-if fs.stat(value,"type")=="dir" then
 	if (m.message) then
-	m.message =m.message.."\nerror!bin path is a dir"
+	m.message =m.message.."\n错误：核心路径是目录"
 	else
-	m.message ="error!bin path is a dir"
+	m.message ="错误：核心路径是目录"
 	end
 	return nil
 end 
 return value
 end
 --- upx
-o = s:option(ListValue, "upxflag", translate("use upx to compress bin after download"))
-o:value("", translate("none"))
-o:value("-1", translate("compress faster"))
-o:value("-9", translate("compress better"))
-o:value("--best", translate("compress best(can be slow for big files)"))
-o:value("--brute", translate("try all available compression methods & filters [slow]"))
-o:value("--ultra-brute", translate("try even more compression variants [very slow]"))
+o = s:option(ListValue, "upxflag", translate("下载后使用 upx 压缩核心"))
+o:value("", translate("不启用"))
+o:value("-1", translate("更快压缩"))
+o:value("-9", translate("更高压缩率"))
+o:value("--best", translate("最强压缩（大文件会更慢）"))
+o:value("--brute", translate("尝试全部压缩方法与过滤器（较慢）"))
+o:value("--ultra-brute", translate("尝试更多压缩组合（很慢）"))
 o.default     = ""
-o.description=translate("bin use less space,but may have compatibility issues")
+o.description=translate("核心体积更小，但可能有兼容性问题")
 o.rmempty = true
 ---- config path
-o = s:option(Value, "configpath", translate("Config Path"), translate("AdGuardHome config path"))
+o = s:option(Value, "configpath", translate("配置文件路径"), translate("AdGuardHome 配置文件路径"))
 o.default     = "/etc/AdGuardHome.yaml"
 o.datatype    = "string"
 o.optional = false
@@ -9744,20 +12822,17 @@ o.rmempty=false
 o.validate=function(self, value)
 if value==nil then return nil end
 if fs.stat(value,"type")=="dir" then
-	fs.rmdir(value)
-end
-if fs.stat(value,"type")=="dir" then
 	if m.message then
-	m.message =m.message.."\nerror!config path is a dir"
+	m.message =m.message.."\n错误：配置路径是目录"
 	else
-	m.message ="error!config path is a dir"
+	m.message ="错误：配置路径是目录"
 	end
 	return nil
 end 
 return value
 end
 ---- work dir
-o = s:option(Value, "workdir", translate("Work dir"), translate("AdGuardHome work dir include rules,audit log and database"))
+o = s:option(Value, "workdir", translate("工作目录"), translate("AdGuardHome 工作目录，包含规则、审计日志和数据库"))
 o.default     = "/usr/bin/AdGuardHome"
 o.datatype    = "string"
 o.optional = false
@@ -9766,9 +12841,9 @@ o.validate=function(self, value)
 if value=="" then return nil end
 if fs.stat(value,"type")=="reg" then
 	if m.message then
-	m.message =m.message.."\nerror!work dir is a file"
+	m.message =m.message.."\n错误：工作目录是文件"
 	else
-	m.message ="error!work dir is a file"
+	m.message ="错误：工作目录是文件"
 	end
 	return nil
 end 
@@ -9779,70 +12854,67 @@ else
 end
 end
 ---- log file
-o = s:option(Value, "logfile", translate("Runtime log file"), translate("AdGuardHome runtime Log file if 'syslog': write to system log;if empty no log"))
+o = s:option(Value, "logfile", translate("运行日志文件"), translate("AdGuardHome 运行日志文件，填 syslog 写入系统日志，留空则不写日志"))
 o.datatype    = "string"
 o.rmempty = true
 o.validate=function(self, value)
 if fs.stat(value,"type")=="dir" then
-	fs.rmdir(value)
-end
-if fs.stat(value,"type")=="dir" then
 	if m.message then
-	m.message =m.message.."\nerror!log file is a dir"
+	m.message =m.message.."\n错误：日志路径是目录"
 	else
-	m.message ="error!log file is a dir"
+	m.message ="错误：日志路径是目录"
 	end
 	return nil
 end 
 return value
 end
 ---- debug
-o = s:option(Flag, "verbose", translate("Verbose log"))
+o = s:option(Flag, "verbose", translate("详细日志"))
 o.default = 0
 o.optional = true
 ---- gfwlist 
-local a=luci.sys.call("grep -m 1 -q programadd "..configpath)
+local a=luci.sys.call("grep -m 1 -q programadd "..shellquote(configpath))
 if (a==0) then
-a="Added"
+a="已加入"
 else
-a="Not added"
+a="未加入"
 end
-o=s:option(Button,"gfwdel",translate("Del gfwlist"),translate(a))
+o=s:option(Button,"gfwdel",translate("删除 gfwlist"),translate(a))
 o.optional = false
-o.inputtitle=translate("Del")
+o.inputtitle=translate("删除")
 o.write=function()
 	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh del 2>&1")
 	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
 end
-o=s:option(Button,"gfwadd",translate("Add gfwlist"),translate(a))
+o=s:option(Button,"gfwadd",translate("加入 gfwlist"),translate(a))
 o.optional = false
-o.inputtitle=translate("Add")
+o.inputtitle=translate("添加")
 o.write=function()
 	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh 2>&1")
 	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
 end
-o = s:option(Value, "gfwupstream", translate("Gfwlist upstream dns server"), translate("Gfwlist domain upstream dns service")..translate(a))
+o = s:option(Value, "gfwupstream", translate("Gfwlist 上游 DNS 服务器"), translate("Gfwlist 域名上游 DNS 服务，当前状态：")..translate(a))
 o.default     = "tcp://208.67.220.220:5353"
 o.datatype    = "string"
 o.optional = false
 ---- chpass
-o = s:option(Value, "hashpass", translate("Change browser management password"), translate("Press load culculate model and culculate finally save/apply"))
+o = s:option(Value, "hashpass", translate("修改浏览器管理密码"), translate("先点读取并计算哈希，最后再保存/应用"))
 o.default     = ""
 o.datatype    = "string"
 o.template = "AdGuardHome/AdGuardHome_chpass"
 o.optional = false
 ---- database protect
-o = s:option(Flag, "keepdb", translate("Keep database when system upgrade"))
+o = s:option(Flag, "keepdb", translate("系统升级时保留数据库"))
 o.default = 0
 o.optional = true
 ---- wait net on boot
-o = s:option(Flag, "waitonboot", translate("Boot delay until network ok"))
+o = s:option(Flag, "waitonboot", translate("开机等待网络就绪"))
 o.default = 1
 o.optional = true
 ---- backup workdir on shutdown
 local workdir=uci:get("AdGuardHome","AdGuardHome","workdir") or "/usr/bin/AdGuardHome"
-o = s:option(MultiValue, "backupfile", translate("Backup workdir files when shutdown"))
-o1 = s:option(Value, "backupwdpath", translate("Backup workdir path"))
+o = s:option(MultiValue, "backupfile", translate("关机时备份工作目录文件"))
+o1 = s:option(Value, "backupwdpath", translate("工作目录备份路径"))
 local name
 o:value("filters","filters")
 o:value("stats.db","stats.db")
@@ -9861,7 +12933,7 @@ end
 o.widget = "checkbox"
 o.default = nil
 o.optional=false
-o.description=translate("Will be restore when workdir/data is empty")
+o.description=translate("当 workdir/data 为空时自动恢复")
 ----backup workdir path
 
 o1.default     = "/usr/bin/AdGuardHome"
@@ -9870,9 +12942,9 @@ o1.optional = false
 o1.validate=function(self, value)
 if fs.stat(value,"type")=="reg" then
 	if m.message then
-	m.message =m.message.."\nerror!backup dir is a file"
+	m.message =m.message.."\n错误：备份目录是文件"
 	else
-	m.message ="error!backup dir is a file"
+	m.message ="错误：备份目录是文件"
 	end
 	return nil
 end 
@@ -9884,18 +12956,18 @@ end
 end
 
 ----Crontab
-o = s:option(MultiValue, "crontab", translate("Crontab task"),translate("Please change time and args in crontab"))
-o:value("autoupdate",translate("Auto update core"))
-o:value("cutquerylog",translate("Auto tail querylog"))
-o:value("cutruntimelog",translate("Auto tail runtime log"))
-o:value("autohost",translate("Auto update ipv6 hosts and restart adh"))
-o:value("autogfw",translate("Auto update gfwlist and restart adh"))
+o = s:option(MultiValue, "crontab", translate("定时任务"),translate("按需调整定时任务时间和参数"))
+o:value("autoupdate",translate("自动更新核心"))
+o:value("cutquerylog",translate("自动裁剪 querylog"))
+o:value("cutruntimelog",translate("自动裁剪运行日志"))
+o:value("autohost",translate("自动更新 IPv6 hosts 并重启 AdGuardHome"))
+o:value("autogfw",translate("自动更新 gfwlist 并重启 AdGuardHome"))
 o.widget = "checkbox"
 o.default = nil
 o.optional=false
 
 ----downloadpath
-o = s:option(TextValue, "downloadlinks",translate("Download links for update"))
+o = s:option(TextValue, "downloadlinks",translate("更新下载链接"))
 o.optional = false
 o.rows = 4
 o.wrap = "soft"
@@ -11050,6 +14122,398 @@ get_openlist_effective_data_dir() {
     printf '%s\n' "$openlist_effective_data_dir"
 }
 
+ddnsgo_size_value() {
+    size_path="$1"
+    size_default="$2"
+    size_value=""
+
+    if [ -f "$size_path" ]; then
+        size_value="$(wc -c < "$size_path" 2>/dev/null | tr -d ' ' || true)"
+    fi
+
+    case "$size_value" in
+        ''|*[!0-9]*|0)
+            size_value="$size_default"
+            ;;
+    esac
+
+    printf '%s\n' "$size_value"
+}
+
+ensure_ddnsgo_config_defaults() {
+    if [ ! -f "$DDNSGO_CONFIG_FILE" ] || ! uci -q show ddns-go >/dev/null 2>&1; then
+        [ -f "$DDNSGO_CONFIG_FILE" ] && backup_file "$DDNSGO_CONFIG_FILE"
+        cat > "$DDNSGO_CONFIG_FILE" <<'EOF_DDNSGO_UCI'
+config basic 'config'
+    option enabled '1'
+    option port '9876'
+    option time '300'
+    option ctimes '5'
+    option dns '223.5.5.5'
+EOF_DDNSGO_UCI
+    fi
+
+    uci -q get ddns-go.config >/dev/null 2>&1 || uci -q set ddns-go.config=basic
+    [ -n "$(uci -q get ddns-go.config.enabled 2>/dev/null || true)" ] || uci -q set ddns-go.config.enabled='1'
+    [ -n "$(uci -q get ddns-go.config.port 2>/dev/null || true)" ] || uci -q set ddns-go.config.port='9876'
+    [ -n "$(uci -q get ddns-go.config.time 2>/dev/null || true)" ] || uci -q set ddns-go.config.time='300'
+    [ -n "$(uci -q get ddns-go.config.ctimes 2>/dev/null || true)" ] || uci -q set ddns-go.config.ctimes='5'
+    [ -n "$(uci -q get ddns-go.config.dns 2>/dev/null || true)" ] || uci -q set ddns-go.config.dns='223.5.5.5'
+    uci -q commit ddns-go >/dev/null 2>&1 || true
+}
+
+write_ddnsgo_yaml_username() {
+    ddnsgo_login_user="$1"
+    ddnsgo_yaml_tmp="/tmp/ddnsgo-config-user.$$"
+
+    [ -f "$DDNSGO_CONFIG_YAML" ] || return 1
+    if grep -q '^[[:space:]]*user:[[:space:]]*$' "$DDNSGO_CONFIG_YAML" 2>/dev/null; then
+        awk -v username="$ddnsgo_login_user" '
+            BEGIN { in_user = 0; wrote_username = 0 }
+            /^[^[:space:]]/ {
+                if (in_user && !wrote_username) {
+                    print "    username: " username
+                    wrote_username = 1
+                }
+                in_user = 0
+            }
+            /^[[:space:]]*user:[[:space:]]*$/ {
+                in_user = 1
+                wrote_username = 0
+                print
+                next
+            }
+            in_user && /^[[:space:]]*username:[[:space:]]*/ {
+                print "    username: " username
+                wrote_username = 1
+                next
+            }
+            { print }
+            END {
+                if (in_user && !wrote_username)
+                    print "    username: " username
+            }
+        ' "$DDNSGO_CONFIG_YAML" > "$ddnsgo_yaml_tmp" && mv "$ddnsgo_yaml_tmp" "$DDNSGO_CONFIG_YAML" || {
+            rm -f "$ddnsgo_yaml_tmp" 2>/dev/null || true
+            return 1
+        }
+    else
+        {
+            printf '\n'
+            printf 'user:\n'
+            printf '    username: %s\n' "$ddnsgo_login_user"
+        } >> "$DDNSGO_CONFIG_YAML"
+    fi
+}
+
+ddnsgo_yaml_has_password() {
+    [ -s "$DDNSGO_CONFIG_YAML" ] || return 1
+    ddnsgo_password_value="$(awk '
+        /^[^[:space:]]/ { in_user = 0 }
+        /^[[:space:]]*user:[[:space:]]*$/ { in_user = 1; next }
+        in_user && /^[[:space:]]*password:[[:space:]]*/ {
+            sub(/^[[:space:]]*password:[[:space:]]*/, "", $0)
+            print
+        }
+    ' "$DDNSGO_CONFIG_YAML" 2>/dev/null | tail -n 1)"
+    case "$ddnsgo_password_value" in
+        ''|'""'|"''"|null)
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+seed_ddnsgo_config_yaml() {
+    ddnsgo_login_user="$1"
+    ddnsgo_yaml_tmp="/tmp/ddnsgo-config-seed.$$"
+
+    mkdir -p "$DDNSGO_CONFIG_DIR" || return 1
+    if [ ! -s "$DDNSGO_CONFIG_YAML" ]; then
+        [ -f "$DDNSGO_CONFIG_YAML" ] && backup_file "$DDNSGO_CONFIG_YAML"
+        cat > "$DDNSGO_CONFIG_YAML" <<EOF_DDNSGO_CONFIG_YAML
+dnsconf: []
+user:
+    username: $ddnsgo_login_user
+    password: ""
+notallowwanaccess: true
+lang: zh
+EOF_DDNSGO_CONFIG_YAML
+        [ -s "$DDNSGO_CONFIG_YAML" ] || return 1
+        chmod 600 "$DDNSGO_CONFIG_YAML" 2>/dev/null || true
+        return 0
+    fi
+
+    awk -v username="$ddnsgo_login_user" '
+        function fill_user_defaults() {
+            if (in_user) {
+                if (!saw_username)
+                    print "    username: " username
+                if (!saw_password)
+                    print "    password: \"\""
+            }
+        }
+        /^[^[:space:]]/ {
+            fill_user_defaults()
+            in_user = 0
+        }
+        /^[[:space:]]*user:[[:space:]]*$/ {
+            saw_user = 1
+            in_user = 1
+            saw_username = 0
+            saw_password = 0
+            print
+            next
+        }
+        in_user && /^[[:space:]]*username:[[:space:]]*/ { saw_username = 1 }
+        in_user && /^[[:space:]]*password:[[:space:]]*/ { saw_password = 1 }
+        { print }
+        END {
+            fill_user_defaults()
+            if (!saw_user) {
+                print ""
+                print "user:"
+                print "    username: " username
+                print "    password: \"\""
+            }
+        }
+    ' "$DDNSGO_CONFIG_YAML" > "$ddnsgo_yaml_tmp" || {
+        rm -f "$ddnsgo_yaml_tmp" 2>/dev/null || true
+        return 1
+    }
+    if ! cmp -s "$ddnsgo_yaml_tmp" "$DDNSGO_CONFIG_YAML" 2>/dev/null; then
+        backup_file "$DDNSGO_CONFIG_YAML"
+        mv "$ddnsgo_yaml_tmp" "$DDNSGO_CONFIG_YAML" || {
+            rm -f "$ddnsgo_yaml_tmp" 2>/dev/null || true
+            return 1
+        }
+    else
+        rm -f "$ddnsgo_yaml_tmp" 2>/dev/null || true
+    fi
+    chmod 600 "$DDNSGO_CONFIG_YAML" 2>/dev/null || true
+}
+
+configure_ddnsgo_web_login() {
+    ddnsgo_existing_login='0'
+    ddnsgo_login_user=''
+    ddnsgo_login_pass=''
+    ddnsgo_login_pass_confirm=''
+
+    mkdir -p "$DDNSGO_CONFIG_DIR"
+    if ddnsgo_yaml_has_password; then
+        ddnsgo_existing_login='1'
+    fi
+
+    if [ "$ddnsgo_existing_login" = '1' ]; then
+        if confirm_default_yes "检测到 DDNS-GO 已有 Web 登录配置，是否保留现有账号密码？"; then
+            chown -R ddns-go:ddns-go "$DDNSGO_CONFIG_DIR" 2>/dev/null || true
+            chmod 755 "$DDNSGO_CONFIG_DIR" 2>/dev/null || true
+            [ -f "$DDNSGO_CONFIG_YAML" ] && chmod 600 "$DDNSGO_CONFIG_YAML" 2>/dev/null || true
+            return 0
+        fi
+        backup_file "$DDNSGO_CONFIG_YAML"
+    fi
+
+    printf '设置 DDNS-GO Web 登录用户名（默认 admin）: '
+    ui_read_line || die "DDNS-GO 登录用户名读取失败"
+    ddnsgo_login_user="$UI_READ_RESULT"
+    [ -n "$ddnsgo_login_user" ] || ddnsgo_login_user='admin'
+    case "$ddnsgo_login_user" in
+        *[!A-Za-z0-9._-]*)
+            die "DDNS-GO 登录用户名只能包含字母、数字、点、下划线或短横线"
+            ;;
+    esac
+
+    printf '设置 DDNS-GO Web 登录密码（不会显示）: '
+    ui_read_secret || die "DDNS-GO 登录密码读取失败"
+    ddnsgo_login_pass="$UI_READ_RESULT"
+    [ -n "$ddnsgo_login_pass" ] || die "DDNS-GO 登录密码不能为空"
+    [ "${#ddnsgo_login_pass}" -ge 8 ] || die "DDNS-GO 登录密码至少 8 位"
+
+    printf '再次输入 DDNS-GO Web 登录密码: '
+    ui_read_secret || die "DDNS-GO 登录密码确认读取失败"
+    ddnsgo_login_pass_confirm="$UI_READ_RESULT"
+    [ "$ddnsgo_login_pass" = "$ddnsgo_login_pass_confirm" ] || die "DDNS-GO 两次输入的登录密码不一致"
+
+    seed_ddnsgo_config_yaml "$ddnsgo_login_user" || die "DDNS-GO Web 登录配置初始化失败：$DDNSGO_CONFIG_YAML"
+    "$DDNSGO_BIN_PATH" -resetPassword "$ddnsgo_login_pass" -c "$DDNSGO_CONFIG_YAML" >/tmp/ddnsgo-reset-password.log 2>&1 || {
+        sed -n '1,120p' /tmp/ddnsgo-reset-password.log >&2
+        die "DDNS-GO Web 登录密码写入失败"
+    }
+
+    if ! ddnsgo_yaml_has_password; then
+        sed -n '1,120p' /tmp/ddnsgo-reset-password.log >&2
+        die "DDNS-GO Web 登录密码写入失败：$DDNSGO_CONFIG_YAML"
+    fi
+    write_ddnsgo_yaml_username "$ddnsgo_login_user" || die "DDNS-GO Web 登录用户名写入失败"
+    chown -R ddns-go:ddns-go "$DDNSGO_CONFIG_DIR" 2>/dev/null || true
+    chmod 755 "$DDNSGO_CONFIG_DIR" 2>/dev/null || true
+    chmod 600 "$DDNSGO_CONFIG_YAML" 2>/dev/null || true
+    log "提示: DDNS-GO Web 登录账号已设置为 $ddnsgo_login_user"
+}
+
+write_ddnsgo_oem_files() {
+    mkdir -p "$(dirname "$DDNSGO_CONTROLLER")" "$(dirname "$DDNSGO_VIEW")"
+    backup_file "$DDNSGO_CONTROLLER"
+    backup_file "$DDNSGO_VIEW"
+
+    cat > "$DDNSGO_CONTROLLER" <<'EOF_DDNSGO_CONTROLLER'
+module("luci.controller.nradio_adv.ddnsgo", package.seeall)
+
+function index()
+    local page = entry({"nradioadv", "system", "ddnsgo"}, template("nradio_adv/ddnsgo"), _("DDNS-GO"), 90)
+    page.dependent = false
+    page.leaf = true
+    entry({"nradioadv", "system", "appcenter", "ddnsgo"}, alias("nradioadv", "system", "ddnsgo"), nil, nil, true).leaf = true
+    entry({"nradioadv", "system", "ddnsgo", "status"}, call("action_status"), nil).leaf = true
+end
+
+local function trim(value)
+    value = tostring(value or "")
+    return value:gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function exec(command)
+    return trim(require("luci.sys").exec(command .. " 2>/dev/null"))
+end
+
+local function config_value(option, default)
+    local value = exec("uci -q get ddns-go.config." .. option)
+    if value == "" then
+        return default or ""
+    end
+    return value
+end
+
+local function ddnsgo_listen_line()
+    for line in exec("netstat -lntp"):gmatch("[^\r\n]+") do
+        if line:find("ddns-go", 1, true) then
+            return line
+        end
+    end
+    return ""
+end
+
+local function write_json(data)
+    local http = require "luci.http"
+    local ok, jsonc = pcall(require, "luci.jsonc")
+    http.prepare_content("application/json")
+    if ok and jsonc and type(jsonc.stringify) == "function" then
+        http.write(jsonc.stringify(data or {}))
+    else
+        http.write("{}")
+    end
+end
+
+function action_status()
+    local fs = require "nixio.fs"
+    local port = config_value("port", "9876")
+    local pid = exec("pidof ddns-go")
+    local running = pid ~= ""
+    local init_status = ""
+    local enabled = "0"
+
+    if fs.access("/etc/init.d/ddns-go") then
+        init_status = exec("/etc/init.d/ddns-go status")
+        enabled = exec("if /etc/init.d/ddns-go enabled >/dev/null 2>&1; then echo 1; else echo 0; fi")
+    end
+
+    write_json({
+        installed = fs.access("/usr/bin/ddns-go") and true or false,
+        running = running,
+        pid = pid,
+        port = port,
+        listen = ddnsgo_listen_line(),
+        init_status = init_status,
+        enabled = enabled == "1",
+        interval = config_value("time", "300"),
+        dns = config_value("dns", "")
+    })
+end
+EOF_DDNSGO_CONTROLLER
+
+    cat > "$DDNSGO_VIEW" <<'EOF_DDNSGO_VIEW'
+<%+header%>
+<style>
+:root{color-scheme:dark}
+body{background:#10131d}
+.ddnsgo-shell{min-height:calc(100vh - 64px);padding:18px;background:radial-gradient(circle at 16% 8%,rgba(34,211,238,.16),transparent 30%),linear-gradient(135deg,#121827 0%,#0b1220 100%);color:#e8edf5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.ddnsgo-top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 14px}
+.ddnsgo-brand{display:flex;align-items:center;gap:12px;min-width:0}
+.ddnsgo-mark{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,rgba(45,212,191,.18),rgba(59,130,246,.2));border:1px solid rgba(125,211,252,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 16px 32px rgba(2,8,23,.32)}
+.ddnsgo-mark svg{width:28px;height:28px}
+.ddnsgo-title{font-size:22px;font-weight:760;line-height:1.15;letter-spacing:0}
+.ddnsgo-sub{margin-top:4px;color:#a8b5c7;font-size:13px}
+.ddnsgo-meta{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.ddnsgo-pill{height:30px;display:inline-flex;align-items:center;border-radius:999px;padding:0 10px;border:1px solid rgba(148,163,184,.24);background:rgba(15,23,42,.58);color:#cbd5e1;font-size:12px;font-weight:650;white-space:nowrap}
+.ddnsgo-pill.ok{border-color:rgba(45,212,191,.48);background:rgba(20,184,166,.13);color:#a7f3d0}
+.ddnsgo-btn{height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;padding:0 13px;border:1px solid rgba(125,211,252,.42);background:linear-gradient(135deg,#0891b2,#2563eb);color:#f8fbff;text-decoration:none;font-weight:720;box-shadow:0 10px 26px rgba(37,99,235,.24)}
+.ddnsgo-btn:hover{color:#f8fbff;text-decoration:none;filter:brightness(1.06)}
+.ddnsgo-stage{height:calc(100vh - 158px);min-height:560px;border-radius:14px;overflow:hidden;border:1px solid rgba(125,211,252,.22);background:#eff6ff;box-shadow:0 20px 46px rgba(2,8,23,.34)}
+.ddnsgo-frame{width:100%;height:100%;display:block;border:0;background:#eff6ff}
+@media(max-width:720px){.ddnsgo-shell{padding:12px}.ddnsgo-top{align-items:flex-start;flex-direction:column}.ddnsgo-meta{justify-content:flex-start}.ddnsgo-stage{height:calc(100vh - 190px);min-height:460px}}
+</style>
+<div class="ddnsgo-shell">
+    <div class="ddnsgo-top">
+        <div class="ddnsgo-brand">
+            <div class="ddnsgo-mark" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M32 8a24 24 0 1 0 0 48 24 24 0 0 0 0-48Z" fill="rgba(14,165,233,.16)" stroke="#38bdf8" stroke-width="3"/>
+                    <path d="M18 31c3-8 8-12 14-12s11 4 14 12M18 33c3 8 8 12 14 12s11-4 14-12" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M32 16v32M12 32h40" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+                    <path d="m46 18 5 1-1 5M18 46l-5-1 1-5" stroke="#a7f3d0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div>
+                <div class="ddnsgo-title">DDNS-GO</div>
+                <div class="ddnsgo-sub">动态 DNS 控制台</div>
+            </div>
+        </div>
+        <div class="ddnsgo-meta">
+            <span id="ddnsgo-run" class="ddnsgo-pill">读取状态</span>
+            <span id="ddnsgo-port" class="ddnsgo-pill">端口 -</span>
+            <span id="ddnsgo-dns" class="ddnsgo-pill">DNS -</span>
+            <a id="ddnsgo-open" class="ddnsgo-btn" target="_blank" rel="noopener">打开控制台</a>
+        </div>
+    </div>
+    <div class="ddnsgo-stage">
+        <iframe id="ddnsgo-frame" class="ddnsgo-frame"></iframe>
+    </div>
+</div>
+<script>
+(function(){
+    function text(id,value){var el=document.getElementById(id);if(el)el.textContent=value;}
+    function setUrl(port){
+        var url=window.location.protocol+"//"+window.location.hostname+":"+port+"/";
+        var frame=document.getElementById("ddnsgo-frame");
+        var open=document.getElementById("ddnsgo-open");
+        if(frame&&frame.src!==url)frame.src=url;
+        if(open)open.href=url;
+    }
+    function refresh(){
+        fetch("<%=url('nradioadv/system/ddnsgo/status')%>",{cache:"no-store"})
+            .then(function(r){return r.json();})
+            .then(function(data){
+                var run=document.getElementById("ddnsgo-run");
+                var port=data.port||"9876";
+                text("ddnsgo-run",data.running?"运行中":"未运行");
+                if(run)run.className=data.running?"ddnsgo-pill ok":"ddnsgo-pill";
+                text("ddnsgo-port","端口 "+port);
+                text("ddnsgo-dns","DNS "+(data.dns||"-"));
+                setUrl(port);
+            })
+            .catch(function(){setUrl("9876");});
+    }
+    refresh();
+    window.setInterval(refresh,5000);
+})();
+</script>
+<%+footer%>
+EOF_DDNSGO_VIEW
+
+    chmod 644 "$DDNSGO_CONTROLLER" "$DDNSGO_VIEW" 2>/dev/null || true
+}
+
 install_mosdns_embedded_icon() {
     mkdir -p "$APP_ICON_DIR"
     backup_file "$APP_ICON_DIR/$MOSDNS_ICON_NAME"
@@ -11267,6 +14731,187 @@ EOF_MOSDNS_VIEW
 
     log_stage 6 6 "MosDNS 安装完成"
     log "提示: dnsmasq 上游需手动设置为 127.0.0.1#553"
+}
+
+install_ddnsgo() {
+    require_nradio_oem_appcenter
+    ensure_default_feeds
+
+    mkdir -p "$WORKDIR/ddnsgo"
+    ddnsgo_archive="$WORKDIR/ddnsgo/$DDNSGO_ARCHIVE_NAME"
+    ddnsgo_unpack="$WORKDIR/ddnsgo/unpack"
+    ddnsgo_core_ipk=""
+    ddnsgo_luci_ipk=""
+    ddnsgo_i18n_ipk=""
+
+    log_stage 1 7 "DDNS-GO GitHub OpenWrt 包安装规划"
+    ddnsgo_target_arch="$(get_primary_arch)"
+    [ -n "$ddnsgo_target_arch" ] || die "无法识别 opkg 架构，停止安装 DDNS-GO"
+    [ "$ddnsgo_target_arch" = "$DDNSGO_PACKAGE_ARCH" ] || die "DDNS-GO 当前集成包适配 $DDNSGO_PACKAGE_ARCH，当前设备为 $ddnsgo_target_arch"
+    log "说明: 将下载 DDNS-GO OpenWrt 三件套，写入 OEM 包装页，并注册到 NRadio 应用商店"
+    log "说明: 目标版本 DDNS-GO $DDNSGO_PACKAGE_VERSION / LuCI $DDNSGO_LUCI_VERSION / 中文包 $DDNSGO_I18N_VERSION"
+    confirm_or_exit "确认继续安装 DDNS-GO 并修改系统吗？"
+
+    log_stage 2 7 "下载 DDNS-GO OpenWrt 三件套并校验 SHA256"
+    ddnsgo_pkg_urls="$DDNSGO_DOWNLOAD_URLS"
+    rank_url_list_hosts "ddnsgo-package" "DDNS-GO OpenWrt 安装包" "$ddnsgo_pkg_urls"
+    if [ -n "${RANKED_URL_HOSTS:-}" ]; then
+        ddnsgo_pkg_urls="$(reorder_urls_by_host_rank "$ddnsgo_pkg_urls" "$RANKED_URL_HOSTS")"
+        log "提示: DDNS-GO 下载主机优先级: $RANKED_URL_HOSTS"
+    fi
+    log "提示: DDNS-GO 实际下载源顺序: $(summarize_url_hosts $ddnsgo_pkg_urls)"
+    ddnsgo_download_stall_time_saved="$DOWNLOAD_STALL_TIME"
+    ddnsgo_download_stall_speed_saved="$DOWNLOAD_STALL_SPEED"
+    ddnsgo_download_max_time_saved="$DOWNLOAD_MAX_TIME"
+    ddnsgo_download_keep_partial_saved="${DOWNLOAD_KEEP_PARTIAL:-0}"
+    DOWNLOAD_MAX_TIME="$DDNSGO_PACKAGE_MAX_TIME"
+    DOWNLOAD_STALL_TIME="$DDNSGO_PACKAGE_STALL_TIME"
+    DOWNLOAD_STALL_SPEED="$DDNSGO_PACKAGE_STALL_SPEED"
+    DOWNLOAD_KEEP_PARTIAL=1
+    ddnsgo_download_url=""
+    if download_from_urls "$ddnsgo_archive" $ddnsgo_pkg_urls; then
+        ddnsgo_download_url="$LAST_DOWNLOAD_SOURCE"
+    fi
+    if [ -z "$ddnsgo_download_url" ]; then
+        log "提示: 首轮 DDNS-GO 安装包下载未完成，正在放宽速度阈值后重试..."
+        DOWNLOAD_STALL_TIME="$DDNSGO_PACKAGE_RETRY_STALL_TIME"
+        DOWNLOAD_STALL_SPEED="$DDNSGO_PACKAGE_RETRY_STALL_SPEED"
+        if download_from_urls "$ddnsgo_archive" $ddnsgo_pkg_urls; then
+            ddnsgo_download_url="$LAST_DOWNLOAD_SOURCE"
+        fi
+    fi
+    DOWNLOAD_MAX_TIME="$ddnsgo_download_max_time_saved"
+    DOWNLOAD_STALL_TIME="$ddnsgo_download_stall_time_saved"
+    DOWNLOAD_STALL_SPEED="$ddnsgo_download_stall_speed_saved"
+    DOWNLOAD_KEEP_PARTIAL="$ddnsgo_download_keep_partial_saved"
+    [ -n "$ddnsgo_download_url" ] || die "无法从全部 GitHub 下载链路获取 DDNS-GO OpenWrt 安装包"
+    [ -s "$ddnsgo_archive" ] || die "DDNS-GO OpenWrt 安装包下载失败"
+    ddnsgo_actual_sha="$(sha256sum "$ddnsgo_archive" 2>/dev/null | awk '{print $1}')"
+    [ -n "$ddnsgo_actual_sha" ] || die "DDNS-GO SHA256 读取失败"
+    [ "$ddnsgo_actual_sha" = "$DDNSGO_ARCHIVE_SHA256" ] || die "DDNS-GO SHA256 不匹配"
+    validate_tar_gzip_archive "$ddnsgo_archive" "DDNS-GO OpenWrt 安装包" "/tmp/ddnsgo-archive-validate.log"
+    ddnsgo_download_host="$(extract_url_host "$ddnsgo_download_url" 2>/dev/null || true)"
+    ddnsgo_archive_size="$(ddnsgo_size_value "$ddnsgo_archive" "0")"
+
+    log_stage 3 7 "解包并安装 DDNS-GO 三件套"
+    ensure_opkg_update
+    ddnsgo_extract_need="$(estimate_archive_extract_bytes "$ddnsgo_archive" 2>/dev/null || true)"
+    rm -rf "$ddnsgo_unpack"
+    mkdir -p "$ddnsgo_unpack"
+    ensure_dir_writable "$ddnsgo_unpack" "DDNS-GO 临时解压目录"
+    case "$ddnsgo_extract_need" in
+        ''|*[!0-9]*) ;;
+        *) ensure_free_space_bytes "$ddnsgo_unpack" "$ddnsgo_extract_need" "DDNS-GO 临时解压目录" ;;
+    esac
+    tar -xzf "$ddnsgo_archive" -C "$ddnsgo_unpack" >/dev/null 2>&1 || die "解压 DDNS-GO OpenWrt 安装包失败"
+
+    for candidate in \
+        "$ddnsgo_unpack"/packages_ci/ddns-go_"$DDNSGO_PACKAGE_VERSION"_"$DDNSGO_PACKAGE_ARCH".ipk \
+        "$ddnsgo_unpack"/*/ddns-go_"$DDNSGO_PACKAGE_VERSION"_"$DDNSGO_PACKAGE_ARCH".ipk \
+        "$ddnsgo_unpack"/*/*/ddns-go_"$DDNSGO_PACKAGE_VERSION"_"$DDNSGO_PACKAGE_ARCH".ipk
+    do
+        [ -f "$candidate" ] || continue
+        ddnsgo_core_ipk="$candidate"
+        break
+    done
+    for candidate in \
+        "$ddnsgo_unpack"/packages_ci/luci-app-ddns-go_"$DDNSGO_LUCI_VERSION"_all.ipk \
+        "$ddnsgo_unpack"/*/luci-app-ddns-go_"$DDNSGO_LUCI_VERSION"_all.ipk \
+        "$ddnsgo_unpack"/*/*/luci-app-ddns-go_"$DDNSGO_LUCI_VERSION"_all.ipk
+    do
+        [ -f "$candidate" ] || continue
+        ddnsgo_luci_ipk="$candidate"
+        break
+    done
+    for candidate in \
+        "$ddnsgo_unpack"/packages_ci/luci-i18n-ddns-go-zh-cn_"$DDNSGO_I18N_VERSION"_all.ipk \
+        "$ddnsgo_unpack"/packages_ci/luci-i18n-ddns-go-zh-cn*_all.ipk \
+        "$ddnsgo_unpack"/*/luci-i18n-ddns-go-zh-cn_"$DDNSGO_I18N_VERSION"_all.ipk \
+        "$ddnsgo_unpack"/*/luci-i18n-ddns-go-zh-cn*_all.ipk \
+        "$ddnsgo_unpack"/*/*/luci-i18n-ddns-go-zh-cn_"$DDNSGO_I18N_VERSION"_all.ipk \
+        "$ddnsgo_unpack"/*/*/luci-i18n-ddns-go-zh-cn*_all.ipk
+    do
+        [ -f "$candidate" ] || continue
+        ddnsgo_i18n_ipk="$candidate"
+        break
+    done
+    [ -n "$ddnsgo_core_ipk" ] || die "解压后未找到 DDNS-GO 核心安装包"
+    [ -n "$ddnsgo_luci_ipk" ] || die "解压后未找到 DDNS-GO LuCI 安装包"
+    [ -n "$ddnsgo_i18n_ipk" ] || die "解压后未找到 DDNS-GO 中文语言包"
+    install_ipk_file "$ddnsgo_core_ipk" "DDNS-GO 核心"
+    install_ipk_file "$ddnsgo_luci_ipk" "DDNS-GO LuCI"
+    install_ipk_file "$ddnsgo_i18n_ipk" "DDNS-GO 中文语言包"
+    ddnsgo_installed_ver="$(get_installed_package_version "$DDNSGO_PACKAGE_NAME" 2>/dev/null || true)"
+    [ -n "$ddnsgo_installed_ver" ] || ddnsgo_installed_ver="$DDNSGO_PACKAGE_VERSION"
+    ddnsgo_core_size="$(ddnsgo_size_value "$DDNSGO_BIN_PATH" "$DDNSGO_CORE_SIZE")"
+    ddnsgo_luci_size="$(ddnsgo_size_value "$ddnsgo_luci_ipk" "$DDNSGO_LUCI_SIZE")"
+    ddnsgo_i18n_size="$(ddnsgo_size_value "$ddnsgo_i18n_ipk" "$DDNSGO_I18N_SIZE")"
+
+    log_stage 4 7 "写入 DDNS-GO 默认配置与 OEM 包装页"
+    ensure_ddnsgo_config_defaults
+    write_ddnsgo_oem_files
+
+    log_stage 5 7 "写入图标、应用商店、多包注册与打开入口"
+    backup_file "$CFG"
+    ddnsgo_icon_name=""
+    if install_ddnsgo_embedded_icon; then
+        ddnsgo_icon_name="$DDNSGO_ICON_NAME"
+    fi
+    set_ddnsgo_appcenter_entry "$ddnsgo_core_size" "$ddnsgo_luci_size" "$ddnsgo_i18n_size" "$ddnsgo_icon_name"
+    uci commit appcenter
+    write_plugin_uninstall_assets
+    patch_common_template
+    refresh_luci_appcenter
+    /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+
+    log_stage 6 7 "启动 DDNS-GO 并写入虚拟内存"
+    verify_file_exists "$DDNSGO_INIT_FILE" "$DDNSGO_APP_NAME"
+    ensure_ddnsgo_config_defaults
+    configure_ddnsgo_web_login
+    "$DDNSGO_INIT_FILE" enable >/dev/null 2>&1 || true
+    if ! "$DDNSGO_INIT_FILE" restart >/tmp/ddnsgo-restart.log 2>&1; then
+        sed -n '1,120p' /tmp/ddnsgo-restart.log >&2
+        die "DDNS-GO 启动失败"
+    fi
+    sleep 2
+    ensure_existing_swap_access "$DDNSGO_APP_NAME"
+
+    log_stage 7 7 "逐项校验 DDNS-GO 文件、服务与应用商店入口"
+    opkg status "$DDNSGO_PACKAGE_NAME" >/dev/null 2>&1 || die "DDNS-GO verify failed: missing package $DDNSGO_PACKAGE_NAME"
+    opkg status "$DDNSGO_LUCI_PACKAGE_NAME" >/dev/null 2>&1 || die "DDNS-GO verify failed: missing package $DDNSGO_LUCI_PACKAGE_NAME"
+    opkg status "$DDNSGO_I18N_PACKAGE_NAME" >/dev/null 2>&1 || die "DDNS-GO verify failed: missing package $DDNSGO_I18N_PACKAGE_NAME"
+    verify_file_exists "$DDNSGO_BIN_PATH" "$DDNSGO_APP_NAME"
+    verify_file_exists "$DDNSGO_INIT_FILE" "$DDNSGO_APP_NAME"
+    verify_file_exists "$DDNSGO_CONFIG_FILE" "$DDNSGO_APP_NAME"
+    verify_file_exists "$DDNSGO_CONFIG_YAML" "$DDNSGO_APP_NAME"
+    verify_file_exists "$DDNSGO_CONTROLLER" "$DDNSGO_APP_NAME"
+    verify_file_exists "$DDNSGO_VIEW" "$DDNSGO_APP_NAME"
+    verify_file_exists "$APP_ICON_DIR/$DDNSGO_ICON_NAME" "$DDNSGO_APP_NAME"
+    verify_appcenter_route "$DDNSGO_APP_NAME" "$DDNSGO_ROUTE"
+    verify_luci_route "$DDNSGO_ROUTE" "$DDNSGO_APP_NAME"
+    verify_luci_route "$DDNSGO_ROUTE/status" "$DDNSGO_APP_NAME"
+    if ! pidof ddns-go >/dev/null 2>&1; then
+        ddnsgo_status="$("$DDNSGO_INIT_FILE" status 2>/dev/null || true)"
+        [ -n "$ddnsgo_status" ] && log "DDNS-GO 状态: $ddnsgo_status"
+        die "DDNS-GO verify failed: service not running"
+    fi
+    ddnsgo_port="$(uci -q get ddns-go.config.port 2>/dev/null || echo 9876)"
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -lntp 2>/dev/null | awk -v port="$ddnsgo_port" '$4 ~ (":" port "$") && $0 ~ /ddns-go/ { found = 1 } END { exit(found ? 0 : 1) }' || die "DDNS-GO verify failed: port $ddnsgo_port not listening"
+    fi
+
+    log "安装完成"
+    log "插件:   $DDNSGO_APP_NAME"
+    log "版本:   $ddnsgo_installed_ver"
+    log "路由:   $DDNSGO_ROUTE"
+    log "端口:   $ddnsgo_port"
+    if [ -n "$ddnsgo_download_host" ]; then
+        log "下载源: GitHub OpenWrt 包（$ddnsgo_download_host）"
+    else
+        log "下载源: GitHub OpenWrt 包"
+    fi
+    log "包大小: $ddnsgo_archive_size bytes"
+    log "说明:   已安装核心、LuCI、中文包，写入 OEM 包装页、图标、应用商店多包条目、异步卸载链和虚拟内存接入"
 }
 
 install_openlist() {
@@ -24574,13 +28219,13 @@ patch_appcenter_shortcut() {
         ' "$template_file" > "$tmp_file" && mv "$tmp_file" "$template_file"
     fi
 
-    if ! grep -q "frame.src.indexOf('/nradioadv/system/webssh')" "$template_file" || ! grep -q "frame.src.indexOf('/admin/vpn/easytier')" "$template_file"; then
+    if ! grep -q "frame.src.indexOf('/nradioadv/system/webssh')" "$template_file" || ! grep -q "frame.src.indexOf('/admin/vpn/easytier')" "$template_file" || ! grep -q "frame.src.indexOf('/nradioadv/system/ddnsgo')" "$template_file"; then
         backup_file "$template_file"
         tmp_file="$WORKDIR/appcenter-iframe.htm"
         awk '
             {
                 if ($0 ~ /frame\.src\.indexOf\('\''\/admin\/services\/openclash'\''\)/ && $0 ~ /\/nradioadv\/system\/zerotier'\''\) === -1/) {
-                    print "            if (frame.src.indexOf('\''/admin/services/openclash'\'') === -1 && frame.src.indexOf('\''/admin/services/AdGuardHome'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openvpnfull'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openlist'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/zerotier'\'') === -1 && frame.src.indexOf('\''/admin/vpn/easytier'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/webssh'\'') === -1)"
+                    print "            if (frame.src.indexOf('\''/admin/services/openclash'\'') === -1 && frame.src.indexOf('\''/admin/services/AdGuardHome'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openvpnfull'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openlist'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/zerotier'\'') === -1 && frame.src.indexOf('\''/admin/vpn/easytier'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/webssh'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/ddnsgo'\'') === -1)"
                     next
                 }
                 print
@@ -24731,7 +28376,7 @@ patch_appcenter_shortcut() {
 }
 
 restart_services() {
-    rm -f /tmp/luci-indexcache /tmp/infocd/cache/appcenter /tmp/luci-modulecache /tmp/luci-modulecache/* 2>/dev/null || true
+    rm -f /tmp/luci-indexcache /tmp/infocd/cache/appcenter /tmp/luci-modulecache/* 2>/dev/null || true
     if [ -x /etc/init.d/ttyd ]; then
         /etc/init.d/ttyd enable >/dev/null 2>&1 || true
         /etc/init.d/ttyd stop >/dev/null 2>&1 || true
@@ -24945,6 +28590,10 @@ run_menu_feature() {
             install_mosdns
             show_support_page_hint='1'
             ;;
+        18)
+            install_ddnsgo
+            show_support_page_hint='1'
+            ;;
         *)
             die_menu_input_issue "$feature_choice"
             ;;
@@ -24969,10 +28618,11 @@ common_plugin_menu() {
         printf '2. 哈基米\n'
         printf '3. ttyd / Web SSH\n'
         printf '4. AdGuardHome\n'
-    printf '5. OpenList\n'
-    printf '6. MosDNS\n'
-    printf '0. 返回功能分类\n'
-    printf '请选择 0、1、2、3、4、5 或 6: '
+        printf '5. OpenList\n'
+        printf '6. MosDNS\n'
+        printf '7. DDNS-GO\n'
+        printf '0. 返回功能分类\n'
+        printf '请选择 0、1、2、3、4、5、6 或 7: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
@@ -24982,6 +28632,7 @@ common_plugin_menu() {
             4) submenu_feature='4' ;;
             5) submenu_feature='5' ;;
             6) submenu_feature='17' ;;
+            7) submenu_feature='18' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then
@@ -25627,13 +29278,31 @@ printf '%s\n' "$SCRIPT_SCOPE_NOTICE"
     log_nradio_oem_environment_hint
 
     if [ -n "$choice" ]; then
-        if run_menu_feature "$choice"; then
-            feature_rc='0'
-        else
-            feature_rc="$?"
-        fi
-        [ "$feature_rc" = '2' ] && return 0
-        return "$feature_rc"
+        case "$choice" in
+            0)
+                return 0
+                ;;
+            1)
+                if common_plugin_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                ;;
+            2)
+                if network_route_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                ;;
+            3)
+                if game_accelerator_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                ;;
+            4)
+                if appcenter_polish_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                ;;
+            5)
+                if maintenance_test_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                ;;
+            *)
+                die_menu_input_issue "$choice"
+                ;;
+        esac
+        [ "$menu_rc" = '2' ] && return 0
+        return "$menu_rc"
     fi
 
     while :; do
