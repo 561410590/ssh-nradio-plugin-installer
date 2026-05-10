@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.0.50"
+SCRIPT_VERSION="V2.0.55"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-10"
+SCRIPT_RELEASE_DATE="2026-05-11"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -42,6 +42,8 @@ TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
 OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
 OPENCLASH_SMART_DISPLAY_NAME="${OPENCLASH_SMART_DISPLAY_NAME:-哈基米 smart}"
+OPENCLASH_CUSTOM_RULES_FILE="${OPENCLASH_CUSTOM_RULES_FILE:-/etc/openclash/custom/openclash_custom_rules.list}"
+OPENCLASH_CUSTOM_RULES_BACKUP_DIR="${OPENCLASH_CUSTOM_RULES_BACKUP_DIR:-/etc/openclash/custom/nradio-backup}"
 QIYOU_INSTALLER_URL="${QIYOU_INSTALLER_URL:-http://sd.qiyou.cn}"
 QIYOU_INSTALLER_SHA256="${QIYOU_INSTALLER_SHA256:-deb8730e598e0cda45ad554127f87f2ee534c8a4a12efc8d4865f81fc12d56f1}"
 LEIGOD_INSTALLER_URL="${LEIGOD_INSTALLER_URL:-http://119.3.40.126/router_plugin_new/plugin_install.sh}"
@@ -2302,6 +2304,81 @@ get_openlist_config_value() {
     printf '%s\n' "$value"
 }
 
+openlist_resolve_path() {
+    target_path="$1"
+    [ -n "$target_path" ] || return 1
+
+    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+        readlink -f "$target_path" 2>/dev/null || printf '%s\n' "$target_path"
+    else
+        printf '%s\n' "$target_path"
+    fi
+}
+
+openlist_dir_is_safe_to_remove() {
+    target_dir="$(openlist_resolve_path "$1" 2>/dev/null || true)"
+    root_dir="$(openlist_resolve_path "$OPENLIST_ROOT_DIR" 2>/dev/null || true)"
+    [ -n "$root_dir" ] || root_dir="$OPENLIST_ROOT_DIR"
+
+    case "$target_dir" in
+        ''|/) return 1 ;;
+    esac
+    case "$root_dir" in
+        ''|/) return 1 ;;
+    esac
+
+    case "$target_dir" in
+        "$root_dir"|"$root_dir"/*|/etc/openlist|/etc/openlist/*|/tmp/openlist|/tmp/openlist/*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+openlist_file_is_safe_to_remove() {
+    target_file="$(openlist_resolve_path "$1" 2>/dev/null || true)"
+    root_dir="$(openlist_resolve_path "$OPENLIST_ROOT_DIR" 2>/dev/null || true)"
+    [ -n "$root_dir" ] || root_dir="$OPENLIST_ROOT_DIR"
+
+    case "$target_file" in
+        ''|/) return 1 ;;
+    esac
+    case "$root_dir" in
+        ''|/) return 1 ;;
+    esac
+
+    case "$target_file" in
+        "$root_dir"/*|/var/log/openlist.log|/tmp/openlist-sync.log|/tmp/openlist.log)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+openlist_remove_dir_if_safe() {
+    target_dir="$1"
+    [ -n "$target_dir" ] || return 0
+    [ -e "$target_dir" ] || [ -L "$target_dir" ] || return 0
+
+    if openlist_dir_is_safe_to_remove "$target_dir"; then
+        rm -rf "$target_dir" 2>/dev/null || true
+    else
+        printf 'OpenList uninstall: skip unsafe directory %s\n' "$target_dir"
+    fi
+}
+
+openlist_remove_file_if_safe() {
+    target_file="$1"
+    [ -n "$target_file" ] || return 0
+    [ -e "$target_file" ] || [ -L "$target_file" ] || return 0
+
+    if openlist_file_is_safe_to_remove "$target_file"; then
+        rm -f "$target_file" 2>/dev/null || true
+    else
+        printf 'OpenList uninstall: skip unsafe file %s\n' "$target_file"
+    fi
+}
+
 delete_iptables_rule_loop() {
     table_name="$1"
     chain_name="$2"
@@ -2589,7 +2666,6 @@ cleanup_openlist() {
     rm -f \
         "$OPENLIST_LINK_PATH" \
         "$OPENLIST_BIN_PATH" \
-        "$openlist_bin_real" \
         /etc/init.d/openlist \
         /usr/libexec/openlist-sync-config \
         /etc/config/openlist \
@@ -2598,8 +2674,14 @@ cleanup_openlist() {
         /usr/lib/lua/luci/model/cbi/nradio_adv/openlist_basic.lua \
         /usr/lib/lua/luci/view/nradio_adv/openlist_logs.htm \
         2>/dev/null || true
-    rm -rf "$openlist_root_dir" "$openlist_data_dir" "$openlist_temp_dir" /etc/openlist /tmp/openlist 2>/dev/null || true
-    rm -f "$openlist_log_path" /var/log/openlist.log /tmp/openlist-sync.log 2>/dev/null || true
+    openlist_remove_file_if_safe "$openlist_bin_real"
+    openlist_remove_dir_if_safe "$openlist_root_dir"
+    openlist_remove_dir_if_safe "$openlist_data_dir"
+    openlist_remove_dir_if_safe "$openlist_temp_dir"
+    openlist_remove_dir_if_safe /etc/openlist
+    openlist_remove_dir_if_safe /tmp/openlist
+    openlist_remove_file_if_safe "$openlist_log_path"
+    rm -f /var/log/openlist.log /tmp/openlist-sync.log 2>/dev/null || true
     remove_app_icon_file "$OPENLIST_ICON_NAME"
     remove_app_icon_file "openlist.png"
     remove_app_icon_file "openlist.svg"
@@ -5283,34 +5365,48 @@ end
 local function nradio_appcenter_read_cpu_usage_percent()
 	local fs = require "nixio.fs"
 	local state_path = "/tmp/nradio_appcenter_cpu.stat"
+	local now = os.time()
+	local min_interval = 2
 	local total, idle = nradio_appcenter_read_cpu_stat()
 	if not total or not idle then
 		return nil
 	end
 
-	local prev_total, prev_idle
+	local prev_time, prev_total, prev_idle, prev_usage
 	local previous = fs.readfile(state_path)
 	if previous then
-		prev_total, prev_idle = previous:match("^(%d+)%s+(%d+)")
+		prev_time, prev_total, prev_idle, prev_usage = previous:match("^(%d+)%s+(%d+)%s+(%d+)%s+([%d%.]+)")
+		if not prev_time then
+			prev_total, prev_idle = previous:match("^(%d+)%s+(%d+)")
+		end
+		prev_time = tonumber(prev_time)
 		prev_total = tonumber(prev_total)
 		prev_idle = tonumber(prev_idle)
+		prev_usage = tonumber(prev_usage)
 	end
-	fs.writefile(state_path, string.format("%d %d\n", total, idle))
+
+	if prev_time and prev_usage and now - prev_time < min_interval then
+		return prev_usage
+	end
 
 	if not prev_total or not prev_idle then
+		fs.writefile(state_path, string.format("%d %d %d %.1f\n", now, total, idle, 0))
 		return nil
 	end
 
 	local delta_total = total - prev_total
 	local delta_idle = idle - prev_idle
 	if delta_total <= 0 then
+		fs.writefile(state_path, string.format("%d %d %d %.1f\n", now, total, idle, prev_usage or 0))
 		return nil
 	end
 
 	local usage = (delta_total - delta_idle) * 100 / delta_total
 	if usage < 0 then usage = 0 end
 	if usage > 100 then usage = 100 end
-	return math.floor(usage * 10 + 0.5) / 10
+	usage = math.floor(usage * 10 + 0.5) / 10
+	fs.writefile(state_path, string.format("%d %d %d %.1f\n", now, total, idle, usage))
+	return usage
 end
 
 local function nradio_appcenter_read_temperature_celsius()
@@ -5415,10 +5511,19 @@ patch_appcenter_card_polish() {
         --nr-status-reserve: 19.5%;
         --nr-status-gap: 14px;
         --nr-status-edge: -5%;
+        --nr-polish-line: rgba(103,232,249,.22);
+        --nr-polish-line-soft: rgba(148,163,184,.12);
+        --nr-polish-panel: rgba(15,23,42,.72);
+        --nr-polish-accent: #23c8e4;
+        --nr-polish-ok: #3ddc97;
+        --nr-polish-ink: #f4f8ff;
     }
     #app_top_menu{
         display: block;
         max-width: 100%;
+        margin-bottom: 12px;
+        padding: 0 2px 8px;
+        border-bottom: 1px solid rgba(125,211,252,.10);
         overflow: hidden !important;
         overflow-x: hidden !important;
         overflow-y: visible !important;
@@ -5432,18 +5537,38 @@ patch_appcenter_card_polish() {
         display: none !important;
     }
     #app_top_menu .top_menu{
-        color: #9be5f2;
+        position: relative;
+        color: #a9bad2;
         font-size: 15px;
         font-weight: 800;
         letter-spacing: 0;
         line-height: 1.2;
+        padding: 0 3px 9px;
         text-shadow: none;
         white-space: nowrap;
+        transition: color .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    #app_top_menu .top_menu::after{
+        content: "";
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 1px;
+        height: 1px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, rgba(35,200,228,.26), transparent);
+        opacity: 0;
+        transition: opacity .16s ease;
+        pointer-events: none;
+    }
+    #app_top_menu .top_menu:hover::after,
+    #app_top_menu .top_menu_active::after{
+        opacity: 1;
     }
     #app_top_menu .top_menu_active{
-        color: #eefcff;
-        border-bottom-color: #6ed8e9;
-        box-shadow: 0 7px 12px -14px rgba(103,215,232,.42);
+        color: #eef8ff;
+        border-bottom-color: #23c8e4;
+        box-shadow: 0 7px 12px -14px rgba(35,200,228,.36);
     }
     #app_top_menu .top_menu_inner{
         display: inline-flex !important;
@@ -5488,14 +5613,24 @@ patch_appcenter_card_polish() {
         box-sizing: border-box;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(148,163,184,.16);
-        border-radius: 12px;
+        border: 1px solid var(--nr-polish-line-soft);
+        border-radius: 8px;
         background:
-            radial-gradient(circle at 50% 0%, rgba(125,211,252,.14), transparent 58%),
-            linear-gradient(180deg, rgba(44,50,65,.76), rgba(29,36,50,.66));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), inset 0 0 0 1px rgba(255,255,255,.022), 0 6px 12px rgba(0,0,0,.085);
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.016)),
+            rgba(12,16,24,.50);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.040), 0 8px 18px rgba(0,0,0,.12);
         -webkit-backdrop-filter: blur(8px) saturate(1.06);
         backdrop-filter: blur(8px) saturate(1.06);
+    }
+    .app_btn_box .app_btn_group::before{
+        content: "";
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        top: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(35,200,228,.34), transparent);
+        pointer-events: none;
     }
     #app_status_mount{
         display: block;
@@ -5511,6 +5646,20 @@ patch_appcenter_card_polish() {
     #app_status_mount:empty{
         display: none;
     }
+    .container_left{
+        position: relative;
+        min-width: 0;
+    }
+    .container_left::after{
+        content: "";
+        position: absolute;
+        top: 6px;
+        right: 7px;
+        bottom: 6px;
+        width: 1px;
+        background: linear-gradient(180deg, transparent, rgba(125,211,252,.16), rgba(148,163,184,.08), transparent);
+        pointer-events: none;
+    }
     .container_left .app_menu{
         display: block;
         width: calc(100% - 14px);
@@ -5521,7 +5670,9 @@ patch_appcenter_card_polish() {
         box-sizing: border-box;
         border: 1px solid rgba(148,163,184,0);
         border-radius: 8px;
-        background: linear-gradient(180deg, rgba(255,255,255,.024), rgba(255,255,255,0));
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.006)),
+            rgba(12,16,24,.20);
         background-clip: border-box;
         -webkit-background-clip: border-box;
         -webkit-text-fill-color: #deebff;
@@ -5531,22 +5682,33 @@ patch_appcenter_card_polish() {
         transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
     }
     .container_left .app_menu:hover{
-        border-color: rgba(125,211,252,.16);
-        background: linear-gradient(180deg, rgba(125,211,252,.074), rgba(96,165,250,.030));
+        border-color: rgba(35,200,228,.20);
+        background: linear-gradient(180deg, rgba(35,200,228,.064), rgba(15,23,42,.018));
         -webkit-text-fill-color: #ffffff;
         color: #ffffff;
         box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
     }
     .container_left .app_menu.menu_active{
-        border-color: rgba(34,211,238,.22);
+        border-color: rgba(35,200,228,.30);
         background:
-            radial-gradient(circle at 0% 50%, rgba(34,211,238,.16), transparent 58%),
-            linear-gradient(180deg, rgba(34,211,238,.120), rgba(59,130,246,.052));
+            linear-gradient(90deg, rgba(35,200,228,.145), rgba(61,220,151,.048)),
+            linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018));
         -webkit-background-clip: border-box;
         background-clip: border-box;
         -webkit-text-fill-color: #f8fbff;
-        color: #f8fbff;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 5px 12px rgba(14,165,233,.055);
+        color: #f4f9ff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.042), 0 4px 10px rgba(8,47,73,.075);
+    }
+    .container_left .app_menu.menu_active::before{
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-right: 8px;
+        border-radius: 999px;
+        background: var(--nr-polish-accent);
+        box-shadow: 0 0 0 5px rgba(35,200,228,.10), 0 0 8px rgba(35,200,228,.34);
+        vertical-align: 1px;
     }
     .container_right{
         display: grid;
@@ -5582,22 +5744,27 @@ patch_appcenter_card_polish() {
         padding: var(--nr-card-pad) var(--nr-card-pad) 64px;
         overflow: hidden;
         box-sizing: border-box;
-        border: 1px solid rgba(108,130,172,.58);
-        border-radius: 14px;
+        border: 1px solid rgba(103,232,249,.18);
+        border-radius: 8px;
         background:
-            radial-gradient(circle at 100% 0%, rgba(34,211,238,.135), transparent 32%),
-            radial-gradient(circle at 0% 0%, rgba(108,162,255,.112), transparent 34%),
-            linear-gradient(180deg, rgba(37,44,61,.935), rgba(22,29,42,.90)),
-            rgba(12,16,24,.66);
-        background-blend-mode: screen, screen, normal, normal;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.078), inset 0 0 0 1px rgba(255,255,255,.026), 0 18px 34px rgba(0,0,0,.18);
+            radial-gradient(circle at 26px 20px, rgba(103,232,249,.055), transparent 130px),
+            linear-gradient(180deg, rgba(30,41,59,.955), rgba(15,23,42,.925)),
+            rgba(10,15,24,.72);
+        background-blend-mode: screen, normal, normal;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.066), inset 0 0 0 1px rgba(255,255,255,.020), 0 12px 24px rgba(0,0,0,.15);
         -webkit-backdrop-filter: blur(10px) saturate(1.10);
         backdrop-filter: blur(10px) saturate(1.10);
         transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
     }
+    .container_right .app_box:nth-child(3n+2)::after{
+        background: linear-gradient(90deg, rgba(61,220,151,0), rgba(61,220,151,.44), rgba(35,200,228,.34), rgba(61,220,151,0));
+    }
+    .container_right .app_box:nth-child(3n+3)::after{
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,.42), rgba(35,200,228,.34), rgba(108,162,255,0));
+    }
     .container_right .app_box:focus-within{
-        border-color: rgba(125,186,255,.36);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), 0 0 0 2px rgba(125,211,252,.075), 0 16px 28px rgba(0,0,0,.14);
+        border-color: rgba(103,232,249,.34);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.068), inset 0 0 0 1px rgba(255,255,255,.022), 0 0 0 2px rgba(103,232,249,.075), 0 12px 24px rgba(0,0,0,.14);
     }
     .container_right .app_box::before{
         content: "";
@@ -5605,12 +5772,17 @@ patch_appcenter_card_polish() {
         inset: 0;
         height: auto;
         background:
-            linear-gradient(135deg, rgba(255,255,255,.086), transparent 42%),
-            linear-gradient(180deg, rgba(255,255,255,.042), transparent 28%),
-            radial-gradient(circle at 50% 100%, rgba(59,130,246,.048), transparent 58%);
-        opacity: .88;
+            linear-gradient(180deg, rgba(255,255,255,.050), transparent 30%),
+            linear-gradient(90deg, rgba(35,200,228,.042), transparent 42%);
+        opacity: .78;
         pointer-events: none;
         z-index: 0;
+    }
+    .container_right .app_box:focus-within::before,
+    .container_right .app_box:hover::before{
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.058), transparent 30%),
+            linear-gradient(90deg, rgba(35,200,228,.058), transparent 42%);
     }
     .container_right .app_box::after{
         content: "";
@@ -5620,28 +5792,27 @@ patch_appcenter_card_polish() {
         top: auto;
         bottom: 0;
         width: auto;
-        height: 3px;
+        height: 2px;
         border-radius: 999px;
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(114,180,255,.72), rgba(47,211,238,.46), rgba(47,211,238,0));
+        background: linear-gradient(90deg, rgba(35,200,228,0), rgba(35,200,228,.56), rgba(61,220,151,.34), rgba(35,200,228,0));
         filter: none;
         display: block;
-        opacity: .74;
+        opacity: .62;
         transition: opacity .18s ease;
         pointer-events: none;
         z-index: 0;
     }
     .container_right .app_box:hover{
         transform: none;
-        border-color: rgba(132,194,255,.42);
+        border-color: rgba(103,232,249,.30);
         background:
-            radial-gradient(circle at 100% 0%, rgba(34,211,238,.160), transparent 32%),
-            radial-gradient(circle at 0% 0%, rgba(108,162,255,.132), transparent 34%),
-            linear-gradient(180deg, rgba(40,49,68,.955), rgba(24,32,47,.92)),
-            rgba(12,16,24,.70);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.084), inset 0 0 0 1px rgba(255,255,255,.028), 0 20px 38px rgba(0,0,0,.20);
+            radial-gradient(circle at 26px 20px, rgba(103,232,249,.070), transparent 132px),
+            linear-gradient(180deg, rgba(35,48,68,.965), rgba(17,27,42,.935)),
+            rgba(10,15,24,.76);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.074), inset 0 0 0 1px rgba(255,255,255,.024), 0 14px 26px rgba(0,0,0,.17);
     }
     .container_right .app_box:hover::after{
-        opacity: .78;
+        opacity: .70;
     }
     .container_right .app_box:hover::before{
         opacity: .84;
@@ -5661,11 +5832,11 @@ patch_appcenter_card_polish() {
         content: "";
         position: absolute;
         inset: 6px 7px 7px 7px;
-        border-radius: 16px;
+        border-radius: 12px;
         background:
-            radial-gradient(circle at 50% 20%, rgba(125,211,252,.18), transparent 52%),
-            linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0));
-        opacity: .76;
+            radial-gradient(circle at 50% 20%, rgba(35,200,228,.20), transparent 54%),
+            linear-gradient(180deg, rgba(255,255,255,.082), rgba(255,255,255,.012));
+        opacity: .82;
         pointer-events: none;
         z-index: 0;
     }
@@ -5678,11 +5849,12 @@ patch_appcenter_card_polish() {
         padding: 6px;
         object-fit: contain;
         box-sizing: border-box;
-        border-radius: 13px;
+        border: 1px solid rgba(125,211,252,.18);
+        border-radius: 8px;
         background:
-            radial-gradient(circle at 70% 18%, rgba(255,255,255,.34), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.10));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 0 rgba(255,255,255,.068), 0 12px 20px rgba(0,0,0,.18);
+            linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.080)),
+            rgba(12,16,24,.24);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.20), inset 0 -1px 0 rgba(255,255,255,.052), 0 10px 18px rgba(0,0,0,.15);
         filter: saturate(1.01) contrast(1.018);
         transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
         will-change: transform;
@@ -5690,7 +5862,8 @@ patch_appcenter_card_polish() {
     .container_right .app_box:hover .app_icon_img{
         transform: none;
         filter: saturate(1.06) contrast(1.028);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(255,255,255,.055), 0 10px 16px rgba(0,0,0,.15);
+        border-color: rgba(35,200,228,.28);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(255,255,255,.055), 0 11px 20px rgba(0,0,0,.16);
     }
     .container_right .app_icon_img.nr_app_default_icon{
         padding: 10px;
@@ -5730,11 +5903,22 @@ patch_appcenter_card_polish() {
         min-width: 0;
         width: 100%;
         min-inline-size: 0;
-        gap: 3px;
+        min-height: 74px;
+        gap: 4px;
         overflow: hidden;
         z-index: 1;
         align-self: start;
         text-rendering: geometricPrecision;
+    }
+    .container_right .app_title::after{
+        content: "";
+        width: 42px;
+        height: 1px;
+        margin-top: 2px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(125,211,252,.20), transparent);
+        opacity: .70;
+        pointer-events: none;
     }
     .container_right .app_name{
         /* NRadio appcenter text safe polish */
@@ -5755,14 +5939,16 @@ patch_appcenter_card_polish() {
         letter-spacing: 0;
         overflow: hidden;
         max-width: 100%;
-        overflow-wrap: normal;
-        word-break: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         hyphens: none;
-        display: block;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        white-space: normal;
+        text-overflow: clip;
         text-align: left !important;
-        text-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 10px rgba(125,211,252,.075);
+        text-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 8px rgba(103,232,249,.055);
         transition: color .18s ease, text-shadow .18s ease;
     }
     .container_right .app_name,
@@ -5788,28 +5974,28 @@ patch_appcenter_card_polish() {
         height: auto;
         margin-top: 0;
         padding: 2px 7px;
-        color: #f0f6ff;
-        font-size: 13px;
-        font-weight: 700;
+        color: #dbeafe;
+        font-size: 12px;
+        font-weight: 800;
         line-height: 1.2;
         opacity: .84;
-        border: 1px solid rgba(148,163,184,.10);
-        border-radius: 999px;
+        border: 1px solid rgba(125,211,252,.18);
+        border-radius: 7px;
         background:
-            radial-gradient(circle at 50% 0%, rgba(125,211,252,.095), transparent 62%),
-            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.024));
+            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.024)),
+            rgba(15,23,42,.36);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         justify-self: start;
         text-align: left !important;
-        text-shadow: 0 1px 1px rgba(0,0,0,.20);
+        text-shadow: none;
         transition: color .18s ease, opacity .18s ease;
     }
     .container_right .app_box:hover .app_version{
-        color: #e0f2fe;
+        color: #e6f8ff;
         opacity: 1;
-        border-color: rgba(125,211,252,.15);
+        border-color: rgba(35,200,228,.30);
     }
     .container_right .app_meta_row{
         grid-column: auto;
@@ -5821,7 +6007,7 @@ patch_appcenter_card_polish() {
         z-index: 1;
         display: flex;
         flex-wrap: wrap;
-        gap: 5px;
+        gap: 6px;
         margin: .08em 0 0;
         align-items: center !important;
         justify-content: flex-start;
@@ -5841,16 +6027,15 @@ patch_appcenter_card_polish() {
         justify-content: center;
         gap: 5px;
         max-width: 100%;
-        min-height: 18px;
-        padding: 2px 6px;
+        min-height: 20px;
+        padding: 3px 7px;
         box-sizing: border-box;
         border-radius: 999px;
-        border: 1px solid rgba(255,255,255,.10);
+        border: 1px solid rgba(255,255,255,.115);
         background:
-            radial-gradient(circle at 50% 0%, rgba(255,255,255,.090), transparent 62%),
-            linear-gradient(180deg, rgba(255,255,255,.052), rgba(255,255,255,.024));
+            linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.022));
         color: #c7d0dc;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 800;
         line-height: 1;
         white-space: nowrap !important;
@@ -5860,7 +6045,7 @@ patch_appcenter_card_polish() {
         writing-mode: horizontal-tb !important;
         text-orientation: mixed !important;
         text-shadow: none;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.060), 0 3px 6px rgba(0,0,0,.050);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(0,0,0,.080);
     }
     .container_right .app_open_badge{
         min-width: 0;
@@ -5869,43 +6054,43 @@ patch_appcenter_card_polish() {
     .container_right .app_open_badge::before{
         content: "";
         flex: 0 0 auto;
-        width: 5px;
-        height: 5px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background: currentColor;
-        box-shadow: none;
+        box-shadow: 0 0 0 4px rgba(255,255,255,.030), 0 0 8px currentColor;
     }
     .container_right .app_state_1{
-        color: #b8eccc;
-        border-color: rgba(74,222,128,.28);
+        color: #d5ffe3;
+        border-color: rgba(61,220,151,.28);
         background:
-            radial-gradient(circle at 50% 0%, rgba(187,247,208,.12), transparent 62%),
-            linear-gradient(180deg, rgba(34,197,94,.118), rgba(21,128,61,.072));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(21,128,61,.045);
+            linear-gradient(180deg, rgba(61,220,151,.120), rgba(34,197,94,.060)),
+            rgba(34,197,94,.045);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(21,128,61,.055);
     }
     .container_right .app_state_2{
-        color: #eadb99;
-        border-color: rgba(251,191,36,.29);
+        color: #ffe3ac;
+        border-color: rgba(245,158,11,.30);
         background:
-            radial-gradient(circle at 50% 0%, rgba(253,230,138,.13), transparent 62%),
-            linear-gradient(180deg, rgba(245,158,11,.118), rgba(180,83,9,.072));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(180,83,9,.045);
+            linear-gradient(180deg, rgba(245,158,11,.125), rgba(180,83,9,.060)),
+            rgba(245,158,11,.045);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(180,83,9,.055);
     }
     .container_right .app_state_0{
-        color: #b8ddec;
-        border-color: rgba(56,189,248,.28);
+        color: #d5e2f7;
+        border-color: rgba(255,255,255,.12);
         background:
-            radial-gradient(circle at 50% 0%, rgba(186,230,253,.12), transparent 62%),
-            linear-gradient(180deg, rgba(14,165,233,.118), rgba(2,132,199,.072));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(2,132,199,.045);
+            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.026)),
+            rgba(255,255,255,.030);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(0,0,0,.055);
     }
     .container_right .app_open_1{
-        color: #a9dfe8;
-        border-color: rgba(34,211,238,.28);
+        color: #d7fbff;
+        border-color: rgba(35,200,228,.28);
         background:
-            radial-gradient(circle at 50% 0%, rgba(165,243,252,.12), transparent 62%),
-            linear-gradient(180deg, rgba(34,211,238,.118), rgba(8,145,178,.072));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 3px 7px rgba(8,145,178,.045);
+            linear-gradient(180deg, rgba(35,200,228,.125), rgba(8,145,178,.058)),
+            rgba(35,200,228,.040);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(8,145,178,.055);
     }
     .container_right .app_des{
         grid-area: desc;
@@ -5925,29 +6110,35 @@ patch_appcenter_card_polish() {
         border: 0;
         border-radius: 0;
         background: transparent;
-        color: #d6dfec;
+        color: #d1deec;
         font-size: 13px;
         line-height: 1.42;
-        opacity: .86;
+        opacity: .88;
         overflow: hidden;
-        display: block;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
         text-align: left !important;
-        text-shadow: 0 1px 1px rgba(0,0,0,.18);
+        text-shadow: none;
         transition: color .18s ease, opacity .18s ease;
     }
     .container_right .app_box:hover .app_des{
-        color: #dce5f0;
-        opacity: .88;
+        color: #e0e8f4;
+        opacity: .92;
     }
     .container_right .app_des_empty{
-        display: block;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
         font-size: 0;
         color: #aeb9c9;
         opacity: .62;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
     }
     .container_right .app_des_empty::before{
         content: "应用功能与运行入口";
@@ -5966,11 +6157,22 @@ patch_appcenter_card_polish() {
         padding: 0;
         box-sizing: border-box;
     }
+    .container_right .app_action::before{
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: -11px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(125,211,252,.14), rgba(125,211,252,.050), transparent);
+        pointer-events: none;
+    }
     .container_right .action_list{
         display: flex;
         align-items: center;
         justify-content: flex-end;
         gap: 8px;
+        min-width: 0;
         float: none;
         margin: 0;
         padding: 0;
@@ -5983,13 +6185,13 @@ patch_appcenter_card_polish() {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(255,255,255,.105);
+        border: 1px solid rgba(125,211,252,.18);
         border-radius: 8px;
         color: #e2e9f4;
         background:
-            radial-gradient(circle at 50% 0%, rgba(255,255,255,.090), transparent 58%),
-            linear-gradient(180deg, rgba(255,255,255,.068), rgba(255,255,255,.038));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), inset 0 -1px 0 rgba(255,255,255,.018), 0 5px 9px rgba(0,0,0,.075);
+            linear-gradient(180deg, rgba(255,255,255,.082), rgba(255,255,255,.034)),
+            rgba(12,16,24,.35);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 8px 16px rgba(0,0,0,.105);
         box-sizing: border-box;
         font-size: 14px;
         font-weight: 760;
@@ -6000,7 +6202,7 @@ patch_appcenter_card_polish() {
     }
     .container_right .action_list_li:focus-visible,
     .app_btn_class:focus-visible{
-        outline: 2px solid rgba(34,211,238,.38);
+        outline: 2px solid rgba(103,232,249,.40);
         outline-offset: 2px;
     }
     .container_right .action_list_li:active,
@@ -6011,13 +6213,27 @@ patch_appcenter_card_polish() {
     .container_right .action_list_li:hover,
     .app_btn_class:hover{
         transform: none;
-        border-color: rgba(125,211,252,.28);
+        border-color: rgba(35,200,228,.34);
         color: #eef8fb;
         background:
-            radial-gradient(circle at 50% 0%, rgba(255,255,255,.12), transparent 58%),
-            linear-gradient(180deg, rgba(125,211,252,.110), rgba(96,165,250,.075));
+            linear-gradient(180deg, rgba(35,200,228,.120), rgba(61,220,151,.050)),
+            rgba(12,16,24,.42);
         -webkit-text-fill-color: currentColor;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.070), inset 0 -1px 0 rgba(255,255,255,.020), 0 5px 10px rgba(0,0,0,.075);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.065), 0 9px 18px rgba(0,0,0,.115);
+    }
+    .container_right .action_list_li:first-child{
+        color: #d5e2f7;
+        border-color: rgba(148,163,184,.18);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.026)),
+            rgba(255,255,255,.020);
+    }
+    .container_right .action_list_li:last-child{
+        color: #f4fbff;
+        border-color: rgba(35,200,228,.32);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.135), rgba(61,220,151,.060)),
+            rgba(35,200,228,.040);
     }
     .app_btn_group{
         gap: 6px;
@@ -6026,22 +6242,24 @@ patch_appcenter_card_polish() {
         min-width: 96px;
         height: 34px;
         padding: 0 10px;
-        border-radius: 10px;
+        border-radius: 8px;
         color: #dfe7f2;
-        background: linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,.042));
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,.030)),
+            rgba(12,16,24,.28);
     }
     .mem_track{
         max-width: 280px;
     }
     .mem_header{
-        color: #dce4f2;
+        color: #d8f7ff;
         font-weight: 800;
     }
     .mem_progress{
         /* NRadio appcenter memory bar safe polish */
         height: 8px;
         border-radius: 999px;
-        background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.08));
+        background: linear-gradient(180deg, rgba(255,255,255,.135), rgba(255,255,255,.078));
         box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
         overflow: hidden;
     }
@@ -6050,8 +6268,8 @@ patch_appcenter_card_polish() {
         height: 100%;
         border-radius: inherit;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 42%),
-            linear-gradient(90deg, #67d7e8, #45bfe4 52%, #6da5df);
+            linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 42%),
+            linear-gradient(90deg, #23c8e4, #3ddc97 72%, #6ca2ff);
         box-shadow: none;
         transition: width .25s ease;
     }
@@ -6079,13 +6297,13 @@ patch_appcenter_card_polish() {
         margin: 0;
         padding: 18px 18px 20px;
         box-sizing: border-box;
-        border-radius: 16px;
-        border: 1px solid rgba(112,190,224,.26);
+        border-radius: 8px;
+        border: 1px solid rgba(92,110,146,.32);
         background:
-            radial-gradient(circle at 0% 0%, rgba(56,189,248,.18), transparent 48%),
-            radial-gradient(circle at 100% 0%, rgba(99,102,241,.12), transparent 44%),
-            linear-gradient(180deg, rgba(23,42,64,.972), rgba(10,23,39,.952));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.096), inset 0 0 0 1px rgba(255,255,255,.024), 0 14px 26px rgba(0,0,0,.14);
+            radial-gradient(circle at 0% 0%, rgba(35,200,228,.105), transparent 28%),
+            linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.016)),
+            rgba(12,16,24,.52);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 14px 30px rgba(0,0,0,.15);
         -webkit-backdrop-filter: blur(10px) saturate(1.07);
         backdrop-filter: blur(10px) saturate(1.07);
     }
@@ -6096,8 +6314,8 @@ patch_appcenter_card_polish() {
         right: 16px;
         top: 0;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(103,215,232,.60), transparent);
-        opacity: .54;
+        background: linear-gradient(90deg, transparent, rgba(35,200,228,.52), transparent);
+        opacity: .50;
         pointer-events: none;
         z-index: -1;
     }
@@ -6108,8 +6326,8 @@ patch_appcenter_card_polish() {
         right: 16px;
         bottom: 0;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(96,165,250,.36), rgba(34,211,238,.28), transparent);
-        opacity: .72;
+        background: linear-gradient(90deg, transparent, rgba(35,200,228,.30), rgba(61,220,151,.20), transparent);
+        opacity: .58;
         pointer-events: none;
         z-index: -1;
     }
@@ -6125,9 +6343,11 @@ patch_appcenter_card_polish() {
         margin: 12px 10px 0;
         padding: 18px 16px;
         box-sizing: border-box;
-        border-radius: 14px;
-        border: 1px dashed rgba(125,211,252,.24);
-        background: rgba(15,23,42,.36);
+        border-radius: 8px;
+        border: 1px dashed rgba(35,200,228,.26);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(35,200,228,.070), transparent 30%),
+            rgba(15,23,42,.42);
         color: #dbeafe;
         line-height: 1.7;
     }
@@ -6145,8 +6365,8 @@ patch_appcenter_card_polish() {
         gap: 12px;
         margin-bottom: 14px;
         padding-bottom: 12px;
-        border-bottom: 1px solid rgba(255,255,255,.10);
-        color: #91dff2;
+        border-bottom: 1px solid rgba(125,211,252,.14);
+        color: #d8f7ff;
         font-size: 12.5px;
         font-weight: 850;
         white-space: nowrap;
@@ -6164,8 +6384,8 @@ patch_appcenter_card_polish() {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: #22d3ee;
-        box-shadow: none;
+        background: #23c8e4;
+        box-shadow: 0 0 0 6px rgba(35,200,228,.12), 0 0 9px rgba(35,200,228,.46);
     }
     .app_status_grid{
         display: grid;
@@ -6183,28 +6403,37 @@ patch_appcenter_card_polish() {
     .app_status_tile{
         min-height: 64px;
         padding: 12px 13px 11px;
-        border: 1px solid rgba(255,255,255,.12);
-        border-radius: 12px;
+        border: 1px solid rgba(125,211,252,.16);
+        border-radius: 7px;
         background:
-            radial-gradient(circle at 50% 0%, rgba(125,211,252,.095), transparent 58%),
-            linear-gradient(180deg, rgba(255,255,255,.084), rgba(255,255,255,.036));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.068), inset 0 -1px 0 rgba(255,255,255,.016), 0 5px 10px rgba(0,0,0,.075);
+            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,.030)),
+            rgba(7,16,29,.38);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 8px 16px rgba(0,0,0,.092);
         transition: border-color .18s ease, box-shadow .18s ease;
     }
     .app_status_tile:hover{
-        border-color: rgba(34,211,238,.25);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.075), inset 0 -1px 0 rgba(255,255,255,.018), 0 5px 10px rgba(0,0,0,.080);
+        border-color: rgba(35,200,228,.30);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.058), 0 9px 18px rgba(0,0,0,.105);
     }
     .app_status_tile strong{
-        color: #ffffff;
+        color: #f8fbff;
         font-size: 24px;
         line-height: 26px;
         text-shadow: none;
     }
+    .app_status_tile strong::after{
+        content: "";
+        display: block;
+        width: 24px;
+        height: 1px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(35,200,228,.42), transparent);
+    }
     .app_status_tile span{
         display: block;
         margin-top: 6px;
-        color: #d8dfec;
+        color: #9fb1cf;
         font-size: 10.5px;
         font-weight: 800;
         opacity: .96;
@@ -6212,7 +6441,7 @@ patch_appcenter_card_polish() {
     }
     .app_status_metric{
         padding: 11px 0 12px;
-        border-top: 1px solid rgba(255,255,255,.095);
+        border-top: 1px solid rgba(125,211,252,.105);
     }
     .app_status_metric_row{
         display: flex;
@@ -6246,9 +6475,9 @@ patch_appcenter_card_polish() {
     }
     .app_status_bar{
         position: relative;
-        height: 8px;
-        border-radius: 999px;
-        background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.10));
+        height: 7px;
+        border-radius: 7px;
+        background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.085));
         box-shadow: inset 0 1px 2px rgba(0,0,0,.22);
         overflow: hidden;
     }
@@ -6269,19 +6498,56 @@ patch_appcenter_card_polish() {
         width: 0;
         border-radius: inherit;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,0) 46%),
-            linear-gradient(90deg, #4fcbdc, #4aaee5 55%, #6b96db);
+            linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,0) 46%),
+            linear-gradient(90deg, #23c8e4, #3ddc97);
         box-shadow: none;
         transition: width .25s ease;
     }
     .app_status_temp_bar{
-        background: linear-gradient(90deg, #22c55e, #facc15 64%, #fb7185) !important;
+        background: linear-gradient(90deg, #3ddc97, #eab308 68%, #ff7676) !important;
     }
     .app_status_cpu_bar{
-        background: linear-gradient(90deg, #38bdf8, #818cf8 72%, #c084fc) !important;
+        background: linear-gradient(90deg, #23c8e4, #38bdf8 62%, #6ca2ff) !important;
     }
     .app_status_mem_bar{
-        background: linear-gradient(90deg, #2dd4bf, #38bdf8 58%, #60a5fa) !important;
+        background: linear-gradient(90deg, #3ddc97, #23c8e4 58%, #6ca2ff) !important;
+    }
+    @media (max-width: 1180px){
+        .appcontainer{
+            --nr-status-rail: 100%;
+            --nr-status-reserve: 0px;
+            --nr-status-gap: 0px;
+            --nr-status-edge: 0;
+        }
+        .app_btn_box{
+            padding-right: 0;
+            flex-wrap: wrap;
+        }
+        .app_btn_box .mem_track{
+            flex: 1 1 260px;
+        }
+        .app_btn_box .app_btn_group{
+            position: static;
+            width: auto;
+            min-width: 212px;
+        }
+        #app_status_mount{
+            position: relative;
+            right: auto;
+            top: auto;
+            width: 100%;
+            margin: 0 0 14px;
+        }
+        .container_right{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            padding-right: 0 !important;
+        }
+        .container_right .app_box:nth-child(n)::after{
+            background: linear-gradient(90deg, rgba(35,200,228,0), rgba(35,200,228,.52), rgba(61,220,151,.30), rgba(35,200,228,0));
+        }
+        .app_status_panel{
+            min-height: 0;
+        }
     }
     @media (max-width: 760px){
         #app_status_mount{
@@ -6369,6 +6635,9 @@ EOF_APPCENTER_CARD_POLISH_CSS
 
     cat > "$status_js_file" <<'EOF_APPCENTER_STATUS_PANEL_JS'
     var APP_STATUS_LAST = null;
+    var APP_STATUS_POLLING = false;
+    var APP_STATUS_TIMER = null;
+    var APP_STATUS_INTERVAL = 2000;
 
     function build_app_status_panel_from_data(data){
         var installed_count = 0;
@@ -6472,10 +6741,14 @@ EOF_APPCENTER_CARD_POLISH_CSS
     }
 
     function get_system_status(){
+        if(APP_STATUS_POLLING)
+            return;
+        APP_STATUS_POLLING = true;
         var data={};
         data['token']='<%=token%>';
         (new XHR()).post('<%=controller%>nradioadv/system/appcenter/sys_status', data, function(xhr){
-            if (xhr.getResponseHeader("Content-Type") == "application/json") {
+            APP_STATUS_POLLING = false;
+            if (xhr && xhr.getResponseHeader("Content-Type") == "application/json") {
                 try {
                     var data_res = JSON.parse(xhr.responseText || '{}');
                     if(data_res && data_res.result)
@@ -6485,6 +6758,13 @@ EOF_APPCENTER_CARD_POLISH_CSS
                 }
             }
         });
+    }
+
+    function start_app_status_polling(){
+        get_system_status();
+        if(APP_STATUS_TIMER)
+            window.clearInterval(APP_STATUS_TIMER);
+        APP_STATUS_TIMER = window.setInterval(get_system_status, APP_STATUS_INTERVAL);
     }
 EOF_APPCENTER_STATUS_PANEL_JS
 
@@ -6500,6 +6780,9 @@ EOF_APPCENTER_EMPTY_STATE_JS
 
     awk '
         /^[[:space:]]*<div id="app_status_mount"><\/div>[[:space:]]*$/ { next }
+        /^[[:space:]]*get_system_status\(\);[[:space:]]*$/ { next }
+        /^[[:space:]]*start_app_status_polling\(\);[[:space:]]*$/ { next }
+        /^[[:space:]]*window\.setInterval\(get_system_status, (1000|2000|5000|6000)\);[[:space:]]*$/ { next }
         /^[[:space:]]*var APP_STATUS_LAST = null;[[:space:]]*$/ {
             skip_status = 1
             next
@@ -6940,14 +7223,12 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_panel" "$TPL"
     fi
 
-    if ! grep -q 'window.setInterval(get_system_status, 1000)' "$TPL" 2>/dev/null; then
+    if ! grep -q 'start_app_status_polling();' "$TPL" 2>/dev/null; then
         awk '
             {
                 print
                 if ($0 ~ /^[[:space:]]*get_memory\(\);[[:space:]]*$/)
-                    print "        get_system_status();"
-                if ($0 ~ /^[[:space:]]*window\.setInterval\(get_memory, 4000\);[[:space:]]*$/)
-                    print "        window.setInterval(get_system_status, 1000);"
+                    print "        start_app_status_polling();"
             }
         ' "$TPL" > "$tmp_ready"
         cp "$tmp_ready" "$TPL"
@@ -6955,7 +7236,7 @@ EOF_APPCENTER_EMPTY_STATE_JS
 
     awk '
         {
-            gsub(/window\.setInterval\(get_system_status, 5000\)/, "window.setInterval(get_system_status, 1000)")
+            gsub(/window\.setInterval\(get_system_status, (1000|5000|6000)\)/, "window.setInterval(get_system_status, 2000)")
             print
         }
     ' "$TPL" > "$tmp_ready"
@@ -6978,7 +7259,8 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'render_app_status_panel(data);' '应用商店右侧系统状态面板挂载'
     verify_template_marker 'function build_app_empty_state' '应用商店空列表提示'
     verify_template_marker 'build_app_empty_state("暂无已安装应用")' '应用商店已安装空列表提示'
-    verify_template_marker 'window.setInterval(get_system_status, 1000)' '应用商店系统状态刷新定时器'
+    verify_template_marker 'APP_STATUS_INTERVAL = 2000' '应用商店系统状态两秒采样'
+    verify_template_marker 'start_app_status_polling();' '应用商店系统状态刷新入口'
 }
 
 install_appcenter_polish() {
@@ -7699,6 +7981,21 @@ selfcheck_appcenter_route_matches() {
         esac
     done)"
 
+    if [ "$plugin_name" = "${DDNSGO_APP_NAME:-DDNS-GO}" ]; then
+        parent_sec_list="$(uci show appcenter 2>/dev/null | while IFS= read -r line; do
+            case "$line" in
+                "appcenter.@package_list"*".parent='${plugin_name}'"|"appcenter.cfg"*".parent='${plugin_name}'")
+                    sec="${line#appcenter.}"
+                    sec="${sec%%.*}"
+                    printf '%s\n' "$sec"
+                    ;;
+            esac
+        done)"
+        if [ -n "$parent_sec_list" ]; then
+            sec_list="$(printf '%s\n%s\n' "$sec_list" "$parent_sec_list" | sed '/^$/d' | sort -u)"
+        fi
+    fi
+
     [ -n "$sec_list" ] || return 1
 
     for sec in $sec_list; do
@@ -7711,6 +8008,7 @@ selfcheck_appcenter_route_matches() {
             luci-app-openclash) [ "$actual_controller" = "/usr/lib/lua/luci/controller/openclash.lua" ] && return 0 ;;
             luci-app-adguardhome) [ "$actual_controller" = "/usr/lib/lua/luci/controller/AdGuardHome.lua" ] && return 0 ;;
             OpenVPN) [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && return 0 ;;
+            DDNS-GO) [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && return 0 ;;
         esac
     done
     return 1
@@ -7722,6 +8020,20 @@ selfcheck_print_appcenter_route_state() {
     expect_route="$3"
 
     sec="$(find_uci_section package_list "$plugin_name")"
+    if [ -z "$sec" ] && [ "$plugin_name" = "${DDNSGO_APP_NAME:-DDNS-GO}" ]; then
+        sec="$(uci show appcenter 2>/dev/null | while IFS= read -r line; do
+            case "$line" in
+                "appcenter.@package_list"*".parent='${plugin_name}'"|"appcenter.cfg"*".parent='${plugin_name}'")
+                    candidate="${line#appcenter.}"
+                    candidate="${candidate%%.*}"
+                    if [ "$(uci -q get "appcenter.$candidate" 2>/dev/null || true)" = "package_list" ]; then
+                        printf '%s\n' "$candidate"
+                        break
+                    fi
+                    ;;
+            esac
+        done)"
+    fi
     if [ -z "$sec" ]; then
         log "应用商店: $label = 缺失"
         return 0
@@ -7747,6 +8059,12 @@ selfcheck_print_appcenter_route_state() {
                 ;;
             OpenVPN)
                 [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && {
+                    log "应用商店: $label = 正常 (controller fallback)"
+                    return 0
+                }
+                ;;
+            DDNS-GO)
+                [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && {
                     log "应用商店: $label = 正常 (controller fallback)"
                     return 0
                 }
@@ -8293,7 +8611,7 @@ run_openlist_cdn_selfcheck() {
     if [ -z "$openlist_probe_urls" ]; then
         log "CDN:      OpenList = 下载地址解析失败"
         set_last_selfcheck_status FAIL 1 0
-        return 1
+        return 0
     fi
 
     rank_url_list_hosts "openlist-unified" "OpenList GitHub 官方" "$OPENLIST_GITHUB_OFFICIAL_PROBE_URLS" "$openlist_probe_urls"
@@ -8311,7 +8629,7 @@ run_easytier_cdn_selfcheck() {
     if [ -z "$easytier_probe_urls" ]; then
         log "CDN:      $EASYTIER_DISPLAY_NAME = 下载地址解析失败"
         set_last_selfcheck_status FAIL 1 0
-        return 1
+        return 0
     fi
 
     rank_url_list_hosts "easytier-unified" "$EASYTIER_DISPLAY_NAME GitHub 官方" "$EASYTIER_GITHUB_OFFICIAL_PROBE_URLS" "$easytier_probe_urls"
@@ -8332,14 +8650,14 @@ run_feed_package_cdn_selfcheck() {
     if [ ! -f "$FEEDS" ]; then
         log "CDN:      $probe_label = 软件源文件缺失"
         set_last_selfcheck_status FAIL 1 0
-        return 1
+        return 0
     fi
 
     probe_meta="$(resolve_package_meta_any_feed "$probe_package" 2>/dev/null || true)"
     if [ -z "$probe_meta" ]; then
         log "CDN:      $probe_label = 无法从当前软件源解析"
         set_last_selfcheck_status FAIL 1 0
-        return 1
+        return 0
     fi
 
     probe_feed_name="${probe_meta%%|*}"
@@ -8351,7 +8669,7 @@ run_feed_package_cdn_selfcheck() {
     if [ -z "$probe_urls" ]; then
         log "CDN:      $probe_label = 下载地址生成失败（$probe_feed_name）"
         set_last_selfcheck_status FAIL 1 0
-        return 1
+        return 0
     fi
 
     rank_url_list_hosts "$probe_prefix" "$probe_label" "$probe_urls"
@@ -8365,15 +8683,1157 @@ run_feed_package_cdn_selfcheck() {
     fi
 }
 
+unified_num_or_zero() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            printf '%s\n' '0'
+            ;;
+        *)
+            printf '%s\n' "$1"
+            ;;
+    esac
+}
+
+unified_health_mem_kib() {
+    mem_key="$1"
+    awk -v key="$mem_key" '$1 == key ":" { print $2; exit }' /proc/meminfo 2>/dev/null || true
+}
+
+unified_health_kib_display() {
+    kib_value="$(unified_num_or_zero "${1:-}")"
+    mib_value="$(( (kib_value + 1023) / 1024 ))"
+    format_mib_or_gib "$mib_value" 2>/dev/null || printf '%sM' "$mib_value"
+}
+
+unified_health_path_free_kib() {
+    target_path="$1"
+    [ -e "$target_path" ] || return 1
+    df -kP "$target_path" 2>/dev/null | awk 'NR == 2 { print $4; exit }'
+}
+
+unified_health_mount_type() {
+    mount_path="$1"
+    awk -v path="$mount_path" '$2 == path { print $3; exit }' /proc/mounts 2>/dev/null || true
+}
+
+unified_health_print_path_usage() {
+    path_label="$1"
+    target_path="$2"
+    [ -e "$target_path" ] || {
+        log "存储:   $path_label = 不存在 ($target_path)"
+        return 1
+    }
+
+    df_line="$(df -kP "$target_path" 2>/dev/null | awk 'NR == 2 { print $2 "|" $3 "|" $4 "|" $5 "|" $6; exit }' || true)"
+    [ -n "$df_line" ] || {
+        log "存储:   $path_label = 无法读取 ($target_path)"
+        return 1
+    }
+
+    df_total_kib="${df_line%%|*}"
+    df_rest="${df_line#*|}"
+    df_used_kib="${df_rest%%|*}"
+    df_rest="${df_rest#*|}"
+    df_avail_kib="${df_rest%%|*}"
+    df_rest="${df_rest#*|}"
+    df_used_pct="${df_rest%%|*}"
+    df_mount="${df_rest#*|}"
+    df_type="$(unified_health_mount_type "$df_mount")"
+    [ -n "$df_type" ] || df_type='未知'
+
+    if [ -w "$target_path" ]; then
+        writable_state='可写'
+    else
+        writable_state='不可写'
+    fi
+
+    log "存储:   $path_label = 可用 $(unified_health_kib_display "$df_avail_kib") / 总 $(unified_health_kib_display "$df_total_kib") (${df_used_pct:-?} 已用, mount=$df_mount, type=$df_type, $writable_state)"
+}
+
+unified_detect_model_name() {
+    if [ -n "${CURRENT_DETECTED_MODEL:-}" ]; then
+        printf '%s\n' "$CURRENT_DETECTED_MODEL"
+        return 0
+    fi
+    normalize_nradio_model "$(detect_board_model_raw)" "$(detect_board_name_raw)" "$(detect_board_compatible_raw)"
+}
+
+unified_detect_arch_name() {
+    arch_name="$(opkg print-architecture 2>/dev/null | awk '$1 == "arch" && $2 != "all" { print $2; exit }' || true)"
+    [ -n "$arch_name" ] || arch_name="$(uname -m 2>/dev/null || true)"
+    printf '%s\n' "${arch_name:-未知}"
+}
+
+unified_first_dns_servers() {
+    for dns_file in /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf.auto /etc/resolv.conf; do
+        [ -f "$dns_file" ] || continue
+        dns_text="$(awk '$1 == "nameserver" && $2 != "" { print $2 }' "$dns_file" 2>/dev/null | sed -n '1,3p' | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+        [ -n "$dns_text" ] && {
+            printf '%s\n' "$dns_text"
+            return 0
+        }
+    done
+    printf '%s\n' ''
+}
+
+unified_default_gateway_summary() {
+    ip route show default 2>/dev/null | sed -n '1,3p' | tr '\n' ';' | sed 's/;$/ /; s/[[:space:]]\+/ /g; s/^ //; s/ $//' || true
+}
+
+run_unified_system_health_summary() {
+    health_warnings=0
+    detected_model="$(unified_detect_model_name 2>/dev/null || true)"
+    [ -n "$detected_model" ] || detected_model='未知'
+    nros_revision="$(detect_nros_revision 2>/dev/null || true)"
+    arch_name="$(unified_detect_arch_name)"
+    kernel_name="$(uname -r 2>/dev/null || true)"
+    mem_total_kib="$(unified_num_or_zero "$(unified_health_mem_kib MemTotal)")"
+    mem_available_kib="$(unified_num_or_zero "$(unified_health_mem_kib MemAvailable)")"
+    [ "$mem_available_kib" -gt 0 ] 2>/dev/null || mem_available_kib="$(unified_num_or_zero "$(unified_health_mem_kib MemFree)")"
+    swap_total_kib="$(unified_num_or_zero "$(unified_health_mem_kib SwapTotal)")"
+    swap_free_kib="$(unified_num_or_zero "$(unified_health_mem_kib SwapFree)")"
+    dns_servers="$(unified_first_dns_servers)"
+    gateway_text="$(unified_default_gateway_summary)"
+
+    selfcheck_print_header "系统体检汇总"
+    log "系统:   机型=${detected_model} NROS=${nros_revision:-未知} 架构=${arch_name} kernel=${kernel_name:-未知}"
+    log "内存:   total=$(unified_health_kib_display "$mem_total_kib") available=$(unified_health_kib_display "$mem_available_kib") swap_total=$(unified_health_kib_display "$swap_total_kib") swap_free=$(unified_health_kib_display "$swap_free_kib")"
+    swap_lines="$(awk 'NR > 1 { print $1 "(" $3 "K used/" $4 "K free)" }' /proc/swaps 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+    if [ -n "$swap_lines" ]; then
+        log "swap:   ${swap_lines:-未启用}"
+    else
+        log "swap:   未启用"
+    fi
+
+    unified_health_print_path_usage "/tmp" "/tmp" || health_warnings=$((health_warnings + 1))
+    unified_health_print_path_usage "/overlay" "/overlay" || health_warnings=$((health_warnings + 1))
+    if [ -d /mnt/app_data ]; then
+        unified_health_print_path_usage "/mnt/app_data" "/mnt/app_data" || health_warnings=$((health_warnings + 1))
+    else
+        log "存储:   /mnt/app_data = 不存在"
+    fi
+
+    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    if [ -n "$storage_mount" ]; then
+        unified_health_print_path_usage "存储卡" "$storage_mount" || health_warnings=$((health_warnings + 1))
+    else
+        log "存储:   存储卡 = 未检测到"
+    fi
+
+    log "网络:   DNS=${dns_servers:-未检测到} 默认网关=${gateway_text:-未检测到}"
+    [ -n "$dns_servers" ] || health_warnings=$((health_warnings + 1))
+    [ -n "$gateway_text" ] || health_warnings=$((health_warnings + 1))
+    [ "$mem_available_kib" -ge 65536 ] 2>/dev/null || health_warnings=$((health_warnings + 1))
+
+    if [ "$health_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$health_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+run_unified_big_package_risk_check() {
+    risk_warnings=0
+    detected_model="$(unified_detect_model_name 2>/dev/null || true)"
+    mem_available_kib="$(unified_num_or_zero "$(unified_health_mem_kib MemAvailable)")"
+    [ "$mem_available_kib" -gt 0 ] 2>/dev/null || mem_available_kib="$(unified_num_or_zero "$(unified_health_mem_kib MemFree)")"
+    swap_free_kib="$(unified_num_or_zero "$(unified_health_mem_kib SwapFree)")"
+    work_mem_kib="$((mem_available_kib + swap_free_kib))"
+    tmp_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /tmp 2>/dev/null || true)")"
+    overlay_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /overlay 2>/dev/null || true)")"
+    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    github_code="$(curl -L -m 8 -s -o /dev/null -w '%{http_code}' https://github.com/ 2>/dev/null || true)"
+
+    selfcheck_print_header "大包安装风险检查"
+    log "说明:   只读评估 OpenList / AdGuardHome / OpenVPN 这类大文件安装前风险，不安装、不改配置"
+    log "资源:   可用内存+swap=$(unified_health_kib_display "$work_mem_kib") /tmp 可用=$(unified_health_kib_display "$tmp_free_kib") /overlay 可用=$(unified_health_kib_display "$overlay_free_kib")"
+
+    case "$github_code" in
+        200|301|302|403)
+            log "网络:   GitHub 连通性 = 可达 (HTTP $github_code)"
+            ;;
+        *)
+            log "网络:   GitHub 连通性 = 异常或超时 (HTTP ${github_code:-000})"
+            risk_warnings=$((risk_warnings + 1))
+            ;;
+    esac
+
+    if [ "$work_mem_kib" -lt 262144 ] 2>/dev/null; then
+        log "风险:   可用内存+swap 低于 256M，文件过大时可能下载、校验或解压失败，甚至被系统 Killed"
+        risk_warnings=$((risk_warnings + 1))
+    fi
+    if [ "$tmp_free_kib" -lt 98304 ] 2>/dev/null; then
+        log "风险:   /tmp 可用空间低于 96M，大包落在 /tmp 时容易失败"
+        risk_warnings=$((risk_warnings + 1))
+    fi
+    if [ "$overlay_free_kib" -lt 65536 ] 2>/dev/null; then
+        log "风险:   /overlay 可用空间低于 64M，插件文件写入空间偏紧"
+        risk_warnings=$((risk_warnings + 1))
+    fi
+
+    if [ "$detected_model" = 'NRadio_C2000MAX' ]; then
+        if [ -n "$storage_mount" ] && [ -w "$storage_mount" ]; then
+            log "OpenList: C2000MAX 文件过大风险已降级：安装链会使用 lite 包，并把下载包与解压目录放到存储卡 ($storage_mount)"
+        else
+            log "OpenList: 高风险：C2000MAX 未检测到可写存储卡，文件过大时可能下载失败、解压失败或被系统 Killed"
+            risk_warnings=$((risk_warnings + 1))
+        fi
+    else
+        log "OpenList: 当前机型沿用常规安装路径；如遇文件过大或内存紧张，建议先扩容 swap 并清理 /tmp"
+    fi
+
+    [ -f "$FEEDS" ] && log "OpenVPN: 软件源文件存在 ($FEEDS)" || {
+        log "OpenVPN: 软件源文件缺失，后续依赖解析可能失败"
+        risk_warnings=$((risk_warnings + 1))
+    }
+    log "AdGuardHome: 将重点受 GitHub/CDN、/overlay 空间和运行内存影响"
+
+    if [ "$risk_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$risk_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_preflight_warn() {
+    log "$1"
+    UNIFIED_PREFLIGHT_WARNINGS=$((UNIFIED_PREFLIGHT_WARNINGS + 1))
+}
+
+unified_preflight_check_tool() {
+    tool_name="$1"
+    if command -v "$tool_name" >/dev/null 2>&1; then
+        log "预检:   tool $tool_name = 存在"
+    else
+        unified_preflight_warn "预检:   tool $tool_name = 缺失，部分安装或诊断步骤可能失败"
+    fi
+}
+
+unified_preflight_check_space() {
+    space_label="$1"
+    space_path="$2"
+    min_mib="$3"
+
+    free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib "$space_path" 2>/dev/null || true)")"
+    need_kib=$((min_mib * 1024))
+    if [ "$free_kib" -ge "$need_kib" ] 2>/dev/null; then
+        log "预检:   $space_label = 可用 $(unified_health_kib_display "$free_kib")，满足建议值 ${min_mib}M"
+    else
+        unified_preflight_warn "预检:   $space_label = 可用 $(unified_health_kib_display "$free_kib")，低于建议值 ${min_mib}M，文件过大时可能失败"
+    fi
+}
+
+unified_preflight_check_urls() {
+    source_label="$1"
+    source_urls="$2"
+
+    if [ -n "$source_urls" ]; then
+        log "预检:   $source_label 下载源 = $(summarize_url_hosts $source_urls)"
+    else
+        unified_preflight_warn "预检:   $source_label 下载源 = 未解析"
+    fi
+}
+
+unified_preflight_check_feed_package() {
+    package_label="$1"
+    package_name="$2"
+
+    installed_version="$(get_installed_package_version "$package_name" 2>/dev/null || true)"
+    if [ -n "$installed_version" ]; then
+        log "预检:   $package_label = 已安装 ($package_name $installed_version)"
+        return 0
+    fi
+
+    if [ ! -f "$FEEDS" ]; then
+        unified_preflight_warn "预检:   $package_label = 软件源文件缺失，无法解析 $package_name"
+        return 0
+    fi
+
+    package_meta="$(resolve_package_meta_any_feed "$package_name" 2>/dev/null || true)"
+    if [ -n "$package_meta" ]; then
+        package_feed="${package_meta%%|*}"
+        package_rest="${package_meta#*|}"
+        package_rest="${package_rest#*|}"
+        package_file="${package_rest%%|*}"
+        package_version="${package_meta##*|}"
+        log "预检:   $package_label = 可解析 ($package_name ${package_version:-unknown}, feed=$package_feed, file=$package_file)"
+    else
+        unified_preflight_warn "预检:   $package_label = 当前软件源无法解析 $package_name"
+    fi
+}
+
+run_unified_install_preflight_check() {
+    UNIFIED_PREFLIGHT_WARNINGS=0
+    detected_model="$(unified_detect_model_name 2>/dev/null || true)"
+    target_arch="$(get_primary_arch 2>/dev/null || true)"
+    [ -n "$target_arch" ] || target_arch="$(unified_detect_arch_name)"
+    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    openlist_preflight_asset="$OPENLIST_ASSET_NAME"
+
+    selfcheck_print_header "安装前一键预检"
+    log "说明:   只读预检下载源、架构、依赖源、空间和基础工具，不安装、不写配置"
+    log "环境:   机型=${detected_model:-未知} 架构=${target_arch:-未知}"
+
+    for tool_name in uci opkg curl tar gzip awk df; do
+        unified_preflight_check_tool "$tool_name"
+    done
+
+    unified_preflight_check_space "/tmp" "/tmp" 128
+    unified_preflight_check_space "/overlay" "/overlay" 64
+    if [ "${detected_model:-}" = 'NRadio_C2000MAX' ]; then
+        if [ -n "$storage_mount" ]; then
+            unified_preflight_check_space "C2000MAX 存储卡" "$storage_mount" 256
+            openlist_preflight_asset="openlist-linux-musl-arm64-lite.tar.gz"
+            log "预检:   OpenList = C2000MAX 将使用 lite 包并落到存储卡，降低文件过大和 OOM 风险"
+        else
+            unified_preflight_warn "预检:   OpenList = C2000MAX 未检测到存储卡，文件过大时可能下载失败、解压失败或被系统 Killed"
+        fi
+    fi
+
+    unified_preflight_check_urls "OpenList" "https://github.com/OpenListTeam/OpenList/releases/latest/download/${openlist_preflight_asset} https://api.github.com/repos/OpenListTeam/OpenList/releases/latest https://release-assets.githubusercontent.com/"
+    unified_preflight_check_urls "AdGuardHome" "$ADGUARDHOME_IPK_URLS"
+    unified_preflight_check_urls "DDNS-GO" "$DDNSGO_DOWNLOAD_URLS"
+    unified_preflight_check_urls "MosDNS" "$MOSDNS_DOWNLOAD_URLS"
+
+    unified_preflight_check_feed_package "OpenVPN LuCI" "luci-app-openvpn"
+    unified_preflight_check_feed_package "OpenVPN 核心" "openvpn-openssl"
+    unified_preflight_check_feed_package "OpenVPN LZO" "liblzo2"
+    unified_preflight_check_feed_package "ZeroTier" "$ZEROTIER_PACKAGE_NAME"
+
+    if [ "$target_arch" = "$DDNSGO_PACKAGE_ARCH" ]; then
+        log "预检:   DDNS-GO 架构 = 匹配 ($target_arch)"
+    else
+        unified_preflight_warn "预检:   DDNS-GO 架构 = 当前 $target_arch，内置包要求 $DDNSGO_PACKAGE_ARCH"
+    fi
+
+    if [ "$UNIFIED_PREFLIGHT_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_PREFLIGHT_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_any_path_present() {
+    for present_path in "$@"; do
+        [ -e "$present_path" ] && return 0
+    done
+    return 1
+}
+
+unified_matrix_service_state() {
+    init_script="$1"
+    [ -n "$init_script" ] || {
+        printf '%s\n' '-'
+        return 0
+    }
+    [ -x "$init_script" ] || {
+        printf '%s\n' '缺失'
+        return 0
+    }
+
+    if "$init_script" enabled >/dev/null 2>&1; then
+        enabled_state='开机=yes'
+    else
+        enabled_state='开机=no'
+    fi
+    service_status="$( ( "$init_script" status 2>/dev/null || true ) | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' )"
+    case "$service_status" in
+        *running*|1)
+            run_state='运行'
+            ;;
+        *)
+            run_state='停止'
+            ;;
+    esac
+    printf '%s\n' "$run_state/$enabled_state"
+}
+
+unified_matrix_appcenter_state() {
+    app_name="$1"
+    app_route="$2"
+
+    case "$app_name" in
+        '')
+            printf '%s\n' '-'
+            return 0
+            ;;
+        __webssh_template)
+            if grep -q 'name:"Web SSH"' "$TPL" 2>/dev/null && grep -q 'nradioadv/system/webssh' "$TPL" 2>/dev/null; then
+                printf '%s\n' '正常'
+            else
+                printf '%s\n' '异常'
+            fi
+            return 0
+            ;;
+    esac
+
+    if selfcheck_appcenter_route_matches "$app_name" "$app_route"; then
+        printf '%s\n' '正常'
+    else
+        printf '%s\n' '异常'
+    fi
+}
+
+unified_matrix_print_plugin() {
+    plugin_label="$1"
+    install_paths="$2"
+    init_script="$3"
+    route_path="$4"
+    app_name="$5"
+    app_route="$6"
+    installed_state='未安装'
+    installed_flag='0'
+
+    for install_path in $install_paths; do
+        if unified_any_path_present "$install_path"; then
+            installed_state='已安装'
+            installed_flag='1'
+            break
+        fi
+    done
+
+    service_state='-'
+    route_state='-'
+    app_state='-'
+
+    if [ "$installed_flag" = '1' ]; then
+        service_state="$(unified_matrix_service_state "$init_script")"
+        if [ -n "$route_path" ]; then
+            if selfcheck_luci_route_ok "$route_path"; then
+                route_state='正常'
+            else
+                route_state='异常'
+                UNIFIED_MATRIX_WARNINGS=$((UNIFIED_MATRIX_WARNINGS + 1))
+            fi
+        fi
+        app_state="$(unified_matrix_appcenter_state "$app_name" "$app_route")"
+        [ "$app_state" = '异常' ] && UNIFIED_MATRIX_WARNINGS=$((UNIFIED_MATRIX_WARNINGS + 1))
+        [ "$service_state" = '缺失' ] && UNIFIED_MATRIX_WARNINGS=$((UNIFIED_MATRIX_WARNINGS + 1))
+    fi
+
+    log "插件:   $plugin_label | 安装=$installed_state | 服务=$service_state | LuCI=$route_state | 应用商店=$app_state"
+}
+
+run_unified_plugin_health_matrix() {
+    UNIFIED_MATRIX_WARNINGS=0
+    selfcheck_print_header "插件健康矩阵"
+    log "说明:   只读列出安装状态、服务状态、LuCI 路由和应用商店入口；未安装的插件不计为异常"
+
+    unified_matrix_print_plugin "$OPENCLASH_DISPLAY_NAME" "/usr/lib/lua/luci/controller/openclash.lua /etc/config/openclash" "/etc/init.d/openclash" "admin/services/openclash" "luci-app-openclash" "admin/services/openclash"
+    unified_matrix_print_plugin "AdGuardHome" "/usr/lib/lua/luci/controller/AdGuardHome.lua /usr/bin/AdGuardHome/AdGuardHome" "/etc/init.d/AdGuardHome" "admin/services/AdGuardHome" "luci-app-adguardhome" "admin/services/AdGuardHome"
+    unified_matrix_print_plugin "OpenList" "$OPENLIST_BIN_PATH /usr/lib/lua/luci/controller/nradio_adv/openlist.lua" "/etc/init.d/openlist" "nradioadv/system/openlist/basic" "OpenList" "nradioadv/system/openlist/basic"
+    unified_matrix_print_plugin "MosDNS" "$MOSDNS_BIN $MOSDNS_CONTROLLER" "$MOSDNS_INIT" "nradioadv/system/mosdns/basic" "$MOSDNS_APP_NAME" "nradioadv/system/mosdns/basic"
+    unified_matrix_print_plugin "$DDNSGO_APP_NAME" "$DDNSGO_BIN_PATH $DDNSGO_CONTROLLER" "$DDNSGO_INIT_FILE" "$DDNSGO_ROUTE" "$DDNSGO_APP_NAME" "$DDNSGO_ROUTE"
+    unified_matrix_print_plugin "Web SSH / ttyd" "/usr/bin/ttyd /usr/lib/lua/luci/controller/nradio_adv/webssh.lua" "/etc/init.d/ttyd" "nradioadv/system/webssh" "__webssh_template" "nradioadv/system/webssh"
+    unified_matrix_print_plugin "OpenVPN" "/usr/sbin/openvpn /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" "/etc/init.d/openvpn" "nradioadv/system/openvpnfull" "OpenVPN" "nradioadv/system/openvpnfull"
+    unified_matrix_print_plugin "$EASYTIER_DISPLAY_NAME" "/usr/bin/easytier-core $EASYTIER_CONTROLLER" "/etc/init.d/easytier" "$EASYTIER_ROUTE" "$EASYTIER_DISPLAY_NAME" "$EASYTIER_ROUTE"
+    unified_matrix_print_plugin "ZeroTier" "/usr/sbin/zerotier-one $ZEROTIER_CONTROLLER" "/etc/init.d/zerotier" "$ZEROTIER_ROUTE" "ZeroTier" "$ZEROTIER_ROUTE"
+
+    if [ "$UNIFIED_MATRIX_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_MATRIX_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_appcenter_warn() {
+    log "$1"
+    UNIFIED_APPCENTER_WARNINGS=$((UNIFIED_APPCENTER_WARNINGS + 1))
+}
+
+run_unified_appcenter_consistency_scan() {
+    UNIFIED_APPCENTER_WARNINGS=0
+    appcenter_dump="$WORKDIR/appcenter.unified.dump"
+    appcenter_routes="$WORKDIR/appcenter.unified.routes"
+    appcenter_names="$WORKDIR/appcenter.unified.names"
+    appcenter_dup_routes="$WORKDIR/appcenter.unified.dup_routes"
+    appcenter_dup_names="$WORKDIR/appcenter.unified.dup_names"
+    : > "$appcenter_routes"
+    : > "$appcenter_names"
+
+    selfcheck_print_header "应用商店一致性扫描"
+    if ! uci show appcenter > "$appcenter_dump" 2>/dev/null; then
+        unified_appcenter_warn "应用商店: 无法读取 /etc/config/appcenter"
+        set_last_selfcheck_status WARN 0 "$UNIFIED_APPCENTER_WARNINGS"
+        return 0
+    fi
+
+    package_sections="$(awk -F= '$2 == "package_list" { sub(/^appcenter\./, "", $1); print $1 }' "$appcenter_dump" 2>/dev/null || true)"
+    package_count="$(awk -F= '$2 == "package" { count++ } END { print count + 0 }' "$appcenter_dump" 2>/dev/null || printf '0')"
+    list_count=0
+    route_count=0
+
+    for app_sec in $package_sections; do
+        list_count=$((list_count + 1))
+        app_name="$(uci -q get "appcenter.$app_sec.name" 2>/dev/null || true)"
+        app_pkg="$(uci -q get "appcenter.$app_sec.pkg_name" 2>/dev/null || true)"
+        app_parent="$(uci -q get "appcenter.$app_sec.parent" 2>/dev/null || true)"
+        app_route="$(uci -q get "appcenter.$app_sec.luci_module_route" 2>/dev/null || true)"
+        app_controller="$(uci -q get "appcenter.$app_sec.luci_module_file" 2>/dev/null || true)"
+
+        [ -n "$app_name" ] || unified_appcenter_warn "应用商店: $app_sec name 为空"
+        [ -n "$app_name" ] && printf '%s|%s\n' "$app_name" "$app_sec" >> "$appcenter_names"
+        if [ -n "$app_route" ]; then
+            route_count=$((route_count + 1))
+            printf '%s|%s\n' "$app_route" "$app_sec" >> "$appcenter_routes"
+        fi
+        [ -n "$app_controller" ] && [ -z "$app_route" ] && unified_appcenter_warn "应用商店: $app_sec controller 存在但 route 为空 ($app_name)"
+        [ -n "$app_route" ] && [ -z "$app_controller" ] && unified_appcenter_warn "应用商店: $app_sec route 存在但 controller 为空 ($app_name -> $app_route)"
+        if [ -n "$app_parent" ] && [ -z "$(find_uci_section package "$app_parent" 2>/dev/null || true)" ]; then
+            unified_appcenter_warn "应用商店: $app_sec parent=$app_parent 但缺少对应 package 主条目"
+        fi
+        [ -n "$app_pkg" ] || [ -n "$app_parent" ] || unified_appcenter_warn "应用商店: $app_sec pkg_name 与 parent 同时为空 ($app_name)"
+    done
+
+    if [ "$list_count" -eq 0 ]; then
+        unified_appcenter_warn "应用商店: 未发现 package_list 条目"
+    fi
+
+    cut -d'|' -f1 "$appcenter_routes" 2>/dev/null | sed '/^$/d' | sort | uniq -d > "$appcenter_dup_routes" || true
+    while IFS= read -r dup_route; do
+        [ -n "$dup_route" ] || continue
+        dup_secs="$(awk -F'|' -v route="$dup_route" '$1 == route { print $2 }' "$appcenter_routes" 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+        unified_appcenter_warn "应用商店: route 重复 ($dup_route) sections=${dup_secs:-未知}"
+    done < "$appcenter_dup_routes"
+
+    cut -d'|' -f1 "$appcenter_names" 2>/dev/null | sed '/^$/d' | sort | uniq -d > "$appcenter_dup_names" || true
+    while IFS= read -r dup_name; do
+        [ -n "$dup_name" ] || continue
+        dup_secs="$(awk -F'|' -v name="$dup_name" '$1 == name { print $2 }' "$appcenter_names" 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+        unified_appcenter_warn "应用商店: name 重复 ($dup_name) sections=${dup_secs:-未知}"
+    done < "$appcenter_dup_names"
+
+    log "应用商店: package=${package_count:-0} package_list=$list_count route=$route_count warnings=$UNIFIED_APPCENTER_WARNINGS"
+    if [ "$UNIFIED_APPCENTER_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_APPCENTER_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_port_warn() {
+    log "$1"
+    UNIFIED_PORT_WARNINGS=$((UNIFIED_PORT_WARNINGS + 1))
+}
+
+unified_listen_lines_for_port() {
+    listen_port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -lntup 2>/dev/null | awk -v port="$listen_port" '$0 ~ (":" port "[[:space:]]") { print }'
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -lntup 2>/dev/null | awk -v port="$listen_port" '$0 ~ (":" port "[[:space:]]") { print }'
+    else
+        return 1
+    fi
+}
+
+unified_port_has_process_detail() {
+    grep -Eq 'users:|/[[:alnum:]_.-]+'
+}
+
+unified_check_port_owner() {
+    port_label="$1"
+    port_number="$2"
+    expected_text="$3"
+    installed_paths="$4"
+    require_listen="$5"
+
+    [ -n "$port_number" ] || return 0
+    case "$port_number" in
+        ''|*[!0-9]*)
+            unified_port_warn "端口:   $port_label = 端口值异常 ($port_number)"
+            return 0
+            ;;
+    esac
+
+    installed_flag='0'
+    for installed_path in $installed_paths; do
+        [ -e "$installed_path" ] && installed_flag='1'
+    done
+
+    listen_lines="$(unified_listen_lines_for_port "$port_number" 2>/dev/null | sed -n '1,3p' || true)"
+    if [ -z "$listen_lines" ]; then
+        if [ "$installed_flag" = '1' ] && [ "$require_listen" = '1' ]; then
+            unified_port_warn "端口:   $port_label:$port_number = 未监听，插件已安装但服务可能未启动"
+        else
+            log "端口:   $port_label:$port_number = 空闲或未监听"
+        fi
+        return 0
+    fi
+
+    if [ "$installed_flag" = '0' ]; then
+        unified_port_warn "端口:   $port_label:$port_number = 已被占用，但未检测到对应插件，可能存在冲突: $(printf '%s\n' "$listen_lines" | sed -n '1p')"
+        return 0
+    fi
+
+    if [ -n "$expected_text" ] && ! printf '%s\n' "$listen_lines" | grep -F "$expected_text" >/dev/null 2>&1; then
+        if printf '%s\n' "$listen_lines" | unified_port_has_process_detail >/dev/null 2>&1; then
+            unified_port_warn "端口:   $port_label:$port_number = 被非预期进程占用，可能冲突: $(printf '%s\n' "$listen_lines" | sed -n '1p')"
+        else
+            log "端口:   $port_label:$port_number = 已监听，但系统未返回进程名"
+        fi
+        return 0
+    fi
+
+    log "端口:   $port_label:$port_number = 正常: $(printf '%s\n' "$listen_lines" | sed -n '1p')"
+}
+
+run_unified_port_conflict_check() {
+    UNIFIED_PORT_WARNINGS=0
+    adg_port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
+    [ -n "$adg_port" ] || adg_port='3000'
+    openlist_port="$(uci -q get openlist.main.port 2>/dev/null || true)"
+    [ -n "$openlist_port" ] || openlist_port='5244'
+    ttyd_port="$(get_ttyd_bind_value port 2>/dev/null || true)"
+    [ -n "$ttyd_port" ] || ttyd_port='7681'
+    ddnsgo_port="$(uci -q get ddns-go.config.port 2>/dev/null || true)"
+    [ -n "$ddnsgo_port" ] || ddnsgo_port='9876'
+    mosdns_port="$(uci -q get mosdns.main.listen_port 2>/dev/null || true)"
+    [ -n "$mosdns_port" ] || mosdns_port="$MOSDNS_PORT"
+
+    selfcheck_print_header "端口与服务冲突检查"
+    log "说明:   只读检查常见端口占用；已安装插件若被非预期进程占用会提示可能冲突"
+    unified_check_port_owner "AdGuardHome" "$adg_port" "AdGuardHome" "/usr/bin/AdGuardHome/AdGuardHome /usr/lib/lua/luci/controller/AdGuardHome.lua" 0
+    unified_check_port_owner "OpenList" "$openlist_port" "openlist" "$OPENLIST_BIN_PATH /usr/lib/lua/luci/controller/nradio_adv/openlist.lua" 0
+    unified_check_port_owner "Web SSH / ttyd" "$ttyd_port" "ttyd" "/usr/bin/ttyd /usr/lib/lua/luci/controller/nradio_adv/webssh.lua" 1
+    unified_check_port_owner "$DDNSGO_APP_NAME" "$ddnsgo_port" "ddns-go" "$DDNSGO_BIN_PATH $DDNSGO_CONTROLLER" 1
+    unified_check_port_owner "MosDNS" "$mosdns_port" "mosdns" "$MOSDNS_BIN $MOSDNS_CONTROLLER" 1
+    unified_check_port_owner "LuCI HTTP" "80" "uhttpd" "/etc/init.d/uhttpd" 0
+    unified_check_port_owner "LuCI HTTPS" "443" "uhttpd" "/etc/init.d/uhttpd" 0
+    unified_check_port_owner "SSH" "22" "dropbear" "/etc/init.d/dropbear /usr/sbin/sshd" 0
+    unified_check_port_owner "DNS" "53" "" "/etc/init.d/dnsmasq /usr/sbin/dnsmasq" 0
+
+    if [ "$UNIFIED_PORT_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_PORT_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_get_openclash_config_path() {
+    config_path="$(uci -q show openclash 2>/dev/null | awk -F"='" '$1 ~ /\.config_path$/ { value=$2; sub(/\047$/, "", value); print value; exit }' || true)"
+    if [ -n "$config_path" ] && [ -f "$config_path" ]; then
+        printf '%s\n' "$config_path"
+        return 0
+    fi
+
+    for candidate_path in /etc/openclash/config/*.yaml /etc/openclash/config/*.yml; do
+        [ -f "$candidate_path" ] || continue
+        printf '%s\n' "$candidate_path"
+        return 0
+    done
+    return 1
+}
+
+run_unified_openclash_rule_check() {
+    rule_warnings=0
+    openclash_config_path="$(unified_get_openclash_config_path 2>/dev/null || true)"
+    direct_provider_path="/etc/openclash/rule_provider/Direct / Domain"
+    custom_count=0
+    custom_codex_hit=0
+
+    selfcheck_print_header "$OPENCLASH_DISPLAY_NAME 规则检查"
+    if [ ! -f /etc/config/openclash ] && [ ! -d /etc/openclash ]; then
+        log "$OPENCLASH_DISPLAY_NAME: 未检测到配置目录，跳过规则检查"
+        set_last_selfcheck_status PASS 0 0
+        return 0
+    fi
+
+    if [ -n "$openclash_config_path" ]; then
+        log "配置:   当前配置文件 = $openclash_config_path"
+        if grep -F "Direct / Domain" "$openclash_config_path" >/dev/null 2>&1; then
+            log "规则:   当前配置已引用 Direct / Domain"
+        else
+            log "规则:   当前配置未发现 Direct / Domain 引用"
+            rule_warnings=$((rule_warnings + 1))
+        fi
+    else
+        log "配置:   未找到当前 $OPENCLASH_DISPLAY_NAME 配置文件"
+        rule_warnings=$((rule_warnings + 1))
+    fi
+
+    if [ -f "$direct_provider_path" ]; then
+        provider_size="$(wc -c < "$direct_provider_path" 2>/dev/null | tr -d ' ' || true)"
+        provider_lines="$(wc -l < "$direct_provider_path" 2>/dev/null | tr -d ' ' || true)"
+        log "Provider: Direct / Domain = 存在 (${provider_lines:-?} 行, ${provider_size:-?} bytes)"
+    else
+        log "Provider: Direct / Domain = 缺失 ($direct_provider_path)"
+        rule_warnings=$((rule_warnings + 1))
+    fi
+
+    for custom_file in /etc/openclash/custom/*; do
+        [ -f "$custom_file" ] || continue
+        custom_count=$((custom_count + 1))
+        grep -F 'codex.597995.xyz' "$custom_file" >/dev/null 2>&1 && custom_codex_hit=1
+    done
+    log "自定义: custom 规则文件数 = $custom_count"
+
+    codex_hit=0
+    [ -n "$openclash_config_path" ] && grep -F 'codex.597995.xyz' "$openclash_config_path" >/dev/null 2>&1 && codex_hit=1
+    [ -f "$direct_provider_path" ] && grep -F 'codex.597995.xyz' "$direct_provider_path" >/dev/null 2>&1 && codex_hit=1
+    [ "$custom_codex_hit" = '1' ] && codex_hit=1
+    if [ "$codex_hit" = '1' ]; then
+        log "关键域名: codex.597995.xyz = 已命中规则"
+    else
+        log "关键域名: codex.597995.xyz = 未命中；如需直连，请加入 Direct / Domain 或自定义直连规则"
+        rule_warnings=$((rule_warnings + 1))
+    fi
+
+    if [ "$rule_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$rule_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+hakimi_policy_label() {
+    case "$1" in
+        DIRECT)
+            printf '%s\n' 'DIRECT（直连）'
+            ;;
+        REJECT)
+            printf '%s\n' 'REJECT（拦截）'
+            ;;
+        *)
+            printf '%s\n' "$1"
+            ;;
+    esac
+}
+
+hakimi_build_policy_menu() {
+    config_path="$1"
+    out_file="$2"
+    raw_file="$WORKDIR/hakimi-policy-targets.raw"
+
+    : > "$raw_file"
+    printf '%s\n' 'DIRECT' 'REJECT' >> "$raw_file"
+    if [ -f "$config_path" ]; then
+        awk '
+            function trim(s) {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+                gsub(/^"|"$/, "", s)
+                return s
+            }
+            /^proxy-groups:[[:space:]]*$/ { in_pg = 1; next }
+            /^rules:[[:space:]]*$/ { in_rules = 1; in_pg = 0; next }
+            in_pg && /^[^[:space:]#][^:]*:/ { in_pg = 0 }
+            in_rules && /^[^[:space:]#][^:]*:/ { in_rules = 0 }
+            in_pg && /^[[:space:]]*-[[:space:]]*\{[[:space:]]*name:[[:space:]]*/ {
+                line = $0
+                sub(/^.*name:[[:space:]]*/, "", line)
+                sub(/,.*/, "", line)
+                gsub(/[{}]/, "", line)
+                line = trim(line)
+                if (line != "") print line
+                next
+            }
+            in_pg && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ {
+                line = $0
+                sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", line)
+                line = trim(line)
+                if (line != "") print line
+                next
+            }
+            in_rules && /^[[:space:]]*-[[:space:]]*/ {
+                line = $0
+                sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+                sub(/[[:space:]]+#.*/, "", line)
+                line = trim(line)
+                n = split(line, part, ",")
+                if (n < 2) next
+                target = trim(part[n])
+                if (target == "no-resolve" && n >= 3) target = trim(part[n - 1])
+                if (target != "" && target !~ /^\(/) print target
+            }
+        ' "$config_path" >> "$raw_file"
+    fi
+
+    awk 'NF && !seen[$0]++ { print }' "$raw_file" > "$out_file"
+}
+
+hakimi_print_policy_menu() {
+    list_file="$1"
+    idx=1
+
+    while IFS= read -r target_name; do
+        [ -n "$target_name" ] || continue
+        printf '%s. %s\n' "$idx" "$(hakimi_policy_label "$target_name")"
+        idx=$((idx + 1))
+    done < "$list_file"
+    printf '99. 手动输入策略名\n'
+    printf '0. 返回\n'
+}
+
+hakimi_select_policy_target() {
+    list_file="$1"
+    count="$(wc -l < "$list_file" 2>/dev/null | tr -d ' ' || printf 0)"
+
+    while :; do
+        printf '请选择要加入的分流目标数字: '
+        ui_read_line || die "input cancelled"
+        choice="$UI_READ_RESULT"
+        case "$choice" in
+            0)
+                return 1
+                ;;
+            99)
+                prompt_with_default "请输入策略名" ""
+                target_name="$PROMPT_RESULT"
+                case "$target_name" in
+                    ''|*,*)
+                        log "策略名为空或包含逗号，无法使用"
+                        continue
+                        ;;
+                esac
+                HAKIMI_SELECTED_TARGET="$target_name"
+                return 0
+                ;;
+            ''|*[!0-9]*)
+                log "请输入菜单中的数字"
+                ;;
+            *)
+                if [ "$choice" -ge 1 ] 2>/dev/null && [ "$choice" -le "$count" ] 2>/dev/null; then
+                    HAKIMI_SELECTED_TARGET="$(sed -n "${choice}p" "$list_file")"
+                    [ -n "$HAKIMI_SELECTED_TARGET" ] && return 0
+                fi
+                log "数字超出菜单范围"
+                ;;
+        esac
+    done
+}
+
+hakimi_is_ipv4() {
+    printf '%s\n' "$1" | awk -F. '
+        NF != 4 { exit 1 }
+        {
+            for (i = 1; i <= 4; i++) {
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+            }
+            exit 0
+        }'
+}
+
+hakimi_is_ipv4_cidr() {
+    value="$1"
+    addr="${value%/*}"
+    bits="${value#*/}"
+    [ "$addr" != "$value" ] || return 1
+    hakimi_is_ipv4 "$addr" || return 1
+    case "$bits" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$bits" -ge 0 ] 2>/dev/null && [ "$bits" -le 32 ] 2>/dev/null
+}
+
+hakimi_is_domain_name() {
+    value="$1"
+    case "$value" in
+        ''|*','*|*' '*|*'/'*|*'?'*|*'#'*|*'@'*|*':'*)
+            return 1
+            ;;
+        *.*)
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    printf '%s\n' "$value" | grep -Eq '^[A-Za-z0-9._-]+$'
+}
+
+hakimi_clean_rule_value() {
+    value="$1"
+    value="$(printf '%s\n' "$value" | sed 's/[[:space:]]//g; s/^https:\/\///; s/^http:\/\///; s/^\.//')"
+    case "$value" in
+        *:*)
+            ;;
+        *.*.*.*/*)
+            ;;
+        *'/'*)
+            value="${value%%/*}"
+            ;;
+    esac
+    printf '%s\n' "$value"
+}
+
+hakimi_is_ipv6_cidr_value() {
+    value="$1"
+    case "$value" in
+        *:*) ;;
+        *) return 1 ;;
+    esac
+    printf '%s\n' "$value" | grep -Eq '^[0-9A-Fa-f:.]+(/[0-9]+)?$' || return 1
+    case "$value" in
+        */*)
+            bits="${value#*/}"
+            case "$bits" in
+                ''|*[!0-9]*)
+                    return 1
+                    ;;
+            esac
+            [ "$bits" -ge 0 ] 2>/dev/null && [ "$bits" -le 128 ] 2>/dev/null
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+hakimi_build_rule_line() {
+    raw_value="$1"
+    target_name="$2"
+    rule_value="$(hakimi_clean_rule_value "$raw_value")"
+
+    case "$rule_value" in
+        '')
+            return 1
+            ;;
+        keyword:*)
+            keyword_value="${rule_value#keyword:}"
+            [ -n "$keyword_value" ] || return 1
+            HAKIMI_RULE_LINE="DOMAIN-KEYWORD,$keyword_value,$target_name"
+            HAKIMI_RULE_KEY="DOMAIN-KEYWORD,$keyword_value"
+            return 0
+            ;;
+        =*)
+            domain_value="${rule_value#=}"
+            hakimi_is_domain_name "$domain_value" || return 1
+            HAKIMI_RULE_LINE="DOMAIN,$domain_value,$target_name"
+            HAKIMI_RULE_KEY="DOMAIN,$domain_value"
+            return 0
+            ;;
+    esac
+
+    if hakimi_is_ipv4_cidr "$rule_value"; then
+        HAKIMI_RULE_LINE="IP-CIDR,$rule_value,$target_name,no-resolve"
+        HAKIMI_RULE_KEY="IP-CIDR,$rule_value"
+        return 0
+    fi
+    if hakimi_is_ipv4 "$rule_value"; then
+        HAKIMI_RULE_LINE="IP-CIDR,$rule_value/32,$target_name,no-resolve"
+        HAKIMI_RULE_KEY="IP-CIDR,$rule_value/32"
+        return 0
+    fi
+    case "$rule_value" in
+        *:*)
+            hakimi_is_ipv6_cidr_value "$rule_value" || return 1
+            case "$rule_value" in
+                */*) ipv6_value="$rule_value" ;;
+                *) ipv6_value="$rule_value/128" ;;
+            esac
+            HAKIMI_RULE_LINE="IP-CIDR6,$ipv6_value,$target_name,no-resolve"
+            HAKIMI_RULE_KEY="IP-CIDR6,$ipv6_value"
+            return 0
+            ;;
+    esac
+    if hakimi_is_domain_name "$rule_value"; then
+        HAKIMI_RULE_LINE="DOMAIN-SUFFIX,$rule_value,$target_name"
+        HAKIMI_RULE_KEY="DOMAIN-SUFFIX,$rule_value"
+        return 0
+    fi
+
+    return 1
+}
+
+hakimi_rule_exact_exists() {
+    rule_file="$1"
+    rule_line="$2"
+    [ -f "$rule_file" ] || return 1
+    grep -F -x -e "- $rule_line" -e "$rule_line" "$rule_file" >/dev/null 2>&1
+}
+
+hakimi_rule_conflicts() {
+    rule_file="$1"
+    rule_key="$2"
+    rule_line="$3"
+    [ -f "$rule_file" ] || return 1
+    awk -v key="$rule_key" -v exact1="- $rule_line" -v exact2="$rule_line" '
+        {
+            line = $0
+            sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+            sub(/[[:space:]]+#.*/, "", line)
+            split(line, part, ",")
+            k = part[1] "," part[2]
+            if (k == key && $0 != exact1 && line != exact2) print $0
+        }
+    ' "$rule_file"
+}
+
+hakimi_insert_custom_rule() {
+    rule_file="$1"
+    rule_line="$2"
+    tmp_file="$WORKDIR/hakimi-custom-rules.tmp"
+    backup_file_path=""
+
+    mkdir -p "$(dirname "$rule_file")" "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR" || die "创建哈基米自定义规则目录失败"
+    if [ -f "$rule_file" ]; then
+        backup_file_path="$OPENCLASH_CUSTOM_RULES_BACKUP_DIR/$(basename "$rule_file").$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now).bak"
+        cp "$rule_file" "$backup_file_path" || die "备份哈基米自定义规则失败"
+    else
+        printf '%s\n' 'rule-providers:' '' 'rules:' > "$rule_file" || die "创建哈基米自定义规则文件失败"
+    fi
+
+    awk -v rule="$rule_line" '
+        BEGIN { inserted = 0 }
+        /^rules:[[:space:]]*$/ {
+            print
+            if (!inserted) {
+                print "- " rule
+                inserted = 1
+            }
+            next
+        }
+        { print }
+        END {
+            if (!inserted) {
+                print ""
+                print "rules:"
+                print "- " rule
+            }
+        }
+    ' "$rule_file" > "$tmp_file" || die "写入哈基米自定义规则临时文件失败"
+    mv "$tmp_file" "$rule_file" || die "更新哈基米自定义规则文件失败"
+    [ -n "$backup_file_path" ] && log "备份:   $backup_file_path"
+}
+
+hakimi_enable_custom_rules() {
+    uci set openclash.config.enable_custom_clash_rules='1' >/dev/null 2>&1 || die "启用哈基米自定义规则失败"
+    uci commit openclash >/dev/null 2>&1 || die "保存哈基米自定义规则开关失败"
+}
+
+run_hakimi_easy_rule_helper() {
+    require_root
+    mkdir -p "$WORKDIR"
+
+    config_path="$(unified_get_openclash_config_path 2>/dev/null || true)"
+    [ -n "$config_path" ] || die "$OPENCLASH_DISPLAY_NAME 未找到当前 YAML 配置文件"
+    [ -f "$config_path" ] || die "$OPENCLASH_DISPLAY_NAME 当前 YAML 配置不存在: $config_path"
+
+    policy_file="$WORKDIR/hakimi-policy-targets.list"
+    hakimi_build_policy_menu "$config_path" "$policy_file"
+    [ -s "$policy_file" ] || die "$OPENCLASH_DISPLAY_NAME 未能从 YAML 解析出可用分流目标"
+
+    log "$OPENCLASH_DISPLAY_NAME 傻瓜分流助手"
+    log "配置:   $config_path"
+    log "说明:   机场订阅或在线订阅生成的 YAML 可能被更新覆盖，本助手只写入哈基米自定义规则文件"
+    log "说明:   默认域名使用 DOMAIN-SUFFIX；精确域名前加 =，关键词前加 keyword:"
+    log ""
+    log "可用分流目标:"
+    hakimi_print_policy_menu "$policy_file"
+    log ""
+
+    if ! hakimi_select_policy_target "$policy_file"; then
+        log "已返回"
+        return 2
+    fi
+
+    prompt_with_default "请输入域名、IP 或网段" ""
+    user_value="$PROMPT_RESULT"
+    if ! hakimi_build_rule_line "$user_value" "$HAKIMI_SELECTED_TARGET"; then
+        die "输入格式无法识别；示例：example.com、=www.example.com、keyword:google、1.2.3.4、1.2.3.0/24"
+    fi
+
+    log ""
+    log "准备添加规则:"
+    log "  $HAKIMI_RULE_LINE"
+    log "写入:   $OPENCLASH_CUSTOM_RULES_FILE"
+
+    if hakimi_rule_exact_exists "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_LINE"; then
+        hakimi_enable_custom_rules
+        log "结果:   相同规则已存在，未重复写入；已启用哈基米自定义规则"
+        return 0
+    fi
+
+    conflicts="$(hakimi_rule_conflicts "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_KEY" "$HAKIMI_RULE_LINE" 2>/dev/null || true)"
+    if [ -n "$conflicts" ]; then
+        log "冲突:   已存在同对象的其他分流规则:"
+        printf '%s\n' "$conflicts"
+        printf '是否仍然追加新规则？[y/N]: '
+        ui_read_line || die "input cancelled"
+        case "$UI_READ_RESULT" in
+            y|Y|yes|YES) ;;
+            *) log "已取消"; return 0 ;;
+        esac
+    fi
+
+    confirm_or_exit "确认写入 $OPENCLASH_DISPLAY_NAME 自定义规则吗？"
+    hakimi_insert_custom_rule "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_LINE"
+    hakimi_enable_custom_rules
+    log "结果:   已写入并启用哈基米自定义规则"
+
+    printf '是否现在重载 %s 使规则生效？[y/N]: ' "$OPENCLASH_DISPLAY_NAME"
+    ui_read_line || die "input cancelled"
+    case "$UI_READ_RESULT" in
+        y|Y|yes|YES)
+            [ -x /etc/init.d/openclash ] || die "$OPENCLASH_DISPLAY_NAME 服务脚本不存在"
+            /etc/init.d/openclash restart >/dev/null 2>&1 || die "$OPENCLASH_DISPLAY_NAME 重载失败"
+            log "结果:   $OPENCLASH_DISPLAY_NAME 已重载"
+            ;;
+        *)
+            log "提示:   已完成写入；稍后可在哈基米页面手动重载"
+            ;;
+    esac
+}
+
+run_unified_sanitized_diagnostic_summary() {
+    detected_model="$(unified_detect_model_name 2>/dev/null || true)"
+    nros_revision="$(detect_nros_revision 2>/dev/null || true)"
+    arch_name="$(unified_detect_arch_name)"
+    mem_available_kib="$(unified_num_or_zero "$(unified_health_mem_kib MemAvailable)")"
+    swap_free_kib="$(unified_num_or_zero "$(unified_health_mem_kib SwapFree)")"
+    tmp_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /tmp 2>/dev/null || true)")"
+    overlay_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /overlay 2>/dev/null || true)")"
+    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    openclash_config_path="$(unified_get_openclash_config_path 2>/dev/null || true)"
+
+    selfcheck_print_header "脱敏诊断摘要"
+    log "===== NRadio 脱敏诊断摘要开始 ====="
+    log "script=${SCRIPT_VERSION} date=${SCRIPT_RELEASE_DATE}"
+    log "model=${detected_model:-未知} nros=${nros_revision:-未知} arch=${arch_name}"
+    log "mem_available=$(unified_health_kib_display "$mem_available_kib") swap_free=$(unified_health_kib_display "$swap_free_kib")"
+    log "tmp_free=$(unified_health_kib_display "$tmp_free_kib") overlay_free=$(unified_health_kib_display "$overlay_free_kib") storage=${storage_mount:-未检测到}"
+    log "hakimi_config=${openclash_config_path:-未检测到}"
+    log "privacy=已避免输出 password/token/cookie/key/secret/jwt 等敏感字段"
+    log "===== NRadio 脱敏诊断摘要结束 ====="
+    set_last_selfcheck_status PASS 0 0
+}
+
 run_unified_test_mode() {
     require_root
     NRADIO_UNIFIED_FAILS=0
     NRADIO_UNIFIED_WARNS=0
     NRADIO_UNIFIED_PASSES=0
-    log "统一测试模式"
+    mkdir -p "$WORKDIR"
+    log "统一体检增强版"
     log "------"
-    log "备注:     this mode only probes CDN, routes and runtime state"
-    log "备注:     no package install will be performed; metadata/feed index probes may still run"
+    log "备注:     本模式只做只读诊断：系统资源、安装风险、插件状态、规则状态、CDN、路由与运行态"
+    log "备注:     不安装插件、不改配置；metadata/feed index probes may still run"
+    log ""
+
+    run_unified_system_health_summary
+    record_unified_selfcheck_summary "系统体检"
+    log ""
+    run_unified_big_package_risk_check
+    record_unified_selfcheck_summary "大包风险"
+    log ""
+    run_unified_install_preflight_check
+    record_unified_selfcheck_summary "安装前预检"
+    log ""
+    run_unified_plugin_health_matrix
+    record_unified_selfcheck_summary "插件矩阵"
+    log ""
+    run_unified_appcenter_consistency_scan
+    record_unified_selfcheck_summary "应用商店一致性"
+    log ""
+    run_unified_port_conflict_check
+    record_unified_selfcheck_summary "端口冲突"
+    log ""
+    run_unified_openclash_rule_check
+    record_unified_selfcheck_summary "$OPENCLASH_DISPLAY_NAME 规则"
+    log ""
+    run_unified_sanitized_diagnostic_summary
+    record_unified_selfcheck_summary "脱敏摘要"
     log ""
 
     selfcheck_print_header "CDN 测试"
@@ -9228,7 +10688,7 @@ end
 	var default_dashboard_<%=self.option%> = document.getElementById('default_dashboard_<%=self.option%>');
 	var delete_dashboard_<%=self.option%> = document.getElementById('delete_dashboard_<%=self.option%>');
 	XHR.get('<%=luci.dispatcher.build_url("admin", "services", "openclash", "dashboard_type")%>', null, function(x, status) {
-	      	if ( x && x.status == 200 ) {
+		if ( x && x.status == 200 ) {
 			if ( btn_type_<%=self.option%> == "Dashboard" ) {
 				if ( status.dashboard_type == "Meta" ) {
 					switch_dashboard_<%=self.option%>.innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Switch To Official Version%>" onclick="return switch_dashboard(this, btn_type_<%=self.option%>, \'Official\')"/>';
@@ -9248,7 +10708,7 @@ end
 			if ( btn_type_<%=self.option%> == "Metacubexd" ) {
 				switch_dashboard_<%=self.option%>.innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Update Metacubexd Version%>" onclick="return switch_dashboard(this, btn_type_<%=self.option%>, \'Official\')"/>';
 			}
-	      	if ( btn_type_<%=self.option%> == "Zashboard" ) {
+			if ( btn_type_<%=self.option%> == "Zashboard" ) {
 				switch_dashboard_<%=self.option%>.innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Update Zashboard Version%>" onclick="return switch_dashboard(this, btn_type_<%=self.option%>, \'Official\')"/>';
 			}
 
@@ -9283,7 +10743,7 @@ end
 						if ( name == "Dashboard" ) {
 							document.getElementById("switch_dashboard_"+name).innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Switch Successful%> - <%:Switch To Meta Version%>" onclick="return switch_dashboard(this, \'Dashboard\', \'Meta\')"/>';
 						}
-						else if ( name == "Yacd" ) 
+						else if ( name == "Yacd" )
 						{
 							document.getElementById("switch_dashboard_"+name).innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Switch Successful%> - <%:Switch To Meta Version%>" onclick="return switch_dashboard(this, \'Yacd\', \'Meta\')"/>';
 						}
@@ -9291,7 +10751,7 @@ end
 							document.getElementById("switch_dashboard_"+name).innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Update Successful%> - <%:Update Metacubexd Version%>" onclick="return switch_dashboard(this, \'Metacubexd\', \'Official\')"/>';
 						} else {
 							document.getElementById("switch_dashboard_"+name).innerHTML = '<input type="button" class="btn cbi-button cbi-button-reset" value="<%:Update Successful%> - <%:Update Zashboard Version%>" onclick="return switch_dashboard(this, \'Zashboard\', \'Official\')"/>';
-	            		}
+						}
 					}
 					document.getElementById("default_dashboard_"+name).firstElementChild.disabled = false;
 					document.getElementById("delete_dashboard_"+name).firstElementChild.disabled = false;
@@ -9310,7 +10770,7 @@ end
 			}
 		});
 		btn.disabled = false;
-		return false; 
+		return false;
 	}
 
 	function delete_dashboard(btn, name)
@@ -9331,7 +10791,7 @@ end
 				}
 			});
 		}
-		return false; 
+		return false;
 	}
 
 	function default_dashboard(btn, name)
@@ -9890,23 +11350,244 @@ local frame_url = base_url .. "/" .. tab
 %>
 <%+header%>
 <style>
-    .adg-wrap { margin-bottom: 20px; }
-    .adg-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 16px; }
-    .adg-tab { display: inline-block; padding: 8px 14px; border-bottom: 2px solid transparent; color: #666; cursor: pointer; }
-    .adg-tab.active { color: #0088cc; border-bottom-color: #0088cc; }
-    .adg-frame { width: 100%; min-height: 760px; border: 0; background: #fff; }
+    .adg-shell {
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 20px;
+        padding: 14px;
+        border: 1px solid rgba(76, 90, 118, 0.86);
+        border-radius: 14px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(35, 200, 228, 0.12), transparent 26%),
+            radial-gradient(circle at 0% 0%, rgba(100, 153, 255, 0.10), transparent 30%),
+            linear-gradient(180deg, rgba(33, 38, 52, 0.985), rgba(22, 26, 38, 0.985));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 24px 60px rgba(0,0,0,0.28);
+    }
+    .adg-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.05), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.03), transparent 24%);
+        pointer-events: none;
+    }
+    .adg-head {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 10px;
+    }
+    .adg-copy {
+        min-width: 0;
+    }
+    .adg-title {
+        margin: 0;
+        color: #f4f8ff;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.08;
+        letter-spacing: 0;
+    }
+    .adg-sub {
+        margin-top: 8px;
+        color: #a4b6d2;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .adg-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0;
+        padding: 4px;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 999px;
+        background: rgba(9, 13, 21, 0.24);
+    }
+    .adg-tab {
+        position: relative;
+        overflow: hidden;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 999px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)),
+            rgba(255,255,255,0.02);
+        color: #a8bcdb;
+        font-size: 12px;
+        text-decoration: none;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: transform 0.16s ease-out, border-color 0.16s ease-out, background 0.16s ease-out, box-shadow 0.16s ease-out, color 0.16s ease-out;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .adg-tab:focus-visible {
+        outline: 2px solid rgba(194, 248, 255, 0.70);
+        outline-offset: 3px;
+    }
+    .adg-tab:hover {
+        transform: translateY(-1px);
+        border-color: rgba(108, 162, 255, 0.26);
+        background:
+            radial-gradient(circle at top right, rgba(108, 162, 255, 0.14), transparent 42%),
+            linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.018)),
+            rgba(255,255,255,0.03);
+        color: #e8f2ff;
+        box-shadow: 0 12px 22px rgba(0,0,0,0.16);
+    }
+    .adg-tab.active {
+        border-color: rgba(54, 163, 255, 0.42);
+        background:
+            linear-gradient(180deg, rgba(42, 156, 255, 0.92), rgba(17, 119, 222, 0.88)),
+            rgba(255,255,255,0.03);
+        color: #f7fbff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 12px 24px rgba(17, 119, 222, 0.22);
+    }
+    .adg-tab.active::after {
+        content: "";
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 5px;
+        height: 2px;
+        border-radius: 999px;
+        background: rgba(210, 250, 255, 0.80);
+        pointer-events: none;
+    }
+    .adg-frame-wrap {
+        position: relative;
+        z-index: 1;
+        overflow: hidden;
+        min-height: 620px;
+        border: 1px solid rgba(78, 96, 131, 0.58);
+        border-top-color: rgba(47, 211, 238, 0.18);
+        border-radius: 13px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(35, 200, 228, 0.08), transparent 24%),
+            linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)),
+            rgba(10, 14, 22, 0.54);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 18px 40px rgba(0,0,0,0.18);
+    }
+    .adg-frame-wrap::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(90deg, transparent, rgba(255,255,255,0.035), transparent),
+            radial-gradient(circle at 50% 0%, rgba(47, 211, 238, 0.09), transparent 32%);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-22%);
+        transition: opacity 0.18s ease-out;
+    }
+    .adg-frame-wrap.adg-frame-loading::before {
+        opacity: 1;
+        animation: adgFrameLoading 1.2s ease-out infinite;
+    }
+    .adg-frame-wrap.adg-frame-loading::after {
+        content: "载入 AdGuardHome 页面";
+        position: absolute;
+        left: 50%;
+        top: 26px;
+        transform: translateX(-50%);
+        padding: 6px 12px;
+        border: 1px solid rgba(143, 164, 199, 0.22);
+        border-radius: 999px;
+        background: rgba(15, 21, 33, 0.82);
+        color: #a9bdd8;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.4;
+        pointer-events: none;
+        box-shadow: 0 10px 22px rgba(0,0,0,0.18);
+    }
+    .adg-frame {
+        width: 100%;
+        min-height: 700px;
+        border: 0;
+        display: block;
+        background: #111827;
+    }
+    @keyframes adgFrameLoading {
+        from {
+            transform: translateX(-32%);
+        }
+        to {
+            transform: translateX(32%);
+        }
+    }
+    @media (max-width: 720px) {
+        .adg-shell {
+            padding: 12px;
+            border-radius: 13px;
+        }
+        .adg-title {
+            font-size: 20px;
+        }
+        .adg-sub {
+            font-size: 12px;
+        }
+        .adg-tabs {
+            width: 100%;
+        }
+        .adg-tab {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+        .adg-frame {
+            min-height: 660px;
+        }
+    }
+    @media (max-width: 480px) {
+        .adg-tabs {
+            gap: 6px;
+            padding: 4px;
+        }
+        .adg-tab {
+            flex-basis: 0;
+            min-height: 38px;
+            padding: 0 8px;
+            font-size: 11px;
+        }
+        .adg-frame {
+            min-height: 620px;
+        }
+    }
 </style>
-<div class="cbi-map adg-wrap">
-    <h2 name="content">AdGuard Home</h2>
-    <div class="cbi-map-descr">OEM compatibility wrapper for AdGuard Home pages.</div>
-    <div class="adg-tabs">
-        <a class="adg-tab<%= tab == 'base' and ' active' or '' %>" data-tab="base" href="<%=base_url%>?tab=base">Base Setting</a>
-        <a class="adg-tab<%= tab == 'manual' and ' active' or '' %>" data-tab="manual" href="<%=base_url%>?tab=manual">Manual Config</a>
-        <a class="adg-tab<%= tab == 'log' and ' active' or '' %>" data-tab="log" href="<%=base_url%>?tab=log">Log</a>
+<div class="cbi-map adg-shell">
+    <div class="adg-head">
+        <div class="adg-copy">
+            <h2 name="content" class="adg-title">AdGuardHome</h2>
+            <div class="adg-sub">基础设置、手动配置和运行日志统一入口。</div>
+        </div>
+        <div class="adg-tabs">
+            <a class="adg-tab<%= tab == 'base' and ' active' or '' %>" data-tab="base" href="<%=base_url%>?tab=base">基础设置</a>
+            <a class="adg-tab<%= tab == 'manual' and ' active' or '' %>" data-tab="manual" href="<%=base_url%>?tab=manual">手动配置</a>
+            <a class="adg-tab<%= tab == 'log' and ' active' or '' %>" data-tab="log" href="<%=base_url%>?tab=log">运行日志</a>
+        </div>
     </div>
-    <iframe id="adg_frame" class="adg-frame" name="adg_frame" src="<%=frame_url%>" onload="adgAfterLoad()"></iframe>
+    <div class="adg-frame-wrap adg-frame-loading">
+        <iframe id="adg_frame" class="adg-frame" name="adg_frame" src="<%=frame_url%>" onload="adgAfterLoad()"></iframe>
+    </div>
 </div>
 <script>
+function adgMarkFrameLoaded() {
+    var wrap = document.querySelector('.adg-frame-wrap');
+    if (!wrap) return;
+    wrap.className = wrap.className.replace(/\s*adg-frame-loading\b/g, '');
+}
 function adgResizeFrame() {
     var frame = document.getElementById('adg_frame');
     if (!frame) return;
@@ -9917,6 +11598,32 @@ function adgResizeFrame() {
         var height = Math.max(h1, h2, 760);
         frame.style.height = height + 'px';
     } catch (e) {}
+}
+function adgInstallInnerSkin(d) {
+    var style;
+    if (!d || !d.head || d.getElementById('adg-wrapper-inner-skin')) return;
+    if (d.body) d.body.className += (d.body.className ? ' ' : '') + 'adg-embedded-page';
+    style = d.createElement('style');
+    style.id = 'adg-wrapper-inner-skin';
+    style.appendChild(d.createTextNode(
+        'html,body{background:#2e2e38!important;}' +
+        '.adg-embedded-page .container.body-container{max-width:none!important;}' +
+        '.adg-embedded-page .cbi-map{margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important;}' +
+        '.adg-embedded-page .cbi-map>h2,.adg-embedded-page .cbi-map>.cbi-map-descr{display:none!important;}' +
+        '.adg-embedded-page .cbi-section{position:relative!important;overflow:hidden!important;margin:0 0 12px!important;padding:16px 18px 15px!important;border:1px solid rgba(78,96,131,.72)!important;border-radius:14px!important;background:radial-gradient(circle at 100% 0%,rgba(34,211,238,.08),transparent 26%),linear-gradient(180deg,rgba(34,40,55,.985),rgba(23,28,40,.985))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 14px 30px rgba(0,0,0,.18)!important;}' +
+        '.adg-embedded-page .cbi-section legend,.adg-embedded-page .cbi-section h3{display:flex!important;align-items:center!important;gap:8px!important;padding:0 0 9px!important;color:#f3f7ff!important;font-size:16px!important;font-weight:800!important;letter-spacing:0!important;}' +
+        '.adg-embedded-page .cbi-section legend:before,.adg-embedded-page .cbi-section h3:before{content:"";width:15px;height:15px;border-radius:6px;background:linear-gradient(135deg,rgba(47,211,238,.88),rgba(108,162,255,.68));box-shadow:inset 0 1px 0 rgba(255,255,255,.22);flex:0 0 auto;}' +
+        '.adg-embedded-page .cbi-value{display:grid!important;grid-template-columns:minmax(160px,230px) minmax(0,1fr)!important;gap:7px 16px!important;align-items:start!important;padding:11px 0!important;border-top:1px solid rgba(255,255,255,.055)!important;}' +
+        '.adg-embedded-page .cbi-value-title{float:none!important;width:auto!important;max-width:none!important;margin:0!important;color:#dce9fd!important;font-size:13px!important;font-weight:800!important;line-height:1.34!important;letter-spacing:0!important;overflow-wrap:anywhere!important;}' +
+        '.adg-embedded-page .cbi-value-field{float:none!important;width:100%!important;max-width:680px!important;margin:0!important;padding:0!important;display:grid!important;gap:8px!important;}' +
+        '.adg-embedded-page input[type=text],.adg-embedded-page input[type=password],.adg-embedded-page select,.adg-embedded-page textarea{width:100%!important;min-height:42px!important;border:1px solid rgba(84,100,134,.9)!important;border-radius:12px!important;background:linear-gradient(180deg,rgba(34,39,54,.985),rgba(22,27,38,.985))!important;color:#eef4ff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 18px rgba(0,0,0,.12)!important;box-sizing:border-box!important;}' +
+        '.adg-embedded-page textarea{min-height:220px!important;font-family:Consolas,"Courier New",monospace!important;line-height:1.52!important;white-space:pre-wrap!important;overflow:auto!important;tab-size:4!important;}' +
+        '.adg-embedded-page input[type=submit],.adg-embedded-page input[type=button],.adg-embedded-page .cbi-button{min-height:40px!important;padding:0 16px!important;border:1px solid #39a0ff!important;border-radius:12px!important;background:linear-gradient(180deg,#2a9cff,#1177de)!important;color:#f0faff!important;font-weight:800!important;line-height:38px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 9px 18px rgba(26,124,215,.18)!important;}' +
+        '.adg-embedded-page .cbi-value-description{margin-top:3px!important;color:#9fb1cf!important;font-size:12px!important;line-height:1.52!important;overflow-wrap:anywhere!important;}' +
+        '.adg-embedded-page .cbi-page-actions{display:flex!important;justify-content:flex-end!important;gap:8px!important;flex-wrap:wrap!important;padding:12px 0 0!important;}' +
+        '@media(max-width:720px){.adg-embedded-page .cbi-section{padding:14px 12px!important;border-radius:12px!important}.adg-embedded-page .cbi-value{grid-template-columns:1fr!important}.adg-embedded-page .cbi-value-field{max-width:none!important}.adg-embedded-page input[type=submit],.adg-embedded-page input[type=button],.adg-embedded-page .cbi-button{width:100%!important}}'
+    ));
+    d.head.appendChild(style);
 }
 function adgHideInnerChrome() {
     var frame = document.getElementById('adg_frame');
@@ -9941,13 +11648,20 @@ function adgHideInnerChrome() {
         var content = d.querySelector('.main-content');
         if (content) { content.style.width = '100%'; content.style.margin = '0'; content.style.padding = '0'; }
         if (d.body) { d.body.style.marginTop = '0'; d.body.style.paddingTop = '0'; }
+        adgInstallInnerSkin(d);
     } catch (e) {}
 }
 function adgAfterLoad() {
     adgHideInnerChrome();
     adgResizeFrame();
+    adgMarkFrameLoaded();
     setTimeout(function() { adgHideInnerChrome(); adgResizeFrame(); }, 300);
+    setTimeout(function() { adgHideInnerChrome(); adgResizeFrame(); }, 900);
+    setTimeout(function() { adgHideInnerChrome(); adgResizeFrame(); }, 1800);
 }
+window.addEventListener('resize', function() {
+    setTimeout(adgResizeFrame, 120);
+});
 </script>
 <%+footer%>
 EOF
@@ -10081,6 +11795,8 @@ function adgBuildAreaPath(values, width, height, padding) {
 function adgApplyChart(lineId, areaId, values) {
 	var lineNode = document.getElementById(lineId);
 	var areaNode = document.getElementById(areaId);
+	var chartNode = lineNode ? lineNode.parentNode : null;
+	var shellNode = chartNode && chartNode.parentNode ? chartNode.parentNode : null;
 	var width = 360;
 	var height = 110;
 	var padding = 8;
@@ -10092,6 +11808,15 @@ function adgApplyChart(lineId, areaId, values) {
 	}
 	if (areaNode) {
 		areaNode.setAttribute("d", area || "");
+	}
+	if (chartNode && chartNode.className && typeof chartNode.className.baseVal === "string") {
+		chartNode.className.baseVal = chartNode.className.baseVal.replace(/\s*adg-chart-empty\b/g, "");
+	}
+	if (shellNode && typeof shellNode.className === "string") {
+		shellNode.className = shellNode.className.replace(/\s*adg-chart-empty\b/g, "");
+		if (!values || !values.length) {
+			adgAddClass(shellNode, "adg-chart-empty");
+		}
 	}
 }
 
@@ -10782,6 +12507,15 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		font-weight: 800;
 	}
 
+	.adg-action-panel .cbi-button:first-child {
+		border-color: rgba(47, 211, 238, 0.32);
+		background:
+			linear-gradient(180deg, rgba(47, 211, 238, 0.18), rgba(47, 211, 238, 0.07)),
+			rgba(15, 22, 34, 0.72);
+		color: #c8fbff;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 22px rgba(5, 28, 38, 0.22);
+	}
+
 	.adg-inline-note {
 		position: relative;
 		z-index: 1;
@@ -11075,6 +12809,8 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
         font-weight: 800;
         letter-spacing: -0.02em;
         text-shadow: 0 14px 30px rgba(0,0,0,0.34);
+		font-variant-numeric: tabular-nums;
+		font-feature-settings: "tnum" 1;
     }
 
 	.adg-card-queries .adg-dashboard-number {
@@ -11207,6 +12943,23 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		z-index: 1;
 		width: 100%;
 		height: 100%;
+	}
+
+	.adg-chart-empty::after {
+		content: "等待统计数据";
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		padding: 5px 10px;
+		border: 1px solid rgba(143, 164, 199, 0.22);
+		border-radius: 999px;
+		background: rgba(15, 21, 33, 0.70);
+		color: #8fa4c7;
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0;
+		pointer-events: none;
 	}
 
 	.adg-chart path {
@@ -11892,6 +13645,14 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		outline: 0;
 	}
 
+	.cbi-map input[type="submit"]:focus-visible,
+	.cbi-map input[type="button"]:focus-visible,
+	.cbi-map .cbi-button:focus-visible,
+	.adg-action-panel .cbi-button:focus-visible {
+		outline: 2px solid rgba(194, 248, 255, 0.72);
+		outline-offset: 3px;
+	}
+
 	.cbi-map select:focus {
 		background-image:
 			radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.11), transparent 30%),
@@ -12018,6 +13779,13 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		box-shadow: none;
 		cursor: not-allowed;
 		opacity: 0.78;
+	}
+
+	.adg-action-panel .cbi-button[disabled] {
+		border-color: rgba(77, 91, 120, 0.74);
+		background:
+			linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92));
+		color: #7f91ad;
 	}
 
 	.cbi-map .cbi-input-invalid,
@@ -12346,6 +14114,10 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		.adg-glance-grid {
 			grid-template-columns: 1fr;
 		}
+
+		.adg-dashboard-head {
+			margin-top: 12px;
+		}
 	}
 
 	@media (max-width: 480px) {
@@ -12663,6 +14435,548 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 			grid-column: 1 !important;
 		}
 	}
+
+	/* AdGuardHome precision polish: status cards, forms, logs, and compact breakpoints. */
+	.adg-dashboard-shell,
+	.adg-dashboard-shell *,
+	.cbi-map.adg-themed-map,
+	.cbi-map.adg-themed-map * {
+		min-width: 0;
+	}
+
+	.adg-panel-title,
+	.adg-glance-value,
+	.adg-dashboard-number,
+	.adg-settings-title,
+	.cbi-map.adg-themed-map .adg-themed-section legend,
+	.cbi-map.adg-themed-map .adg-themed-section h3,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title {
+		letter-spacing: 0 !important;
+	}
+
+	.adg-runtime-wrap {
+		align-items: stretch;
+	}
+
+	.adg-runtime-pill,
+	.adg-runtime-item {
+		max-width: 100%;
+		white-space: normal;
+		overflow: hidden;
+	}
+
+	.adg-runtime-key {
+		flex: 0 0 auto;
+	}
+
+	.adg-runtime-value,
+	#adg-runtime-running {
+		min-width: 0;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	.adg-inline-note {
+		height: auto;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	.adg-glance-card {
+		min-height: 118px;
+	}
+
+	.adg-glance-label,
+	.adg-glance-sub,
+	.adg-dashboard-label,
+	.adg-dashboard-sub,
+	.adg-dashboard-meta {
+		overflow-wrap: anywhere;
+	}
+
+	.adg-glance-value {
+		font-size: 22px;
+		line-height: 1.18;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+		text-wrap: balance;
+	}
+
+	.adg-dashboard-card {
+		grid-template-rows: auto auto auto auto minmax(112px, 1fr) !important;
+		min-height: 268px;
+	}
+
+	.adg-card-head {
+		align-items: flex-start;
+	}
+
+	.adg-dashboard-number {
+		max-width: 100%;
+		font-size: 50px;
+		line-height: 1.02;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	.adg-percentage {
+		max-width: 100%;
+		white-space: normal;
+		text-align: center;
+	}
+
+	.adg-chart-shell {
+		height: 112px;
+		min-height: 112px;
+		margin-top: 16px;
+	}
+
+	.adg-chart path {
+		transition: d 0.22s ease-out, opacity 0.18s ease-out;
+	}
+
+	.adg-chart-empty .adg-chart {
+		opacity: 0.34;
+	}
+
+	.adg-chart-empty::after {
+		max-width: calc(100% - 28px);
+		white-space: nowrap;
+	}
+
+	.cbi-tabmenu a:focus-visible,
+	.tabs a:focus-visible,
+	.nav-tabs a:focus-visible,
+	.cbi-map.adg-themed-map input[type="text"]:focus-visible,
+	.cbi-map.adg-themed-map input[type="password"]:focus-visible,
+	.cbi-map.adg-themed-map textarea:focus-visible,
+	.cbi-map.adg-themed-map select:focus-visible {
+		outline: 2px solid rgba(194, 248, 255, 0.72) !important;
+		outline-offset: 3px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+		grid-template-columns: minmax(190px, 280px) minmax(0, 760px) !important;
+		column-gap: 24px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title label {
+		overflow-wrap: anywhere !important;
+		word-break: normal !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > .cbi-value-field {
+		max-width: 760px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-description {
+		max-width: 760px !important;
+		overflow-wrap: anywhere !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > textarea,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-text,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-password,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-input-textarea {
+		max-width: 760px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo > .cbi-value-field {
+		grid-template-columns: minmax(0, 1fr) minmax(176px, 220px) !important;
+		max-width: 860px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-description {
+		max-width: 860px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-textarea > .cbi-value-field,
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-actions.adg-value-textarea > .cbi-value-field {
+		max-width: 860px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-textarea textarea,
+	.cbi-map.adg-themed-map textarea.adg-update-log {
+		min-height: 260px !important;
+		max-width: 860px !important;
+		white-space: pre-wrap !important;
+		overflow-wrap: anywhere !important;
+		word-break: break-word !important;
+		tab-size: 4;
+	}
+
+	.cbi-map.adg-themed-map textarea.adg-update-log {
+		min-height: 280px !important;
+		max-height: 420px !important;
+	}
+
+	.cbi-map.adg-themed-map input[disabled]:hover,
+	.cbi-map.adg-themed-map textarea[disabled]:hover,
+	.cbi-map.adg-themed-map select[disabled]:hover,
+	.cbi-map.adg-themed-map .cbi-button[disabled]:hover {
+		transform: none !important;
+		box-shadow: none !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-page-actions input[type="submit"],
+	.cbi-map.adg-themed-map .adg-page-actions input[type="button"],
+	.cbi-map.adg-themed-map .adg-page-actions .cbi-button,
+	.cbi-map.adg-themed-map .cbi-optionals input[type="submit"],
+	.cbi-map.adg-themed-map .cbi-optionals input[type="button"],
+	.cbi-map.adg-themed-map .cbi-optionals .cbi-button {
+		white-space: normal !important;
+	}
+
+	@media (max-width: 980px) {
+		.adg-dashboard-number {
+			font-size: 46px;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+			grid-template-columns: minmax(170px, 240px) minmax(0, 1fr) !important;
+			column-gap: 18px !important;
+		}
+	}
+
+	@media (max-width: 720px) {
+		.adg-dashboard-shell {
+			padding: 18px 12px 16px;
+		}
+
+		.adg-runtime-pill,
+		.adg-runtime-item {
+			flex: 1 1 100%;
+			justify-content: flex-start;
+		}
+
+		.adg-glance-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		}
+
+		.adg-dashboard-card {
+			min-height: 252px;
+		}
+
+		.adg-dashboard-number {
+			font-size: 42px;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+			grid-template-columns: 1fr !important;
+			row-gap: 8px !important;
+			padding-top: 15px !important;
+			padding-bottom: 15px !important;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo > .cbi-value-field {
+			grid-template-columns: 1fr !important;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-field > input[type="button"],
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-field > input[type="submit"],
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-combo .cbi-value-field > .cbi-button,
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field button,
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field .btn,
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-password .cbi-value-field .cbi-button {
+			width: 100% !important;
+			min-width: 0 !important;
+			max-width: none !important;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-password > .cbi-value-field,
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-password > .cbi-value-field > div {
+			max-width: 100% !important;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.adg-glance-grid {
+			grid-template-columns: 1fr !important;
+		}
+
+		.adg-dashboard-number {
+			font-size: 36px;
+		}
+
+		.adg-chart-shell {
+			height: 104px;
+			min-height: 104px;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+		.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+		.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select,
+		.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="button"],
+		.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="submit"],
+		.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-button {
+			height: 44px !important;
+			min-height: 44px !important;
+			line-height: 44px !important;
+		}
+
+		.cbi-map.adg-themed-map .adg-themed-section .adg-value-textarea textarea,
+		.cbi-map.adg-themed-map textarea.adg-update-log {
+			min-height: 200px !important;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.adg-runtime-dot,
+		.cbi-map .adg-button-loading {
+			animation: none !important;
+		}
+
+		.adg-dashboard-card,
+		.adg-glance-card,
+		.adg-runtime-panel,
+		.adg-action-panel,
+		.cbi-map .adg-themed-section,
+		.cbi-map .adg-themed-value {
+			transition: none !important;
+		}
+	}
+
+	/* Compact correction for app-center embedded AdGuard pages. */
+	.adg-dashboard-shell {
+		padding: 12px 12px 14px !important;
+	}
+
+	.adg-hero-grid {
+		grid-template-columns: minmax(0, 1.55fr) minmax(230px, 0.75fr) !important;
+		gap: 10px !important;
+		margin-bottom: 10px !important;
+	}
+
+	.adg-runtime-panel,
+	.adg-action-panel {
+		padding: 13px 15px !important;
+		border-radius: 13px !important;
+	}
+
+	.adg-panel-kicker {
+		font-size: 10px !important;
+	}
+
+	.adg-panel-title {
+		margin-top: 5px !important;
+		font-size: 18px !important;
+		line-height: 1.18 !important;
+	}
+
+	.adg-panel-sub {
+		margin-top: 5px !important;
+		font-size: 12px !important;
+		line-height: 1.48 !important;
+	}
+
+	.adg-runtime-wrap {
+		gap: 7px !important;
+		margin-top: 10px !important;
+	}
+
+	.adg-runtime-pill,
+	.adg-runtime-item {
+		min-height: 34px !important;
+		padding: 6px 10px !important;
+		font-size: 11px !important;
+		gap: 7px !important;
+	}
+
+	.adg-runtime-dot {
+		width: 8px !important;
+		height: 8px !important;
+		box-shadow: 0 0 0 4px rgba(var(--adg-accent-rgb), 0.14) !important;
+	}
+
+	.adg-action-group {
+		gap: 8px !important;
+		margin-top: 10px !important;
+	}
+
+	.adg-action-panel .cbi-button {
+		height: 42px !important;
+		min-height: 42px !important;
+		line-height: 40px !important;
+		border-radius: 12px !important;
+		font-size: 13px !important;
+	}
+
+	.adg-inline-note {
+		min-height: 38px !important;
+		padding: 7px 12px !important;
+		border-radius: 12px !important;
+		font-size: 12px !important;
+	}
+
+	.adg-glance-grid {
+		gap: 8px !important;
+		margin-top: 10px !important;
+	}
+
+	.adg-glance-card {
+		min-height: 86px !important;
+		padding: 10px 11px !important;
+		border-radius: 12px !important;
+	}
+
+	.adg-glance-label {
+		font-size: 9px !important;
+	}
+
+	.adg-glance-value {
+		margin-top: 8px !important;
+		font-size: 18px !important;
+		line-height: 1.18 !important;
+	}
+
+	.adg-glance-sub {
+		padding-top: 7px !important;
+		font-size: 11px !important;
+		line-height: 1.42 !important;
+	}
+
+	.adg-dashboard-head {
+		margin: 10px 0 8px !important;
+	}
+
+	.adg-dashboard-grid {
+		gap: 10px !important;
+	}
+
+	.adg-dashboard-card {
+		grid-template-rows: auto auto auto auto minmax(84px, 1fr) !important;
+		min-height: 214px !important;
+		padding: 14px 16px 14px !important;
+		border-radius: 13px !important;
+	}
+
+	.adg-dashboard-label {
+		font-size: 13px !important;
+	}
+
+	.adg-dashboard-number {
+		margin-top: 10px !important;
+		font-size: 40px !important;
+		line-height: 1 !important;
+	}
+
+	.adg-percentage {
+		margin-top: 8px !important;
+		padding: 4px 8px !important;
+		font-size: 13px !important;
+	}
+
+	.adg-dashboard-sub {
+		margin-top: 8px !important;
+		font-size: 12px !important;
+	}
+
+	.adg-chart-shell {
+		height: 82px !important;
+		min-height: 82px !important;
+		margin-top: 10px !important;
+		padding-top: 6px !important;
+		border-radius: 12px !important;
+	}
+
+	.adg-chart-empty::after {
+		font-size: 11px !important;
+		padding: 4px 8px !important;
+	}
+
+	.adg-settings-bridge {
+		margin: 0 0 12px !important;
+		padding: 12px 14px !important;
+		border-radius: 13px !important;
+	}
+
+	.adg-settings-title {
+		margin-top: 6px !important;
+		font-size: 17px !important;
+	}
+
+	.adg-settings-sub {
+		margin-top: 4px !important;
+		font-size: 12px !important;
+		line-height: 1.45 !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+		grid-template-columns: minmax(170px, 240px) minmax(0, 680px) !important;
+		column-gap: 18px !important;
+		row-gap: 7px !important;
+		padding-top: 14px !important;
+		padding-bottom: 14px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title {
+		min-height: 44px !important;
+		font-size: 13px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > .cbi-value-field,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-description,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > textarea {
+		max-width: 680px !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="button"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="submit"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > .cbi-button {
+		height: 44px !important;
+		min-height: 44px !important;
+		line-height: 44px !important;
+	}
+
+	@media (max-width: 980px) {
+		.adg-dashboard-number {
+			font-size: 36px !important;
+		}
+
+		.adg-dashboard-card {
+			min-height: 204px !important;
+		}
+	}
+
+	@media (max-width: 720px) {
+		.adg-hero-grid,
+		.adg-dashboard-grid {
+			grid-template-columns: 1fr !important;
+		}
+
+		.adg-dashboard-number {
+			font-size: 34px !important;
+		}
+
+		.adg-glance-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.adg-dashboard-shell {
+			padding: 10px 8px 12px !important;
+		}
+
+		.adg-glance-grid {
+			grid-template-columns: 1fr !important;
+		}
+
+		.adg-dashboard-number {
+			font-size: 30px !important;
+		}
+	}
 </style>
 <fieldset id="AdGuardHome_status_fieldset" class="cbi-section">
 	<div id="adg-dashboard-shell" class="adg-dashboard-shell">
@@ -12723,10 +15037,10 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 					<div class="adg-dashboard-label">DNS 查询</div>
 				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
 				</div>
-                <div id="adg-stats-total" class="adg-dashboard-number">16,023</div>
-                <div id="adg-stats-total-percent" class="adg-dashboard-sub-ratio adg-percentage">31.60%</div>
+                <div id="adg-stats-total" class="adg-dashboard-number">--</div>
+                <div id="adg-stats-total-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div>
                 <div class="adg-dashboard-sub">3000 仪表盘统计</div>
-				<div class="adg-chart-shell">
+				<div class="adg-chart-shell adg-chart-empty">
 					<div class="adg-chart-grid"></div>
 					<svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
 						<path id="adg-chart-total-area"></path>
@@ -12739,10 +15053,10 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
                     <div class="adg-dashboard-label">已被过滤器拦截</div>
 				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
                 </div>
-                <div id="adg-stats-blocked" class="adg-dashboard-number">5,063</div>
-                <div id="adg-stats-blocked-percent" class="adg-dashboard-sub-ratio adg-percentage">31.60%</div>
+                <div id="adg-stats-blocked" class="adg-dashboard-number">--</div>
+                <div id="adg-stats-blocked-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div>
                 <div class="adg-dashboard-sub">过滤器拦截统计</div>
-                <div class="adg-chart-shell">
+                <div class="adg-chart-shell adg-chart-empty">
                     <div class="adg-chart-grid"></div>
                     <svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
                         <path id="adg-chart-blocked-area"></path>
@@ -28666,6 +30980,15 @@ run_menu_feature() {
                 return "$fanctrl_rc"
             fi
             ;;
+        19)
+            if run_hakimi_easy_rule_helper; then
+                :
+            else
+                hakimi_rc="$?"
+                [ "$hakimi_rc" = '2' ] && return 2
+                return "$hakimi_rc"
+            fi
+            ;;
         15)
             install_appcenter_polish
             show_support_page_hint='1'
@@ -29333,15 +31656,17 @@ maintenance_test_menu() {
     while :; do
         submenu_feature=''
         printf '\n设备维护与检测:\n'
-        printf '1. 统一测试模式\n'
+        printf '1. 统一体检增强版\n'
         printf '2. NRadio_C8-688 / C2000MAX 风扇控制\n'
+        printf '3. 哈基米傻瓜分流助手\n'
         printf '0. 返回功能分类\n'
-        printf '请选择 0、1 或 2: '
+        printf '请选择 0、1、2 或 3: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
             1) submenu_feature='13' ;;
             2) submenu_feature='14' ;;
+            3) submenu_feature='19' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then

@@ -392,7 +392,7 @@
     }
 
     .hero-copy::after {
-        content: "V2.0.50";
+        content: "V2.0.55";
       position: absolute;
       right: 28px;
       bottom: 2px;
@@ -2865,7 +2865,7 @@
     }
 
     .hero-copy::after {
-      content: "V2.0.50";
+      content: "V2.0.55";
       color: rgba(226, 58, 126, 0.08);
     }
 
@@ -6866,7 +6866,7 @@
       }
     }
 
-    /* V2.0.50 release polish */
+    /* V2.0.55 release polish */
     .floating-nav {
       gap: 8px;
       padding: 10px 12px;
@@ -6905,7 +6905,7 @@
     }
 
     .hero-latest::before {
-      content: "V2.0.50";
+      content: "V2.0.55";
       top: auto;
       right: clamp(18px, 4vw, 38px);
       bottom: clamp(8px, 2vw, 18px);
@@ -7192,7 +7192,7 @@
       }
     }
 
-    /* V2.0.50 card wall compact pass */
+    /* V2.0.55 card wall compact pass */
     .floating-nav a,
     .floating-nav span,
     .hero-latest-label,
@@ -7456,7 +7456,7 @@
       }
     }
 
-    /* V2.0.50 published polish pass */
+    /* V2.0.55 published polish pass */
     .floating-nav {
       align-items: center;
       max-width: min(900px, calc(100% - 28px));
@@ -7596,6 +7596,324 @@
       }
     }
 
+    /* V2.0.55 public page detail polish pass */
+    .floating-nav {
+      top: 14px;
+      gap: 5px;
+      max-width: min(760px, calc(100% - 32px));
+      padding: 5px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 241, 248, 0.70)),
+        rgba(255, 248, 252, 0.78);
+      border-color: rgba(225, 88, 150, 0.22);
+      box-shadow:
+        0 18px 46px rgba(142, 24, 83, 0.18),
+        0 3px 12px rgba(142, 24, 83, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    }
+
+    .floating-nav a,
+    .floating-nav span {
+      min-height: 34px;
+      padding-inline: 13px;
+      border-color: rgba(225, 88, 150, 0.14);
+      font-size: 12.5px;
+      box-shadow: none;
+    }
+
+    .floating-nav span {
+      padding-inline: 19px;
+      background:
+        linear-gradient(135deg, rgba(237, 65, 151, 0.96), rgba(196, 18, 112, 0.96)),
+        #d71978;
+      box-shadow:
+        0 10px 22px rgba(196, 18, 112, 0.20),
+        inset 0 1px 0 rgba(255, 255, 255, 0.38);
+    }
+
+    .hero-latest {
+      padding: clamp(21px, 2vw, 28px);
+      border-radius: 22px;
+      background:
+        linear-gradient(90deg, rgba(225, 88, 150, 0.10), transparent 24%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 244, 249, 0.90)),
+        rgba(255, 249, 252, 0.92);
+      box-shadow:
+        0 22px 58px rgba(184, 37, 95, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.94) inset;
+    }
+
+    .hero-latest::before {
+      right: clamp(18px, 4vw, 42px);
+      bottom: 4px;
+      color: rgba(217, 45, 118, 0.045);
+      font-size: clamp(54px, 6.6vw, 94px);
+    }
+
+    .hero-latest-top {
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(225, 88, 150, 0.14);
+    }
+
+    .hero-latest-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding-inline: 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(225, 88, 150, 0.14);
+      color: #a51661;
+      font-weight: 900;
+    }
+
+    .hero-latest-version {
+      min-height: 38px;
+      min-width: 120px;
+      background:
+        linear-gradient(135deg, rgba(239, 82, 159, 0.98), rgba(206, 25, 119, 0.98)),
+        #d71978;
+      border-color: rgba(255, 255, 255, 0.42);
+      color: #fffafb;
+      box-shadow: 0 12px 26px rgba(196, 18, 112, 0.22);
+    }
+
+    .hero-latest strong {
+      max-width: 28ch;
+      color: #35051e;
+      font-size: clamp(24px, 2.5vw, 34px);
+      line-height: 1.18;
+    }
+
+    .hero-latest p {
+      padding: 14px 16px;
+      border: 1px solid rgba(225, 88, 150, 0.14);
+      border-radius: 14px;
+      color: #733251;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 247, 251, 0.62)),
+        rgba(255, 250, 252, 0.68);
+    }
+
+    .release-cards {
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)) !important;
+      gap: clamp(12px, 1.1vw, 16px) !important;
+    }
+
+    .release-cards > .release-card,
+    .release-cards > .release-card:nth-child(-n+3),
+    .release-cards > .release-card:nth-child(-n+4),
+    .release-cards > .release-card:nth-child(-n+5),
+    .release-cards > .release-card:nth-child(n+9),
+    .release-cards > .release-card:nth-child(n+13),
+    .release-cards > .release-card:nth-child(6),
+    .release-cards > .release-card:nth-child(7),
+    .release-cards > .release-card:nth-child(8) {
+      min-height: 138px !important;
+      padding: 16px 17px !important;
+      border-radius: 18px !important;
+      border-color: rgba(225, 88, 150, 0.16) !important;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 250, 253, 0.76)),
+        rgba(255, 249, 252, 0.78) !important;
+      box-shadow:
+        0 16px 34px rgba(184, 37, 95, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.92) !important;
+    }
+
+    .release-cards > .release-card:first-child {
+      grid-column: span 2;
+      background:
+        linear-gradient(115deg, rgba(239, 82, 159, 0.16), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 244, 249, 0.78)),
+        rgba(255, 249, 252, 0.86) !important;
+    }
+
+    .release-cards > .release-card b {
+      min-height: 30px;
+      padding-inline: 12px;
+      font-size: 12px;
+    }
+
+    .release-cards > .release-card strong,
+    .feature-tile strong {
+      color: #3a061f;
+      line-height: 1.18;
+    }
+
+    .release-cards > .release-card p,
+    .release-cards > .release-card:nth-child(-n+3) p,
+    .release-cards > .release-card:nth-child(-n+4) p,
+    .release-cards > .release-card:nth-child(-n+5) p,
+    .release-cards > .release-card:nth-child(n+9) p,
+    .release-cards > .release-card:nth-child(n+13) p,
+    .release-cards > .release-card:nth-child(6) p,
+    .release-cards > .release-card:nth-child(7) p,
+    .release-cards > .release-card:nth-child(8) p {
+      color: #7d4660;
+      line-height: 1.62;
+      -webkit-line-clamp: 3;
+    }
+
+    .feature-tile {
+      border-color: rgba(225, 88, 150, 0.16);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 240, 248, 0.07)),
+        rgba(255, 255, 255, 0.055);
+    }
+
+    .feature-tags span,
+    .model-chip-list span {
+      min-height: 28px;
+      padding-inline: 10px;
+    }
+
+    .download-card,
+    .route-code-card {
+      border-radius: 20px;
+      border-color: rgba(225, 88, 150, 0.15);
+      box-shadow:
+        0 14px 34px rgba(184, 37, 95, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.88);
+    }
+
+    .timeline-entry.is-current {
+      background:
+        linear-gradient(115deg, rgba(239, 82, 159, 0.10), transparent 38%),
+        rgba(255, 250, 252, 0.86);
+      border-color: rgba(225, 88, 150, 0.18);
+    }
+
+    @media (max-width: 980px) {
+      .release-cards > .release-card:first-child {
+        grid-column: auto;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .floating-nav {
+        top: 10px;
+        max-width: calc(100% - 20px);
+        padding: 5px;
+      }
+
+      .hero-latest {
+        padding: 18px;
+      }
+
+      .hero-latest p {
+        padding: 12px 13px;
+      }
+
+      .release-cards {
+        gap: 10px !important;
+      }
+
+      .hero-shell,
+      .hero-copy,
+      .support-side,
+      .support-side .download-card,
+      .hero-copy .feature-shell {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+
+      .hero-copy *,
+      .support-side * {
+        min-width: 0;
+      }
+
+      .lead,
+      .hero-status span,
+      .download-code,
+      .route-code-card code {
+        overflow-wrap: anywhere;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .container {
+        width: min(100%, calc(100% - 24px));
+      }
+
+      .hero {
+        padding-top: 92px;
+      }
+
+      .hero-copy {
+        width: 100%;
+        max-width: 100%;
+        padding: 28px 18px 24px;
+        border-radius: 24px;
+      }
+
+      h1 {
+        max-width: 7.6ch;
+        font-size: clamp(58px, 17vw, 72px);
+      }
+
+      .lead {
+        max-width: 100%;
+        font-size: 16px;
+        line-height: 1.72;
+      }
+
+      .hero-tags,
+      .hero-status,
+      .hero-summary,
+      .hero-actions {
+        width: 100%;
+      }
+
+      .hero-tags span {
+        max-width: 100%;
+      }
+
+      .hero-action-primary {
+        width: 100%;
+      }
+
+      .hero-status {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .hero-status span {
+        min-width: 0;
+        font-size: 12px;
+      }
+
+      .hero-summary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .hero-summary div {
+        min-height: 64px;
+        padding: 11px 10px;
+      }
+
+      .hero-summary strong {
+        font-size: 25px;
+      }
+
+      .hero-summary span {
+        font-size: 11.5px;
+        line-height: 1.45;
+      }
+
+      .hero-latest {
+        border-radius: 20px;
+      }
+
+      .hero-latest-top {
+        align-items: flex-start;
+      }
+
+      .hero-latest-version {
+        min-width: 106px;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -7607,7 +7925,7 @@
       <a href="#history">更新记录</a>
       <a href="#install">安装教程</a>
       <a href="#wechat">微信支持</a>
-      <span>V2.0.50 已发布</span>
+      <span>V2.0.55 已发布</span>
     </nav>
 
     <section class="hero">
@@ -7618,11 +7936,11 @@
           <h1>NRadio<br>插件工具</h1>
           <p class="lead">
             NRadio NROS2.0 设备 SSH 插件安装脚本。
-            当前已发布版本 <strong>V2.0.50</strong>，通过 SSH 在路由器执行。
+            当前已发布版本 <strong>V2.0.55</strong>，通过 SSH 在路由器执行。
           </p>
 
           <div class="hero-tags">
-            <span>V2.0.50</span>
+            <span>V2.0.55</span>
             <span>SSH 执行</span>
             <span>单一脚本入口</span>
             <span>NROS2.0 设备</span>
@@ -7633,7 +7951,7 @@
           </div>
 
           <div class="hero-status" aria-label="当前维护状态">
-            <span><b>版本</b>V2.0.50</span>
+            <span><b>版本</b>V2.0.55</span>
             <span><b>文件</b>ssh-nradio-plugin-installer.sh</span>
             <span><b>方式</b>SSH 终端执行</span>
             <span><b>入口</b>单一下载入口</span>
@@ -7657,16 +7975,21 @@
           <section class="hero-latest" aria-label="当前里程碑说明">
             <div class="hero-latest-top">
               <div class="hero-latest-label">已发布</div>
-              <div class="hero-latest-version">V2.0.50</div>
+              <div class="hero-latest-version">V2.0.55</div>
             </div>
-            <strong>脚本集成 DDNS-GO 安装，OpenList C2000MAX 安装链降内存</strong>
+            <strong>应用商店状态卡 2 秒采样，AdGuardHome 页面热更新回写</strong>
             <p>
-              脚本集成 DDNS-GO 安装入口，并把 DDNS-GO 接入应用商店卡片、包装页、图标和卸载链；
-              C2000MAX 安装 OpenList 时改用 lite 包并把下载、解压放到存储卡；应用商店和 AdGuardHome 内页二次重新美化继续保留。
+              在统一体检增强和哈基米分流助手基础上，应用商店系统状态卡改为 2 秒采样并加入请求锁；
+              AdGuardHome 包装页和状态页已回写进总脚本，深色外壳、统计图表空态和移动端细节一并收口。
             </p>
           </section>
 
           <div class="release-cards" id="history" aria-label="最新更新摘要">
+            <article class="release-card">
+              <b>V2.0.50</b>
+              <strong>DDNS-GO 集成，OpenList C2000MAX 安装链降内存</strong>
+              <p>脚本新增 DDNS-GO 安装入口，并接入应用商店卡片、包装页、图标和异步卸载链；C2000MAX 安装 OpenList 时改用 lite 包并落到存储卡，减少 /tmp 内存压力。</p>
+            </article>
             <article class="release-card">
               <b>V2.0.40</b>
               <strong>AdGuardHome 内页重新美化</strong>
@@ -7847,14 +8170,15 @@
                     <span>卡片布局修复</span>
                     <span>DDNS-GO 卡片</span>
                     <span>AdGuardHome 内页</span>
-                    <span>状态徽标</span>
+                    <span>2 秒状态卡</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="04">
                   <strong>系统维护能力</strong>
                   <div class="feature-tags">
                     <span>swap</span>
-                    <span>自检</span>
+                    <span>统一体检</span>
+                    <span>哈基米分流助手</span>
                     <span>卸载链</span>
                   </div>
                 </article>
@@ -8047,7 +8371,7 @@ sh ssh-nradio-plugin-installer.sh</code>
               </div>
               <div>
                 <strong>持续更新</strong>
-                <span>当前已发布版本整理到 V2.0.50。</span>
+                <span>当前已发布版本整理到 V2.0.55，补入应用商店状态卡和 AdGuardHome 页面回写。</span>
               </div>
             </div>
           </section>
@@ -8384,11 +8708,18 @@ sh ssh-nradio-plugin-installer.sh</code>
                     <p>AdGuardHome 应用商店内页改成统一风格，首页打开即可直接看到 DNS 查询和拦截统计数；同时补齐 C2000MAX 的监听、统计和 3000 仪表盘认证链路，并修正 Linux 空设备重定向写法。</p>
                   </div>
                 </article>
-                <article class="timeline-entry is-current">
+                <article class="timeline-entry">
                   <div class="version">V2.0.50</div>
                   <div class="entry-copy">
                     <strong>DDNS-GO 集成、OpenList C2000MAX 安装链降内存</strong>
                     <p>脚本新增 DDNS-GO 安装入口，并接入应用商店卡片、包装页、图标和异步卸载链；C2000MAX 安装 OpenList 时改用 lite 包，下载包和解压目录落到存储卡，减少 /tmp 内存压力；应用商店和 AdGuardHome 内页二次重新美化继续保留。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry is-current">
+                  <div class="version">V2.0.55</div>
+                  <div class="entry-copy">
+                    <strong>统一体检、哈基米助手、应用商店和 AdGuardHome 收口</strong>
+                    <p>设备维护与检测补入系统资源、安装前预检、插件健康矩阵、应用商店一致性、端口冲突、哈基米规则检查和脱敏摘要；哈基米助手可按数字菜单写入域名、IP 或网段规则，并修复已有规则未启用自定义规则开关的问题。应用商店系统状态卡改为 2 秒采样，AdGuardHome 包装页和状态页也已回写进总脚本。</p>
                   </div>
                 </article>
               </div>

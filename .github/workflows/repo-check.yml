@@ -32,14 +32,15 @@ jobs:
           test -f 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua
           test -f 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm
           test "$(find 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted -type f | wc -l)" -eq 4620
+          node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/etc/gcom/ncm.json','utf8'))"
           ! grep -R -E 'NRadio appcenter card polish|sys_status|plugin_uninstall|appcenter-card-polish|appcenter-backup-66\.1-20260427' 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm
           printf '%s  %s\n' '754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua' | sha256sum -c -
           printf '%s  %s\n' 'c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm' | sha256sum -c -
 
-      - name: Verify V2.0.50 script state
+      - name: Verify V2.0.55 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.0.50"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-05-10"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.0.55"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-05-11"' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q '测试中' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '3. 游戏加速器" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '1. 奇游联机宝" 00-current/ssh-nradio-plugin-installer.sh
@@ -113,13 +114,26 @@ jobs:
           grep -q 'dashboard_stats' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'Dashboard API password' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'AdGuardHome 应用商店页已可读取本地运行态与监听' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '安装前一键预检' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '应用商店一致性扫描' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '哈基米傻瓜分流助手' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'hakimi_enable_custom_rules' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '相同规则已存在，未重复写入；已启用哈基米自定义规则' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '2>/dev/null' 00-current/ssh-nradio-plugin-installer.sh
 
       - name: Verify support page state
         run: |
+          grep -q 'V2.0.55' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.0.55 已发布' 40-server-web/mayebano-support/index.html
+          grep -q '统一体检增强' 40-server-web/mayebano-support/index.html
+          grep -q '哈基米分流助手' 40-server-web/mayebano-support/index.html
+          grep -q '应用商店状态卡 2 秒采样' 40-server-web/mayebano-support/index.html
+          grep -q 'AdGuardHome 页面热更新回写' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.0.55 public page detail polish pass' 40-server-web/mayebano-support/index.html
+          ! grep -q '<b>V2.0.55</b>' 40-server-web/mayebano-support/index.html
+          grep -q '<b>V2.0.50</b>' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.50' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.50 已发布' 40-server-web/mayebano-support/index.html
-          grep -q '脚本集成 DDNS-GO 安装' 40-server-web/mayebano-support/index.html
+          grep -q 'DDNS-GO 集成' 40-server-web/mayebano-support/index.html
           grep -q 'OpenList C2000MAX 安装链降内存' 40-server-web/mayebano-support/index.html
           grep -q 'C2000MAX 安装 OpenList 时改用 lite 包' 40-server-web/mayebano-support/index.html
           grep -q '脚本新增 DDNS-GO 安装入口' 40-server-web/mayebano-support/index.html
@@ -170,12 +184,12 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a' CHECKSUMS.txt
-          grep -q '1163194  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q 'd206161380c5c6482a62010c93d2b28c9f4f6f1f657216e969b341103d40ecc8' CHECKSUMS.txt
-          grep -q '233691  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
-          printf '%s  %s\n' 'e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' 'd206161380c5c6482a62010c93d2b28c9f4f6f1f657216e969b341103d40ecc8' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          grep -q 'a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5' CHECKSUMS.txt
+          grep -q '1246762  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q 'bb11f70250a2e2bfbc1f161fed0dee82ee9a6e255439d0ef870e0ed8aa44b0ea' CHECKSUMS.txt
+          grep -q '242925  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          printf '%s  %s\n' 'a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' 'bb11f70250a2e2bfbc1f161fed0dee82ee9a6e255439d0ef870e0ed8aa44b0ea' '40-server-web/mayebano-support/index.html' | sha256sum -c -
 
       - name: Verify license
         run: |
@@ -185,16 +199,20 @@ jobs:
 
       - name: Verify repository docs
         run: |
+          grep -q 'V2.0.55' README.md
+          grep -q 'V2.0.55' CHANGELOG.md
           grep -q 'V2.0.50' README.md
           grep -q 'V2.0.50' CHANGELOG.md
+          grep -q '哈基米傻瓜分流助手' README.md
+          grep -q '哈基米傻瓜分流助手' CHANGELOG.md
           grep -q 'DDNS-GO' README.md
           grep -q 'DDNS-GO' CHANGELOG.md
           grep -q 'OpenList C2000MAX' README.md
           grep -q 'OpenList lite 包' CHANGELOG.md
           grep -q 'AdGuardHome' README.md
           grep -q 'AdGuardHome' CHANGELOG.md
-          grep -q 'e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a' README.md
-          grep -q '1163194' README.md
+          grep -q 'a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5' README.md
+          grep -q '1246762' README.md
           grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
           grep -q 'Only the current public script is maintained' SECURITY.md
           grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml

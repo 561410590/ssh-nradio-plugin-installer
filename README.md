@@ -2,7 +2,7 @@
 
 NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.0.50`
+- 当前版本：`V2.0.55`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
@@ -46,7 +46,16 @@ sh ssh-nradio-plugin-installer.sh
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
-| 设备维护与检测 | swap、自检、通用卸载链、风扇控制 |
+| 设备维护与检测 | swap、统一体检、哈基米傻瓜分流助手、通用卸载链、风扇控制 |
+
+## V2.0.55 更新
+
+- 设备维护与检测新增 **统一体检增强版**，补入系统资源、安装前预检、插件健康矩阵、应用商店一致性、端口冲突、哈基米规则检查和脱敏摘要。
+- 新增 **哈基米傻瓜分流助手**（设备维护与检测菜单第 3 项），可读取当前 YAML 的分流目标，输入域名、IP 或网段后按数字菜单写入哈基米自定义规则。
+- 哈基米助手写入位置固定为 `/etc/openclash/custom/openclash_custom_rules.list`，避免机场订阅或在线订阅更新覆盖用户自定义规则。
+- 修复相同哈基米规则已存在时未启用自定义规则开关的问题，确保已有规则也能生效。
+- 修复 C2000MAX 工厂提取内容中 `etc/gcom/ncm.json` 的非法尾逗号。
+- 当前脚本 SHA256：`a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5`（大小 1246762 字节）。
 
 ## V2.0.50 更新
 
@@ -60,6 +69,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.0.55`：统一体检增强、哈基米傻瓜分流助手、OpenList C2000MAX 风险提示和哈基米规则生效修复。
 - `V2.0.50`：DDNS-GO 集成，OpenList C2000MAX 安装链降内存，应用商店和 AdGuardHome 页面重新美化，卸载链和校验链补强。
 - `V2.0.40`：EasyTier / MosDNS 修复，AdGuardHome 内页重新美化并补齐监听和统计链路。
 - `V2.0.35`：新增 MosDNS 插件。
@@ -79,7 +89,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.50 当前主线脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.55 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -92,8 +102,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  e32fc09076793822635c65e174e32caf55ab9ecf8e6f9039cccbf5ab635e188a
-Bytes   1163194
+SHA256  a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5
+Bytes   1246762
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

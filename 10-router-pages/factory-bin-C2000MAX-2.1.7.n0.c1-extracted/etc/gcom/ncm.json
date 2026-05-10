@@ -329,6 +329,6 @@
 			"AT+CFUN=1"
 		],
 		"connect": "AT",
-		"disconnect": "AT+CFUN=0",
+		"disconnect": "AT+CFUN=0"
 	}
 }
