@@ -392,7 +392,7 @@
     }
 
     .hero-copy::after {
-        content: "V2.0.55";
+        content: "V2.0.60";
       position: absolute;
       right: 28px;
       bottom: 2px;
@@ -2865,7 +2865,7 @@
     }
 
     .hero-copy::after {
-      content: "V2.0.55";
+      content: "V2.0.60";
       color: rgba(226, 58, 126, 0.08);
     }
 
@@ -6905,7 +6905,7 @@
     }
 
     .hero-latest::before {
-      content: "V2.0.55";
+      content: "V2.0.60";
       top: auto;
       right: clamp(18px, 4vw, 38px);
       bottom: clamp(8px, 2vw, 18px);
@@ -7722,11 +7722,10 @@
     }
 
     .release-cards > .release-card:first-child {
-      grid-column: span 2;
+      grid-column: auto;
       background:
-        linear-gradient(115deg, rgba(239, 82, 159, 0.16), transparent 34%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 244, 249, 0.78)),
-        rgba(255, 249, 252, 0.86) !important;
+        linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 250, 253, 0.76)),
+        rgba(255, 249, 252, 0.78) !important;
     }
 
     .release-cards > .release-card b {
@@ -7925,7 +7924,7 @@
       <a href="#history">更新记录</a>
       <a href="#install">安装教程</a>
       <a href="#wechat">微信支持</a>
-      <span>V2.0.55 已发布</span>
+      <span>V2.0.60 已发布</span>
     </nav>
 
     <section class="hero">
@@ -7936,11 +7935,11 @@
           <h1>NRadio<br>插件工具</h1>
           <p class="lead">
             NRadio NROS2.0 设备 SSH 插件安装脚本。
-            当前已发布版本 <strong>V2.0.55</strong>，通过 SSH 在路由器执行。
+            当前已发布版本 <strong>V2.0.60</strong>，通过 SSH 在路由器执行。
           </p>
 
           <div class="hero-tags">
-            <span>V2.0.55</span>
+            <span>V2.0.60</span>
             <span>SSH 执行</span>
             <span>单一脚本入口</span>
             <span>NROS2.0 设备</span>
@@ -7951,7 +7950,7 @@
           </div>
 
           <div class="hero-status" aria-label="当前维护状态">
-            <span><b>版本</b>V2.0.55</span>
+            <span><b>版本</b>V2.0.60</span>
             <span><b>文件</b>ssh-nradio-plugin-installer.sh</span>
             <span><b>方式</b>SSH 终端执行</span>
             <span><b>入口</b>单一下载入口</span>
@@ -7975,16 +7974,29 @@
           <section class="hero-latest" aria-label="当前里程碑说明">
             <div class="hero-latest-top">
               <div class="hero-latest-label">已发布</div>
-              <div class="hero-latest-version">V2.0.55</div>
+              <div class="hero-latest-version">V2.0.60</div>
             </div>
-            <strong>应用商店状态卡 2 秒采样，AdGuardHome 页面热更新回写</strong>
+            <strong>C8/C5800 eMMC 存储扩展与应用还原修复</strong>
             <p>
-              在统一体检增强和哈基米分流助手基础上，应用商店系统状态卡改为 2 秒采样并加入请求锁；
-              AdGuardHome 包装页和状态页已回写进总脚本，深色外壳、统计图表空态和移动端细节一并收口。
+              新增 C8-688 / C5800-688 专用 eMMC 存储扩展，可将 rootfs_2nd 接入为扩展盘；
+              应用商店双空间显示、动态应用迁移/还原、第二系统烧录保护、hybrid 大项保留和 DDNS-GO 迁移权限修复同步收口。
             </p>
           </section>
 
           <div class="release-cards" id="history" aria-label="最新更新摘要">
+            <article class="release-card">
+              <b>V2.0.60</b>
+              <strong>存储扩展还原与 DDNS-GO 迁移权限修复</strong>
+              <p>OpenClash / AdGuardHome 还原支持 hybrid 保留策略，overlay 空间不足时保留扩展盘大项子链接；DDNS-GO 迁移后会修正 nradio-apps 路径权限，避免非 root 服务启动失败。</p>
+            </article>
+            <article class="release-card">
+              <b>V2.0.55</b>
+              <strong>应用商店状态卡 2 秒采样，AdGuardHome 页面热更新回写</strong>
+              <p>
+                在统一体检增强和哈基米分流助手基础上，应用商店系统状态卡改为 2 秒采样并加入请求锁；
+                AdGuardHome 包装页和状态页已回写进总脚本，深色外壳、统计图表空态和移动端细节一并收口。
+              </p>
+            </article>
             <article class="release-card">
               <b>V2.0.50</b>
               <strong>DDNS-GO 集成，OpenList C2000MAX 安装链降内存</strong>
@@ -8371,7 +8383,7 @@ sh ssh-nradio-plugin-installer.sh</code>
               </div>
               <div>
                 <strong>持续更新</strong>
-                <span>当前已发布版本整理到 V2.0.55，补入应用商店状态卡和 AdGuardHome 页面回写。</span>
+                <span>当前已发布版本整理到 V2.0.60，补入 C8/C5800 eMMC 存储扩展、动态应用迁移/还原、hybrid 大项保留、DDNS-GO 迁移权限修复和第二系统烧录保护。</span>
               </div>
             </div>
           </section>
@@ -8715,11 +8727,18 @@ sh ssh-nradio-plugin-installer.sh</code>
                     <p>脚本新增 DDNS-GO 安装入口，并接入应用商店卡片、包装页、图标和异步卸载链；C2000MAX 安装 OpenList 时改用 lite 包，下载包和解压目录落到存储卡，减少 /tmp 内存压力；应用商店和 AdGuardHome 内页二次重新美化继续保留。</p>
                   </div>
                 </article>
-                <article class="timeline-entry is-current">
+                <article class="timeline-entry">
                   <div class="version">V2.0.55</div>
                   <div class="entry-copy">
                     <strong>统一体检、哈基米助手、应用商店和 AdGuardHome 收口</strong>
                     <p>设备维护与检测补入系统资源、安装前预检、插件健康矩阵、应用商店一致性、端口冲突、哈基米规则检查和脱敏摘要；哈基米助手可按数字菜单写入域名、IP 或网段规则，并修复已有规则未启用自定义规则开关的问题。应用商店系统状态卡改为 2 秒采样，AdGuardHome 包装页和状态页也已回写进总脚本。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry is-current">
+                  <div class="version">V2.0.60</div>
+                  <div class="entry-copy">
+                    <strong>C8/C5800 eMMC 存储扩展与应用还原修复</strong>
+                    <p>新增 C8-688 / C5800-688 专用 rootfs_2nd 扩展盘接入；应用商店双空间显示、动态应用迁移/还原、hybrid 大项保留、DDNS-GO 迁移权限修复、第二系统烧录保护和深色玻璃界面精修同步收口。</p>
                   </div>
                 </article>
               </div>

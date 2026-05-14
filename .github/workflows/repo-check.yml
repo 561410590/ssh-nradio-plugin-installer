@@ -37,10 +37,10 @@ jobs:
           printf '%s  %s\n' '754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua' | sha256sum -c -
           printf '%s  %s\n' 'c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm' | sha256sum -c -
 
-      - name: Verify V2.0.55 script state
+      - name: Verify V2.0.60 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.0.55"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-05-11"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.0.60"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-05-14"' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q '测试中' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '3. 游戏加速器" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '1. 奇游联机宝" 00-current/ssh-nradio-plugin-installer.sh
@@ -119,18 +119,39 @@ jobs:
           grep -q '哈基米傻瓜分流助手' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'hakimi_enable_custom_rules' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '相同规则已存在，未重复写入；已启用哈基米自定义规则' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'manage_rootfs_2nd_storage_expand' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'rootfs_2nd 存储扩展' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'storage_expand_require_app_runtime_files' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'storage_expand_make_searchable_storage_path' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'storage_expand_repair_migrated_runtime_paths' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'storage_expand_restore_hybrid_payload' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'storage_expand_allow_child_link_restore' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '修复扩展盘应用运行路径权限失败' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'AdGuardHome 运行文件缺失' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'openclash_asn_mmdb_valid' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'openclash_require_asn_mmdb' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '扩容 swap 虚拟内存仅支持 NRadio_C2000MAX' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '扩容 swap 虚拟内存（仅支持NRadio_C2000MAX）' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '2>/dev/null' 00-current/ssh-nradio-plugin-installer.sh
 
       - name: Verify support page state
         run: |
+          grep -q 'V2.0.60' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.0.60 已发布' 40-server-web/mayebano-support/index.html
+          grep -q 'C8/C5800 eMMC 存储扩展' 40-server-web/mayebano-support/index.html
+          grep -q 'rootfs_2nd 接入为扩展盘' 40-server-web/mayebano-support/index.html
+          grep -q '动态应用迁移/还原' 40-server-web/mayebano-support/index.html
+          grep -q '存储扩展还原与 DDNS-GO 迁移权限修复' 40-server-web/mayebano-support/index.html
+          grep -q 'hybrid 大项保留' 40-server-web/mayebano-support/index.html
+          grep -q '非 root 服务启动失败' 40-server-web/mayebano-support/index.html
+          grep -q '第二系统烧录保护' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.55' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.55 已发布' 40-server-web/mayebano-support/index.html
           grep -q '统一体检增强' 40-server-web/mayebano-support/index.html
           grep -q '哈基米分流助手' 40-server-web/mayebano-support/index.html
           grep -q '应用商店状态卡 2 秒采样' 40-server-web/mayebano-support/index.html
           grep -q 'AdGuardHome 页面热更新回写' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.55 public page detail polish pass' 40-server-web/mayebano-support/index.html
-          ! grep -q '<b>V2.0.55</b>' 40-server-web/mayebano-support/index.html
+          grep -q '<b>V2.0.55</b>' 40-server-web/mayebano-support/index.html
           grep -q '<b>V2.0.50</b>' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.50' 40-server-web/mayebano-support/index.html
           grep -q 'DDNS-GO 集成' 40-server-web/mayebano-support/index.html
@@ -166,7 +187,7 @@ jobs:
           grep -q '3. 路由器在线下载' 40-server-web/mayebano-support/index.html
           grep -q 'wget -O ssh-nradio-plugin-installer.sh https://nradio.mayebano.shop/ssh-nradio-plugin-installer.sh' 40-server-web/mayebano-support/index.html
           grep -q '哈基米' 40-server-web/mayebano-support/index.html
-          ! grep -q 'V2.0.5' 40-server-web/mayebano-support/index.html
+          ! grep -q '<b>V2.0.5</b>' 40-server-web/mayebano-support/index.html
           ! grep -q 'HC-WT9108' 40-server-web/mayebano-support/index.html
           ! grep -q '我的项目' 40-server-web/mayebano-support/index.html
           ! grep -q '安装方式提醒' 40-server-web/mayebano-support/index.html
@@ -184,12 +205,15 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5' CHECKSUMS.txt
-          grep -q '1246762  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q 'bb11f70250a2e2bfbc1f161fed0dee82ee9a6e255439d0ef870e0ed8aa44b0ea' CHECKSUMS.txt
-          grep -q '242925  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
-          printf '%s  %s\n' 'a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' 'bb11f70250a2e2bfbc1f161fed0dee82ee9a6e255439d0ef870e0ed8aa44b0ea' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          grep -q 'fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498' CHECKSUMS.txt
+          grep -q '1420683  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q '82f7a503d78cdda8672308b850cd9abc437c6264971382fcfca6dac11cb8967a' CHECKSUMS.txt
+          grep -q '244366  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' CHECKSUMS.txt
+          grep -q '564  vercel.json' CHECKSUMS.txt
+          printf '%s  %s\n' 'fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' '82f7a503d78cdda8672308b850cd9abc437c6264971382fcfca6dac11cb8967a' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          printf '%s  %s\n' '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' 'vercel.json' | sha256sum -c -
 
       - name: Verify license
         run: |
@@ -199,10 +223,22 @@ jobs:
 
       - name: Verify repository docs
         run: |
+          grep -q 'V2.0.60' README.md
+          grep -q 'V2.0.60' CHANGELOG.md
           grep -q 'V2.0.55' README.md
           grep -q 'V2.0.55' CHANGELOG.md
           grep -q 'V2.0.50' README.md
           grep -q 'V2.0.50' CHANGELOG.md
+          grep -q 'C8/C5800 eMMC 存储扩展' README.md
+          grep -q 'C8/C5800 eMMC 存储扩展' CHANGELOG.md
+          grep -q 'hybrid 应用还原' README.md
+          grep -q 'hybrid 状态' CHANGELOG.md
+          grep -q 'DDNS-GO 迁移权限修复' README.md
+          grep -q 'DDNS-GO 迁移到扩展盘后' CHANGELOG.md
+          grep -q 'OpenClash ASN.mmdb' README.md
+          grep -q 'ASN.mmdb' CHANGELOG.md
+          grep -q 'NRadio_C2000MAX' README.md
+          grep -q 'NRadio_C2000MAX' CHANGELOG.md
           grep -q '哈基米傻瓜分流助手' README.md
           grep -q '哈基米傻瓜分流助手' CHANGELOG.md
           grep -q 'DDNS-GO' README.md
@@ -211,8 +247,8 @@ jobs:
           grep -q 'OpenList lite 包' CHANGELOG.md
           grep -q 'AdGuardHome' README.md
           grep -q 'AdGuardHome' CHANGELOG.md
-          grep -q 'a65b2de02d9eb83e755699c3910d23aaada465700f53b8ece1e7af5fd6e555b5' README.md
-          grep -q '1246762' README.md
+          grep -q 'fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498' README.md
+          grep -q '1420683' README.md
           grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
           grep -q 'Only the current public script is maintained' SECURITY.md
           grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml

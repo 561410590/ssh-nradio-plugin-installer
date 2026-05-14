@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.0.55"
+SCRIPT_VERSION="V2.0.60"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-11"
+SCRIPT_RELEASE_DATE="2026-05-14"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -38,6 +38,11 @@ PLUGIN_UNINSTALL_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/plugin_unin
 WORKDIR="/tmp/nradio-plugin-fix.$$"
 LOCK_DIR="${LOCK_DIR:-/var/run/nradio-plugin-assistant.lock}"
 LOCK_OWNER='0'
+ROOTFS_2ND_STORAGE_MOUNT_POINT="${ROOTFS_2ND_STORAGE_MOUNT_POINT:-/mnt/rootfs_2nd_data}"
+ROOTFS_2ND_STORAGE_INIT="${ROOTFS_2ND_STORAGE_INIT:-/etc/init.d/rootfs_2nd_data}"
+ROOTFS_2ND_STORAGE_MARKER="${ROOTFS_2ND_STORAGE_MARKER:-/etc/nradio_storage_expand_enabled}"
+ROOTFS_2ND_STORAGE_APPS_DIR="${ROOTFS_2ND_STORAGE_APPS_DIR:-$ROOTFS_2ND_STORAGE_MOUNT_POINT/nradio-apps}"
+ROOTFS_2ND_STORAGE_MIGRATE_LIST="${ROOTFS_2ND_STORAGE_MIGRATE_LIST:-/etc/nradio_storage_expand_migrated.list}"
 TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
 OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
@@ -46,8 +51,24 @@ OPENCLASH_CUSTOM_RULES_FILE="${OPENCLASH_CUSTOM_RULES_FILE:-/etc/openclash/custo
 OPENCLASH_CUSTOM_RULES_BACKUP_DIR="${OPENCLASH_CUSTOM_RULES_BACKUP_DIR:-/etc/openclash/custom/nradio-backup}"
 QIYOU_INSTALLER_URL="${QIYOU_INSTALLER_URL:-http://sd.qiyou.cn}"
 QIYOU_INSTALLER_SHA256="${QIYOU_INSTALLER_SHA256:-deb8730e598e0cda45ad554127f87f2ee534c8a4a12efc8d4865f81fc12d56f1}"
+QIYOU_APP_NAME="${QIYOU_APP_NAME:-奇游联机宝}"
+QIYOU_PACKAGE_NAME="${QIYOU_PACKAGE_NAME:-nradio-qiyou}"
+QIYOU_ROUTE="${QIYOU_ROUTE:-nradioadv/system/qiyou}"
+QIYOU_CONTROLLER="${QIYOU_CONTROLLER:-/usr/lib/lua/luci/controller/nradio_adv/qiyou.lua}"
+QIYOU_VIEW="${QIYOU_VIEW:-/usr/lib/lua/luci/view/nradiobridge_qiyou/qiyou.htm}"
+QIYOU_ICON_NAME="${QIYOU_ICON_NAME:-qiyou.svg}"
+QIYOU_DIR="${QIYOU_DIR:-/etc/qy}"
+QIYOU_SERVICE_NAME="${QIYOU_SERVICE_NAME:-qy_acc.boot}"
 LEIGOD_INSTALLER_URL="${LEIGOD_INSTALLER_URL:-http://119.3.40.126/router_plugin_new/plugin_install.sh}"
 LEIGOD_INSTALLER_SHA256="${LEIGOD_INSTALLER_SHA256:-04b52b5c3df51266e6f4d8568cd17679b37fe0cbd4a65ead0aa9958b5dd72f8d}"
+LEIGOD_APP_NAME="${LEIGOD_APP_NAME:-雷神加速器}"
+LEIGOD_PACKAGE_NAME="${LEIGOD_PACKAGE_NAME:-nradio-leigod}"
+LEIGOD_ROUTE="${LEIGOD_ROUTE:-nradioadv/system/leigod}"
+LEIGOD_CONTROLLER="${LEIGOD_CONTROLLER:-/usr/lib/lua/luci/controller/nradio_adv/leigod.lua}"
+LEIGOD_VIEW="${LEIGOD_VIEW:-/usr/lib/lua/luci/view/nradiobridge_leigod/leigod.htm}"
+LEIGOD_ICON_NAME="${LEIGOD_ICON_NAME:-leigod.svg}"
+LEIGOD_DIR="${LEIGOD_DIR:-/usr/sbin/leigod}"
+LEIGOD_INIT="${LEIGOD_INIT:-/etc/init.d/acc}"
 OPENCLASH_MIRRORS="${OPENCLASH_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH} https://fastly.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH} https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH}}"
 OPENCLASH_CORE_VERSION_MIRRORS="${OPENCLASH_CORE_VERSION_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev}"
 OPENCLASH_CORE_SMART_MIRRORS="${OPENCLASH_CORE_SMART_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart}"
@@ -185,7 +206,7 @@ OPENLIST_ICON_NAME="${OPENLIST_ICON_NAME:-openlist.svg}"
 OPENLIST_ICON_URLS="${OPENLIST_ICON_URLS:-https://res.oplist.org/logo/OpenList.svg https://res.oplist.org/logo/logo.svg}"
 ZEROTIER_ICON_NAME="${ZEROTIER_ICON_NAME:-zerotier.svg}"
 ZEROTIER_ICON_URLS="${ZEROTIER_ICON_URLS:-https://fastly.jsdelivr.net/npm/simple-icons@latest/icons/zerotier.svg https://testingcf.jsdelivr.net/npm/simple-icons@latest/icons/zerotier.svg https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/zerotier.svg}"
-EASYTIER_ICON_NAME="${EASYTIER_ICON_NAME:-easytier.svg}"
+EASYTIER_ICON_NAME="${EASYTIER_ICON_NAME:-easytier.png}"
 FANCTRL_ICON_NAME="${FANCTRL_ICON_NAME:-nradio-fanctrl}"
 DOWNLOAD_CONNECT_TIMEOUT="${DOWNLOAD_CONNECT_TIMEOUT:-15}"
 DOWNLOAD_MAX_TIME="${DOWNLOAD_MAX_TIME:-900}"
@@ -2013,7 +2034,7 @@ ADGUARDHOME_ICON_NAME="adguard.svg"
 OPENVPN_ICON_NAME="openvpn.svg"
 OPENLIST_ICON_NAME="openlist.svg"
 ZEROTIER_ICON_NAME="zerotier.svg"
-EASYTIER_ICON_NAME="easytier.svg"
+EASYTIER_ICON_NAME="easytier.png"
 WEBSSH_ICON_NAME="webssh.svg"
 WEBSSH_ROUTE="nradioadv/system/webssh"
 WEBSSH_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/webssh.lua"
@@ -4441,12 +4462,40 @@ EOF_ZEROTIER_ICON
 install_easytier_embedded_icon() {
     ensure_app_icon_dir
     backup_file "$APP_ICON_DIR/$EASYTIER_ICON_NAME"
-    cat > "$APP_ICON_DIR/$EASYTIER_ICON_NAME" <<'EOF_EASYTIER_ICON'
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="EasyTier"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#eef8ff"/><stop offset="100%" stop-color="#cbeaff"/></linearGradient><linearGradient id="core" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="26" stdDeviation="22" flood-color="#8db7dd" flood-opacity="0.28"/></filter></defs><rect x="84" y="84" width="856" height="856" rx="188" fill="url(#bg)" stroke="#9fd7ff" stroke-width="18" filter="url(#shadow)"/><rect x="162" y="162" width="700" height="700" rx="154" fill="#f8fcff" stroke="#d8eefc" stroke-width="12"/><g transform="translate(210 238)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M142 316C142 200 236 106 352 106H470" stroke="#9fd7ff" stroke-width="48"/><path d="M462 52L548 106L462 160" stroke="#2f548f" stroke-width="48"/><path d="M462 212C462 328 368 422 252 422H134" stroke="#2f548f" stroke-width="48"/><path d="M142 476L56 422L142 368" stroke="#9fd7ff" stroke-width="48"/></g><circle cx="512" cy="512" r="116" fill="url(#core)"/><path d="M452 512h120M512 452v120" stroke="#eef8ff" stroke-width="42" stroke-linecap="round"/></svg>
-EOF_EASYTIER_ICON
+    if [ "$EASYTIER_ICON_NAME" != "easytier.svg" ]; then
+        backup_file "$APP_ICON_DIR/easytier.svg"
+        rm -f "$APP_ICON_DIR/easytier.svg" 2>/dev/null || true
+    fi
+    cat <<'EOF_EASYTIER_ICON_PNG_GZ_B64' | decode_gzip_b64_to_file "$APP_ICON_DIR/$EASYTIER_ICON_NAME" "内置 EasyTier PNG 图标" || return 1
+H4sIAAAAAAAEAAGMBXP6iVBORw0KGgoAAAANSUhEUgAAAIAAAACABAMAAAAxEHz4AAAAD1BMVEVn
+m/1HcEwwSntNdMKZx/8fjVk1AAAABHRSTlP5AFKUNxJXPAAABShJREFUaN6lmVuagyAMRiN0AYob
+QLsBrBvoQ/e/ppF7EoK2Dg/zdVQOP+GSEGD6Z4Hz12Z9Lf8BzHCU7T7AQCjLbYCNAHUX4AU8riSc
+Acaj/ufzBhhuAqyv7wnqJgAyAG4DPqHcBZgKWO4AjK0AtfwMME8/fhkA0J3RHcAzTqEKOBC/ANIU
+JIDOYEoA42KTdRijIL18B4j1D7slK/q2je0RBIDL03/OU3nLK1N/A3C1qdR5qML0NcAic7HlbCVL
+grAHsfr0wXYOMOjzGUrZEGE5BVjUzTCU6/osVogGUmeAGbUwZlsaVMs0nQC2gOvryjJIwgxscQMT
+oNB+tqHnA+rk0AMYbCKHxxz9Y5gdgW6iA+rNQN7g30oG4K561dQ4GzaUDMC9Pv5RdHiHSbIIAZCZ
+bqmpCM9hCdAD0xlnoCcVZO4BWElhL3ULMESAgaYsRMLSAEbyyTkANwZVlpq+BfjpyAGGLRLrtAZX
+/2jF5vzCACPAT6FV6QOUMVC/AGofQO7BVal9gFs9QH2ALEnswbqD21e5D4oAxDholkaQGx2yCZae
+h5Y9c6kBiae7HrrjmV3SDD0TRP3vz+cBYrybqwDBsbn8iPHBW7JDFg0dE9gSXqQQQ7UtEIDQgc+H
+EBqnGJ+AbEMX9ZdA5w3CJ0MBWG6CGdfPhI0bQRVAY8MY3NRRTIFOF8BtaIKAUHXfE6GJmJPhRMCY
+asQZ+ITEG3qAZhBCD6rh5ySBRwahWQgf6DbOx+eMMT3gw7AlAHNjvkUvgHjn8GSbWncnAcbY3tYg
+hw7ANm88QFO5j8YIsd0I2BoTAHeu0BhhLgDXAPIpZT06r9d8emkAugC4J06toUg1qmLfdQBzACga
+qUa7bDKAkeMgDDRSzQ+bqSgoGFNjDnK4fzQVZQ09Bc0oHqLSBI6rajO5X8TYpwCXVnEg6N8BJuuP
+f5efAXPeiOLWtP1XwXrTBu/7NvhlFE7mQfIJfh48zuaBOBMNjtB+mYndtQC9tfDv1Wg5uewHxjnY
+l+5+oDpbmrABSjtSf0v7ck+sCr7alR8nu/K//ULPMynk6k49k+AbH5Jv1D3fyBdDzzuLxyjRvU9y
+fEBNhQHfRShMAo5QOjHSO9ePv3cqAQPGJgp0ZSWjKM35syA/moJwUMZx4rsmsxZDomYcJ05fRKq+
+qgWSlSCx8nYsvBePlXF9l3Y5L+Gp9TLjWPlAax7Uz9l8sfnNZzfGOBQ2AhU5L8QynJwXQoZMo31u
+oCcWlPSSTywpTW7ZUbacmcJ6bbYm/GnMMUXjvIGemUpwrfipzelyaksJBkeDb0BT9yKDnGYL0HQ1
+lB3rMgEcBy4ni99kGGv2dDtVsJFsM1GQj1fb6XFXT8HHRYCk4BxgvYQKgF+74NXrjgL3TRY9SujZ
+4PENYEqRRjsK9pubhJSCEufBXFPQV3kHbaWZOEE6JQ3TpQSdv2UZjHY1diSwjAAF6GW6liABLJxk
+O84lQNm+9PWtVknd65qUSCs0iDf28moups6XeBgqrm0ssYAVbwCYAFV+DSVOLF23FxJmmuSOgJmm
+bPWFALY/QHAKUy9r3K6mAdNUADS5UHV2/7iwbBbwFI7rE/gNR6gJPAMz9mZkvPwZeB4GeBard88q
+PfdVQTh6Q7pnYjd37WqbA+AQvOMSTzuQTt3RQaUHxgddqPhbA4iTm5TqQff9dXzm8uKZ22RxUNAC
+sGdGHloGODEFbRjitYjpat8F8+IFX1mG4vJ15ZOX5eLqfF3317qebjI/ZoPb8gfbXytTB9L2tgAA
+AABJRU5ErkJggvy4PY2MBQAA
+EOF_EASYTIER_ICON_PNG_GZ_B64
     chmod 644 "$APP_ICON_DIR/$EASYTIER_ICON_NAME" 2>/dev/null || true
-    log "图标:   内置 EasyTier SVG 卡片"
+    log "图标:   内置 EasyTier PNG 卡片"
     return 0
 }
 
@@ -5502,18 +5551,21 @@ patch_appcenter_card_polish() {
 
     cat > "$css_file" <<'EOF_APPCENTER_CARD_POLISH_CSS'
     /* NRadio appcenter card polish: visual-only layer */
-    /* NRadio appcenter card polish V2.0.25 full repair layer */
+    /* NRadio appcenter card polish V2.0.60 full repair layer */
     /* NRadio appcenter visual polish 1-5 safe refinement */
+    /* NRadio appcenter square card calm refinement */
+    /* NRadio appcenter large-card proportion repair */
+    /* NRadio appcenter status time readability repair */
     /* Keep container_left/app_top_menu layout owned by NRadio OEM CSS. */
     .appcontainer{
         position: relative;
-        --nr-status-rail: 25%;
-        --nr-status-reserve: 19.5%;
-        --nr-status-gap: 14px;
-        --nr-status-edge: -5%;
+        --nr-status-rail: 21.6%;
+        --nr-status-reserve: 15.4%;
+        --nr-status-gap: 12px;
+        --nr-status-edge: -5.2%;
         --nr-polish-line: rgba(103,232,249,.22);
         --nr-polish-line-soft: rgba(148,163,184,.12);
-        --nr-polish-panel: rgba(15,23,42,.72);
+        --nr-polish-panel: rgba(8,14,24,.76);
         --nr-polish-accent: #23c8e4;
         --nr-polish-ok: #3ddc97;
         --nr-polish-ink: #f4f8ff;
@@ -5566,7 +5618,7 @@ patch_appcenter_card_polish() {
         opacity: 1;
     }
     #app_top_menu .top_menu_active{
-        color: #eef8ff;
+        color: #25d4f0;
         border-bottom-color: #23c8e4;
         box-shadow: 0 7px 12px -14px rgba(35,200,228,.36);
     }
@@ -5593,6 +5645,20 @@ patch_appcenter_card_polish() {
         padding-right: calc(var(--nr-status-reserve) + var(--nr-status-gap));
         box-sizing: border-box;
         flex-wrap: nowrap;
+        background: transparent !important;
+        background-image: none !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        outline: 0 !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+    }
+    .app_btn_box::before,
+    .app_btn_box::after{
+        content: none !important;
+        display: none !important;
+        background: none !important;
+        box-shadow: none !important;
     }
     .app_btn_box .mem_track{
         flex: 0 1 280px;
@@ -5613,12 +5679,15 @@ patch_appcenter_card_polish() {
         box-sizing: border-box;
         align-items: center;
         justify-content: center;
-        border: 1px solid var(--nr-polish-line-soft);
+        border: 1px solid rgba(125,211,252,.20);
         border-radius: 8px;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.016)),
-            rgba(12,16,24,.50);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.040), 0 8px 18px rgba(0,0,0,.12);
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.007)),
+            rgba(5,12,22,.62);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.044),
+            inset 0 0 0 .0625rem rgba(103,232,249,.040),
+            0 .7em 1.35em rgba(0,0,0,.17);
         -webkit-backdrop-filter: blur(8px) saturate(1.06);
         backdrop-filter: blur(8px) saturate(1.06);
     }
@@ -5629,7 +5698,7 @@ patch_appcenter_card_polish() {
         right: 10px;
         top: 0;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(35,200,228,.34), transparent);
+        background: linear-gradient(90deg, transparent, rgba(35,200,228,.26), transparent);
         pointer-events: none;
     }
     #app_status_mount{
@@ -5713,58 +5782,71 @@ patch_appcenter_card_polish() {
     .container_right{
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 26px 14px;
+        gap: 14px;
+        justify-content: start;
         align-content: start;
-        align-items: stretch;
+        align-items: start;
         padding-right: calc(var(--nr-status-reserve) + var(--nr-status-gap)) !important;
         box-sizing: border-box;
     }
     .container_right .app_box{
         /* NRadio appcenter card surface safe polish */
-        --nr-card-pad: 20px;
-        --nr-action-height: 36px;
-        --nr-desc-gap: 14px;
+        --nr-card-pad: 14px;
+        --nr-action-height: 32px;
+        --nr-desc-gap: 8px;
+        --nr-card-accent: 70,211,230;
+        --nr-card-accent-2: 85,214,162;
         position: relative;
         isolation: isolate;
         display: grid;
-        grid-template-columns: 72px minmax(0, 1fr);
+        grid-template-columns: 58px minmax(0, 1fr);
         grid-template-rows: auto auto;
         grid-template-areas:
             "icon info"
             "desc desc";
         grid-auto-flow: row;
-        column-gap: 14px;
-        row-gap: 7px;
+        column-gap: 11px;
+        row-gap: 8px;
         align-items: start;
+        align-content: start;
         float: none !important;
-        width: auto !important;
+        width: 100% !important;
+        max-width: none;
         height: auto !important;
-        min-height: 194px;
+        aspect-ratio: 1 / 1;
+        min-height: 0;
         margin: 0 !important;
-        padding: var(--nr-card-pad) var(--nr-card-pad) 64px;
+        padding: var(--nr-card-pad) var(--nr-card-pad) 48px;
         overflow: hidden;
         box-sizing: border-box;
-        border: 1px solid rgba(103,232,249,.18);
+        border: 1px solid rgba(125,211,252,.21);
         border-radius: 8px;
         background:
-            radial-gradient(circle at 26px 20px, rgba(103,232,249,.055), transparent 130px),
-            linear-gradient(180deg, rgba(30,41,59,.955), rgba(15,23,42,.925)),
-            rgba(10,15,24,.72);
-        background-blend-mode: screen, normal, normal;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.066), inset 0 0 0 1px rgba(255,255,255,.020), 0 12px 24px rgba(0,0,0,.15);
-        -webkit-backdrop-filter: blur(10px) saturate(1.10);
-        backdrop-filter: blur(10px) saturate(1.10);
+            radial-gradient(circle at 18% 0%, rgba(35,200,228,.125), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.006)),
+            linear-gradient(145deg, rgba(15,29,47,.958), rgba(5,11,21,.925));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.032), inset 0 -1px 0 rgba(3,7,14,.68), 0 16px 30px rgba(0,0,0,.215);
+        -webkit-backdrop-filter: blur(8px) saturate(1.05);
+        backdrop-filter: blur(8px) saturate(1.05);
         transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
     }
     .container_right .app_box:nth-child(3n+2)::after{
-        background: linear-gradient(90deg, rgba(61,220,151,0), rgba(61,220,151,.44), rgba(35,200,228,.34), rgba(61,220,151,0));
+        background: none;
+    }
+    .container_right .app_box:nth-child(3n+2){
+        --nr-card-accent: 80,220,184;
+        --nr-card-accent-2: 70,211,230;
     }
     .container_right .app_box:nth-child(3n+3)::after{
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,.42), rgba(35,200,228,.34), rgba(108,162,255,0));
+        background: none;
+    }
+    .container_right .app_box:nth-child(3n+3){
+        --nr-card-accent: 105,170,255;
+        --nr-card-accent-2: 70,211,230;
     }
     .container_right .app_box:focus-within{
-        border-color: rgba(103,232,249,.34);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.068), inset 0 0 0 1px rgba(255,255,255,.022), 0 0 0 2px rgba(103,232,249,.075), 0 12px 24px rgba(0,0,0,.14);
+        border-color: rgba(103,232,249,.26);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.032), 0 0 0 2px rgba(103,232,249,.050), 0 10px 22px rgba(0,0,0,.17);
     }
     .container_right .app_box::before{
         content: "";
@@ -5772,17 +5854,17 @@ patch_appcenter_card_polish() {
         inset: 0;
         height: auto;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.050), transparent 30%),
-            linear-gradient(90deg, rgba(35,200,228,.042), transparent 42%);
-        opacity: .78;
+            linear-gradient(180deg, rgba(255,255,255,.016), transparent 42%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.042), transparent 46%);
+        opacity: .48;
         pointer-events: none;
         z-index: 0;
     }
     .container_right .app_box:focus-within::before,
     .container_right .app_box:hover::before{
         background:
-            linear-gradient(180deg, rgba(255,255,255,.058), transparent 30%),
-            linear-gradient(90deg, rgba(35,200,228,.058), transparent 42%);
+            linear-gradient(180deg, rgba(255,255,255,.022), transparent 42%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.058), transparent 46%);
     }
     .container_right .app_box::after{
         content: "";
@@ -5792,30 +5874,30 @@ patch_appcenter_card_polish() {
         top: auto;
         bottom: 0;
         width: auto;
-        height: 2px;
+        height: 1px;
         border-radius: 999px;
-        background: linear-gradient(90deg, rgba(35,200,228,0), rgba(35,200,228,.56), rgba(61,220,151,.34), rgba(35,200,228,0));
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent),0), rgba(var(--nr-card-accent),.42), rgba(var(--nr-card-accent-2),.28), rgba(var(--nr-card-accent),0));
         filter: none;
-        display: block;
-        opacity: .62;
+        display: none;
+        opacity: 0;
         transition: opacity .18s ease;
         pointer-events: none;
         z-index: 0;
     }
     .container_right .app_box:hover{
         transform: none;
-        border-color: rgba(103,232,249,.30);
+        border-color: rgba(103,232,249,.32);
         background:
-            radial-gradient(circle at 26px 20px, rgba(103,232,249,.070), transparent 132px),
-            linear-gradient(180deg, rgba(35,48,68,.965), rgba(17,27,42,.935)),
-            rgba(10,15,24,.76);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.074), inset 0 0 0 1px rgba(255,255,255,.024), 0 14px 26px rgba(0,0,0,.17);
+            radial-gradient(circle at 18% 0%, rgba(35,200,228,.155), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.008)),
+            linear-gradient(145deg, rgba(18,32,52,.962), rgba(6,13,24,.915));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.038), 0 18px 34px rgba(0,0,0,.235);
     }
     .container_right .app_box:hover::after{
-        opacity: .70;
+        opacity: .50;
     }
     .container_right .app_box:hover::before{
-        opacity: .84;
+        opacity: .56;
     }
     .container_right .app_icon{
         position: relative;
@@ -5823,7 +5905,7 @@ patch_appcenter_card_polish() {
         grid-column: auto;
         grid-row: auto;
         float: none;
-        width: 72px;
+        width: 58px;
         margin: 0;
         text-align: center;
         z-index: 1;
@@ -5831,12 +5913,12 @@ patch_appcenter_card_polish() {
     .container_right .app_icon::before{
         content: "";
         position: absolute;
-        inset: 6px 7px 7px 7px;
-        border-radius: 12px;
+        inset: 5px;
+        border-radius: 10px;
         background:
-            radial-gradient(circle at 50% 20%, rgba(35,200,228,.20), transparent 54%),
-            linear-gradient(180deg, rgba(255,255,255,.082), rgba(255,255,255,.012));
-        opacity: .82;
+            linear-gradient(180deg, rgba(125,211,252,.082), rgba(255,255,255,.010)),
+            rgba(5,12,22,.42);
+        opacity: .86;
         pointer-events: none;
         z-index: 0;
     }
@@ -5844,34 +5926,32 @@ patch_appcenter_card_polish() {
         /* NRadio appcenter icon safe polish */
         position: relative;
         z-index: 1;
-        width: 58px;
-        height: 58px;
-        padding: 6px;
+        width: 52px;
+        height: 52px;
+        padding: 5px;
         object-fit: contain;
         box-sizing: border-box;
-        border: 1px solid rgba(125,211,252,.18);
+        border: 1px solid rgba(125,211,252,.20);
         border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.080)),
-            rgba(12,16,24,.24);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.20), inset 0 -1px 0 rgba(255,255,255,.052), 0 10px 18px rgba(0,0,0,.15);
-        filter: saturate(1.01) contrast(1.018);
+        background: rgba(6,12,22,.62);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.046), 0 9px 15px rgba(0,0,0,.155);
+        filter: saturate(1.045) contrast(1.018);
         transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
         will-change: transform;
     }
     .container_right .app_box:hover .app_icon_img{
         transform: none;
-        filter: saturate(1.06) contrast(1.028);
-        border-color: rgba(35,200,228,.28);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(255,255,255,.055), 0 11px 20px rgba(0,0,0,.16);
+        filter: saturate(1.075) contrast(1.024);
+        border-color: rgba(125,211,252,.28);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.040), 0 8px 13px rgba(0,0,0,.14);
     }
     .container_right .app_icon_img.nr_app_default_icon{
-        padding: 10px;
+        padding: 8px;
         background:
-            linear-gradient(180deg, rgba(148,163,184,.20), rgba(71,85,105,.18));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 10px 18px rgba(0,0,0,.16);
-        filter: grayscale(.08) saturate(.86) contrast(1.02);
-        opacity: .92;
+            linear-gradient(180deg, rgba(148,163,184,.18), rgba(71,85,105,.16));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.034), 0 8px 14px rgba(0,0,0,.14);
+        filter: grayscale(.06) saturate(.90) contrast(1.018);
+        opacity: .94;
     }
     .container_right .app_info{
         grid-area: auto;
@@ -5903,8 +5983,8 @@ patch_appcenter_card_polish() {
         min-width: 0;
         width: 100%;
         min-inline-size: 0;
-        min-height: 74px;
-        gap: 4px;
+        min-height: 62px;
+        gap: 5px;
         overflow: hidden;
         z-index: 1;
         align-self: start;
@@ -5912,12 +5992,12 @@ patch_appcenter_card_polish() {
     }
     .container_right .app_title::after{
         content: "";
-        width: 42px;
+        width: 44px;
         height: 1px;
         margin-top: 2px;
         border-radius: 999px;
-        background: linear-gradient(90deg, rgba(125,211,252,.20), transparent);
-        opacity: .70;
+        background: linear-gradient(90deg, rgba(125,211,252,.15), transparent);
+        opacity: .34;
         pointer-events: none;
     }
     .container_right .app_name{
@@ -5931,11 +6011,11 @@ patch_appcenter_card_polish() {
         min-inline-size: 0;
         height: auto;
         min-height: 0;
-        max-height: 40px;
-        color: #f8fbff;
-        font-size: 14.5px;
-        font-weight: 850;
-        line-height: 1.32;
+        max-height: 20px;
+        color: #f3f9ff;
+        font-size: 14px;
+        font-weight: 830;
+        line-height: 1.2;
         letter-spacing: 0;
         overflow: hidden;
         max-width: 100%;
@@ -5948,7 +6028,7 @@ patch_appcenter_card_polish() {
         white-space: normal;
         text-overflow: clip;
         text-align: left !important;
-        text-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 8px rgba(103,232,249,.055);
+        text-shadow: none;
         transition: color .18s ease, text-shadow .18s ease;
     }
     .container_right .app_name,
@@ -5958,8 +6038,8 @@ patch_appcenter_card_polish() {
         max-width: 100%;
     }
     .container_right .app_box:hover .app_name{
-        color: #ffffff;
-        text-shadow: 0 1px 1px rgba(0,0,0,.22);
+        color: #f7fcff;
+        text-shadow: none;
     }
     .container_right .app_version{
         grid-column: auto;
@@ -5974,16 +6054,14 @@ patch_appcenter_card_polish() {
         height: auto;
         margin-top: 0;
         padding: 2px 7px;
-        color: #dbeafe;
+        color: #d6e7f7;
         font-size: 12px;
         font-weight: 800;
         line-height: 1.2;
-        opacity: .84;
+        opacity: .90;
         border: 1px solid rgba(125,211,252,.18);
         border-radius: 7px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.024)),
-            rgba(15,23,42,.36);
+        background: rgba(6,12,22,.55);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -5993,9 +6071,9 @@ patch_appcenter_card_polish() {
         transition: color .18s ease, opacity .18s ease;
     }
     .container_right .app_box:hover .app_version{
-        color: #e6f8ff;
+        color: #e5f7ff;
         opacity: 1;
-        border-color: rgba(35,200,228,.30);
+        border-color: rgba(35,200,228,.28);
     }
     .container_right .app_meta_row{
         grid-column: auto;
@@ -6007,8 +6085,8 @@ patch_appcenter_card_polish() {
         z-index: 1;
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
-        margin: .08em 0 0;
+        gap: 5px;
+        margin: .10em 0 0;
         align-items: center !important;
         justify-content: flex-start;
         justify-self: start;
@@ -6031,11 +6109,10 @@ patch_appcenter_card_polish() {
         padding: 3px 7px;
         box-sizing: border-box;
         border-radius: 999px;
-        border: 1px solid rgba(255,255,255,.115);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.022));
-        color: #c7d0dc;
-        font-size: 10px;
+        border: 1px solid rgba(125,211,252,.15);
+        background: rgba(6,12,22,.44);
+        color: #c7d5e4;
+        font-size: 10.5px;
         font-weight: 800;
         line-height: 1;
         white-space: nowrap !important;
@@ -6045,7 +6122,7 @@ patch_appcenter_card_polish() {
         writing-mode: horizontal-tb !important;
         text-orientation: mixed !important;
         text-shadow: none;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(0,0,0,.080);
+        box-shadow: none;
     }
     .container_right .app_open_badge{
         min-width: 0;
@@ -6054,43 +6131,43 @@ patch_appcenter_card_polish() {
     .container_right .app_open_badge::before{
         content: "";
         flex: 0 0 auto;
-        width: 6px;
-        height: 6px;
+        width: 5px;
+        height: 5px;
         border-radius: 50%;
         background: currentColor;
-        box-shadow: 0 0 0 4px rgba(255,255,255,.030), 0 0 8px currentColor;
+        box-shadow: none;
     }
     .container_right .app_state_1{
-        color: #d5ffe3;
-        border-color: rgba(61,220,151,.28);
+        color: #cdfbdc;
+        border-color: rgba(61,220,151,.24);
         background:
-            linear-gradient(180deg, rgba(61,220,151,.120), rgba(34,197,94,.060)),
-            rgba(34,197,94,.045);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(21,128,61,.055);
+            linear-gradient(180deg, rgba(61,220,151,.080), rgba(34,197,94,.038)),
+            rgba(34,197,94,.034);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.026), 0 4px 9px rgba(21,128,61,.034);
     }
     .container_right .app_state_2{
-        color: #ffe3ac;
-        border-color: rgba(245,158,11,.30);
+        color: #f8dca8;
+        border-color: rgba(245,158,11,.21);
         background:
-            linear-gradient(180deg, rgba(245,158,11,.125), rgba(180,83,9,.060)),
-            rgba(245,158,11,.045);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(180,83,9,.055);
+            linear-gradient(180deg, rgba(245,158,11,.070), rgba(180,83,9,.034)),
+            rgba(245,158,11,.030);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.026), 0 4px 9px rgba(180,83,9,.034);
     }
     .container_right .app_state_0{
-        color: #d5e2f7;
-        border-color: rgba(255,255,255,.12);
+        color: #c8d3e2;
+        border-color: rgba(125,211,252,.12);
         background:
-            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.026)),
-            rgba(255,255,255,.030);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(0,0,0,.055);
+            linear-gradient(180deg, rgba(148,163,184,.026), rgba(148,163,184,.008)),
+            rgba(6,12,22,.38);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.016), 0 4px 9px rgba(0,0,0,.048);
     }
     .container_right .app_open_1{
-        color: #d7fbff;
-        border-color: rgba(35,200,228,.28);
+        color: #ccf8ff;
+        border-color: rgba(35,200,228,.24);
         background:
-            linear-gradient(180deg, rgba(35,200,228,.125), rgba(8,145,178,.058)),
-            rgba(35,200,228,.040);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 6px 12px rgba(8,145,178,.055);
+            linear-gradient(180deg, rgba(35,200,228,.080), rgba(8,145,178,.038)),
+            rgba(35,200,228,.034);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.026), 0 4px 9px rgba(8,145,178,.034);
     }
     .container_right .app_des{
         grid-area: desc;
@@ -6103,34 +6180,35 @@ patch_appcenter_card_polish() {
         min-width: 0;
         min-inline-size: 0;
         max-width: 100%;
-        height: auto;
-        margin-top: 12px;
+        height: 18px;
+        margin-top: 8px;
         padding: 0;
         box-sizing: border-box;
         border: 0;
         border-radius: 0;
         background: transparent;
-        color: #d1deec;
-        font-size: 13px;
-        line-height: 1.42;
-        opacity: .88;
+        color: #bdcadb;
+        font-size: 12.5px;
+        line-height: 18px;
+        opacity: .90;
         overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        text-overflow: clip;
+        display: block;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: initial;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
+        text-overflow: ellipsis;
         text-align: left !important;
         text-shadow: none;
         transition: color .18s ease, opacity .18s ease;
     }
     .container_right .app_box:hover .app_des{
-        color: #e0e8f4;
+        color: #d9e4f2;
         opacity: .92;
     }
     .container_right .app_des_empty{
-        display: -webkit-box;
+        display: none;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         font-size: 0;
@@ -6141,16 +6219,14 @@ patch_appcenter_card_polish() {
         text-overflow: clip;
     }
     .container_right .app_des_empty::before{
-        content: "应用功能与运行入口";
-        font-size: 13px;
-        line-height: 1.42;
+        content: "";
     }
     .container_right .app_action{
         position: absolute;
         z-index: 2;
-        left: 19px;
-        right: 19px;
-        bottom: 20px;
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
         float: none;
         width: auto;
         margin: 0;
@@ -6162,16 +6238,16 @@ patch_appcenter_card_polish() {
         position: absolute;
         left: 0;
         right: 0;
-        top: -11px;
+        top: -7px;
         height: 1px;
-        background: linear-gradient(90deg, rgba(125,211,252,.14), rgba(125,211,252,.050), transparent);
+        background: linear-gradient(90deg, transparent, rgba(125,211,252,.14), rgba(125,211,252,.045), transparent);
         pointer-events: none;
     }
     .container_right .action_list{
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 8px;
+        gap: 7px;
         min-width: 0;
         float: none;
         margin: 0;
@@ -6179,21 +6255,21 @@ patch_appcenter_card_polish() {
     }
     .container_right .action_list_li,
     .app_btn_class{
-        min-width: 52px;
-        height: 36px;
-        padding: 0 13px;
+        min-width: 54px;
+        height: 32px;
+        padding: 0 10px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(125,211,252,.18);
+        border: 1px solid rgba(125,211,252,.19);
         border-radius: 8px;
-        color: #e2e9f4;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,.082), rgba(255,255,255,.034)),
-            rgba(12,16,24,.35);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 8px 16px rgba(0,0,0,.105);
+        color: #e9f1fb;
+        background: rgba(6,12,22,.54);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.026), 0 6px 11px rgba(0,0,0,.10);
+        -webkit-backdrop-filter: blur(9px) saturate(1.06);
+        backdrop-filter: blur(9px) saturate(1.06);
         box-sizing: border-box;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 760;
         line-height: 1;
         white-space: nowrap;
@@ -6213,40 +6289,122 @@ patch_appcenter_card_polish() {
     .container_right .action_list_li:hover,
     .app_btn_class:hover{
         transform: none;
-        border-color: rgba(35,200,228,.34);
-        color: #eef8fb;
-        background:
-            linear-gradient(180deg, rgba(35,200,228,.120), rgba(61,220,151,.050)),
-            rgba(12,16,24,.42);
+        border-color: rgba(103,232,249,.30);
+        color: #f4fbff;
+        background: rgba(8,18,30,.70);
         -webkit-text-fill-color: currentColor;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.065), 0 9px 18px rgba(0,0,0,.115);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.032), 0 7px 12px rgba(0,0,0,.11);
     }
     .container_right .action_list_li:first-child{
         color: #d5e2f7;
-        border-color: rgba(148,163,184,.18);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,.026)),
-            rgba(255,255,255,.020);
+        border-color: rgba(148,163,184,.22);
+        background: rgba(6,12,22,.46);
     }
     .container_right .action_list_li:last-child{
         color: #f4fbff;
-        border-color: rgba(35,200,228,.32);
-        background:
-            linear-gradient(180deg, rgba(35,200,228,.135), rgba(61,220,151,.060)),
-            rgba(35,200,228,.040);
+        border-color: rgba(103,232,249,.31);
+        background: rgba(35,200,228,.068);
     }
     .app_btn_group{
         gap: 6px;
     }
     .app_btn_class{
         min-width: 96px;
-        height: 34px;
+        height: 32px;
         padding: 0 10px;
         border-radius: 8px;
-        color: #dfe7f2;
+        color: #eaf3fb;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,.030)),
-            rgba(12,16,24,.28);
+            linear-gradient(180deg, rgba(255,255,255,.036), rgba(255,255,255,.012)),
+            rgba(6,12,22,.56);
+    }
+    /* NRadio appcenter square card text alignment repair */
+    .container_right .app_box{
+        grid-template-columns: 58px minmax(0, 1fr) !important;
+        grid-template-areas:
+            "icon info"
+            "desc desc" !important;
+        column-gap: 11px !important;
+        row-gap: 8px !important;
+    }
+    .container_right .app_icon{
+        grid-area: icon !important;
+    }
+    .container_right .app_title{
+        grid-area: info !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 62px;
+        height: 62px !important;
+        max-height: 62px !important;
+        overflow: hidden !important;
+    }
+    .container_right .app_title::after{
+        display: none !important;
+    }
+    .container_right .app_name{
+        display: block !important;
+        grid-area: auto !important;
+        align-self: start !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        max-height: 20px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+        line-height: 1.2 !important;
+    }
+    .container_right .app_version{
+        grid-area: auto !important;
+        align-self: start !important;
+        justify-self: start !important;
+        width: auto !important;
+        max-width: 100% !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+    }
+    .container_right .app_meta_row{
+        grid-area: auto !important;
+        align-self: start !important;
+        justify-self: start !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        flex: 0 0 auto !important;
+        min-height: 20px;
+        padding: 3px 7px;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        max-width: none !important;
+    }
+    .container_right .app_des{
+        margin-top: 7px !important;
+        height: 18px !important;
+        line-height: 18px !important;
+        display: block !important;
+        -webkit-line-clamp: 1 !important;
+        -webkit-box-orient: initial !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+        text-overflow: ellipsis !important;
     }
     .mem_track{
         max-width: 280px;
@@ -6259,8 +6417,10 @@ patch_appcenter_card_polish() {
         /* NRadio appcenter memory bar safe polish */
         height: 8px;
         border-radius: 999px;
-        background: linear-gradient(180deg, rgba(255,255,255,.135), rgba(255,255,255,.078));
-        box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
+        background:
+            linear-gradient(180deg, rgba(15,23,42,.74), rgba(4,9,17,.73)),
+            rgba(4,8,16,.70);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.28), inset 0 0 0 1px rgba(125,211,252,.082);
         overflow: hidden;
     }
     .mem_progress_inner{
@@ -6268,7 +6428,7 @@ patch_appcenter_card_polish() {
         height: 100%;
         border-radius: inherit;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 42%),
+            linear-gradient(180deg, rgba(255,255,255,.090), rgba(255,255,255,0) 42%),
             linear-gradient(90deg, #23c8e4, #3ddc97 72%, #6ca2ff);
         box-shadow: none;
         transition: width .25s ease;
@@ -6280,7 +6440,7 @@ patch_appcenter_card_polish() {
         right: 0;
         top: 0;
         height: 1px;
-        background: rgba(255,255,255,.30);
+        background: rgba(255,255,255,.10);
         pointer-events: none;
     }
     .app_status_panel{
@@ -6293,19 +6453,22 @@ patch_appcenter_card_polish() {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
-        min-height: 312px;
+        min-height: 0;
         margin: 0;
-        padding: 18px 18px 20px;
+        padding: 12px;
         box-sizing: border-box;
         border-radius: 8px;
-        border: 1px solid rgba(92,110,146,.32);
+        border: 1px solid rgba(125,211,252,.17);
         background:
-            radial-gradient(circle at 0% 0%, rgba(35,200,228,.105), transparent 28%),
-            linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.016)),
-            rgba(12,16,24,.52);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 14px 30px rgba(0,0,0,.15);
-        -webkit-backdrop-filter: blur(10px) saturate(1.07);
-        backdrop-filter: blur(10px) saturate(1.07);
+            linear-gradient(145deg, rgba(255,255,255,.028), rgba(255,255,255,.006) 38%, rgba(125,211,252,.012)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.074), transparent 34%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.068), transparent 36%),
+            linear-gradient(180deg, rgba(13,23,38,.945), rgba(5,11,21,.855)),
+            rgba(4,8,16,.78);
+        background-blend-mode: normal, screen, soft-light, normal, normal;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.036), inset 0 -1px 0 rgba(4,8,15,.62), inset 0 0 0 1px rgba(103,232,249,.024), 0 12px 26px rgba(0,0,0,.19);
+        -webkit-backdrop-filter: blur(10px) saturate(1.05);
+        backdrop-filter: blur(10px) saturate(1.05);
     }
     .app_status_panel::before{
         content: "";
@@ -6314,8 +6477,8 @@ patch_appcenter_card_polish() {
         right: 16px;
         top: 0;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(35,200,228,.52), transparent);
-        opacity: .50;
+        background: linear-gradient(90deg, transparent, rgba(103,232,249,.34), transparent);
+        opacity: .44;
         pointer-events: none;
         z-index: -1;
     }
@@ -6326,8 +6489,8 @@ patch_appcenter_card_polish() {
         right: 16px;
         bottom: 0;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(35,200,228,.30), rgba(61,220,151,.20), transparent);
-        opacity: .58;
+        background: linear-gradient(90deg, transparent, rgba(96,165,250,.18), rgba(61,220,151,.13), transparent);
+        opacity: .48;
         pointer-events: none;
         z-index: -1;
     }
@@ -6348,7 +6511,7 @@ patch_appcenter_card_polish() {
         background:
             radial-gradient(circle at 0% 0%, rgba(35,200,228,.070), transparent 30%),
             rgba(15,23,42,.42);
-        color: #dbeafe;
+        color: #cfe0f3;
         line-height: 1.7;
     }
     .app_empty_state strong{
@@ -6362,11 +6525,11 @@ patch_appcenter_card_polish() {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 14px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(125,211,252,.14);
-        color: #d8f7ff;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding-bottom: 9px;
+        border-bottom: 1px solid rgba(125,211,252,.115);
+        color: #e6f3ff;
         font-size: 12.5px;
         font-weight: 850;
         white-space: nowrap;
@@ -6384,73 +6547,118 @@ patch_appcenter_card_polish() {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: #23c8e4;
-        box-shadow: 0 0 0 6px rgba(35,200,228,.12), 0 0 9px rgba(35,200,228,.46);
+        background: #55deef;
+        box-shadow: 0 0 0 4px rgba(96,165,250,.092), 0 0 7px rgba(103,232,249,.34);
     }
     .app_status_grid{
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
+        gap: 6px;
+        margin-bottom: 8px;
     }
     .app_status_time{
-        color: #cbd5e1;
-        font-weight: 800;
-        font-style: italic;
-        font-size: 9.5px;
+        flex: 0 0 auto;
+        min-width: 68px;
+        padding: 3px 6px 4px;
+        box-sizing: border-box;
+        border: 1px solid rgba(103,232,249,.20);
+        border-radius: 7px;
+        color: #e8fbff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.095), rgba(35,200,228,.034)),
+            rgba(5,13,25,.66);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.038), 0 5px 10px rgba(0,0,0,.11);
+        font-weight: 900;
+        font-style: normal;
+        font-size: 11.5px;
+        line-height: 1;
+        letter-spacing: 0;
+        text-align: center;
         white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        -webkit-text-fill-color: currentColor;
+        user-select: none;
     }
     .app_status_tile{
-        min-height: 64px;
-        padding: 12px 13px 11px;
-        border: 1px solid rgba(125,211,252,.16);
+        --nr-tile-accent: 96,165,250;
+        min-height: 48px;
+        padding: 8px 8px 7px;
+        border: 1px solid rgba(125,211,252,.14);
         border-radius: 7px;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,.030)),
-            rgba(7,16,29,.38);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.050), 0 8px 16px rgba(0,0,0,.092);
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-tile-accent),.092), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.007)),
+            rgba(5,13,25,.60);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.026), 0 7px 13px rgba(0,0,0,.11);
+        -webkit-backdrop-filter: blur(10px) saturate(1.06);
+        backdrop-filter: blur(10px) saturate(1.06);
         transition: border-color .18s ease, box-shadow .18s ease;
     }
+    .app_status_tile:nth-child(2){
+        --nr-tile-accent: 61,220,151;
+    }
+    .app_status_tile:nth-child(3){
+        --nr-tile-accent: 167,139,250;
+    }
     .app_status_tile:hover{
-        border-color: rgba(35,200,228,.30);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.058), 0 9px 18px rgba(0,0,0,.105);
+        border-color: rgba(125,211,252,.22);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.034), 0 8px 15px rgba(0,0,0,.13);
     }
     .app_status_tile strong{
-        color: #f8fbff;
-        font-size: 24px;
-        line-height: 26px;
+        color: #f4fbff;
+        font-size: 20px;
+        line-height: 22px;
         text-shadow: none;
     }
     .app_status_tile strong::after{
         content: "";
         display: block;
-        width: 24px;
+        width: 20px;
         height: 1px;
-        margin-top: 8px;
+        margin-top: 4px;
         border-radius: 999px;
-        background: linear-gradient(90deg, rgba(35,200,228,.42), transparent);
+        background: linear-gradient(90deg, rgba(var(--nr-tile-accent),.46), transparent);
     }
     .app_status_tile span{
         display: block;
-        margin-top: 6px;
-        color: #9fb1cf;
+        margin-top: 4px;
+        color: #a8b8cd;
         font-size: 10.5px;
         font-weight: 800;
         opacity: .96;
         white-space: nowrap;
     }
     .app_status_metric{
-        padding: 11px 0 12px;
-        border-top: 1px solid rgba(125,211,252,.105);
+        --nr-metric-accent: 96,165,250;
+        margin-top: 6px;
+        padding: 8px;
+        border: 1px solid rgba(125,211,252,.12);
+        border-radius: 7px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--nr-metric-accent),.068), transparent 68%),
+            linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.006)),
+            rgba(5,13,25,.55);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.022);
+        -webkit-backdrop-filter: blur(9px) saturate(1.05);
+        backdrop-filter: blur(9px) saturate(1.05);
+    }
+    .app_status_metric:nth-of-type(3){
+        --nr-metric-accent: 248,113,113;
+    }
+    .app_status_metric:nth-of-type(4){
+        --nr-metric-accent: 96,165,250;
+    }
+    .app_status_metric:nth-of-type(5){
+        --nr-metric-accent: 61,220,151;
     }
     .app_status_metric_row{
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 7px;
-        color: #cbd5e1;
-        font-size: 12.5px;
+        gap: 8px;
+        margin-bottom: 5px;
+        color: #cbd8e7;
+        font-size: 11.5px;
         font-weight: 700;
         white-space: nowrap;
     }
@@ -6464,21 +6672,23 @@ patch_appcenter_card_polish() {
     }
     .app_status_metric_row strong{
         flex: 0 1 auto;
-        color: #f8fafc;
+        color: #f4f9ff;
         max-width: 70%;
         overflow: hidden;
         text-align: right;
         text-overflow: ellipsis;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 900;
-        text-shadow: 0 0 8px rgba(148,163,184,.16);
+        text-shadow: 0 1px 1px rgba(0,0,0,.20);
     }
     .app_status_bar{
         position: relative;
-        height: 7px;
+        height: 5px;
         border-radius: 7px;
-        background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.085));
-        box-shadow: inset 0 1px 2px rgba(0,0,0,.22);
+        background:
+            linear-gradient(180deg, rgba(15,23,42,.76), rgba(4,9,17,.72)),
+            rgba(4,8,16,.70);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.28), inset 0 0 0 1px rgba(125,211,252,.064);
         overflow: hidden;
     }
     .app_status_bar::after{
@@ -6488,7 +6698,7 @@ patch_appcenter_card_polish() {
         right: 0;
         top: 0;
         height: 1px;
-        background: rgba(255,255,255,.18);
+        background: rgba(255,255,255,.045);
         pointer-events: none;
     }
     .app_status_bar span{
@@ -6498,7 +6708,7 @@ patch_appcenter_card_polish() {
         width: 0;
         border-radius: inherit;
         background:
-            linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,0) 46%),
+            linear-gradient(180deg, rgba(255,255,255,.060), rgba(255,255,255,0) 46%),
             linear-gradient(90deg, #23c8e4, #3ddc97);
         box-shadow: none;
         transition: width .25s ease;
@@ -6512,12 +6722,519 @@ patch_appcenter_card_polish() {
     .app_status_mem_bar{
         background: linear-gradient(90deg, #3ddc97, #23c8e4 58%, #6ca2ff) !important;
     }
+    /* NRadio appcenter restrained cyan finish */
+    .appcontainer :where(.container_left .app_menu,
+        .mem_header,
+        .container_right .app_name,
+        .container_right .app_version,
+        .container_right .app_state_badge,
+        .container_right .app_open_badge,
+        .container_right .app_des,
+        .container_right .action_list_li,
+        .app_btn_class,
+        .app_status_panel,
+        .app_empty_state){
+        font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+        font-kerning: normal;
+        letter-spacing: 0;
+    }
+    .container_left .app_menu.menu_active{
+        border-color: rgba(35,200,228,.34);
+        background:
+            linear-gradient(90deg, rgba(35,200,228,.150), rgba(61,220,151,.045)),
+            linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.014));
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.050), 0 .45em 1em rgba(0,0,0,.12);
+    }
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.22);
+        background:
+            radial-gradient(circle at 16% 0%, rgba(35,200,228,.120), transparent 40%),
+            radial-gradient(circle at 100% 100%, rgba(96,165,250,.046), transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,.020), rgba(255,255,255,.005)),
+            linear-gradient(145deg, rgba(12,25,42,.972), rgba(4,10,19,.940));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.045),
+            inset 0 0 0 .0625rem rgba(103,232,249,.045),
+            0 1rem 2rem rgba(0,0,0,.22);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(37,212,240,.34);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            inset 0 0 0 .0625rem rgba(103,232,249,.075),
+            0 1.1rem 2.2rem rgba(0,0,0,.24);
+    }
+    .container_right .app_box::before{
+        opacity: .44;
+    }
+    .container_right .app_icon_img{
+        filter: saturate(1.07) contrast(1.022);
+    }
+    .container_right .app_name{
+        color: #f7fbff;
+        text-shadow: none;
+    }
+    .container_right .app_version{
+        color: #c7d8ee;
+        border-color: rgba(125,211,252,.16);
+        background: rgba(4,10,19,.52);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        color: #d9e8f8;
+        border-color: rgba(125,211,252,.16);
+        background: rgba(4,10,19,.44);
+    }
+    .container_right .app_state_1{
+        color: #d8ffe9;
+        border-color: rgba(61,220,151,.24);
+        background: rgba(21,128,61,.12);
+    }
+    .container_right .app_open_1{
+        color: #d8f9ff;
+        border-color: rgba(35,200,228,.24);
+        background: rgba(8,145,178,.13);
+    }
+    .container_right .app_des{
+        color: #b9c9dc;
+    }
+    .container_right .action_list_li,
+    .app_btn_class{
+        border-color: rgba(125,211,252,.22);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.030), rgba(255,255,255,.008)),
+            rgba(5,12,22,.62);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.045),
+            0 .55em 1.05em rgba(0,0,0,.16);
+    }
+    .container_right .action_list_li:hover,
+    .app_btn_class:hover{
+        border-color: rgba(37,212,240,.36);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.120), rgba(35,200,228,.034)),
+            rgba(5,12,22,.68);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.20);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.048),
+            inset 0 0 0 .0625rem rgba(103,232,249,.050),
+            0 1rem 2rem rgba(0,0,0,.22);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.14);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--nr-tile-accent, 96,165,250),.066), transparent 70%),
+            rgba(4,10,19,.58);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.038);
+    }
+    .app_status_metric{
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--nr-metric-accent),.062), transparent 70%),
+            rgba(4,10,19,.56);
+    }
+    /* NRadio appcenter card-panel finish */
+    .container_left .app_menu{
+        color: #dcecff;
+        -webkit-text-fill-color: #dcecff;
+        border-color: rgba(125,211,252,.06);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.024);
+    }
+    .container_left .app_menu:hover{
+        color: #f3fbff;
+        -webkit-text-fill-color: #f3fbff;
+        border-color: rgba(37,212,240,.24);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.075), rgba(35,200,228,.018)),
+            rgba(4,10,19,.18);
+    }
+    .container_left .app_menu.menu_active{
+        color: #f7fdff;
+        -webkit-text-fill-color: #f7fdff;
+        border-color: rgba(37,212,240,.38);
+    }
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.24);
+        background:
+            radial-gradient(circle at 16% 0%, rgba(35,200,228,.125), transparent 40%),
+            radial-gradient(circle at 100% 100%, rgba(96,165,250,.052), transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.005)),
+            linear-gradient(145deg, rgba(12,25,42,.978), rgba(4,10,19,.944));
+    }
+    .container_right .app_box::after{
+        display: block;
+        opacity: .20;
+        background: linear-gradient(90deg, transparent, rgba(37,212,240,.34), rgba(61,220,151,.20), transparent);
+    }
+    .container_right .app_box:hover::after,
+    .container_right .app_box:focus-within::after{
+        opacity: .34;
+    }
+    .container_right .app_icon::before{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            inset 0 0 0 .0625rem rgba(125,211,252,.065);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(125,211,252,.26);
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.075), rgba(255,255,255,.008)),
+            rgba(4,10,19,.64);
+    }
+    .container_right .app_box:hover .app_icon_img{
+        border-color: rgba(37,212,240,.34);
+    }
+    .container_right .app_name{
+        color: #f8fcff;
+    }
+    .container_right .app_des{
+        color: #c0cee0;
+    }
+    .container_right .action_list_li,
+    .app_btn_class{
+        color: #eff8ff;
+        border-color: rgba(125,211,252,.24);
+    }
+    .container_right .action_list_li:last-child,
+    .app_btn_class:hover{
+        border-color: rgba(37,212,240,.38);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.135), rgba(35,200,228,.038)),
+            rgba(5,12,22,.70);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.22);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.030), rgba(255,255,255,.006) 38%, rgba(125,211,252,.014)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.080), transparent 34%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.072), transparent 36%),
+            linear-gradient(180deg, rgba(13,23,38,.950), rgba(5,11,21,.862)),
+            rgba(4,8,16,.80);
+    }
+    .app_status_head{
+        color: #ecf8ff;
+        border-bottom-color: rgba(125,211,252,.15);
+    }
+    .app_status_time{
+        color: #edfdff;
+        border-color: rgba(37,212,240,.25);
+    }
+    .app_status_tile strong,
+    .app_status_metric_row strong{
+        color: #f7fcff;
+    }
+    .mem_progress,
+    .app_status_bar{
+        box-shadow:
+            inset 0 .08em .18em rgba(0,0,0,.38),
+            inset 0 0 0 .0625rem rgba(103,232,249,.070);
+    }
+    /* NRadio appcenter element-only finish: cards and status panel */
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.27);
+        background:
+            radial-gradient(circle at 18% 0%, rgba(35,200,228,.136), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.006)),
+            linear-gradient(145deg, rgba(15,29,47,.970), rgba(5,11,21,.932));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.040),
+            inset 0 -0.08em 0 rgba(3,7,14,.62),
+            0 .86em 1.62em rgba(0,0,0,.21);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(103,232,249,.34);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.045),
+            inset 0 -0.08em 0 rgba(3,7,14,.60),
+            0 .96em 1.72em rgba(0,0,0,.23);
+    }
+    .container_right .app_box::before{
+        opacity: .54;
+    }
+    .container_right .app_box::after{
+        opacity: .26;
+    }
+    .container_right .app_icon::before{
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.092), rgba(255,255,255,.010)),
+            rgba(5,12,22,.46);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(125,211,252,.28);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            0 .48em .84em rgba(0,0,0,.145);
+    }
+    .container_right .app_name{
+        color: #f9fdff;
+    }
+    .container_right .app_version{
+        border-color: rgba(125,211,252,.22);
+        color: #dcecf8;
+        background: rgba(6,12,22,.60);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(125,211,252,.20);
+        background: rgba(6,12,22,.50);
+    }
+    .container_right .app_state_1{
+        color: #d9ffe8;
+        border-color: rgba(61,220,151,.30);
+        background:
+            linear-gradient(180deg, rgba(61,220,151,.105), rgba(34,197,94,.044)),
+            rgba(34,197,94,.040);
+    }
+    .container_right .app_open_1{
+        color: #dcfbff;
+        border-color: rgba(35,200,228,.30);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.105), rgba(8,145,178,.044)),
+            rgba(35,200,228,.040);
+    }
+    .container_right .app_des{
+        color: #c9d6e5;
+    }
+    .container_right .action_list_li{
+        color: #f3f9ff;
+        border-color: rgba(125,211,252,.28);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.032), rgba(255,255,255,.006)),
+            rgba(5,12,22,.64);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.040),
+            0 .46em .82em rgba(0,0,0,.13);
+    }
+    .container_right .action_list_li:hover{
+        border-color: rgba(37,212,240,.40);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.145), rgba(35,200,228,.040)),
+            rgba(5,12,22,.70);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.25);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.046),
+            inset 0 0 0 .0625rem rgba(103,232,249,.044),
+            0 .96em 1.9em rgba(0,0,0,.22);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.16);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.038),
+            0 .36em .70em rgba(0,0,0,.10);
+    }
+    .app_status_metric_row strong{
+        text-shadow: none;
+        font-variant-numeric: tabular-nums;
+    }
+    .app_status_head span::before{
+        background: #67e8f9;
+        box-shadow: 0 0 0 .30em rgba(96,165,250,.105), 0 0 .62em rgba(103,232,249,.38);
+    }
+    .app_status_time{
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.112), rgba(35,200,228,.038)),
+            rgba(5,13,25,.70);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.044), 0 .42em .76em rgba(0,0,0,.12);
+    }
+    .app_status_tile strong::after{
+        background: linear-gradient(90deg, rgba(var(--nr-tile-accent),.55), transparent);
+    }
+    .app_status_bar span{
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.12), 0 0 .62em rgba(35,200,228,.16);
+    }
+    .app_status_temp_bar{
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,0) 46%),
+            linear-gradient(90deg, #3ddc97, #facc15, #fb7185);
+    }
+    .app_status_cpu_bar{
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,0) 46%),
+            linear-gradient(90deg, #23c8e4, #60a5fa);
+    }
+    .app_status_mem_bar{
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.070), rgba(255,255,255,0) 46%),
+            linear-gradient(90deg, #3ddc97, #23c8e4, #60a5fa);
+    }
+    .container_right .app_box:hover .app_name,
+    .container_right .app_box:focus-within .app_name{
+        color: #ffffff;
+    }
+    .container_right .app_box:hover .app_des,
+    .container_right .app_box:focus-within .app_des{
+        color: #d7e3f0;
+        opacity: .96;
+    }
+    .container_right .app_box:hover .app_version,
+    .container_right .app_box:focus-within .app_version{
+        color: #e9f7ff;
+        border-color: rgba(37,212,240,.32);
+        background: rgba(6,12,22,.70);
+    }
+    .container_right .app_box:hover .app_state_badge,
+    .container_right .app_box:hover .app_open_badge,
+    .container_right .app_box:focus-within .app_state_badge,
+    .container_right .app_box:focus-within .app_open_badge{
+        border-color: rgba(125,211,252,.26);
+    }
+    .container_right .app_state_0{
+        color: #d3dce8;
+        border-color: rgba(148,163,184,.18);
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.040), rgba(148,163,184,.012)),
+            rgba(6,12,22,.42);
+    }
+    .container_right .app_state_2{
+        color: #ffe5b5;
+        border-color: rgba(245,158,11,.28);
+        background:
+            linear-gradient(180deg, rgba(245,158,11,.090), rgba(180,83,9,.040)),
+            rgba(245,158,11,.036);
+    }
+    .container_right .action_list_li:focus-visible{
+        outline: none;
+        border-color: rgba(103,232,249,.46);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            0 0 0 .12em rgba(103,232,249,.12),
+            0 .46em .82em rgba(0,0,0,.13);
+    }
+    .container_right .action_list_li:active{
+        border-color: rgba(37,212,240,.44);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.110), rgba(35,200,228,.034)),
+            rgba(4,10,19,.72);
+        box-shadow:
+            inset 0 .10em .18em rgba(0,0,0,.20),
+            0 .30em .58em rgba(0,0,0,.12);
+    }
+    .container_right .app_icon_img.nr_app_default_icon{
+        border-color: rgba(148,163,184,.24);
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.20), rgba(71,85,105,.18));
+    }
+    .container_right .app_box:hover .app_icon::before,
+    .container_right .app_box:focus-within .app_icon::before{
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.120), rgba(255,255,255,.014)),
+            rgba(5,12,22,.52);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        border-color: rgba(103,232,249,.36);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.058),
+            0 .52em .90em rgba(0,0,0,.16);
+    }
+    .container_right .app_state_badge::before,
+    .container_right .app_open_badge::before{
+        box-shadow: 0 0 .42em currentColor;
+    }
+    .container_right .action_list_li:first-child{
+        color: #d8e4f1;
+        border-color: rgba(148,163,184,.24);
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.030), rgba(148,163,184,.008)),
+            rgba(5,12,22,.58);
+    }
+    .container_right .action_list_li:last-child{
+        color: #f3fcff;
+        border-color: rgba(37,212,240,.36);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.125), rgba(35,200,228,.034)),
+            rgba(5,12,22,.68);
+    }
+    .container_right .action_list_li:last-child:hover{
+        border-color: rgba(103,232,249,.48);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.170), rgba(35,200,228,.050)),
+            rgba(5,12,22,.72);
+    }
+    .app_status_panel::before{
+        opacity: .52;
+    }
+    .app_status_panel::after{
+        opacity: .54;
+    }
+    .app_status_tile:hover strong{
+        color: #ffffff;
+    }
+    .app_status_tile:hover{
+        border-color: rgba(125,211,252,.24);
+    }
+    .app_status_tile span,
+    .app_status_metric_row span{
+        color: #b7c7d9;
+    }
+    .app_status_metric_row strong{
+        color: #f8fcff;
+    }
+    .app_status_metric{
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--nr-metric-accent),.078), transparent 68%),
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.007)),
+            rgba(5,13,25,.58);
+    }
+    .app_status_metric:nth-of-type(3){
+        border-color: rgba(248,113,113,.18);
+    }
+    .app_status_metric:nth-of-type(4){
+        border-color: rgba(96,165,250,.18);
+    }
+    .app_status_metric:nth-of-type(5){
+        border-color: rgba(61,220,151,.18);
+    }
+    .app_status_bar{
+        background:
+            linear-gradient(180deg, rgba(15,23,42,.82), rgba(4,9,17,.76)),
+            rgba(4,8,16,.74);
+    }
+    .app_status_bar::after{
+        background: rgba(255,255,255,.060);
+    }
+    .container_right .app_version,
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.030);
+    }
+    .container_right .app_state_badge::before,
+    .container_right .app_open_badge::before{
+        opacity: .95;
+    }
+    .container_right .app_action::before{
+        background: linear-gradient(90deg, transparent, rgba(125,211,252,.18), rgba(61,220,151,.070), transparent);
+    }
+    .app_status_tile{
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-tile-accent),.105), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.030), rgba(255,255,255,.008)),
+            rgba(5,13,25,.62);
+    }
+    .app_status_tile strong{
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0;
+    }
+    .app_status_metric_row{
+        color: #d0ddeb;
+    }
+    .app_status_metric_row span{
+        font-weight: 760;
+    }
     @media (max-width: 1180px){
         .appcontainer{
             --nr-status-rail: 100%;
             --nr-status-reserve: 0px;
             --nr-status-gap: 0px;
             --nr-status-edge: 0;
+            --nr-app-card-size: clamp(190px, 30vw, 230px);
         }
         .app_btn_box{
             padding-right: 0;
@@ -6539,11 +7256,12 @@ patch_appcenter_card_polish() {
             margin: 0 0 14px;
         }
         .container_right{
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(var(--nr-app-card-size), var(--nr-app-card-size)));
+            justify-content: start;
             padding-right: 0 !important;
         }
         .container_right .app_box:nth-child(n)::after{
-            background: linear-gradient(90deg, rgba(35,200,228,0), rgba(35,200,228,.52), rgba(61,220,151,.30), rgba(35,200,228,0));
+            background: linear-gradient(90deg, rgba(var(--nr-card-accent),0), rgba(var(--nr-card-accent),.38), rgba(var(--nr-card-accent-2),.24), rgba(var(--nr-card-accent),0));
         }
         .app_status_panel{
             min-height: 0;
@@ -6578,10 +7296,14 @@ patch_appcenter_card_polish() {
             box-shadow: none;
         }
         .container_right{
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
             padding-right: 0 !important;
         }
         .container_right .app_box{
-            min-height: 168px;
+            aspect-ratio: 1 / 1;
+            width: auto !important;
+            max-width: none;
+            min-height: 0;
         }
         .app_status_panel{
             position: relative;
@@ -6597,6 +7319,137 @@ patch_appcenter_card_polish() {
         }
         .app_status_grid{
             grid-template-columns: 1fr;
+        }
+    }
+    /* NRadio appcenter router hot polish: user pass 2 */
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.30);
+        background:
+            radial-gradient(circle at 16% -4%, rgba(103,232,249,.165), transparent 39%),
+            radial-gradient(circle at 104% 104%, rgba(96,165,250,.070), transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,.032), rgba(255,255,255,.007)),
+            linear-gradient(145deg, rgba(16,31,50,.982), rgba(4,10,19,.944));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            inset 0 0 0 .0625rem rgba(103,232,249,.055),
+            inset 0 -.08em 0 rgba(3,7,14,.66),
+            0 .96em 1.9em rgba(0,0,0,.235);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(103,232,249,.38);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            inset 0 -.08em 0 rgba(3,7,14,.60),
+            0 1.02em 1.86em rgba(0,0,0,.24);
+    }
+    .container_right .app_box::before{
+        opacity: .50;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.022), transparent 43%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.062), transparent 46%);
+    }
+    .container_right .app_box::after{
+        left: 16px;
+        right: 16px;
+        opacity: .32;
+    }
+    .container_right .app_icon{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 58px;
+        align-self: start;
+    }
+    .container_right .app_icon::before{
+        inset: 3px;
+        border-radius: 11px;
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.105), rgba(255,255,255,.012)),
+            rgba(4,10,19,.54);
+    }
+    .container_right .app_icon_img{
+        width: 52px;
+        height: 52px;
+        margin: 0 auto;
+        border-color: rgba(125,211,252,.32);
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.082), rgba(255,255,255,.010)),
+            rgba(4,10,19,.66);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            0 .44em .78em rgba(0,0,0,.15);
+    }
+    .container_right .app_name{
+        color: #fbfdff;
+        font-weight: 850;
+    }
+    .container_right .app_version{
+        max-width: calc(100% - 2px) !important;
+        border-color: rgba(125,211,252,.25);
+        background: rgba(5,12,22,.66);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(125,211,252,.24);
+        background: rgba(5,12,22,.56);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.034);
+    }
+    .container_right .app_des{
+        color: #d0dceb;
+        opacity: .94;
+    }
+    .container_right .action_list_li{
+        border-color: rgba(125,211,252,.30);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.036), rgba(255,255,255,.008)),
+            rgba(5,12,22,.66);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.044),
+            0 .48em .86em rgba(0,0,0,.14);
+    }
+    .container_right .action_list_li:last-child{
+        border-color: rgba(37,212,240,.42);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.150), rgba(35,200,228,.040)),
+            rgba(5,12,22,.72);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.27);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.036), rgba(255,255,255,.007) 38%, rgba(125,211,252,.018)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.092), transparent 34%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.082), transparent 36%),
+            linear-gradient(180deg, rgba(13,23,38,.960), rgba(5,11,21,.874)),
+            rgba(4,8,16,.82);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            inset 0 0 0 .0625rem rgba(103,232,249,.048),
+            0 1.02em 1.96em rgba(0,0,0,.23);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.18);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-tile-accent, 96,165,250),.112), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.009)),
+            rgba(5,13,25,.64);
+    }
+    .app_status_metric_row strong,
+    .app_status_tile strong{
+        font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 760px){
+        .container_right{
+            grid-template-columns: 1fr !important;
+            gap: 12px;
+        }
+        .container_right .app_box{
+            aspect-ratio: auto;
+            min-height: 186px;
+        }
+        .container_right .action_list{
+            gap: 6px;
         }
     }
 EOF_APPCENTER_CARD_POLISH_CSS
@@ -7243,7 +8096,8 @@ EOF_APPCENTER_EMPTY_STATE_JS
     cp "$tmp_ready" "$TPL"
 
     verify_template_marker 'NRadio appcenter card polish: visual-only layer' '应用商店卡片美化 CSS'
-    verify_template_marker 'NRadio appcenter card polish V2.0.25 full repair layer' '应用商店 V2.0.25 修复美化 CSS'
+    verify_template_marker 'NRadio appcenter card polish V2.0.60 full repair layer' '应用商店 V2.0.60 修复美化 CSS'
+    verify_template_marker 'NRadio appcenter router hot polish: user pass 2' '应用商店本轮热更精修 CSS'
     verify_template_marker '<div class="app_meta_row"' '应用商店卡片状态徽标'
     verify_template_marker 'status_label: db.status_label' '应用商店卡片状态标签数据'
     verify_template_marker 'app_open_badge app_open_1' '应用商店后台状态徽标'
@@ -8211,7 +9065,10 @@ run_openclash_selfcheck() {
     [ -s /etc/openclash/core_version ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
     [ -x /etc/openclash/core/clash ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
     [ -x /etc/openclash/core/clash_meta ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
-    [ -f /etc/openclash/ASN.mmdb ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
+    if ! openclash_asn_mmdb_valid; then
+        log "runtime:  $OPENCLASH_DISPLAY_NAME ASN.mmdb missing or invalid"
+        oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
+    fi
     selfcheck_appcenter_route_matches "luci-app-openclash" "admin/services/openclash" || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
     selfcheck_luci_route_ok "admin/services/openclash" || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
     selfcheck_luci_route_ok "admin/services/openclash/settings" || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
@@ -9702,6 +10559,28 @@ hakimi_enable_custom_rules() {
     uci commit openclash >/dev/null 2>&1 || die "保存哈基米自定义规则开关失败"
 }
 
+openclash_asn_mmdb_valid() {
+    asn_file="/etc/openclash/ASN.mmdb"
+    [ -f "$asn_file" ] || return 1
+    asn_size="$(wc -c < "$asn_file" 2>/dev/null | tr -d ' ')"
+    case "$asn_size" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$asn_size" -ge 1048576 ] 2>/dev/null
+}
+
+openclash_require_asn_mmdb() {
+    openclash_asn_mmdb_valid && return 0
+    if [ -L /etc/openclash ]; then
+        openclash_real_path="$(readlink /etc/openclash 2>/dev/null || true)"
+    else
+        openclash_real_path="/etc/openclash"
+    fi
+    die "$OPENCLASH_DISPLAY_NAME ASN.mmdb 缺失或异常：/etc/openclash/ASN.mmdb（实际目录：${openclash_real_path:-/etc/openclash}）。请先补齐 ASN.mmdb，再迁移或重载 $OPENCLASH_DISPLAY_NAME"
+}
+
 run_hakimi_easy_rule_helper() {
     require_root
     mkdir -p "$WORKDIR"
@@ -9767,6 +10646,7 @@ run_hakimi_easy_rule_helper() {
     case "$UI_READ_RESULT" in
         y|Y|yes|YES)
             [ -x /etc/init.d/openclash ] || die "$OPENCLASH_DISPLAY_NAME 服务脚本不存在"
+            openclash_require_asn_mmdb
             /etc/init.d/openclash restart >/dev/null 2>&1 || die "$OPENCLASH_DISPLAY_NAME 重载失败"
             log "结果:   $OPENCLASH_DISPLAY_NAME 已重载"
             ;;
@@ -11015,11 +11895,11 @@ local http=require"luci.http"
 local sys=require"luci.sys"
 local uci=require"luci.model.uci".cursor()
 function index()
-entry({"admin", "services", "AdGuardHome"},alias("admin", "services", "AdGuardHome", "oem"),_("AdGuard Home"), 10).dependent = true
-entry({"admin","services","AdGuardHome","oem"},template("AdGuardHome/oem_wrapper"),_("Overview"),0).leaf = true
-entry({"admin","services","AdGuardHome","base"},cbi("AdGuardHome/base"),_("Base Setting"),1).leaf = true
-entry({"admin","services","AdGuardHome","log"},form("AdGuardHome/log"),_("Log"),2).leaf = true
-entry({"admin","services","AdGuardHome","manual"},cbi("AdGuardHome/manual"),_("Manual Config"),3).leaf = true
+entry({"admin", "services", "AdGuardHome"},alias("admin", "services", "AdGuardHome", "oem"),_("AdGuardHome"), 10).dependent = true
+entry({"admin","services","AdGuardHome","oem"},template("AdGuardHome/oem_wrapper"),_("总览"),0).leaf = true
+entry({"admin","services","AdGuardHome","base"},cbi("AdGuardHome/base"),_("基础设置"),1).leaf = true
+entry({"admin","services","AdGuardHome","log"},form("AdGuardHome/log"),_("运行日志"),2).leaf = true
+entry({"admin","services","AdGuardHome","manual"},cbi("AdGuardHome/manual"),_("手动配置"),3).leaf = true
 entry({"admin", "services", "AdGuardHome", "status"},call("act_status")).leaf=true
 entry({"admin", "services", "AdGuardHome", "dashboard_stats"},call("act_dashboard_stats")).leaf=true
 entry({"admin", "services", "AdGuardHome", "dashboard_runtime"},call("act_dashboard_runtime")).leaf=true
@@ -11171,7 +12051,7 @@ if user == "" then
 user = "admin"
 end
 if pass == "" then
-return nil, "dashboard auth password missing"
+return nil, "未填写仪表盘认证密码"
 end
 
 login_body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
@@ -11179,21 +12059,21 @@ login_cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
 	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
 	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
 	" --post-data=" .. adg_shell_quote(login_body) ..
-	" -O - " .. dashboard_base .. "/control/login 2>/dev/null"
+	" -O - " .. adg_shell_quote(dashboard_base .. "/control/login") .. " 2>/dev/null"
 login_out = sys.exec(login_cmd)
 if not login_out:find("OK", 1, true) then
 sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return nil, "dashboard login failed"
+return nil, "仪表盘登录失败"
 end
 
 data = sys.exec(
 	"wget -q --load-cookies=" .. adg_shell_quote(cookiefile) ..
-	" -O - " .. dashboard_base .. path .. " 2>/dev/null"
+	" -O - " .. adg_shell_quote(dashboard_base .. path) .. " 2>/dev/null"
 )
 sys.exec("rm -f " .. adg_shell_quote(cookiefile))
 
 if data == nil or data == "" then
-return nil, "dashboard fetch failed"
+return nil, "仪表盘数据读取失败"
 end
 
 return data
@@ -11293,17 +12173,28 @@ http.prepare_content("application/json")
 http.write('')
 local arg
 local update_script="/usr/share/AdGuardHome/update_core.sh"
+local update_cmd
 if luci.http.formvalue("force") == "1" then
 arg="force"
 else
 arg=""
 end
+update_cmd="sh "..adg_shell_quote(update_script)
+if arg ~= "" then
+update_cmd=update_cmd.." "..arg
+end
+update_cmd=update_cmd.." >/tmp/AdGuardHome_update.log 2>&1 &"
 if fs.access("/var/run/update_core") then
 if arg=="force" then
-    sys.exec("for pid in $(pgrep -f " .. adg_shell_quote(update_script) .. " 2>/dev/null); do kill \"$pid\" 2>/dev/null || true; done; sh " .. adg_shell_quote(update_script) .. " " .. arg .. " >/tmp/AdGuardHome_update.log 2>&1 &")
+	local pids=sys.exec("pgrep -f "..adg_shell_quote(update_script).." 2>/dev/null")
+	local pid
+	for pid in pids:gmatch("%d+") do
+		sys.exec("kill "..pid.." 2>/dev/null")
+	end
+	sys.exec(update_cmd)
 end
 else
-    sys.exec("sh " .. adg_shell_quote(update_script) .. " " .. arg .. " >/tmp/AdGuardHome_update.log 2>&1 &")
+sys.exec(update_cmd)
 end
 end
 function get_log()
@@ -11329,8 +12220,10 @@ http.write('')
 end
 function check_update()
 local e={}
-    local pkg_ver=sys.exec("grep PKG_VERSION /usr/share/AdGuardHome/Makefile 2>/dev/null | awk -F := '{print $2}'")
-e.luciversion=string.sub(pkg_ver,1,-2)
+local makefile=fs.readfile("/usr/share/AdGuardHome/Makefile") or ""
+local pkg_ver=makefile:match("PKG_VERSION%s*:?=%s*([^\r\n]+)") or ""
+pkg_ver=pkg_ver:gsub("^%s+",""):gsub("%s+$","")
+e.luciversion=pkg_ver
 e.coreversion=uci:get("AdGuardHome","AdGuardHome","coreversion") or ""
 http.prepare_content("application/json")
 http.write_json(e)
@@ -11403,6 +12296,7 @@ local frame_url = base_url .. "/" .. tab
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
+        max-width: 100%;
         margin: 0;
         padding: 4px;
         border: 1px solid rgba(255,255,255,0.06);
@@ -11453,6 +12347,10 @@ local frame_url = base_url .. "/" .. tab
         color: #f7fbff;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 12px 24px rgba(17, 119, 222, 0.22);
     }
+    .adg-tab[aria-current="page"] {
+        cursor: default;
+        pointer-events: none;
+    }
     .adg-tab.active::after {
         content: "";
         position: absolute;
@@ -11467,6 +12365,7 @@ local frame_url = base_url .. "/" .. tab
     .adg-frame-wrap {
         position: relative;
         z-index: 1;
+        isolation: isolate;
         overflow: hidden;
         min-height: 620px;
         border: 1px solid rgba(78, 96, 131, 0.58);
@@ -11495,7 +12394,7 @@ local frame_url = base_url .. "/" .. tab
         animation: adgFrameLoading 1.2s ease-out infinite;
     }
     .adg-frame-wrap.adg-frame-loading::after {
-        content: "载入 AdGuardHome 页面";
+        content: "载入中";
         position: absolute;
         left: 50%;
         top: 26px;
@@ -11517,6 +12416,10 @@ local frame_url = base_url .. "/" .. tab
         border: 0;
         display: block;
         background: #111827;
+        transition: opacity 0.18s ease-out;
+    }
+    .adg-frame-wrap.adg-frame-loading .adg-frame {
+        opacity: 0.72;
     }
     @keyframes adgFrameLoading {
         from {
@@ -11565,21 +12468,28 @@ local frame_url = base_url .. "/" .. tab
             min-height: 620px;
         }
     }
+    @media (prefers-reduced-motion: reduce) {
+        .adg-frame-wrap::before,
+        .adg-tab {
+            animation: none;
+            transition: none;
+        }
+    }
 </style>
 <div class="cbi-map adg-shell">
     <div class="adg-head">
         <div class="adg-copy">
             <h2 name="content" class="adg-title">AdGuardHome</h2>
-            <div class="adg-sub">基础设置、手动配置和运行日志统一入口。</div>
+            <div class="adg-sub">基础设置、手动配置、运行日志。</div>
         </div>
         <div class="adg-tabs">
-            <a class="adg-tab<%= tab == 'base' and ' active' or '' %>" data-tab="base" href="<%=base_url%>?tab=base">基础设置</a>
-            <a class="adg-tab<%= tab == 'manual' and ' active' or '' %>" data-tab="manual" href="<%=base_url%>?tab=manual">手动配置</a>
-            <a class="adg-tab<%= tab == 'log' and ' active' or '' %>" data-tab="log" href="<%=base_url%>?tab=log">运行日志</a>
+            <a class="adg-tab<%= tab == 'base' and ' active' or '' %>"<%= tab == 'base' and ' aria-current="page"' or '' %> data-tab="base" href="<%=base_url%>?tab=base">基础设置</a>
+            <a class="adg-tab<%= tab == 'manual' and ' active' or '' %>"<%= tab == 'manual' and ' aria-current="page"' or '' %> data-tab="manual" href="<%=base_url%>?tab=manual">手动配置</a>
+            <a class="adg-tab<%= tab == 'log' and ' active' or '' %>"<%= tab == 'log' and ' aria-current="page"' or '' %> data-tab="log" href="<%=base_url%>?tab=log">运行日志</a>
         </div>
     </div>
     <div class="adg-frame-wrap adg-frame-loading">
-        <iframe id="adg_frame" class="adg-frame" name="adg_frame" src="<%=frame_url%>" onload="adgAfterLoad()"></iframe>
+        <iframe id="adg_frame" class="adg-frame" name="adg_frame" title="AdGuardHome 配置页" src="<%=frame_url%>" onload="adgAfterLoad()"></iframe>
     </div>
 </div>
 <script>
@@ -11601,27 +12511,36 @@ function adgResizeFrame() {
 }
 function adgInstallInnerSkin(d) {
     var style;
-    if (!d || !d.head || d.getElementById('adg-wrapper-inner-skin')) return;
-    if (d.body) d.body.className += (d.body.className ? ' ' : '') + 'adg-embedded-page';
+    if (!d || !d.head) return;
+    if (d.body && (' ' + d.body.className + ' ').indexOf(' adg-embedded-page ') < 0) {
+        d.body.className += (d.body.className ? ' ' : '') + 'adg-embedded-page';
+    }
+    if (d.getElementById('adg-wrapper-inner-skin')) return;
     style = d.createElement('style');
     style.id = 'adg-wrapper-inner-skin';
     style.appendChild(d.createTextNode(
         'html,body{background:#2e2e38!important;}' +
+        '.adg-embedded-page *{box-sizing:border-box!important;min-width:0;}' +
         '.adg-embedded-page .container.body-container{max-width:none!important;}' +
         '.adg-embedded-page .cbi-map{margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important;}' +
         '.adg-embedded-page .cbi-map>h2,.adg-embedded-page .cbi-map>.cbi-map-descr{display:none!important;}' +
         '.adg-embedded-page .cbi-section{position:relative!important;overflow:hidden!important;margin:0 0 12px!important;padding:16px 18px 15px!important;border:1px solid rgba(78,96,131,.72)!important;border-radius:14px!important;background:radial-gradient(circle at 100% 0%,rgba(34,211,238,.08),transparent 26%),linear-gradient(180deg,rgba(34,40,55,.985),rgba(23,28,40,.985))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 14px 30px rgba(0,0,0,.18)!important;}' +
-        '.adg-embedded-page .cbi-section legend,.adg-embedded-page .cbi-section h3{display:flex!important;align-items:center!important;gap:8px!important;padding:0 0 9px!important;color:#f3f7ff!important;font-size:16px!important;font-weight:800!important;letter-spacing:0!important;}' +
+        '.adg-embedded-page .cbi-section legend,.adg-embedded-page .cbi-section h3{display:flex!important;align-items:center!important;gap:8px!important;padding:0 0 9px!important;color:#f3f7ff!important;font-size:16px!important;font-weight:800!important;line-height:1.25!important;letter-spacing:0!important;overflow-wrap:anywhere!important;}' +
         '.adg-embedded-page .cbi-section legend:before,.adg-embedded-page .cbi-section h3:before{content:"";width:15px;height:15px;border-radius:6px;background:linear-gradient(135deg,rgba(47,211,238,.88),rgba(108,162,255,.68));box-shadow:inset 0 1px 0 rgba(255,255,255,.22);flex:0 0 auto;}' +
         '.adg-embedded-page .cbi-value{display:grid!important;grid-template-columns:minmax(160px,230px) minmax(0,1fr)!important;gap:7px 16px!important;align-items:start!important;padding:11px 0!important;border-top:1px solid rgba(255,255,255,.055)!important;}' +
         '.adg-embedded-page .cbi-value-title{float:none!important;width:auto!important;max-width:none!important;margin:0!important;color:#dce9fd!important;font-size:13px!important;font-weight:800!important;line-height:1.34!important;letter-spacing:0!important;overflow-wrap:anywhere!important;}' +
         '.adg-embedded-page .cbi-value-field{float:none!important;width:100%!important;max-width:680px!important;margin:0!important;padding:0!important;display:grid!important;gap:8px!important;}' +
         '.adg-embedded-page input[type=text],.adg-embedded-page input[type=password],.adg-embedded-page select,.adg-embedded-page textarea{width:100%!important;min-height:42px!important;border:1px solid rgba(84,100,134,.9)!important;border-radius:12px!important;background:linear-gradient(180deg,rgba(34,39,54,.985),rgba(22,27,38,.985))!important;color:#eef4ff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 18px rgba(0,0,0,.12)!important;box-sizing:border-box!important;}' +
+        '.adg-embedded-page input[type=text]:focus-visible,.adg-embedded-page input[type=password]:focus-visible,.adg-embedded-page select:focus-visible,.adg-embedded-page textarea:focus-visible{outline:2px solid rgba(194,248,255,.72)!important;outline-offset:2px!important;border-color:rgba(194,248,255,.46)!important;}' +
         '.adg-embedded-page textarea{min-height:220px!important;font-family:Consolas,"Courier New",monospace!important;line-height:1.52!important;white-space:pre-wrap!important;overflow:auto!important;tab-size:4!important;}' +
         '.adg-embedded-page input[type=submit],.adg-embedded-page input[type=button],.adg-embedded-page .cbi-button{min-height:40px!important;padding:0 16px!important;border:1px solid #39a0ff!important;border-radius:12px!important;background:linear-gradient(180deg,#2a9cff,#1177de)!important;color:#f0faff!important;font-weight:800!important;line-height:38px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 9px 18px rgba(26,124,215,.18)!important;}' +
+        '.adg-embedded-page input[type=submit],.adg-embedded-page input[type=button],.adg-embedded-page .cbi-button{max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}' +
+        '.adg-embedded-page input[type=submit]:hover,.adg-embedded-page input[type=button]:hover,.adg-embedded-page .cbi-button:hover{filter:brightness(1.05)!important;}' +
+        '.adg-embedded-page input[disabled],.adg-embedded-page select[disabled],.adg-embedded-page textarea[disabled],.adg-embedded-page .cbi-button[disabled]{cursor:not-allowed!important;opacity:.60!important;filter:saturate(.72)!important;}' +
         '.adg-embedded-page .cbi-value-description{margin-top:3px!important;color:#9fb1cf!important;font-size:12px!important;line-height:1.52!important;overflow-wrap:anywhere!important;}' +
         '.adg-embedded-page .cbi-page-actions{display:flex!important;justify-content:flex-end!important;gap:8px!important;flex-wrap:wrap!important;padding:12px 0 0!important;}' +
-        '@media(max-width:720px){.adg-embedded-page .cbi-section{padding:14px 12px!important;border-radius:12px!important}.adg-embedded-page .cbi-value{grid-template-columns:1fr!important}.adg-embedded-page .cbi-value-field{max-width:none!important}.adg-embedded-page input[type=submit],.adg-embedded-page input[type=button],.adg-embedded-page .cbi-button{width:100%!important}}'
+        '.adg-embedded-page textarea::-webkit-scrollbar{width:9px!important;height:9px!important}.adg-embedded-page textarea::-webkit-scrollbar-track{background:rgba(255,255,255,.035)!important}.adg-embedded-page textarea::-webkit-scrollbar-thumb{border-radius:999px!important;background:rgba(143,164,199,.42)!important}' +
+        '@media(max-width:720px){.adg-embedded-page .cbi-section{padding:14px 12px!important;border-radius:12px!important}.adg-embedded-page .cbi-value{grid-template-columns:1fr!important}.adg-embedded-page .cbi-value-field{max-width:none!important}.adg-embedded-page input[type=submit],.adg-embedded-page input[type=button],.adg-embedded-page .cbi-button{width:100%!important;min-width:0!important}}'
     ));
     d.head.appendChild(style);
 }
@@ -11720,6 +12639,15 @@ function adgHasRuntimePayload(runtime) {
 	));
 }
 
+function adgHasStatsPayload(data) {
+	return !!(data && data.ok !== false && (
+		typeof data.num_dns_queries !== "undefined" ||
+		typeof data.num_blocked_filtering !== "undefined" ||
+		(data.dns_queries && data.dns_queries.length) ||
+		(data.blocked_filtering && data.blocked_filtering.length)
+	));
+}
+
 function adgSetRefreshState(loading) {
 	var button = document.getElementById("adg-stats-refresh");
 	if (!button) {
@@ -11731,6 +12659,8 @@ function adgSetRefreshState(loading) {
 	}
 	button.disabled = !!loading;
 	button.value = loading ? "刷新中..." : "刷新统计数据";
+	button.setAttribute("aria-busy", loading ? "true" : "false");
+	button.setAttribute("title", loading ? "正在刷新统计数据" : "刷新仪表盘统计数据");
 }
 
 window.adgDashboardHttpPort = "";
@@ -12110,6 +13040,7 @@ function adgApplyDashboardStats(data) {
 	var ratioText;
 
 	if (data && data.ok === false) {
+		var errText = data.error || "未填写仪表盘 API 密码。";
 		if (totalNode) {
 			totalNode.textContent = "—";
 		}
@@ -12123,7 +13054,7 @@ function adgApplyDashboardStats(data) {
 			blockedPercentNode.textContent = "—";
 		}
 		if (metaNode) {
-			metaNode.textContent = "等待 3000 仪表盘认证";
+			metaNode.textContent = "等待仪表盘认证";
 		}
 		if (glanceTotalNode) {
 			glanceTotalNode.textContent = "待认证";
@@ -12131,7 +13062,35 @@ function adgApplyDashboardStats(data) {
 		if (glanceRatioNode) {
 			glanceRatioNode.textContent = "待认证";
 		}
-		adgSetInlineNote("未填写仪表盘 API 密码。", "warn");
+		adgSetInlineNote(errText, "warn");
+		adgApplyChart("adg-chart-total-line", "adg-chart-total-area", []);
+		adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", []);
+		return;
+	}
+
+	if (!adgHasStatsPayload(data)) {
+		if (totalNode) {
+			totalNode.textContent = "—";
+		}
+		if (blockedNode) {
+			blockedNode.textContent = "—";
+		}
+		if (totalPercentNode) {
+			totalPercentNode.textContent = "等待";
+		}
+		if (blockedPercentNode) {
+			blockedPercentNode.textContent = "等待";
+		}
+		if (metaNode) {
+			metaNode.textContent = "等待统计数据";
+		}
+		if (glanceTotalNode) {
+			glanceTotalNode.textContent = "等待";
+		}
+		if (glanceRatioNode) {
+			glanceRatioNode.textContent = "等待数据";
+		}
+		adgSetInlineNote("等待仪表盘统计返回。", "soft");
 		adgApplyChart("adg-chart-total-line", "adg-chart-total-area", []);
 		adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", []);
 		return;
@@ -12164,7 +13123,7 @@ function adgApplyDashboardStats(data) {
 		glanceRatioNode.textContent = "拦截率 " + ratioText;
 	}
 
-	adgSetInlineNote("已同步 3000 仪表盘统计。", "ok");
+	adgSetInlineNote("已同步仪表盘统计。", "ok");
 	adgApplyChart("adg-chart-total-line", "adg-chart-total-area", data && data.dns_queries ? data.dns_queries : []);
 	adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", data && data.blocked_filtering ? data.blocked_filtering : []);
 }
@@ -12273,7 +13232,7 @@ function adgRefreshAll() {
 	});
 	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', { _: Date.now() }, function(x, data) {
 		adgSetRefreshState(false);
-		adgApplyDashboardStats(data || {});
+		adgApplyDashboardStats(data);
 		adgApplyPageSkin();
 	});
 }
@@ -12286,7 +13245,7 @@ XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtim
 });
 
 XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', null, function(x, data) {
-	adgApplyDashboardStats(data || {});
+	adgApplyDashboardStats(data);
 	adgApplyPageSkin();
 });
 
@@ -12946,7 +13905,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 	}
 
 	.adg-chart-empty::after {
-		content: "等待统计数据";
+		content: "等待数据";
 		position: absolute;
 		left: 50%;
 		top: 50%;
@@ -14977,14 +15936,70 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 			font-size: 30px !important;
 		}
 	}
+
+	/* AdGuardHome micro polish: focus, loading, and compact overflow states. */
+	.adg-action-panel .cbi-button {
+		min-width: 176px !important;
+		max-width: 100% !important;
+		overflow: hidden !important;
+		text-overflow: ellipsis !important;
+		white-space: nowrap !important;
+	}
+
+	.adg-action-panel .cbi-button[disabled],
+	.cbi-map.adg-themed-map .cbi-button[disabled] {
+		cursor: not-allowed !important;
+		opacity: 0.62 !important;
+		filter: saturate(0.72) !important;
+	}
+
+	.adg-inline-note[role="status"] {
+		align-items: flex-start !important;
+	}
+
+	.adg-glance-card:focus-within,
+	.adg-dashboard-card:focus-within {
+		border-color: rgba(194, 248, 255, 0.28) !important;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 28px rgba(0,0,0,0.20) !important;
+	}
+
+	.adg-chart-shell::before {
+		content: "";
+		position: absolute;
+		left: 10px;
+		right: 10px;
+		top: 8px;
+		height: 1px;
+		background: linear-gradient(90deg, transparent, rgba(194, 248, 255, 0.20), transparent);
+		pointer-events: none;
+	}
+
+	.cbi-map.adg-themed-map input[aria-invalid="true"],
+	.cbi-map.adg-themed-map textarea[aria-invalid="true"],
+	.cbi-map.adg-themed-map select[aria-invalid="true"] {
+		border-color: rgba(255, 118, 118, 0.76) !important;
+		box-shadow: 0 0 0 3px rgba(255, 118, 118, 0.14) !important;
+	}
+
+	@media (max-width: 360px) {
+		.adg-action-group {
+			grid-template-columns: 1fr !important;
+			gap: 7px !important;
+		}
+
+		.adg-action-panel .cbi-button {
+			width: 100% !important;
+			min-width: 0 !important;
+		}
+	}
 </style>
 <fieldset id="AdGuardHome_status_fieldset" class="cbi-section">
-	<div id="adg-dashboard-shell" class="adg-dashboard-shell">
+	<div id="adg-dashboard-shell" class="adg-dashboard-shell" aria-live="polite">
 		<div class="adg-hero-grid">
 			<div class="adg-runtime-panel">
 				<div class="adg-panel-kicker">状态</div>
 				<div class="adg-panel-title">AdGuardHome 状态</div>
-				<div class="adg-panel-sub">运行态、监听地址、端口、核心版本。</div>
+				<div class="adg-panel-sub">运行态、监听、端口、核心版本。</div>
 				<div class="adg-runtime-wrap">
 					<div class="adg-runtime-pill"><span class="adg-runtime-dot"></span><span id="adg-runtime-running">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">保护</span><span id="adg-runtime-protect" class="adg-runtime-value">读取中</span></div>
@@ -14997,14 +16012,14 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 			<div class="adg-action-panel">
 				<div class="adg-panel-kicker">入口</div>
 				<div class="adg-panel-title">统计与原版入口</div>
-				<div class="adg-panel-sub">读取 3000 仪表盘统计，保留原版入口。</div>
+				<div class="adg-panel-sub">刷新统计，保留原版入口。</div>
 				<div class="adg-action-group">
-					<input id="adg-open-dashboard" class="cbi-button" type="button" value="打开原版页面" onclick="adgOpenOriginalDashboard()" disabled="disabled" />
-					<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计数据" onclick="adgRefreshAll()" />
+					<input id="adg-open-dashboard" class="cbi-button" type="button" value="打开原版页面" aria-label="打开 AdGuardHome 原版页面" onclick="adgOpenOriginalDashboard()" disabled="disabled" />
+					<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计数据" aria-label="刷新 AdGuardHome 统计数据" onclick="adgRefreshAll()" />
 				</div>
 			</div>
 		</div>
-		<div id="adg-inline-note" class="adg-inline-note adg-inline-note-soft">正在读取统计…</div>
+		<div id="adg-inline-note" class="adg-inline-note adg-inline-note-soft" role="status" aria-live="polite">正在读取统计…</div>
 		<div class="adg-glance-grid">
 			<div class="adg-glance-card">
 				<div class="adg-glance-label">当前模式</div>
@@ -15039,7 +16054,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 				</div>
                 <div id="adg-stats-total" class="adg-dashboard-number">--</div>
                 <div id="adg-stats-total-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div>
-                <div class="adg-dashboard-sub">3000 仪表盘统计</div>
+                <div class="adg-dashboard-sub">仪表盘查询统计</div>
 				<div class="adg-chart-shell adg-chart-empty">
 					<div class="adg-chart-grid"></div>
 					<svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
@@ -15071,7 +16086,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 	<div class="adg-settings-copy">
 		<div class="adg-settings-kicker">配置区</div>
 		<div class="adg-settings-title">基础配置区</div>
-		<div class="adg-settings-sub">把认证、端口、路径、日志和维护选项收进同一套暗色面板语言，和上方状态区统一。</div>
+		<div class="adg-settings-sub">认证、端口、路径、日志与维护选项。</div>
 	</div>
 </div>
 EOF_ADG_STATUS
@@ -15090,7 +16105,7 @@ local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGu
 local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
 httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
 m = Map("AdGuardHome", "AdGuardHome")
-m.description = translate("全网广告与跟踪拦截 DNS 服务。")
+m.description = translate("运行状态、统计读取、路径与维护选项集中管理。")
 m:section(SimpleSection).template  = "AdGuardHome/AdGuardHome_status"
 
 s = m:section(TypedSection, "AdGuardHome")
@@ -15101,20 +16116,20 @@ o = s:option(Flag, "enabled", translate("启用"))
 o.default = 0
 o.optional = false
 ---- httpport
-o =s:option(Value,"httpport",translate("浏览器管理端口"))
+o =s:option(Value,"httpport",translate("原版管理端口"))
 o.placeholder=3000
 o.default=3000
 o.datatype="port"
 o.optional = false
-o.description = translate("<input type=\"button\" style=\"width:240px;min-height:46px;border:1px solid #39a0ff;border-radius:14px;background:linear-gradient(180deg,#2a9cff,#1177de);text-align:center;font-weight:700;color:#eff7ff;box-shadow:0 12px 24px rgba(26,124,215,0.22);\" value=\"打开 "..httpport.." 原版页面\" onclick=\"window.open('http://'+window.location.hostname+':"..httpport.."/')\"/>")
+o.description = translate("<input type=\"button\" class=\"cbi-button adg-origin-button\" value=\"打开原版页面（"..httpport.."）\" onclick=\"window.open('http://'+window.location.hostname+':"..httpport.."/')\"/>")
 ---- dashboard user
-o = s:option(Value, "dashboard_user", translate("仪表盘 API 用户"), translate("用于应用商店页面读取 AdGuardHome 3000 仪表盘状态和统计数据"))
+o = s:option(Value, "dashboard_user", translate("仪表盘 API 用户"), translate("状态页用于读取原版仪表盘运行态和 24 小时统计"))
 o.default = "admin"
 o.datatype = "string"
 o.optional = false
 o.rmempty = false
 ---- dashboard password
-o = s:option(Value, "dashboard_password", translate("仪表盘 API 密码"), translate("用于应用商店页面读取 AdGuardHome 3000 仪表盘状态和统计数据"))
+o = s:option(Value, "dashboard_password", translate("仪表盘 API 密码"), translate("仅用于本页向本机原版仪表盘读取状态和统计"))
 o.password = true
 o.datatype = "string"
 o.optional = false
@@ -15143,7 +16158,7 @@ else
 	e=version..e
 end
 o=s:option(Button,"restart",translate("更新"))
-o.inputtitle=translate("更新核心版本")
+o.inputtitle=translate("检查并更新核心")
 o.template = "AdGuardHome/AdGuardHome_check"
 o.showfastconfig=(not fs.access(configpath))
 o.description=string.format(translate("核心版本：").."<strong><font id=\"updateversion\" color=\"green\">%s </font></strong>",e)
@@ -15151,7 +16166,7 @@ o.description=string.format(translate("核心版本：").."<strong><font id=\"up
 local port=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..shellquote(configpath).." 2>/dev/null")
 if (port=="") then port="?" end
 ---- Redirect
-o = s:option(ListValue, "redirect", port..translate(" 重定向"), translate("AdGuardHome 重定向模式"))
+o = s:option(ListValue, "redirect", port..translate(" DNS 重定向"), translate("选择 AdGuardHome 与 dnsmasq 的接入方式"))
 o.placeholder = "none"
 o:value("none", translate("不启用"))
 o:value("dnsmasq-upstream", translate("作为 dnsmasq 上游"))
@@ -15195,7 +16210,7 @@ o.datatype    = "string"
 o.optional = false
 o.rmempty=false
 o.validate=function(self, value)
-if value==nil then return nil end
+if value==nil or value=="" then return nil end
 if fs.stat(value,"type")=="dir" then
 	if m.message then
 	m.message =m.message.."\n错误：配置路径是目录"
@@ -15233,6 +16248,7 @@ o = s:option(Value, "logfile", translate("运行日志文件"), translate("AdGua
 o.datatype    = "string"
 o.rmempty = true
 o.validate=function(self, value)
+if value==nil or value=="" then return value end
 if fs.stat(value,"type")=="dir" then
 	if m.message then
 	m.message =m.message.."\n错误：日志路径是目录"
@@ -15254,21 +16270,21 @@ a="已加入"
 else
 a="未加入"
 end
-o=s:option(Button,"gfwdel",translate("删除 gfwlist"),translate(a))
+o=s:option(Button,"gfwdel",translate("删除 GFWList"),translate(a))
 o.optional = false
 o.inputtitle=translate("删除")
 o.write=function()
 	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh del 2>&1")
 	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
 end
-o=s:option(Button,"gfwadd",translate("加入 gfwlist"),translate(a))
+o=s:option(Button,"gfwadd",translate("加入 GFWList"),translate(a))
 o.optional = false
 o.inputtitle=translate("添加")
 o.write=function()
 	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh 2>&1")
 	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
 end
-o = s:option(Value, "gfwupstream", translate("Gfwlist 上游 DNS 服务器"), translate("Gfwlist 域名上游 DNS 服务，当前状态：")..translate(a))
+o = s:option(Value, "gfwupstream", translate("GFWList 上游 DNS"), translate("GFWList 域名上游 DNS 服务，当前状态：")..translate(a))
 o.default     = "tcp://208.67.220.220:5353"
 o.datatype    = "string"
 o.optional = false
@@ -15336,13 +16352,13 @@ o:value("autoupdate",translate("自动更新核心"))
 o:value("cutquerylog",translate("自动裁剪 querylog"))
 o:value("cutruntimelog",translate("自动裁剪运行日志"))
 o:value("autohost",translate("自动更新 IPv6 hosts 并重启 AdGuardHome"))
-o:value("autogfw",translate("自动更新 gfwlist 并重启 AdGuardHome"))
+o:value("autogfw",translate("自动更新 GFWList 并重启 AdGuardHome"))
 o.widget = "checkbox"
 o.default = nil
 o.optional=false
 
 ----downloadpath
-o = s:option(TextValue, "downloadlinks",translate("更新下载链接"))
+o = s:option(TextValue, "downloadlinks",translate("核心下载链接"))
 o.optional = false
 o.rows = 4
 o.wrap = "soft"
@@ -15466,7 +16482,7 @@ ensure_adguard_dashboard_auth_defaults() {
     fi
 
     if [ -z "$dashboard_password" ] && { [ -t 0 ] || can_use_ui_tty; }; then
-        if confirm_default_yes "是否现在写入 AdGuardHome 3000 仪表盘密码供应用商店页读取统计？"; then
+        if confirm_default_yes "是否现在写入 AdGuardHome 原版仪表盘密码供应用商店页读取统计？"; then
             prompt_with_default "Dashboard API user" "$dashboard_user"
             dashboard_user="$PROMPT_RESULT"
             printf 'Dashboard API password（与 3000 登录密码一致）: '
@@ -15749,6 +16765,8 @@ manage_swapfile() {
     local swapfile="/overlay/swapfile"
     local current_bytes current_mib target_mib final_mib swap_limit_mib
 
+    [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000MAX' ] || die "扩容 swap 虚拟内存仅支持 NRadio_C2000MAX，当前机型：${CURRENT_DETECTED_MODEL:-unknown}"
+
     swap_limit_mib=2048
 
     current_bytes="$(get_swapfile_size_bytes "$swapfile")"
@@ -15822,6 +16840,1913 @@ manage_swapfile() {
     activate_swapfile_if_needed "$swapfile" || die "启用虚拟内存失败"
     final_mib="$(get_swapfile_size_mib "$swapfile")"
     log "备注: 已完成虚拟内存设置（约 ${final_mib}M）"
+}
+
+storage_expand_current_model() {
+    local model
+
+    model="${CURRENT_DETECTED_MODEL:-}"
+    if [ -z "$model" ]; then
+        model="$(normalize_nradio_model "$(detect_board_model_raw)" "$(detect_board_name_raw)" "$(detect_board_compatible_raw)" 2>/dev/null || true)"
+    fi
+    printf '%s\n' "$model"
+}
+
+require_c8_c5800_storage_model() {
+    local model
+
+    model="$(storage_expand_current_model)"
+    case "$model" in
+        NRadio_C8-688|NRadio_C5800-688)
+            CURRENT_DETECTED_MODEL="$model"
+            return 0
+            ;;
+        *)
+            die "存储扩展仅支持 NRadio_C8-688 / NRadio_C5800-688，当前机型：${model:-unknown}"
+            ;;
+    esac
+}
+
+storage_expand_canonical_path() {
+    local target_path="$1"
+
+    if command -v readlink >/dev/null 2>&1; then
+        readlink -f "$target_path" 2>/dev/null || printf '%s\n' "$target_path"
+    else
+        printf '%s\n' "$target_path"
+    fi
+}
+
+storage_expand_find_rootfs_2nd_device() {
+    local sysdev partname dev info
+
+    if [ -e /dev/disk/by-partlabel/rootfs_2nd ]; then
+        storage_expand_canonical_path /dev/disk/by-partlabel/rootfs_2nd
+        return 0
+    fi
+
+    for sysdev in /sys/class/block/*; do
+        [ -f "$sysdev/uevent" ] || continue
+        partname="$(sed -n 's/^PARTNAME=//p' "$sysdev/uevent" 2>/dev/null | sed -n '1p' || true)"
+        [ "$partname" = 'rootfs_2nd' ] || continue
+        dev="/dev/$(basename "$sysdev")"
+        [ -b "$dev" ] || continue
+        printf '%s\n' "$dev"
+        return 0
+    done
+
+    if command -v block >/dev/null 2>&1; then
+        for dev in /dev/mmcblk*p* /dev/sd*[0-9]; do
+            [ -b "$dev" ] || continue
+            info="$(block info "$dev" 2>/dev/null || true)"
+            printf '%s\n' "$info" | grep -q 'PARTLABEL="rootfs_2nd"' || continue
+            printf '%s\n' "$dev"
+            return 0
+        done
+    fi
+
+    return 1
+}
+
+storage_expand_is_booted_from_rootfs_2nd() {
+    grep -q 'root=PARTLABEL=rootfs_2nd' /proc/cmdline 2>/dev/null
+}
+
+storage_expand_mount_source_for_mountpoint() {
+    awk -v mp="$ROOTFS_2ND_STORAGE_MOUNT_POINT" '$2 == mp { print $1; exit }' /proc/mounts 2>/dev/null
+}
+
+storage_expand_mount_source_matches_device() {
+    local source="$1"
+    local device="$2"
+    local source_real device_real
+
+    [ -n "$source" ] || return 1
+    source_real="$(storage_expand_canonical_path "$source")"
+    device_real="$(storage_expand_canonical_path "$device")"
+    [ "$source_real" = "$device_real" ]
+}
+
+storage_expand_device_mountpoint() {
+    local device="$1"
+    local device_real source source_real mount_path fs rest
+
+    device_real="$(storage_expand_canonical_path "$device")"
+    while read -r source mount_path fs rest; do
+        [ -n "$source" ] || continue
+        source_real="$(storage_expand_canonical_path "$source")"
+        [ "$source_real" = "$device_real" ] || continue
+        printf '%s\n' "$mount_path"
+        return 0
+    done < /proc/mounts
+
+    return 1
+}
+
+storage_expand_print_mount_usage() {
+    if [ -n "$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)" ]; then
+        df -h "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true
+    else
+        log "扩展挂载: 未挂载到 $ROOTFS_2ND_STORAGE_MOUNT_POINT"
+    fi
+}
+
+storage_expand_status() {
+    local model device mount_source mount_point boot_state marker_state info
+
+    require_c8_c5800_storage_model
+    model="$(storage_expand_current_model)"
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
+
+    if storage_expand_is_booted_from_rootfs_2nd; then
+        boot_state="当前疑似从第二系统 rootfs_2nd 启动，禁止启用扩展"
+    else
+        boot_state="当前未从 rootfs_2nd 启动"
+    fi
+
+    if [ -f "$ROOTFS_2ND_STORAGE_MARKER" ]; then
+        marker_state="已启用标记存在"
+    else
+        marker_state="未发现启用标记"
+    fi
+
+    mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    mount_point="$(storage_expand_device_mountpoint "$device" 2>/dev/null || true)"
+
+    log "机型: $model"
+    log "rootfs_2nd 分区: $device"
+    log "启动状态: $boot_state"
+    log "扩展标记: $marker_state"
+    if [ -n "$mount_source" ]; then
+        log "扩展挂载点: $ROOTFS_2ND_STORAGE_MOUNT_POINT <- $mount_source"
+    elif [ -n "$mount_point" ]; then
+        log "rootfs_2nd 当前挂载在: $mount_point"
+    else
+        log "rootfs_2nd 当前未挂载"
+    fi
+
+    info="$(block info "$device" 2>/dev/null || true)"
+    [ -n "$info" ] && log "分区信息: $info"
+
+    log "第一系统 overlay:"
+    df -h /overlay 2>/dev/null || true
+    log "扩展空间:"
+    storage_expand_print_mount_usage
+    storage_expand_print_migration_list
+    storage_expand_print_expand_dependencies || true
+}
+
+storage_expand_require_active() {
+    local device mount_source
+
+    require_c8_c5800_storage_model
+    [ -f "$ROOTFS_2ND_STORAGE_MARKER" ] || die "存储扩展未启用：缺少 $ROOTFS_2ND_STORAGE_MARKER"
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
+    mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    [ -n "$mount_source" ] || die "扩展盘未挂载到 $ROOTFS_2ND_STORAGE_MOUNT_POINT"
+    storage_expand_mount_source_matches_device "$mount_source" "$device" || die "$ROOTFS_2ND_STORAGE_MOUNT_POINT 挂载源不是 rootfs_2nd：$mount_source"
+    ensure_dir_writable "$ROOTFS_2ND_STORAGE_MOUNT_POINT" "$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+    storage_expand_repair_migrated_runtime_paths || die "修复扩展盘应用运行路径权限失败"
+}
+
+storage_expand_app_spec() {
+    case "$1" in
+        openclash)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenClash" "openclash" "/etc/openclash" "luci-app-openclash" "luci-app-openclash" "admin/services/openclash"
+            ;;
+        adguardhome)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "AdGuardHome" "AdGuardHome" "/usr/bin/AdGuardHome" "luci-app-adguardhome" "luci-app-adguardhome" "admin/services/AdGuardHome"
+            ;;
+        openvpn)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenVPN" "openvpn" "/etc/openvpn" "OpenVPN" "luci-app-openvpn" "nradioadv/system/openvpnfull"
+            ;;
+        openlist)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenList" "openlist" "$OPENLIST_ROOT_DIR" "OpenList" "OpenList" "nradioadv/system/openlist/basic"
+            ;;
+        zerotier)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "ZeroTier" "zerotier" "/etc/config/zerotier" "ZeroTier" "$ZEROTIER_PACKAGE_NAME" "$ZEROTIER_ROUTE"
+            ;;
+        easytier)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$EASYTIER_DISPLAY_NAME" "easytier" "/etc/easytier" "$EASYTIER_DISPLAY_NAME" "$EASYTIER_LUCI_PACKAGE_NAME" "$EASYTIER_ROUTE"
+            ;;
+        mosdns)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$MOSDNS_APP_NAME" "mosdns" "$MOSDNS_BIN" "$MOSDNS_APP_NAME" "$MOSDNS_APP_NAME" "nradioadv/system/mosdns/basic"
+            ;;
+        ddnsgo)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$DDNSGO_APP_NAME" "ddns-go" "$DDNSGO_BIN_PATH" "$DDNSGO_APP_NAME" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
+            ;;
+        fanctrl)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$FANCTRL_DISPLAY_NAME" "$FANCTRL_SERVICE_NAME" "$FANCTRL_BIN_PATH" "$FANCTRL_DISPLAY_NAME" "$FANCTRL_PACKAGE_NAME" "$FANCTRL_ROUTE"
+            ;;
+        qiyou)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$QIYOU_APP_NAME" "$QIYOU_SERVICE_NAME" "$QIYOU_DIR" "$QIYOU_APP_NAME" "$QIYOU_PACKAGE_NAME" "$QIYOU_ROUTE"
+            ;;
+        leigod)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$LEIGOD_APP_NAME" "acc" "$LEIGOD_DIR" "$LEIGOD_APP_NAME" "$LEIGOD_PACKAGE_NAME" "$LEIGOD_ROUTE"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+storage_expand_app_spec_keys() {
+    printf '%s\n' \
+        openclash \
+        adguardhome \
+        openvpn \
+        openlist \
+        zerotier \
+        easytier \
+        mosdns \
+        ddnsgo \
+        fanctrl \
+        qiyou \
+        leigod
+}
+
+storage_expand_appcenter_field_matches() {
+    local section_type="$1"
+    local field_name="$2"
+    local expected="$3"
+    local appcenter_sections sec actual
+
+    [ -n "$expected" ] || return 1
+    appcenter_sections="$(uci show appcenter 2>/dev/null | awk -F= -v section_type="$section_type" '$2 == section_type { sub(/^appcenter\./, "", $1); print $1 }' || true)"
+    for sec in $appcenter_sections; do
+        actual="$(uci -q get "appcenter.$sec.$field_name" 2>/dev/null || true)"
+        [ "$actual" = "$expected" ] && return 0
+    done
+    return 1
+}
+
+storage_expand_appcenter_has_installed_app() {
+    local app_key="$1"
+    local spec label app_name app_pkg app_route
+
+    spec="$(storage_expand_app_spec "$app_key")" || return 1
+    label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+    app_name="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $4 }')"
+    app_pkg="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $5 }')"
+    app_route="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $6 }')"
+    [ -n "$app_name" ] || app_name="$label"
+
+    storage_expand_appcenter_field_matches package name "$app_name" && return 0
+    storage_expand_appcenter_field_matches package name "$label" && return 0
+    storage_expand_appcenter_field_matches package name "$app_pkg" && return 0
+    storage_expand_appcenter_field_matches package_list name "$app_name" && return 0
+    storage_expand_appcenter_field_matches package_list name "$label" && return 0
+    storage_expand_appcenter_field_matches package_list pkg_name "$app_pkg" && return 0
+    storage_expand_appcenter_field_matches package_list parent "$app_name" && return 0
+    storage_expand_appcenter_field_matches package_list parent "$label" && return 0
+    storage_expand_appcenter_field_matches package_list luci_module_route "$app_route" && return 0
+    return 1
+}
+
+storage_expand_path_is_migrated() {
+    local src="$1"
+    local target="$2"
+    local src_real target_real
+
+    [ -L "$src" ] || return 1
+    src_real="$(storage_expand_canonical_path "$src")"
+    target_real="$(storage_expand_canonical_path "$target")"
+    [ -n "$src_real" ] && [ "$src_real" = "$target_real" ]
+}
+
+storage_expand_key_for_src() {
+    local src="$1"
+    local app_key spec spec_src
+
+    for app_key in $(storage_expand_app_spec_keys); do
+        spec="$(storage_expand_app_spec "$app_key")" || continue
+        spec_src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        [ "$spec_src" = "$src" ] && {
+            printf '%s\n' "$app_key"
+            return 0
+        }
+    done
+    return 1
+}
+
+storage_expand_build_migrate_menu_list() {
+    local list_file="$1"
+    local app_key spec label src target
+
+    : > "$list_file"
+    for app_key in $(storage_expand_app_spec_keys); do
+        spec="$(storage_expand_app_spec "$app_key")" || continue
+        label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+        src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        target="$(storage_expand_target_for_path "$src")"
+
+        storage_expand_appcenter_has_installed_app "$app_key" || continue
+        [ -e "$src" ] || continue
+        storage_expand_path_is_migrated "$src" "$target" && continue
+        storage_expand_path_has_self_loop_child_links "$src" && continue
+        if storage_expand_path_has_child_links_to_target "$src" "$target"; then
+            [ -e "$target" ] || [ -L "$target" ] || continue
+            storage_expand_path_has_self_loop_child_links "$target" && continue
+            printf '%s\t%s\t%s\n' "$app_key" "$label" "$src" >> "$list_file"
+            continue
+        fi
+        storage_expand_path_depends_on_target "$src" "$target" && continue
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            continue
+        fi
+        printf '%s\t%s\t%s\n' "$app_key" "$label" "$src" >> "$list_file"
+    done
+}
+
+storage_expand_build_restore_menu_list() {
+    local list_file="$1"
+    local label service src target kind migrated_at app_key spec
+
+    : > "$list_file"
+    if [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ]; then
+        while IFS="$(printf '\t')" read -r label service src target kind migrated_at; do
+            [ -n "$src" ] || continue
+            [ -e "$target" ] || [ -L "$target" ] || continue
+            app_key="$(storage_expand_key_for_src "$src" 2>/dev/null || true)"
+            [ -n "$app_key" ] || continue
+            printf '%s\t%s\t%s\n' "$app_key" "$label" "$src" >> "$list_file"
+        done < "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+    fi
+
+    for app_key in $(storage_expand_app_spec_keys); do
+        spec="$(storage_expand_app_spec "$app_key")" || continue
+        label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+        src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        target="$(storage_expand_target_for_path "$src")"
+        [ -e "$target" ] || [ -L "$target" ] || continue
+        storage_expand_path_depends_on_target "$src" "$target" || continue
+        awk -F '\t' -v app_key="$app_key" '$1 == app_key { found = 1 } END { exit(found ? 0 : 1) }' "$list_file" 2>/dev/null && continue
+        printf '%s\t%s\t%s\n' "$app_key" "$label" "$src" >> "$list_file"
+    done
+}
+
+storage_expand_run_app_action() {
+    local action_name="$1"
+    local app_key="$2"
+
+    if [ "$action_name" = "迁移应用到扩展盘" ]; then
+        storage_expand_migrate_one_app "$app_key"
+    else
+        storage_expand_restore_one_app "$app_key"
+    fi
+}
+
+storage_expand_target_for_path() {
+    local src="$1"
+    printf '%s%s\n' "$ROOTFS_2ND_STORAGE_APPS_DIR" "$src"
+}
+
+storage_expand_make_searchable_storage_path() {
+    local target_path="$1"
+    local rel old_ifs part current_path
+
+    [ -n "$target_path" ] || return 0
+    case "$target_path" in
+        "$ROOTFS_2ND_STORAGE_APPS_DIR"|"$ROOTFS_2ND_STORAGE_APPS_DIR"/*)
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    chmod 755 "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true
+    chmod 755 "$ROOTFS_2ND_STORAGE_APPS_DIR" 2>/dev/null || true
+
+    rel="${target_path#$ROOTFS_2ND_STORAGE_APPS_DIR/}"
+    [ "$rel" != "$target_path" ] || return 0
+
+    current_path="$ROOTFS_2ND_STORAGE_APPS_DIR"
+    old_ifs="$IFS"
+    IFS='/'
+    for part in $rel; do
+        [ -n "$part" ] || continue
+        current_path="$current_path/$part"
+        [ -d "$current_path" ] && chmod 755 "$current_path" 2>/dev/null || true
+    done
+    IFS="$old_ifs"
+}
+
+storage_expand_prepare_apps_tree() {
+    mkdir -p "$ROOTFS_2ND_STORAGE_APPS_DIR" || return 1
+    storage_expand_make_searchable_storage_path "$ROOTFS_2ND_STORAGE_APPS_DIR"
+}
+
+storage_expand_prepare_target_parent() {
+    local target_path="$1"
+    local target_parent
+
+    target_parent="$(dirname "$target_path")"
+    mkdir -p "$target_parent" || return 1
+    storage_expand_make_searchable_storage_path "$target_parent"
+}
+
+storage_expand_repair_migrated_runtime_paths() {
+    local label service src target kind migrated_at
+
+    storage_expand_prepare_apps_tree || return 1
+    [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] || return 0
+    while IFS="$(printf '\t')" read -r label service src target kind migrated_at; do
+        [ -n "$target" ] || continue
+        storage_expand_prepare_target_parent "$target" || return 1
+    done < "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+}
+
+storage_expand_path_size_bytes() {
+    local target_path="$1"
+    local size_kib
+
+    [ -e "$target_path" ] || {
+        printf '0\n'
+        return 0
+    }
+    size_kib="$(du -sk "$target_path" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
+    case "$size_kib" in
+        ''|*[!0-9]*)
+            printf '0\n'
+            ;;
+        *)
+            printf '%s\n' "$((size_kib * 1024))"
+            ;;
+    esac
+}
+
+storage_expand_restore_size_bytes() {
+    local app_key="$1"
+    local target_path="$2"
+
+    storage_expand_path_size_bytes "$target_path"
+}
+
+storage_expand_allow_child_link_restore() {
+    case "$1" in
+        openclash|adguardhome)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+storage_expand_copy_restore_payload() {
+    local app_key="$1"
+    local target_path="$2"
+    local tmp_restore="$3"
+    local item name dest_item
+
+    if [ ! -d "$target_path" ]; then
+        cp -a "$target_path" "$tmp_restore"
+        return $?
+    fi
+
+    mkdir -p "$tmp_restore" || return 1
+    for item in "$target_path"/* "$target_path"/.[!.]* "$target_path"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        name="$(basename "$item")"
+        dest_item="$tmp_restore/$name"
+        if storage_expand_link_points_to_self "$item"; then
+            log "失败项: $name 是自指软链接"
+            return 1
+        fi
+        cp -a "$item" "$tmp_restore/" || {
+            if storage_expand_allow_child_link_restore "$app_key"; then
+                rm -rf "$dest_item" 2>/dev/null || true
+                ln -s "$item" "$dest_item" || {
+                    log "失败项: $name"
+                    return 1
+                }
+                log "链接: 大项 $name -> $item"
+                continue
+            fi
+            log "失败项: $name"
+            return 1
+        }
+    done
+
+    if [ "$app_key" = 'openclash' ]; then
+        [ -e "$tmp_restore/ASN.mmdb" ] || {
+            log "失败项: ASN.mmdb 未成功还原"
+            return 1
+        }
+        [ -e "$tmp_restore/GeoIP.dat" ] || {
+            log "失败项: GeoIP.dat 未成功还原"
+            return 1
+        }
+        [ -e "$tmp_restore/core" ] || {
+            log "失败项: core 目录未成功还原"
+            return 1
+        }
+    fi
+
+    return 0
+}
+
+storage_expand_restore_overlay_space_after_failure() {
+    local src="$1"
+    local target="$2"
+
+    log "失败后 /overlay 空间:"
+    df -h /overlay 2>/dev/null || true
+    log "扩展盘目标大小:"
+    du -sh "$target" 2>/dev/null || true
+    log "临时还原目录大小:"
+    du -sh "$src.restore.$$" 2>/dev/null || true
+}
+
+storage_expand_restore_failure_hint() {
+    local label="$1"
+    local src="$2"
+    local target="$3"
+
+    storage_expand_restore_overlay_space_after_failure "$src" "$target"
+    die "$label 从扩展盘复制回 overlay 失败"
+}
+
+storage_expand_try_full_restore_copy() {
+    local app_key="$1"
+    local target="$2"
+    local tmp_restore="$3"
+
+    storage_expand_copy_restore_payload "$app_key" "$target" "$tmp_restore" && return 0
+    return 1
+}
+
+storage_expand_restore_copy_or_fail() {
+    local app_key="$1"
+    local label="$2"
+    local src="$3"
+    local target="$4"
+    local tmp_restore="$5"
+
+    if storage_expand_try_full_restore_copy "$app_key" "$target" "$tmp_restore"; then
+        return 0
+    fi
+    rm -rf "$tmp_restore" 2>/dev/null || true
+    ln -s "$target" "$src" 2>/dev/null || true
+    storage_expand_restore_failure_hint "$label" "$src" "$target"
+}
+
+storage_expand_restore_hybrid_payload() {
+    local app_key="$1"
+    local source_path="$2"
+    local target_path="$3"
+    local item name dest_item tmp_item
+
+    [ -d "$source_path" ] || return 1
+    for item in "$target_path"/* "$target_path"/.[!.]* "$target_path"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        name="$(basename "$item")"
+        dest_item="$source_path/$name"
+        if storage_expand_link_points_to_self "$item"; then
+            log "失败项: $name 是扩展盘自指软链接"
+            return 1
+        fi
+        if storage_expand_link_points_to_self "$dest_item"; then
+            log "失败项: $name 原路径是自指软链接"
+            return 1
+        fi
+
+        if storage_expand_link_points_under "$dest_item" "$target_path"; then
+            tmp_item="$source_path/.restore-$name.$$"
+            rm -rf "$tmp_item" 2>/dev/null || true
+            if cp -a "$item" "$tmp_item"; then
+                rm -f "$dest_item" || {
+                    rm -rf "$tmp_item" 2>/dev/null || true
+                    log "失败项: $name"
+                    return 1
+                }
+                mv "$tmp_item" "$dest_item" || {
+                    rm -rf "$tmp_item" 2>/dev/null || true
+                    log "失败项: $name"
+                    return 1
+                }
+                log "写回: $name"
+            else
+                rm -rf "$tmp_item" 2>/dev/null || true
+                log "保留链接: $name -> $item"
+            fi
+            continue
+        fi
+
+        if [ -e "$dest_item" ] || [ -L "$dest_item" ]; then
+            continue
+        fi
+        cp -a "$item" "$source_path/" || {
+            if storage_expand_allow_child_link_restore "$app_key"; then
+                rm -rf "$dest_item" 2>/dev/null || true
+                ln -s "$item" "$dest_item" || {
+                    log "失败项: $name"
+                    return 1
+                }
+                log "链接: 大项 $name -> $item"
+                continue
+            fi
+            log "失败项: $name"
+            return 1
+        }
+    done
+    return 0
+}
+
+storage_expand_sync_hybrid_to_target() {
+    local source_path="$1"
+    local target_path="$2"
+    local item name dest_item tmp_item
+
+    [ -d "$source_path" ] || return 1
+    [ -d "$target_path" ] || return 1
+    for item in "$source_path"/* "$source_path"/.[!.]* "$source_path"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        name="$(basename "$item")"
+        dest_item="$target_path/$name"
+        if storage_expand_link_points_to_self "$item"; then
+            log "失败项: $name 是自指软链接"
+            return 1
+        fi
+        storage_expand_link_points_under "$item" "$target_path" && continue
+        tmp_item="$target_path/.migrate-$name.$$"
+        rm -rf "$tmp_item" 2>/dev/null || true
+        cp -a "$item" "$tmp_item" || {
+            rm -rf "$tmp_item" 2>/dev/null || true
+            log "失败项: $name"
+            return 1
+        }
+        rm -rf "$dest_item" || {
+            rm -rf "$tmp_item" 2>/dev/null || true
+            log "失败项: $name"
+            return 1
+        }
+        mv "$tmp_item" "$dest_item" || {
+            rm -rf "$tmp_item" 2>/dev/null || true
+            log "失败项: $name"
+            return 1
+        }
+    done
+    return 0
+}
+
+storage_expand_link_points_under() {
+    local link_path="$1"
+    local target_path="$2"
+    local raw_link link_real target_real
+
+    [ -L "$link_path" ] || return 1
+    raw_link="$(readlink "$link_path" 2>/dev/null || true)"
+    case "$raw_link" in
+        "$target_path"|"$target_path"/*)
+            return 0
+            ;;
+    esac
+
+    link_real="$(storage_expand_canonical_path "$link_path" 2>/dev/null || true)"
+    target_real="$(storage_expand_canonical_path "$target_path" 2>/dev/null || true)"
+    [ -n "$link_real" ] && [ -n "$target_real" ] || return 1
+    case "$link_real" in
+        "$target_real"|"$target_real"/*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+storage_expand_link_points_to_self() {
+    local link_path="$1"
+    local raw_link link_name
+
+    [ -L "$link_path" ] || return 1
+    raw_link="$(readlink "$link_path" 2>/dev/null || true)"
+    [ -n "$raw_link" ] || return 1
+    [ "$raw_link" = "$link_path" ] && return 0
+    case "$raw_link" in
+        /*)
+            return 1
+            ;;
+    esac
+    link_name="$(basename "$link_path")"
+    [ "$raw_link" = "$link_name" ] && return 0
+    [ "$raw_link" = "./$link_name" ] && return 0
+    return 1
+}
+
+storage_expand_path_has_self_loop_child_links() {
+    local source_path="$1"
+    local item
+
+    [ -d "$source_path" ] || return 1
+    for item in "$source_path"/* "$source_path"/.[!.]* "$source_path"/..?*; do
+        [ -L "$item" ] || continue
+        storage_expand_link_points_to_self "$item" && return 0
+    done
+    return 1
+}
+
+storage_expand_path_has_child_links_to_target() {
+    local source_path="$1"
+    local target_path="$2"
+    local item
+
+    [ -d "$source_path" ] || return 1
+    for item in "$source_path"/* "$source_path"/.[!.]* "$source_path"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        storage_expand_link_points_under "$item" "$target_path" && return 0
+    done
+    return 1
+}
+
+storage_expand_path_depends_on_target() {
+    local source_path="$1"
+    local target_path="$2"
+
+    storage_expand_link_points_under "$source_path" "$target_path" && return 0
+    storage_expand_path_has_child_links_to_target "$source_path" "$target_path" && return 0
+    return 1
+}
+
+storage_expand_openclash_has_expand_dependency() {
+    storage_expand_path_depends_on_target "/etc/openclash" "$ROOTFS_2ND_STORAGE_APPS_DIR/etc/openclash"
+}
+
+storage_expand_has_expand_dependency() {
+    local app_key spec src target
+
+    for app_key in $(storage_expand_app_spec_keys); do
+        spec="$(storage_expand_app_spec "$app_key")" || continue
+        src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        target="$(storage_expand_target_for_path "$src")"
+        storage_expand_path_depends_on_target "$src" "$target" && return 0
+    done
+    return 1
+}
+
+storage_expand_print_expand_dependencies() {
+    local app_key spec label src target printed
+
+    printed=0
+    for app_key in $(storage_expand_app_spec_keys); do
+        spec="$(storage_expand_app_spec "$app_key")" || continue
+        label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+        src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        target="$(storage_expand_target_for_path "$src")"
+        storage_expand_path_depends_on_target "$src" "$target" || continue
+        [ "$printed" = '1' ] || {
+            log "扩展依赖:"
+            printed=1
+        }
+        log "  - $label: $src -> $target"
+    done
+    [ "$printed" = '1' ]
+}
+
+storage_expand_stop_service() {
+    local service_name="$1"
+
+    [ -n "$service_name" ] || return 0
+    [ -x "/etc/init.d/$service_name" ] || return 0
+    "/etc/init.d/$service_name" stop >/dev/null 2>&1 || true
+}
+
+storage_expand_start_service() {
+    local service_name="$1"
+
+    [ -n "$service_name" ] || return 0
+    [ -x "/etc/init.d/$service_name" ] || return 0
+    "/etc/init.d/$service_name" start >/dev/null 2>&1 || true
+}
+
+storage_expand_require_app_runtime_files() {
+    local app_key="$1"
+
+    case "$app_key" in
+        openclash)
+            openclash_require_asn_mmdb
+            ;;
+        adguardhome)
+            [ -x /usr/bin/AdGuardHome/AdGuardHome ] || die "AdGuardHome 运行文件缺失：/usr/bin/AdGuardHome/AdGuardHome"
+            ;;
+    esac
+}
+
+storage_expand_list_without_src() {
+    local src="$1"
+    local tmp_list
+
+    [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] || return 0
+    tmp_list="$ROOTFS_2ND_STORAGE_MIGRATE_LIST.tmp.$$"
+    awk -F '\t' -v src="$src" '$3 != src { print }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" > "$tmp_list" 2>/dev/null || true
+    mv "$tmp_list" "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+}
+
+storage_expand_record_migration() {
+    local label="$1"
+    local service="$2"
+    local src="$3"
+    local target="$4"
+    local kind="$5"
+
+    storage_expand_list_without_src "$src"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$label" "$service" "$src" "$target" "$kind" "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)" >> "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+    chmod 600 "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null || true
+}
+
+storage_expand_remove_migration_record() {
+    local src="$1"
+
+    storage_expand_list_without_src "$src"
+    if [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] && ! awk 'NF { found = 1 } END { exit(found ? 0 : 1) }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null; then
+        rm -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+    fi
+}
+
+storage_expand_print_migration_list() {
+    if [ ! -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ]; then
+        log "迁移清单: 暂无"
+        return 0
+    fi
+
+    log "迁移清单:"
+    awk -F '\t' 'NF >= 4 { printf "  - %s: %s -> %s\n", $1, $3, $4 }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null || true
+}
+
+storage_expand_migrate_one_app() {
+    local app_key="$1"
+    local spec label service src target target_parent tmp_target backup_src kind src_real target_real
+
+    storage_expand_require_active
+    spec="$(storage_expand_app_spec "$app_key")" || die "未知迁移项：$app_key"
+    label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+    service="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $2 }')"
+    src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+    target="$(storage_expand_target_for_path "$src")"
+    target_parent="$(dirname "$target")"
+
+    [ -e "$src" ] || {
+        log "跳过: $label 源路径不存在：$src"
+        return 0
+    }
+
+    if [ -L "$src" ]; then
+        src_real="$(storage_expand_canonical_path "$src")"
+        target_real="$(storage_expand_canonical_path "$target")"
+        if [ "$src_real" = "$target_real" ]; then
+            log "跳过: $label 已迁移：$src -> $target"
+            storage_expand_prepare_target_parent "$target" || die "$label 修复扩展盘目标父目录权限失败"
+            storage_expand_require_app_runtime_files "$app_key"
+            storage_expand_record_migration "$label" "$service" "$src" "$target" "link"
+            return 0
+        fi
+        die "$label 源路径已是非本功能软链接：$src -> $src_real"
+    fi
+
+    if storage_expand_path_has_child_links_to_target "$src" "$target"; then
+        [ -d "$target" ] || die "$label 扩展盘目标不存在或不是目录：$target"
+        storage_expand_prepare_target_parent "$target" || die "$label 修复扩展盘目标父目录权限失败"
+        storage_expand_path_has_self_loop_child_links "$src" && die "$label 原路径含自指软链接，拒绝迁移：$src"
+        storage_expand_path_has_self_loop_child_links "$target" && die "$label 扩展盘目标含自指软链接，请先修复目标目录：$target"
+        log "迁移: $label -> $target"
+        storage_expand_stop_service "$service"
+        storage_expand_sync_hybrid_to_target "$src" "$target" || {
+            storage_expand_start_service "$service"
+            die "$label 同步到扩展盘失败"
+        }
+        backup_src="$src.nradio-storage-backup-$TS"
+        mv "$src" "$backup_src" || {
+            storage_expand_start_service "$service"
+            die "$label 移动原路径失败：$src"
+        }
+        ln -s "$target" "$src" || {
+            mv "$backup_src" "$src" 2>/dev/null || true
+            storage_expand_start_service "$service"
+            die "$label 创建软链接失败"
+        }
+        rm -rf "$backup_src"
+        storage_expand_require_app_runtime_files "$app_key"
+        storage_expand_record_migration "$label" "$service" "$src" "$target" "link"
+        storage_expand_start_service "$service"
+        log "完成: $label 已迁移到扩展盘"
+        return 0
+    fi
+    storage_expand_path_has_self_loop_child_links "$src" && die "$label 原路径含自指软链接，拒绝迁移：$src"
+
+    [ ! -e "$target" ] || die "$label 目标路径已存在：$target"
+    storage_expand_require_app_runtime_files "$app_key"
+    storage_expand_prepare_target_parent "$target" || die "$label 创建扩展盘目标父目录失败：$target_parent"
+    tmp_target="$target.tmp.$$"
+    rm -rf "$tmp_target" 2>/dev/null || true
+
+    if [ -d "$src" ]; then
+        kind="dir"
+    else
+        kind="file"
+    fi
+
+    log "迁移: $label -> $target"
+    storage_expand_stop_service "$service"
+    cp -a "$src" "$tmp_target" || {
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_start_service "$service"
+        die "$label 复制到扩展盘失败"
+    }
+    mv "$tmp_target" "$target" || {
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_start_service "$service"
+        die "$label 写入扩展盘目标失败"
+    }
+
+    backup_src="$src.nradio-storage-backup-$TS"
+    mv "$src" "$backup_src" || {
+        storage_expand_start_service "$service"
+        die "$label 移动原路径失败：$src"
+    }
+    ln -s "$target" "$src" || {
+        mv "$backup_src" "$src" 2>/dev/null || true
+        storage_expand_start_service "$service"
+        die "$label 创建软链接失败"
+    }
+
+    rm -rf "$backup_src"
+    storage_expand_require_app_runtime_files "$app_key"
+    storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind"
+    storage_expand_start_service "$service"
+    log "完成: $label 已迁移到扩展盘"
+}
+
+storage_expand_restore_one_app() {
+    local app_key="$1"
+    local spec label service src target required_bytes free_bytes tmp_restore src_real target_real keep_target restore_mode
+
+    storage_expand_require_active
+    spec="$(storage_expand_app_spec "$app_key")" || die "未知还原项：$app_key"
+    label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+    service="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $2 }')"
+    src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+    target="$(storage_expand_target_for_path "$src")"
+
+    [ -e "$target" ] || {
+        log "跳过: $label 扩展盘目标不存在：$target"
+        storage_expand_remove_migration_record "$src"
+        return 0
+    }
+    storage_expand_prepare_target_parent "$target" || die "$label 修复扩展盘目标父目录权限失败"
+    storage_expand_path_has_self_loop_child_links "$target" && die "$label 扩展盘目标含自指软链接，请先修复目标目录：$target"
+    if [ -L "$src" ]; then
+        src_real="$(storage_expand_canonical_path "$src")"
+        target_real="$(storage_expand_canonical_path "$target")"
+        [ "$src_real" = "$target_real" ] || die "$label 软链接目标不匹配：$src -> $src_real"
+        restore_mode="link"
+    elif storage_expand_path_has_child_links_to_target "$src" "$target"; then
+        restore_mode="hybrid"
+    else
+        die "$label 当前源路径不是本功能迁移状态，拒绝覆盖：$src"
+    fi
+
+    required_bytes="$(storage_expand_restore_size_bytes "$app_key" "$target")"
+    free_bytes="$(get_path_free_bytes /overlay 2>/dev/null || true)"
+    case "$free_bytes" in
+        ''|*[!0-9]*)
+            die "无法读取 /overlay 剩余空间，拒绝还原"
+            ;;
+    esac
+    log "空间参考: $label 目录约 $(format_bytes_human "$required_bytes")，/overlay 剩余 $(format_bytes_human "$free_bytes")；继续尝试完整还原"
+    if [ "$restore_mode" = "link" ]; then
+        storage_expand_require_app_runtime_files "$app_key"
+    fi
+
+    log "还原: $label -> $src"
+    storage_expand_stop_service "$service"
+    if [ "$restore_mode" = "link" ]; then
+        rm -f "$src" || {
+            storage_expand_start_service "$service"
+            die "$label 删除软链接失败：$src"
+        }
+        tmp_restore="$src.restore.$$"
+        rm -rf "$tmp_restore" 2>/dev/null || true
+        storage_expand_restore_copy_or_fail "$app_key" "$label" "$src" "$target" "$tmp_restore"
+        mv "$tmp_restore" "$src" || {
+            rm -rf "$tmp_restore" 2>/dev/null || true
+            ln -s "$target" "$src" 2>/dev/null || true
+            storage_expand_start_service "$service"
+            die "$label 写回原路径失败"
+        }
+    else
+        storage_expand_restore_hybrid_payload "$app_key" "$src" "$target" || {
+            storage_expand_start_service "$service"
+            die "$label 续还原失败"
+        }
+    fi
+    storage_expand_require_app_runtime_files "$app_key"
+    keep_target=0
+    if storage_expand_path_depends_on_target "$src" "$target"; then
+        keep_target=1
+        log "保留: $label 原路径含扩展盘子项链接，保留 $target"
+    fi
+    if [ "$keep_target" != '1' ]; then
+        rm -rf "$target" || {
+            storage_expand_start_service "$service"
+            die "$label 删除扩展盘目标失败：$target"
+        }
+    fi
+    if [ "$keep_target" = '1' ]; then
+        storage_expand_record_migration "$label" "$service" "$src" "$target" "hybrid"
+    else
+        storage_expand_remove_migration_record "$src"
+    fi
+    storage_expand_start_service "$service"
+    log "完成: $label 已还原到原路径"
+}
+
+storage_expand_preflight_restore_all() {
+    local list_file="$1"
+    local app_key label listed_src spec src target src_real target_real required_bytes free_bytes total_required
+
+    total_required=0
+    free_bytes="$(get_path_free_bytes /overlay 2>/dev/null || true)"
+    case "$free_bytes" in
+        ''|*[!0-9]*)
+            die "无法读取 /overlay 剩余空间，拒绝全部还原"
+            ;;
+    esac
+
+    log "全部还原空间预检:"
+    while IFS="$(printf '\t')" read -r app_key label listed_src; do
+        [ -n "$app_key" ] || continue
+        spec="$(storage_expand_app_spec "$app_key")" || die "未知还原项：$app_key"
+        src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        target="$(storage_expand_target_for_path "$src")"
+        [ -e "$target" ] || die "$label 扩展盘目标不存在：$target"
+        storage_expand_path_has_self_loop_child_links "$target" && die "$label 扩展盘目标含自指软链接，请先修复目标目录：$target"
+        if [ -L "$src" ]; then
+            src_real="$(storage_expand_canonical_path "$src")"
+            target_real="$(storage_expand_canonical_path "$target")"
+            [ "$src_real" = "$target_real" ] || die "$label 软链接目标不匹配：$src -> $src_real"
+        elif storage_expand_path_has_child_links_to_target "$src" "$target"; then
+            :
+        else
+            die "$label 当前源路径不是本功能迁移状态，拒绝全部还原：$src"
+        fi
+        if [ -L "$src" ]; then
+            storage_expand_require_app_runtime_files "$app_key"
+        fi
+        required_bytes="$(storage_expand_restore_size_bytes "$app_key" "$target")"
+        case "$required_bytes" in
+            ''|*[!0-9]*)
+                required_bytes=0
+                ;;
+        esac
+        total_required=$((total_required + required_bytes))
+        log "  - $label: $(format_bytes_human "$required_bytes")"
+    done < "$list_file"
+
+    log "全部还原空间参考: 合计约 $(format_bytes_human "$total_required")；/overlay 剩余: $(format_bytes_human "$free_bytes")；继续尝试完整还原"
+}
+
+write_rootfs_2nd_storage_init() {
+    backup_file "$ROOTFS_2ND_STORAGE_INIT"
+    mkdir -p "$(dirname "$ROOTFS_2ND_STORAGE_INIT")"
+    cat > "$ROOTFS_2ND_STORAGE_INIT" <<'EOF_ROOTFS_2ND_DATA_INIT'
+#!/bin/sh /etc/rc.common
+
+START=09
+STOP=89
+
+MOUNT_POINT="/mnt/rootfs_2nd_data"
+
+resolve_rootfs_2nd_device() {
+	if [ -e /dev/disk/by-partlabel/rootfs_2nd ]; then
+		readlink -f /dev/disk/by-partlabel/rootfs_2nd 2>/dev/null || printf '%s\n' /dev/disk/by-partlabel/rootfs_2nd
+		return 0
+	fi
+
+	for sysdev in /sys/class/block/*; do
+		[ -f "$sysdev/uevent" ] || continue
+		partname="$(sed -n 's/^PARTNAME=//p' "$sysdev/uevent" 2>/dev/null | sed -n '1p' || true)"
+		[ "$partname" = 'rootfs_2nd' ] || continue
+		dev="/dev/$(basename "$sysdev")"
+		[ -b "$dev" ] || continue
+		printf '%s\n' "$dev"
+		return 0
+	done
+
+	return 1
+}
+
+start() {
+	device="$(resolve_rootfs_2nd_device 2>/dev/null || true)"
+	[ -n "$device" ] || return 0
+	mkdir -p "$MOUNT_POINT"
+	grep -qs " $MOUNT_POINT " /proc/mounts && return 0
+	mount -t f2fs "$device" "$MOUNT_POINT"
+}
+
+stop() {
+	umount "$MOUNT_POINT" 2>/dev/null || true
+}
+EOF_ROOTFS_2ND_DATA_INIT
+    chmod +x "$ROOTFS_2ND_STORAGE_INIT"
+}
+
+enable_rootfs_2nd_storage_autostart() {
+    write_rootfs_2nd_storage_init
+    "$ROOTFS_2ND_STORAGE_INIT" enable >/dev/null 2>&1 || {
+        mkdir -p /etc/rc.d
+        rm -f /etc/rc.d/S12rootfs_2nd_data
+        ln -sf ../init.d/rootfs_2nd_data /etc/rc.d/S09rootfs_2nd_data
+    }
+}
+
+mount_rootfs_2nd_storage_now() {
+    local device="$1"
+    local mount_source mounted_elsewhere
+
+    mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    if [ -n "$mount_source" ]; then
+        storage_expand_mount_source_matches_device "$mount_source" "$device" || die "$ROOTFS_2ND_STORAGE_MOUNT_POINT 已被其它设备挂载：$mount_source"
+        return 0
+    fi
+
+    mounted_elsewhere="$(storage_expand_device_mountpoint "$device" 2>/dev/null || true)"
+    [ -z "$mounted_elsewhere" ] || die "rootfs_2nd 已挂载在 $mounted_elsewhere，已停止"
+
+    mkdir -p "$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+    mount -t f2fs "$device" "$ROOTFS_2ND_STORAGE_MOUNT_POINT" >/dev/null 2>&1 || return 1
+}
+
+storage_expand_confirm_format() {
+    log "警告: 启用该扩展会格式化第二系统 rootfs_2nd 分区。"
+    log "影响: 第二系统 OpenWrt 内容会被清空，之后只能先关闭扩展，再重新烧录第二系统。"
+    prompt_with_default "确认清空 rootfs_2nd 请输入 YES_ROOTFS_2ND" ""
+    [ "$PROMPT_RESULT" = 'YES_ROOTFS_2ND' ] || {
+        log "已取消"
+        return 1
+    }
+}
+
+enable_rootfs_2nd_storage_expand() {
+    local device mount_source
+
+    require_c8_c5800_storage_model
+    storage_expand_is_booted_from_rootfs_2nd && die "当前疑似从第二系统 rootfs_2nd 启动，禁止把当前系统分区改作扩展盘"
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
+    patch_reset_page_storage_expand_guard
+    patch_appcenter_storage_expand_display
+
+    mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    if [ -n "$mount_source" ]; then
+        storage_expand_mount_source_matches_device "$mount_source" "$device" || die "$ROOTFS_2ND_STORAGE_MOUNT_POINT 已被其它设备挂载：$mount_source"
+        enable_rootfs_2nd_storage_autostart
+        printf '%s\n' "enabled $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)" > "$ROOTFS_2ND_STORAGE_MARKER"
+        storage_expand_prepare_apps_tree || die "初始化扩展盘应用目录失败"
+        log "检测到 rootfs_2nd 已挂载，已补齐自启动和启用标记"
+        storage_expand_status
+        return 0
+    fi
+
+    if [ -f "$ROOTFS_2ND_STORAGE_MARKER" ]; then
+        enable_rootfs_2nd_storage_autostart
+        mount_rootfs_2nd_storage_now "$device" || die "检测到启用标记，但挂载 rootfs_2nd 失败；请先查看分区状态"
+        storage_expand_prepare_apps_tree || die "初始化扩展盘应用目录失败"
+        log "已按现有启用标记恢复挂载"
+        storage_expand_status
+        return 0
+    fi
+
+    mkdir -p "$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+    if mount_rootfs_2nd_storage_now "$device"; then
+        enable_rootfs_2nd_storage_autostart
+        printf '%s\n' "enabled $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)" > "$ROOTFS_2ND_STORAGE_MARKER"
+        storage_expand_prepare_apps_tree || die "初始化扩展盘应用目录失败"
+        log "检测到 rootfs_2nd 已是 f2fs，已直接接入扩展挂载"
+        storage_expand_status
+        return 0
+    fi
+
+    command -v mkfs.f2fs >/dev/null 2>&1 || die "系统缺少 mkfs.f2fs，无法格式化 rootfs_2nd"
+    storage_expand_confirm_format || return 0
+
+    mkfs.f2fs -f -l rootfs_2nd_data "$device" >/dev/null 2>&1 || die "格式化 rootfs_2nd 为 f2fs 失败"
+    enable_rootfs_2nd_storage_autostart
+    mount_rootfs_2nd_storage_now "$device" || die "格式化后挂载 rootfs_2nd 失败"
+    printf '%s\n' "enabled $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)" > "$ROOTFS_2ND_STORAGE_MARKER"
+    storage_expand_prepare_apps_tree || die "初始化扩展盘应用目录失败"
+    log "已启用 rootfs_2nd 存储扩展"
+    storage_expand_status
+}
+
+disable_rootfs_2nd_storage_expand() {
+    local device mount_source
+
+    require_c8_c5800_storage_model
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
+    if [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] && awk 'NF { found = 1 } END { exit(found ? 0 : 1) }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null; then
+        storage_expand_print_migration_list
+        die "仍有应用迁移到扩展盘，请先还原应用后再关闭存储扩展"
+    fi
+    if storage_expand_has_expand_dependency; then
+        storage_expand_print_expand_dependencies || true
+        die "仍有原路径依赖扩展盘，禁止关闭存储扩展"
+    fi
+    patch_reset_page_storage_expand_guard
+    patch_appcenter_storage_expand_display
+
+    mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    if [ -n "$mount_source" ]; then
+        storage_expand_mount_source_matches_device "$mount_source" "$device" || die "$ROOTFS_2ND_STORAGE_MOUNT_POINT 已被其它设备挂载：$mount_source"
+        umount "$ROOTFS_2ND_STORAGE_MOUNT_POINT" >/dev/null 2>&1 || die "卸载 $ROOTFS_2ND_STORAGE_MOUNT_POINT 失败，请先停止正在使用扩展盘的程序"
+    fi
+
+    if [ -f "$ROOTFS_2ND_STORAGE_INIT" ]; then
+        "$ROOTFS_2ND_STORAGE_INIT" disable >/dev/null 2>&1 || true
+        backup_file "$ROOTFS_2ND_STORAGE_INIT"
+        rm -f "$ROOTFS_2ND_STORAGE_INIT"
+    fi
+    rm -f /etc/rc.d/S09rootfs_2nd_data /etc/rc.d/S12rootfs_2nd_data "$ROOTFS_2ND_STORAGE_MARKER"
+    rmdir "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true
+
+    log "已关闭 rootfs_2nd 存储扩展。"
+    log "说明: 这只恢复第二系统烧录入口的使用条件，不会自动恢复第二系统内容；需要重新烧录第二系统固件。"
+}
+
+patch_reset_page_storage_expand_guard() {
+    local reset_controller="/usr/lib/lua/luci/controller/nradio_adv/reset.lua"
+    local reset_view="/usr/lib/lua/luci/view/nradio_adv/reset.htm"
+
+    [ -f "$reset_controller" ] || die "未找到备份/升级控制器：$reset_controller"
+    [ -f "$reset_view" ] || die "未找到备份/升级页面：$reset_view"
+    command -v lua >/dev/null 2>&1 || die "系统缺少 lua，无法写入备份/升级页面保护"
+
+    backup_file "$reset_controller"
+    backup_file "$reset_view"
+
+    lua <<'EOF_STORAGE_EXPAND_RESET_PATCH'
+local function read_file(path)
+    local f = assert(io.open(path, "rb"))
+    local s = f:read("*a")
+    f:close()
+    return s
+end
+
+local function write_file(path, data)
+    local f = assert(io.open(path, "wb"))
+    f:write(data)
+    f:close()
+end
+
+local controller = "/usr/lib/lua/luci/controller/nradio_adv/reset.lua"
+local view = "/usr/lib/lua/luci/view/nradio_adv/reset.htm"
+
+local function replace_once(data, old, new, label)
+    local first, last = data:find(old, 1, true)
+    assert(first, label)
+    return data:sub(1, first - 1) .. new .. data:sub(last + 1)
+end
+
+local function insert_after_once(data, anchor, insert, marker, label)
+    if data:find(marker or insert, 1, true) then
+        return data
+    end
+    return replace_once(data, anchor, anchor .. insert, label)
+end
+
+local c = read_file(controller)
+if not c:find("rootfs_2nd_storage_expand_enabled", 1, true) then
+    local helper = [[
+local function rootfs_2nd_storage_expand_enabled()
+	local fs = require "nixio.fs"
+	return fs.access("/etc/nradio_storage_expand_enabled")
+end
+]]
+    c = insert_after_once(c, 'local client_ip = luci.http.getenv("REMOTE_ADDR") or ""' .. "\n", helper, "local function rootfs_2nd_storage_expand_enabled()", "failed to insert storage expand helper")
+end
+
+local third_party_marker = 'upgrade third party")' .. "\n" .. '	if rootfs_2nd_storage_expand_enabled() then'
+if not c:find(third_party_marker, 1, true) then
+    local target = 'nixio.syslog("err","WEB["..client_ip.."] upgrade third party")\n'
+    local guard = [[	if rootfs_2nd_storage_expand_enabled() then
+		luci.template.render("nradio_adv/reset", { auto=-3, storage_expand=1 })
+		return
+	end
+]]
+    c = replace_once(c, target, target .. guard, "failed to guard upgrade_3rd_party")
+end
+
+local switch_marker = 'switch system")' .. "\n" .. '	if rootfs_2nd_storage_expand_enabled() then'
+if not c:find(switch_marker, 1, true) then
+    local target = 'nixio.syslog("err","WEB["..client_ip.."] switch system")\n'
+    local guard = [[	if rootfs_2nd_storage_expand_enabled() then
+		luci.template.render("nradio_adv/reset", { auto=-3, storage_expand=1 })
+		return
+	end
+]]
+    c = replace_once(c, target, target .. guard, "failed to guard switch_system")
+end
+write_file(controller, c)
+
+local v = read_file(view)
+if not v:find('rootfs_2nd_storage_expand_enabled = fs.access("/etc/nradio_storage_expand_enabled")', 1, true) then
+    v = insert_after_once(v, 'local display = uci:get("luci", "main", "display_backup") or "1"' .. "\n", 'local rootfs_2nd_storage_expand_enabled = fs.access("/etc/nradio_storage_expand_enabled")' .. "\n", 'rootfs_2nd_storage_expand_enabled = fs.access("/etc/nradio_storage_expand_enabled")', "failed to insert view storage state")
+end
+
+if not v:find("nradio-storage-expand-disabled", 1, true) then
+    local css = [[
+	.nradio-storage-expand-disabled {
+		opacity: 0.46;
+		filter: grayscale(1);
+	}
+	.nradio-storage-expand-disabled .cbi-section-node {
+		pointer-events: none;
+		user-select: none;
+	}
+	.nradio-storage-expand-disabled input,
+	.nradio-storage-expand-disabled button {
+		cursor: not-allowed !important;
+	}
+	.nradio-storage-expand-note {
+		margin: 10px 0 0 0;
+		max-width: 520px;
+		padding: 8px 10px;
+		border: 1px solid rgba(255,255,255,0.14);
+		border-radius: 6px;
+		background: rgba(255,255,255,0.04);
+		color: #c4c9d3;
+		font-size: 14px;
+		line-height: 1.7;
+	}
+]]
+    v = replace_once(v, "</style>", css .. "\n</style>", "failed to insert disabled css")
+
+    local before = [[<% if nr.support_multi_system() then %>
+<fieldset class="cbi-section">
+	<legend><%:Flash second system%></legend>]]
+    local after = [[<% if nr.support_multi_system() then %>
+<fieldset class="cbi-section<% if rootfs_2nd_storage_expand_enabled then %> nradio-storage-expand-disabled<% end %>">
+	<legend><%:Flash second system%></legend>]]
+    v = replace_once(v, before, after, "failed to patch second system fieldset")
+end
+
+if not v:find('id="image_3rd_party" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %>', 1, true) then
+    v = replace_once(v,
+        '<input type="file" name="image_3rd_party" style="display:none" id="image_3rd_party" />',
+        '<input type="file" name="image_3rd_party" style="display:none" id="image_3rd_party" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %> />',
+        "failed to disable second-system file input")
+end
+
+if not v:find('value="<%:Flash%>" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %>', 1, true) then
+    v = replace_once(v,
+        '<input type="submit" class="cbi-button upgrade_common_width cbi-input-apply" value="<%:Flash%>" />',
+        '<input type="submit" class="cbi-button upgrade_common_width cbi-input-apply" value="<%:Flash%>" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %> />',
+        "failed to disable second-system flash button")
+end
+
+if not v:find('id="btn-switch" value="<%:Switch system%>" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %>', 1, true) then
+    v = replace_once(v,
+        '<input type="button" class="cbi-button upgrade_common_width cbi-input-apply upgrade_sys_switch" id="btn-switch" value="<%:Switch system%>" />',
+        '<input type="button" class="cbi-button upgrade_common_width cbi-input-apply upgrade_sys_switch" id="btn-switch" value="<%:Switch system%>" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %> />',
+        "failed to disable second-system switch button")
+end
+
+if v:find('rootfs_2nd 已作为 eMMC 存储扩展使用，第二系统烧录、固件选择和系统切换已禁用；关闭存储扩展后可重新烧录第二系统。', 1, true) then
+    v = v:gsub('%s*<%% if rootfs_2nd_storage_expand_enabled then %%>%s*<div class="cbi%-section%-descr nradio%-storage%-expand%-note">rootfs_2nd 已作为 eMMC 存储扩展使用，第二系统烧录、固件选择和系统切换已禁用；关闭存储扩展后可重新烧录第二系统。</div>%s*<%% end %%>', '', 1)
+end
+
+if not v:find('因开启了存储扩展功能，暂不可用，如果要使用 OpenWrt，请关闭存储扩展功能。', 1, true) then
+    v = replace_once(v,
+        '<input type="button" class="cbi-button upgrade_common_width cbi-input-apply upgrade_sys_switch" id="btn-switch" value="<%:Switch system%>" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %> />',
+        [[<input type="button" class="cbi-button upgrade_common_width cbi-input-apply upgrade_sys_switch" id="btn-switch" value="<%:Switch system%>" <% if rootfs_2nd_storage_expand_enabled then %>disabled="disabled"<% end %> />
+					<% if rootfs_2nd_storage_expand_enabled then %>
+					<div class="nradio-storage-expand-note">因开启了存储扩展功能，暂不可用，如果要使用 OpenWrt，请关闭存储扩展功能。</div>
+					<% end %>]],
+        "failed to insert storage expand disabled note")
+end
+
+if not v:find("rootfs_2nd 已作为 eMMC 存储扩展使用，第二系统烧录和切换当前不可用。", 1, true) then
+    local old = [[		else if (auto == '-2') {
+			create_info_box({msg:"<%:Power capacity is below 50%, please make sure power up to 50% before doing a upgrade. %>",btn_val:"<%:OK%>"});
+		}]]
+    local new = [[		else if (auto == '-2') {
+			create_info_box({msg:"<%:Power capacity is below 50%, please make sure power up to 50% before doing a upgrade. %>",btn_val:"<%:OK%>"});
+		}
+		else if (auto == '-3') {
+			create_info_box({msg:"rootfs_2nd 已作为 eMMC 存储扩展使用，第二系统烧录和切换当前不可用。",btn_val:"<%:OK%>"});
+		}]]
+    v = replace_once(v, old, new, "failed to insert disabled action message")
+end
+
+write_file(view, v)
+EOF_STORAGE_EXPAND_RESET_PATCH
+
+    log "已写入备份/升级页第二系统禁用保护"
+}
+
+patch_appcenter_storage_expand_display() {
+    require_nradio_oem_appcenter
+    verify_file_exists "$APPCENTER_CONTROLLER" "NRadio 应用商店控制器"
+    command -v lua >/dev/null 2>&1 || die "系统缺少 lua，无法写入应用商店空间显示补丁"
+
+    backup_file "$APPCENTER_CONTROLLER"
+    lua <<'EOF_STORAGE_EXPAND_APPCENTER_PATCH'
+local controller = "/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua"
+local view = "/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm"
+
+local function read_file(file)
+    local f = assert(io.open(file, "rb"))
+    local s = f:read("*a")
+    f:close()
+    return s
+end
+
+local function write_file(file, data)
+    local f = assert(io.open(file, "wb"))
+    f:write(data)
+    f:close()
+end
+
+local function replace_once(data, old, new, label)
+    local first, last = data:find(old, 1, true)
+    assert(first, label)
+    return data:sub(1, first - 1) .. new .. data:sub(last + 1)
+end
+
+local data = read_file(controller)
+local replacement = [[function action_get_memory()
+	local fs = require "nixio.fs"
+	local overlay_total, overlay_used = 0, 0
+	local expand_total, expand_used = 0, 0
+	local expand_enabled, expand_mounted = false, false
+	local tfcard = false
+
+	local function read_storage_stat(path)
+		local stat = fs.statvfs(path)
+		if not stat then
+			return 0, 0
+		end
+
+		local block_size = tonumber(stat.frsize or stat.bsize or 1024) or 1024
+		local blocks = tonumber(stat.blocks or 0) or 0
+		local bavail = tonumber(stat.bavail or stat.bfree or 0) or 0
+		local total = math.floor((blocks * block_size) / 1024)
+		local used = math.floor(((blocks - bavail) * block_size) / 1024)
+		if used < 0 then
+			used = 0
+		end
+		return total, used
+	end
+
+	if fs.access("/usr/lib/lua/luci/controller/nradio_adv/sd.lua") then
+		tfcard = true
+	end
+
+	overlay_total, overlay_used = read_storage_stat("/overlay")
+
+	if fs.access("/etc/nradio_storage_expand_enabled") then
+		expand_enabled = true
+		local mounts = fs.readfile("/proc/mounts") or ""
+		if mounts:find("%s/mnt/rootfs_2nd_data%s") then
+			expand_mounted = true
+			expand_total, expand_used = read_storage_stat("/mnt/rootfs_2nd_data")
+		end
+	end
+
+	luci.nradio.luci_call_result({
+		tfcard = tfcard,
+		total_memory = overlay_total,
+		used_memory = overlay_used,
+		overlay_total_memory = overlay_total,
+		overlay_used_memory = overlay_used,
+		storage_expand_enabled = expand_enabled,
+		storage_expand_mounted = expand_mounted,
+		expand_total_memory = expand_total,
+		expand_used_memory = expand_used,
+	})
+end
+
+local function nradio_appcenter_read_first_line(path)
+	local fp = io.open(path, "r")
+	if not fp then
+		return nil
+	end
+	local line = fp:read("*l")
+	fp:close()
+	return line
+end
+
+local function nradio_appcenter_read_cpu_stat()
+	local line = nradio_appcenter_read_first_line("/proc/stat")
+	if not line then
+		return nil
+	end
+
+	local values = {}
+	for n in line:gmatch("%d+") do
+		values[#values + 1] = tonumber(n) or 0
+	end
+	if #values < 4 then
+		return nil
+	end
+
+	local idle = (values[4] or 0) + (values[5] or 0)
+	local total = 0
+	for _, value in ipairs(values) do
+		total = total + value
+	end
+
+	return total, idle
+end
+
+local function nradio_appcenter_read_cpu_usage_percent()
+	local fs = require "nixio.fs"
+	local state_path = "/tmp/nradio_appcenter_cpu.stat"
+	local total, idle = nradio_appcenter_read_cpu_stat()
+	if not total or not idle then
+		return nil
+	end
+
+	local prev_total, prev_idle
+	local previous = fs.readfile(state_path)
+	if previous then
+		prev_total, prev_idle = previous:match("^(%d+)%s+(%d+)")
+		prev_total = tonumber(prev_total)
+		prev_idle = tonumber(prev_idle)
+	end
+	fs.writefile(state_path, string.format("%d %d\n", total, idle))
+
+	if not prev_total or not prev_idle then
+		return nil
+	end
+
+	local delta_total = total - prev_total
+	local delta_idle = idle - prev_idle
+	if delta_total <= 0 then
+		return nil
+	end
+
+	local usage = (delta_total - delta_idle) * 100 / delta_total
+	if usage < 0 then usage = 0 end
+	if usage > 100 then usage = 100 end
+	return math.floor(usage * 10 + 0.5) / 10
+end
+
+local function nradio_appcenter_read_temperature_celsius()
+	local fs = require "nixio.fs"
+	local max_temp = nil
+	for i = 0, 8 do
+		local path = string.format("/sys/class/thermal/thermal_zone%d/temp", i)
+		if fs.access(path) then
+			local raw = tonumber(nradio_appcenter_read_first_line(path) or "")
+			if raw then
+				local temp = raw
+				if temp > 1000 then
+					temp = temp / 1000
+				end
+				if not max_temp or temp > max_temp then
+					max_temp = temp
+				end
+			end
+		end
+	end
+	if not max_temp then
+		return nil
+	end
+	return math.floor(max_temp * 10 + 0.5) / 10
+end
+
+local function nradio_appcenter_read_system_memory()
+	local total, available = 0, 0
+	for line in io.lines("/proc/meminfo") do
+		local key, value = line:match("^(%w+):%s+(%d+)")
+		value = tonumber(value)
+		if key == "MemTotal" and value then
+			total = value
+		elseif key == "MemAvailable" and value then
+			available = value
+		end
+		if total > 0 and available > 0 then
+			break
+		end
+	end
+
+	local used = total - available
+	if used < 0 then
+		used = 0
+	end
+
+	local percent = 0
+	if total > 0 then
+		percent = math.floor((used * 1000 / total) + 0.5) / 10
+	end
+
+	return total, used, percent
+end
+]]
+
+local start_pos = data:find("function action_get_memory()", 1, true)
+assert(start_pos, "action_get_memory not found")
+local next_pos = data:find("\nfunction ", start_pos + 1, true) or (#data + 1)
+data = data:sub(1, start_pos - 1) .. replacement .. data:sub(next_pos)
+
+write_file(controller, data)
+
+local html = read_file(view)
+local storage_layout_css =
+[[    .nr-storage-row{
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 100%;
+    }
+    .nr-storage-expand-row{
+        display: none;
+        margin-top: 4px;
+    }
+    .nr-storage-expand-row .mem_progress_inner{
+        background: linear-gradient(to right, #29e0b8, #68a5ff);
+    }
+    div.appcontainer > div.app_btn_box{
+        background: none !important;
+        background-color: transparent !important;
+        background-image: none !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        outline: 0 !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+    div.appcontainer > div.app_btn_box::before,
+    div.appcontainer > div.app_btn_box::after{
+        content: none !important;
+        display: none !important;
+        background: none !important;
+        box-shadow: none !important;
+    }
+    div.app_btn_box > div.mem_track{
+        flex: 0 0 280px;
+        min-width: 220px;
+        max-width: 280px;
+        gap: 10px;
+        margin-left: 0;
+        overflow: visible;
+    }
+    div.app_btn_box > div.mem_track .mem_header{
+        gap: 14px;
+        line-height: 1.2;
+    }
+    div.app_btn_box > div.mem_track .mem_header span:first-child{
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+    div.app_btn_box > div.mem_track .mem_header span:last-child{
+        flex: 0 1 auto;
+        min-width: 0;
+        text-align: right;
+        white-space: nowrap;
+    }
+    div.app_btn_box > div.mem_track .mem_progress{
+        flex: none;
+        width: 100%;
+        margin-top: 0;
+    }
+    #app_status_mount .app_status_bar span{
+        display: block;
+        height: 100%;
+        width: 0;
+    }
+    @media (max-width: 768px){
+        div.app_btn_box > div.mem_track{
+            flex: 0 0 220px;
+            min-width: 220px;
+            max-width: 220px;
+            margin-left: 0;
+        }
+    }
+]]
+if not html:find("storage_expand_memory_row", 1, true) then
+    html = replace_once(html,
+[[    .mem_progress_inner{
+        height: 100%;
+        background: linear-gradient(to right, #00D5FF, #00aeff);
+        width: 66.6%;
+    }
+]],
+[[    .mem_progress_inner{
+        height: 100%;
+        background: linear-gradient(to right, #00D5FF, #00aeff);
+        width: 66.6%;
+    }
+]] .. storage_layout_css, "failed to patch appcenter memory css")
+
+    html = replace_once(html,
+[[        <div class="mem_track">
+            <div class="mem_header">
+                <span><%:APPMemory%></span>
+                <span id="memory_detail">9.9 G / 99.9 G</span>
+            </div>
+            <div class="mem_progress">
+                <div class="mem_progress_inner"></div>
+            </div>
+        </div>
+]],
+[[        <div class="mem_track">
+            <div class="nr-storage-row">
+                <div class="mem_header">
+                    <span>系统空间</span>
+                    <span id="memory_detail">9.9 G / 99.9 G</span>
+                </div>
+                <div class="mem_progress">
+                    <div class="mem_progress_inner" id="memory_progress_inner"></div>
+                </div>
+            </div>
+            <div class="nr-storage-row nr-storage-expand-row" id="storage_expand_memory_row">
+                <div class="mem_header">
+                    <span>存储扩展</span>
+                    <span id="storage_expand_memory_detail">0.0 G / 0.0 G</span>
+                </div>
+                <div class="mem_progress">
+                    <div class="mem_progress_inner" id="storage_expand_memory_progress_inner"></div>
+                </div>
+            </div>
+        </div>
+]], "failed to patch appcenter memory block")
+
+    html = replace_once(html,
+[[        <div class="mem_mobile">
+            <span><%:APPMemory%></span>
+            <span id="memory_detail_mobile">9.9 G / 99.9 G</span>
+        </div>
+]],
+[[        <div class="mem_mobile">
+            <span>系统空间</span>
+            <span id="memory_detail_mobile">9.9 G / 99.9 G</span>
+            <span id="storage_expand_memory_mobile" style="display:none">存储扩展：<em id="storage_expand_memory_detail_mobile">0.0 G / 0.0 G</em></span>
+        </div>
+]], "failed to patch appcenter mobile memory block")
+end
+if not html:find("div.app_btn_box > div.mem_track", 1, true) then
+    html = replace_once(html,
+[[    .mem_mobile{]],
+storage_layout_css .. [[    .mem_mobile{]], "failed to patch appcenter storage layout css")
+end
+html = html:gsub("margin%-top:%s*%-5px;", "margin-top: 0;")
+
+local old_update_start = html:find("    function update_memory(", 1, true)
+local old_update_end = html:find("    function get_memory(){", old_update_start or 1, true)
+assert(old_update_start and old_update_end, "failed to locate update_memory")
+local new_update = [[    function format_storage_size(total, used){
+        var total_mb = total / 1024;
+        var used_mb = used / 1024;
+        var unit = (total_mb < 1024) ? " M" : " G";
+        var total_ui = (total_mb < 1024) ? total_mb : (total_mb / 1024);
+        var used_ui = (total_mb < 1024) ? used_mb : (used_mb / 1024);
+        return used_ui.toFixed(1) + unit + " / " + total_ui.toFixed(1) + unit;
+    }
+
+    function update_memory_bar(detail_selector, mobile_selector, progress_selector, total, used){
+        if(!total || total <= 0) return false;
+        var percent = Math.max(0, Math.min(100, (used / total) * 100));
+        var text = format_storage_size(total, used);
+
+        $(detail_selector).text(text);
+        if(mobile_selector)
+            $(mobile_selector).text(text);
+        $(progress_selector).css("width",percent.toFixed(1) + "%");
+        return true;
+    }
+
+    function update_memory(data){
+        var overlay_total = Number(data.overlay_total_memory || data.total_memory || 0);
+        var overlay_used = Number(data.overlay_used_memory || data.used_memory || 0);
+        var expand_total = Number(data.expand_total_memory || 0);
+        var expand_used = Number(data.expand_used_memory || 0);
+
+        update_memory_bar("#memory_detail", "#memory_detail_mobile", "#memory_progress_inner", overlay_total, overlay_used);
+
+        if(data.storage_expand_enabled && data.storage_expand_mounted && expand_total > 0){
+            $("#storage_expand_memory_row").css("display", "flex");
+            $("#storage_expand_memory_mobile").show();
+            update_memory_bar("#storage_expand_memory_detail", "#storage_expand_memory_detail_mobile", "#storage_expand_memory_progress_inner", expand_total, expand_used);
+        }
+        else{
+            $("#storage_expand_memory_row").hide();
+            $("#storage_expand_memory_mobile").hide();
+        }
+    }
+
+]]
+html = html:sub(1, old_update_start - 1) .. new_update .. html:sub(old_update_end)
+html = html:gsub("update_memory%(%s*TOTAL_MEMORY%s*,%s*USED_MEMORY%s*%);", "update_memory(data_res.result);")
+write_file(view, html)
+EOF_STORAGE_EXPAND_APPCENTER_PATCH
+
+    grep -q 'read_storage_stat("/overlay")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店空间显示补丁写入失败"
+    grep -q 'nradio_appcenter_read_cpu_usage_percent' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态采样函数恢复失败"
+    grep -q 'storage_expand_memory_row' "$TPL" 2>/dev/null || die "应用商店双空间显示补丁写入失败"
+    refresh_luci_appcenter
+    /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+    log "已写入应用商店空间显示补丁：扩展启用时显示 $ROOTFS_2ND_STORAGE_MOUNT_POINT，否则显示 /overlay"
+    log "已清理 LuCI 控制器缓存并重载 uhttpd"
+}
+
+storage_expand_select_app_action() {
+    local action_name="$1"
+    local choice list_file list_count all_choice line app_key
+
+    storage_expand_require_active
+    while :; do
+        mkdir -p "$WORKDIR"
+        list_file="$WORKDIR/storage-expand-app-menu.$$"
+        if [ "$action_name" = "迁移应用到扩展盘" ]; then
+            storage_expand_build_migrate_menu_list "$list_file"
+        else
+            storage_expand_build_restore_menu_list "$list_file"
+        fi
+        list_count="$(wc -l < "$list_file" 2>/dev/null | tr -d ' ' || printf '0')"
+        case "$list_count" in
+            ''|*[!0-9]*)
+                list_count=0
+                ;;
+        esac
+
+        printf '\n%s:\n' "$action_name"
+        if [ "$list_count" -eq 0 ]; then
+            if [ "$action_name" = "迁移应用到扩展盘" ]; then
+                log "暂无可迁移应用：应用商店已安装列表中没有发现可迁移且源路径存在的应用"
+            else
+                log "暂无可还原应用：未发现已迁移到扩展盘的应用记录"
+            fi
+            rm -f "$list_file"
+            return 0
+        fi
+
+        awk -F '\t' '{ printf "%d. %s (%s)\n", NR, $2, $3 }' "$list_file"
+        all_choice=$((list_count + 1))
+        printf '%s. 全部\n' "$all_choice"
+        printf '0. 返回\n'
+        printf '请选择 0、1-%s 或 %s: ' "$list_count" "$all_choice"
+        read_category_choice
+        choice="$UI_READ_RESULT"
+        case "$choice" in
+            0)
+                rm -f "$list_file"
+                return 2
+                ;;
+            ''|*[!0-9]*)
+                rm -f "$list_file"
+                die_menu_input_issue "$choice"
+                ;;
+            *)
+                if [ "$choice" -eq "$all_choice" ] 2>/dev/null; then
+                    if [ "$action_name" = "还原应用到 overlay" ]; then
+                        storage_expand_preflight_restore_all "$list_file"
+                    fi
+                    while IFS="$(printf '\t')" read -r app_key _label _src; do
+                        [ -n "$app_key" ] || continue
+                        storage_expand_run_app_action "$action_name" "$app_key"
+                    done < "$list_file"
+                    rm -f "$list_file"
+                    return 0
+                fi
+                if [ "$choice" -ge 1 ] 2>/dev/null && [ "$choice" -le "$list_count" ] 2>/dev/null; then
+                    line="$(sed -n "${choice}p" "$list_file")"
+                    app_key="$(printf '%s\n' "$line" | awk -F '\t' '{ print $1 }')"
+                    rm -f "$list_file"
+                    [ -n "$app_key" ] || die_menu_input_issue "$choice"
+                    storage_expand_run_app_action "$action_name" "$app_key"
+                    return 0
+                fi
+                rm -f "$list_file"
+                die_menu_input_issue "$choice"
+                ;;
+        esac
+    done
+}
+
+manage_rootfs_2nd_storage_expand() {
+    while :; do
+        printf '\nC8/C5800 eMMC 存储扩展:\n'
+        printf '1. 查看当前扩展状态\n'
+        printf '2. 启用 rootfs_2nd 存储扩展\n'
+        printf '3. 关闭存储扩展并恢复第二系统烧录入口\n'
+        printf '4. 修复应用商店存储空间显示\n'
+        printf '5. 迁移应用到扩展盘\n'
+        printf '6. 还原应用到 overlay\n'
+        printf '0. 返回功能分类\n'
+        printf '请选择 0、1、2、3、4、5 或 6: '
+        read_category_choice
+        case "$UI_READ_RESULT" in
+            0) return 2 ;;
+            1) storage_expand_status; return 0 ;;
+            2) enable_rootfs_2nd_storage_expand; return 0 ;;
+            3) disable_rootfs_2nd_storage_expand; return 0 ;;
+            4) patch_appcenter_storage_expand_display; return 0 ;;
+            5) storage_expand_select_app_action "迁移应用到扩展盘"; return 0 ;;
+            6) storage_expand_select_app_action "还原应用到 overlay"; return 0 ;;
+            *) die_menu_input_issue "$UI_READ_RESULT" ;;
+        esac
+    done
 }
 
 ensure_openclash_swap_setup() {
@@ -19637,8 +22562,8 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
 
 <%+openvpn/ovpn_css%>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk3 is-loading">
-  <section class="vpn-hero vpn-hero-mk3">
+<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 is-loading">
+  <section class="vpn-hero vpn-hero-mk5">
     <div class="vpn-hero-main">
       <div class="vpn-brand-block">
         <h2>OpenVPN 控制台</h2>
@@ -19690,7 +22615,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       </aside>
     </div>
 
-    <div class="vpn-mini-grid vpn-mini-grid-mk3">
+    <div class="vpn-mini-grid vpn-mini-grid-mk5">
       <div class="vpn-mini-card vpn-mini-card-accent vpn-mini-card-wide">
         <span class="vpn-mini-label">当前动作</span>
         <strong id="vpn-mini-action">等待更新</strong>
@@ -20076,7 +23001,7 @@ function vpnCopyConfig() {
   function setShellState(stateClass) {
     var shell = document.querySelector('.vpn-shell-refined');
     if (shell) {
-      shell.className = 'vpn-shell vpn-shell-refined vpn-shell-mk3' + (stateClass ? (' ' + stateClass) : '');
+      shell.className = 'vpn-shell vpn-shell-refined vpn-shell-mk5' + (stateClass ? (' ' + stateClass) : '');
     }
   }
 
@@ -24008,8 +26933,8 @@ elseif mode == "file" then
 end
 %>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk3 vpn-shell-secondary">
-  <div class="vpn-hero vpn-hero-mk3 vpn-hero-secondary">
+<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary">
+  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary">
     <div class="vpn-toolbar">
       <span class="vpn-pill">OpenVPN</span>
       <span class="vpn-status-chip"><%=mode_label%></span>
@@ -24033,7 +26958,7 @@ end
   </div>
 
   <div class="vpn-mini-grid">
-    <div class="vpn-mini-card">
+    <div class="vpn-mini-card vpn-mini-card-accent">
       <span class="vpn-mini-label">当前实例</span>
       <strong><%=pcdata(instance)%></strong>
       <span class="vpn-mini-note">当前正在编辑的 OpenVPN UCI 节点</span>
@@ -24043,12 +26968,12 @@ end
       <strong><%=pcdata(cfg_path)%></strong>
       <span class="vpn-mini-note">若使用外部 ovpn 文件，这里显示其落盘路径</span>
     </div>
-    <div class="vpn-mini-card">
+    <div class="vpn-mini-card vpn-mini-card-status">
       <span class="vpn-mini-label">实例状态</span>
       <strong><%=enabled_label%></strong>
       <span class="vpn-mini-note">协议：<%=pcdata(proto)%> · 端口：<%=pcdata(port)%></span>
     </div>
-    <div class="vpn-mini-card">
+    <div class="vpn-mini-card vpn-mini-card-route">
       <span class="vpn-mini-label">路由模式</span>
       <strong><%=route_noexec%></strong>
       <span class="vpn-mini-note">用于判断当前实例是否交给外部脚本接管</span>
@@ -24151,8 +27076,8 @@ EOF_OPENVPN_PAGESWITCH
 
 <%+openvpn/ovpn_css%>
 
-<div class="vpn-entry-grid vpn-entry-grid-mk3">
-	<div class="vpn-entry-card" id="div_add">
+<div class="vpn-entry-grid vpn-entry-grid-mk5">
+	<div class="vpn-entry-card vpn-entry-card-template" id="div_add">
 		<div class="vpn-entry-head">
 			<h4>模板创建</h4>
 			<span class="vpn-entry-badge">模板</span>
@@ -24174,7 +27099,7 @@ EOF_OPENVPN_PAGESWITCH
 		</div>
 	</div>
 
-	<div class="vpn-entry-card" id="div_upload">
+	<div class="vpn-entry-card vpn-entry-card-upload" id="div_upload">
 		<div class="vpn-entry-head">
 			<h4>OVPN 文件上传</h4>
 			<span class="vpn-entry-badge vpn-badge-neutral">兼容</span>
@@ -24200,8 +27125,8 @@ EOF_OPENVPN_SELECT_INPUT_ADD
     cat > /usr/lib/lua/luci/view/openvpn/overview_intro.htm <<'EOF_OPENVPN_OVERVIEW_INTRO'
 <%+openvpn/ovpn_css%>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk3 vpn-shell-secondary">
-  <div class="vpn-hero vpn-hero-mk3 vpn-hero-secondary">
+<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary">
+  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary">
     <div class="vpn-hero-top">
       <div class="vpn-brand-block">
         <div class="vpn-toolbar">
@@ -24222,7 +27147,7 @@ EOF_OPENVPN_SELECT_INPUT_ADD
     </div>
 
     <div class="vpn-mini-grid">
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-accent">
         <span class="vpn-mini-label">实例总数</span>
         <strong><%=self.instance_count or 0%></strong>
         <span class="vpn-mini-note">当前 UCI 中已注册的 OpenVPN 实例数量</span>
@@ -24232,12 +27157,12 @@ EOF_OPENVPN_SELECT_INPUT_ADD
         <strong><%=self.enabled_count or 0%></strong>
         <span class="vpn-mini-note">已开启 `enabled` 的实例数量</span>
       </div>
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-status">
         <span class="vpn-mini-label">运行实例</span>
         <strong><%=self.running_count or 0%></strong>
         <span class="vpn-mini-note">当前检测到仍在运行的进程数量</span>
       </div>
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-route">
         <span class="vpn-mini-label">文件型实例</span>
         <strong><%=self.file_cfg_count or 0%></strong>
         <span class="vpn-mini-note">配置来源为外部 `.ovpn` 文件的实例数量</span>
@@ -24249,7 +27174,7 @@ EOF_OPENVPN_OVERVIEW_INTRO
 
     cat > /usr/lib/lua/luci/view/openvpn/nsection.htm <<'EOF_OPENVPN_NSECTION'
 <% if self:cfgvalue(self.section) then section = self.section %>
-	<fieldset class="cbi-section vpn-cbi-section">
+	<fieldset class="cbi-section vpn-cbi-section vpn-cbi-section-mk5">
 		<% if self.title and #self.title > 0 then -%>
 			<div class="vpn-section-title"><%=self.title%></div>
 		<%- end %>
@@ -24269,7 +27194,7 @@ EOF_OPENVPN_OVERVIEW_INTRO
 	</fieldset>
 <% elseif self.addremove then %>
 	<% if self.template_addremove then include(self.template_addremove) else -%>
-	<fieldset class="cbi-section vpn-cbi-section" id="cbi-<%=self.config%>-<%=self.section%>">
+	<fieldset class="cbi-section vpn-cbi-section vpn-cbi-section-mk5" id="cbi-<%=self.config%>-<%=self.section%>">
 		<% if self.title and #self.title > 0 then -%>
 			<div class="vpn-section-title"><%=self.title%></div>
 		<%- end %>
@@ -26279,6 +29204,1764 @@ EOF_OPENVPN_MK3_FINAL_POLISH
     }
 </style>
 EOF_OPENVPN_OVPN_CSS_MK3_EXACT
+
+    for openvpn_mk5_file in \
+        /usr/lib/lua/luci/view/openvpn/ovpn_css.htm \
+        /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm \
+        /usr/lib/lua/luci/view/openvpn/pageswitch.htm \
+        /usr/lib/lua/luci/view/openvpn/cbi-select-input-add.htm \
+        /usr/lib/lua/luci/view/openvpn/overview_intro.htm \
+        /usr/lib/lua/luci/view/openvpn/nsection.htm; do
+        [ -f "$openvpn_mk5_file" ] || continue
+        sed -i \
+            -e 's/Mk3/Mk5/g' \
+            -e 's/mk3/mk5/g' \
+            "$openvpn_mk5_file"
+    done
+
+    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_DEPTH_POLISH'
+<style type="text/css">
+    :root {
+        --vpn-bg: #2e2e38;
+        --vpn-panel: #151b27;
+        --vpn-panel-2: #101622;
+        --vpn-glass: rgba(12, 16, 24, 0.56);
+        --vpn-glass-strong: rgba(18, 24, 36, 0.82);
+        --vpn-line: rgba(92, 110, 146, 0.34);
+        --vpn-line-strong: rgba(108, 162, 255, 0.40);
+        --vpn-text: #edf4ff;
+        --vpn-muted: #9fb1cd;
+        --vpn-soft: rgba(255, 255, 255, 0.052);
+        --vpn-state: #23c8e4;
+        --vpn-state-rgb: 35, 200, 228;
+        --vpn-good: #3ddc97;
+        --vpn-warn: #f7c667;
+        --vpn-bad: #ff7676;
+    }
+    .vpn-shell {
+        position: relative;
+        isolation: isolate;
+        padding: 8px 8px 18px;
+    }
+    .vpn-shell-mk5 {
+        --vpn-state: #23c8e4;
+        --vpn-state-rgb: 35, 200, 228;
+        border-color: rgba(92, 110, 146, 0.42);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--vpn-state-rgb), 0.10), transparent 28%),
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.12), transparent 30%),
+            linear-gradient(180deg, rgba(35, 41, 57, 0.98), rgba(20, 25, 37, 0.98)),
+            var(--vpn-bg);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 24px 56px rgba(0,0,0,0.26);
+    }
+    .vpn-shell-mk5::before {
+        content: "";
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        top: 0;
+        height: 1px;
+        border-radius: 999px;
+        pointer-events: none;
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.58), rgba(47,211,238,0.62), rgba(47,211,238,0));
+        opacity: 0.88;
+    }
+    .vpn-shell-mk5.is-ok {
+        --vpn-state: #3ddc97;
+        --vpn-state-rgb: 61, 220, 151;
+    }
+    .vpn-shell-mk5.is-warn,
+    .vpn-shell-mk5.is-ready,
+    .vpn-shell-mk5.is-profile-ready {
+        --vpn-state: #f7c667;
+        --vpn-state-rgb: 247, 198, 103;
+    }
+    .vpn-shell-mk5.is-bad,
+    .vpn-shell-mk5.is-empty {
+        --vpn-state: #ff7676;
+        --vpn-state-rgb: 255, 118, 118;
+    }
+    .vpn-hero-mk5,
+    .vpn-hero-secondary {
+        border-color: rgba(92, 110, 146, 0.42);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--vpn-state-rgb), 0.12), transparent 28%),
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.14), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(12, 16, 24, 0.58);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.042), 0 14px 30px rgba(0,0,0,0.16);
+        -webkit-backdrop-filter: blur(12px) saturate(116%);
+        backdrop-filter: blur(12px) saturate(116%);
+    }
+    .vpn-hero-mk5::before,
+    .vpn-hero-secondary::before {
+        inset: 0;
+        border: 0;
+        border-radius: inherit;
+        background: linear-gradient(135deg, rgba(255,255,255,0.055), transparent 45%);
+        opacity: 0.72;
+    }
+    .vpn-brand-block,
+    .vpn-command-card,
+    .vpn-mini-card,
+    .vpn-stat-card,
+    .vpn-card,
+    .vpn-quick-rail,
+    .vpn-panel-shell,
+    .vpn-subcard,
+    .vpn-entry-card,
+    .vpn-shell-secondary .vpn-category-rail {
+        position: relative;
+        overflow: hidden;
+        border-color: rgba(78, 96, 131, 0.72);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.085), transparent 30%),
+            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.065), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 30px rgba(0,0,0,0.16);
+        -webkit-backdrop-filter: blur(10px) saturate(112%);
+        backdrop-filter: blur(10px) saturate(112%);
+    }
+    .vpn-brand-block > *,
+    .vpn-command-card > *,
+    .vpn-mini-card > *,
+    .vpn-stat-card > *,
+    .vpn-card > *,
+    .vpn-quick-rail > *,
+    .vpn-panel-shell > *,
+    .vpn-subcard > *,
+    .vpn-entry-card > * {
+        position: relative;
+        z-index: 1;
+    }
+    .vpn-mini-card::before,
+    .vpn-stat-card::before,
+    .vpn-card::before,
+    .vpn-quick-rail::before,
+    .vpn-panel-shell::before,
+    .vpn-subcard::before,
+    .vpn-entry-card::before,
+    .vpn-command-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(135deg, rgba(255,255,255,0.052), transparent 46%);
+        opacity: 0.66;
+    }
+    .vpn-mini-card::after,
+    .vpn-stat-card::after,
+    .vpn-card::after,
+    .vpn-quick-rail::after,
+    .vpn-panel-shell::after,
+    .vpn-subcard::after,
+    .vpn-entry-card::after {
+        content: "";
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 0;
+        height: 2px;
+        border-radius: 999px;
+        pointer-events: none;
+        background: linear-gradient(90deg, rgba(108, 162, 255, 0), rgba(var(--vpn-state-rgb), 0.66), rgba(47, 211, 238, 0));
+        opacity: 0.58;
+    }
+    .vpn-shell-mk5 .vpn-command-card {
+        border-color: rgba(var(--vpn-state-rgb), 0.36);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.18), transparent 34%),
+            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
+            rgba(14, 20, 28, 0.72);
+    }
+    .vpn-shell-mk5 .vpn-brand-block {
+        background:
+            radial-gradient(circle at 0% 0%, rgba(var(--vpn-state-rgb), 0.12), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.016)),
+            rgba(12, 16, 24, 0.54);
+    }
+    .vpn-shell-mk5 .vpn-brand-block h2::after {
+        background: linear-gradient(90deg, #6ca2ff, #2fd3ee);
+        box-shadow: 0 0 18px rgba(47, 211, 238, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-orb-copy strong {
+        font-size: 24px;
+    }
+    .vpn-mini-card-status {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.14), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-mini-card-route {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.13), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-shell-mk5 .vpn-stat-card-emphasis,
+    .vpn-shell-mk5 .vpn-mini-card-accent {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.20), transparent 36%),
+            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.13), rgba(255,255,255,0.018)),
+            rgba(14, 18, 28, 0.70);
+    }
+    .vpn-entry-card-template {
+        border-color: rgba(61, 220, 151, 0.22);
+        background:
+            radial-gradient(circle at 96% 0%, rgba(61, 220, 151, 0.13), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-entry-card-upload {
+        border-color: rgba(108, 162, 255, 0.22);
+        background:
+            radial-gradient(circle at 96% 0%, rgba(108, 162, 255, 0.13), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-entry-card-template .vpn-entry-badge {
+        border-color: rgba(61, 220, 151, 0.34);
+        color: #bbf7d0;
+        background: rgba(61, 220, 151, 0.12);
+    }
+    .vpn-entry-card-upload .vpn-entry-badge {
+        border-color: rgba(108, 162, 255, 0.34);
+        color: #bfdbfe;
+        background: rgba(108, 162, 255, 0.12);
+    }
+    .vpn-hero-actions .cbi-button-apply,
+    .cbi-map .cbi-button-apply,
+    .vpn-tab-btn.is-active {
+        color: #f4f8ff !important;
+        border-color: rgba(47, 211, 238, 0.50) !important;
+        background: linear-gradient(180deg, #2a9cff, #1177de) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 22px rgba(17,119,222,0.20);
+    }
+    .vpn-tabbar {
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
+            rgba(7, 10, 17, 0.72);
+    }
+    .vpn-tab-btn {
+        border-color: rgba(84, 100, 134, 0.74);
+        background:
+            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+        transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+    }
+    .vpn-tab-btn:hover {
+        border-color: rgba(47, 211, 238, 0.36);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.09), transparent 32%),
+            linear-gradient(180deg, rgba(50, 58, 76, 0.94), rgba(31, 37, 51, 0.94));
+        transform: translateY(-1px);
+    }
+    .vpn-panel-shell-head {
+        border-bottom-color: rgba(255,255,255,0.065);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.014)),
+            rgba(10, 14, 22, 0.50);
+    }
+    .vpn-panel pre,
+    .vpn-subcard pre,
+    .vpn-output {
+        border-color: rgba(47, 211, 238, 0.30);
+        background:
+            linear-gradient(to top, rgba(108,162,255,0.052) 1px, transparent 1px),
+            linear-gradient(to right, rgba(108,162,255,0.020) 1px, transparent 1px),
+            radial-gradient(circle at 96% 0%, rgba(47, 211, 238, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(22, 27, 39, 0.98), rgba(11, 15, 24, 0.98)),
+            #050b14;
+        background-size: 100% 24px, 32px 100%, auto, auto, auto;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 0 0 1px rgba(47,211,238,0.10), 0 10px 24px rgba(0,0,0,0.20);
+        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
+    }
+    .vpn-log-good,
+    .vpn-log-bad,
+    .vpn-log-warn,
+    .vpn-log-info {
+        font-weight: 800;
+    }
+    .vpn-log-good {
+        color: #8ef0bd;
+    }
+    .vpn-log-bad {
+        color: #ff9aa4;
+    }
+    .vpn-log-warn {
+        color: #ffd982;
+    }
+    .vpn-log-info {
+        color: #7dd3fc;
+    }
+    .vpn-check-section {
+        display: grid;
+        gap: 8px;
+    }
+    .vpn-check-section + .vpn-check-section {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255,255,255,0.055);
+    }
+    .vpn-check-section-title {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 28px;
+        align-items: center;
+        padding: 0 10px;
+        border: 1px solid rgba(84, 100, 134, 0.74);
+        border-radius: 999px;
+        color: #afc4e4;
+        background: rgba(15, 21, 33, 0.62);
+        font-size: 12px;
+        font-weight: 900;
+    }
+    .vpn-check-row,
+    .vpn-check-empty,
+    .vpn-action-tile {
+        border-color: rgba(255,255,255,0.07);
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.028), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.018)),
+            rgba(12, 16, 24, 0.48);
+        transition: border-color .14s ease, background .14s ease, box-shadow .14s ease, transform .14s ease;
+    }
+    .vpn-check-row:hover,
+    .vpn-action-tile:hover {
+        border-color: rgba(108, 162, 255, 0.24);
+        background:
+            radial-gradient(circle at 94% 18%, rgba(47, 211, 238, 0.08), transparent 38%),
+            linear-gradient(90deg, rgba(108, 162, 255, 0.055), rgba(255,255,255,0.016) 54%, rgba(255,255,255,0.028));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 10px 20px rgba(0,0,0,0.11);
+        transform: translateY(-1px);
+    }
+    .vpn-remote-host {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        color: #f4f8ff;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .vpn-remote-port {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 24px;
+        align-items: center;
+        margin-top: 8px;
+        padding: 0 8px;
+        border: 1px solid rgba(47, 211, 238, 0.24);
+        border-radius: 999px;
+        color: #9beafe;
+        background: rgba(47, 211, 238, 0.10);
+        font-size: 12px;
+    }
+    .vpn-copy-feedback.is-visible {
+        display: inline-flex;
+        min-height: 28px;
+        align-items: center;
+        width: fit-content;
+        padding: 0 10px;
+        border: 1px solid rgba(47, 211, 238, 0.28);
+        border-radius: 999px;
+        background: rgba(47, 211, 238, 0.09);
+    }
+    .vpn-copy-feedback.warn {
+        color: #ffd982;
+        border-color: rgba(247, 198, 103, 0.30);
+        background: rgba(247, 198, 103, 0.10);
+    }
+    .vpn-copy-feedback.ok {
+        color: #8ef0bd;
+        border-color: rgba(61, 220, 151, 0.30);
+        background: rgba(61, 220, 151, 0.10);
+    }
+    .vpn-orb-ring.ok {
+        color: #bbf7d0;
+        border-color: rgba(61, 220, 151, 0.42);
+        background:
+            radial-gradient(circle, rgba(61, 220, 151, 0.16), transparent 58%),
+            #07111f;
+        box-shadow: 0 0 0 8px rgba(61, 220, 151, 0.055), 0 0 34px rgba(61, 220, 151, 0.24), inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .vpn-orb-ring.warn,
+    .vpn-orb-ring.ready,
+    .vpn-orb-ring.profile-ready {
+        border-color: rgba(247, 198, 103, 0.42);
+        background:
+            radial-gradient(circle, rgba(247, 198, 103, 0.14), transparent 58%),
+            #07111f;
+        box-shadow: 0 0 0 8px rgba(247, 198, 103, 0.050), 0 0 34px rgba(247, 198, 103, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .vpn-orb-ring.bad,
+    .vpn-orb-ring.empty {
+        border-color: rgba(255, 118, 118, 0.42);
+        background:
+            radial-gradient(circle, rgba(255, 118, 118, 0.14), transparent 58%),
+            #07111f;
+        box-shadow: 0 0 0 8px rgba(255, 118, 118, 0.050), 0 0 34px rgba(255, 118, 118, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .vpn-card.is-ok {
+        border-color: rgba(61, 220, 151, 0.26);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-card.is-warn,
+    .vpn-card.is-ready,
+    .vpn-card.is-profile-ready {
+        border-color: rgba(247, 198, 103, 0.26);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-card.is-bad,
+    .vpn-card.is-empty {
+        border-color: rgba(255, 118, 118, 0.24);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(255, 118, 118, 0.11), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .cbi-map ul.cbi-tabmenu,
+    .cbi-map .cbi-tabmenu {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 14px !important;
+        padding: 8px !important;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 8px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
+            rgba(7, 10, 17, 0.48);
+    }
+    .cbi-map ul.cbi-tabmenu > li,
+    .cbi-map .cbi-tabmenu > li {
+        margin: 0 !important;
+    }
+    .cbi-map ul.cbi-tabmenu > li > a,
+    .cbi-map ul.cbi-tabmenu > li > span,
+    .cbi-map .cbi-tabmenu > li > a,
+    .cbi-map .cbi-tabmenu > li > span {
+        display: inline-flex !important;
+        min-height: 34px;
+        align-items: center;
+        padding: 0 12px !important;
+        border: 1px solid rgba(84, 100, 134, 0.74) !important;
+        border-radius: 8px !important;
+        color: #cbd5e1 !important;
+        background:
+            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92)) !important;
+        text-decoration: none !important;
+    }
+    .cbi-map ul.cbi-tabmenu > li.cbi-tab > a,
+    .cbi-map ul.cbi-tabmenu > li.cbi-tab > span,
+    .cbi-map .cbi-tabmenu > li.cbi-tab > a,
+    .cbi-map .cbi-tabmenu > li.cbi-tab > span {
+        color: #f4f8ff !important;
+        border-color: rgba(47, 211, 238, 0.50) !important;
+        background: linear-gradient(180deg, #2a9cff, #1177de) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px rgba(17,119,222,0.18);
+    }
+    .cbi-map input[type="text"],
+    .cbi-map input[type="password"],
+    .cbi-map input[type="file"],
+    .cbi-map textarea,
+    .cbi-map select,
+    .vpn-entry-card input[type="text"],
+    .vpn-entry-card input[type="file"],
+    .vpn-entry-card select {
+        border-color: rgba(84, 100, 134, 0.90) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 30%),
+            linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985)) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .cbi-map input[type="text"]:hover,
+    .cbi-map input[type="password"]:hover,
+    .cbi-map input[type="file"]:hover,
+    .cbi-map textarea:hover,
+    .cbi-map select:hover,
+    .vpn-entry-card input[type="text"]:hover,
+    .vpn-entry-card input[type="file"]:hover,
+    .vpn-entry-card select:hover {
+        border-color: rgba(47, 211, 238, 0.34) !important;
+    }
+    .cbi-map input[type="checkbox"],
+    .cbi-map input[type="radio"] {
+        accent-color: #2a9cff;
+    }
+    .vpn-cbi-section-mk5 {
+        isolation: isolate;
+    }
+    .vpn-cbi-section-mk5 .vpn-section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .vpn-cbi-section-mk5 .vpn-section-title::after {
+        content: "";
+        height: 1px;
+        min-width: 48px;
+        flex: 1 1 auto;
+        background: linear-gradient(90deg, rgba(108,162,255,0.48), rgba(47,211,238,0));
+        opacity: 0.72;
+    }
+</style>
+EOF_OPENVPN_MK5_DEPTH_POLISH
+
+    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_LOCAL_DEPTH_POLISH'
+<style type="text/css">
+    /* OpenVPN Mk5 depth polish: glass controls, diagnostics, and form surfaces */
+    .vpn-shell-mk5::before {
+        content: "";
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        top: 0;
+        height: 1px;
+        border-radius: 999px;
+        pointer-events: none;
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.58), rgba(47,211,238,0.62), rgba(47,211,238,0));
+        opacity: 0.88;
+    }
+    .vpn-brand-block > *,
+    .vpn-command-card > *,
+    .vpn-mini-card > *,
+    .vpn-stat-card > *,
+    .vpn-card > *,
+    .vpn-quick-rail > *,
+    .vpn-panel-shell > *,
+    .vpn-subcard > *,
+    .vpn-entry-card > * {
+        position: relative;
+        z-index: 1;
+    }
+    .vpn-shell-mk5 .vpn-brand-block,
+    .vpn-shell-mk5 .vpn-command-card,
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-card,
+    .vpn-shell-mk5 .vpn-quick-rail,
+    .vpn-shell-mk5 .vpn-panel-shell,
+    .vpn-shell-mk5 .vpn-subcard,
+    .vpn-entry-card,
+    .vpn-shell-secondary .vpn-mini-card,
+    .vpn-shell-secondary .vpn-category-rail {
+        border-color: rgba(78, 96, 131, 0.72);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.085), transparent 30%),
+            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.065), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 30px rgba(0,0,0,0.16);
+    }
+    .vpn-shell-mk5 .vpn-command-card {
+        border-color: rgba(var(--vpn-state-rgb), 0.36);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.18), transparent 34%),
+            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
+            rgba(14, 20, 28, 0.72);
+    }
+    .vpn-shell-mk5 .vpn-stat-card:nth-child(2),
+    .vpn-shell-mk5 .vpn-mini-card:nth-child(3),
+    .vpn-shell-secondary .vpn-mini-card:nth-child(2) {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-shell-mk5 .vpn-stat-card:nth-child(3),
+    .vpn-shell-mk5 .vpn-mini-card:nth-child(4),
+    .vpn-shell-secondary .vpn-mini-card:nth-child(3) {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(134, 122, 255, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-shell-mk5 .vpn-stat-card-emphasis,
+    .vpn-shell-mk5 .vpn-mini-card-accent {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.20), transparent 36%),
+            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.13), rgba(255,255,255,0.018)),
+            rgba(14, 18, 28, 0.70);
+    }
+    .vpn-mini-card-status {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.14), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-mini-card-route {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.13), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-kv {
+        border-top-color: rgba(255,255,255,0.06);
+    }
+    .vpn-kv:first-of-type {
+        border-top-color: transparent;
+    }
+    .vpn-action-tile {
+        position: relative;
+        overflow: hidden;
+        border-color: rgba(255,255,255,0.07);
+        background:
+            radial-gradient(circle at 96% 0%, rgba(47, 211, 238, 0.08), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.038), rgba(255,255,255,0.012)),
+            rgba(15, 21, 33, 0.64);
+    }
+    .vpn-action-tile::after {
+        content: "";
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 0;
+        height: 2px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.62), rgba(47,211,238,0));
+        opacity: 0.62;
+    }
+    .vpn-entry-card-template {
+        border-color: rgba(61, 220, 151, 0.22);
+        background:
+            radial-gradient(circle at 96% 0%, rgba(61, 220, 151, 0.13), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-entry-card-upload {
+        border-color: rgba(108, 162, 255, 0.22);
+        background:
+            radial-gradient(circle at 96% 0%, rgba(108, 162, 255, 0.13), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-entry-card-template .vpn-entry-badge {
+        border-color: rgba(61, 220, 151, 0.34);
+        color: #bbf7d0;
+        background: rgba(61, 220, 151, 0.12);
+    }
+    .vpn-entry-card-upload .vpn-entry-badge {
+        border-color: rgba(108, 162, 255, 0.34);
+        color: #bfdbfe;
+        background: rgba(108, 162, 255, 0.12);
+    }
+    .vpn-panel-shell-head,
+    .vpn-tabbar {
+        position: relative;
+        z-index: 1;
+    }
+    .vpn-panel-shell-head {
+        border-bottom-color: rgba(255,255,255,0.065);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.014)),
+            rgba(10, 14, 22, 0.50);
+    }
+    .vpn-tabbar {
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
+            rgba(7, 10, 17, 0.72);
+    }
+    .vpn-tab-btn {
+        border-color: rgba(84, 100, 134, 0.74);
+        background:
+            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+        transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+    }
+    .vpn-tab-btn:hover {
+        border-color: rgba(47, 211, 238, 0.36);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.09), transparent 32%),
+            linear-gradient(180deg, rgba(50, 58, 76, 0.94), rgba(31, 37, 51, 0.94));
+        transform: translateY(-1px);
+    }
+    .vpn-panel {
+        position: relative;
+        z-index: 1;
+    }
+    .vpn-panel.is-active {
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.016), rgba(255,255,255,0.006)),
+            rgba(255,255,255,0.006);
+    }
+    .vpn-panel pre,
+    .vpn-subcard pre,
+    .vpn-output {
+        border-color: rgba(47, 211, 238, 0.30);
+        background:
+            linear-gradient(to top, rgba(108,162,255,0.052) 1px, transparent 1px),
+            linear-gradient(to right, rgba(108,162,255,0.020) 1px, transparent 1px),
+            radial-gradient(circle at 96% 0%, rgba(47, 211, 238, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(22, 27, 39, 0.98), rgba(11, 15, 24, 0.98)),
+            #050b14;
+        background-size: 100% 24px, 32px 100%, auto, auto, auto;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 0 0 1px rgba(47,211,238,0.10), 0 10px 24px rgba(0,0,0,0.20);
+        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
+    }
+    .vpn-panel pre::-webkit-scrollbar,
+    .vpn-subcard pre::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    .vpn-panel pre::-webkit-scrollbar-track,
+    .vpn-subcard pre::-webkit-scrollbar-track {
+        background: rgba(18, 23, 34, 0.72);
+    }
+    .vpn-panel pre::-webkit-scrollbar-thumb,
+    .vpn-subcard pre::-webkit-scrollbar-thumb {
+        border: 2px solid rgba(18, 23, 34, 0.72);
+        border-radius: 999px;
+        background: rgba(92, 128, 178, 0.72);
+    }
+    .vpn-log-good {
+        color: #8ef0bd;
+        font-weight: 800;
+    }
+    .vpn-log-bad {
+        color: #ff9aa4;
+        font-weight: 800;
+    }
+    .vpn-log-warn {
+        color: #ffd982;
+        font-weight: 800;
+    }
+    .vpn-log-info {
+        color: #7dd3fc;
+        font-weight: 800;
+    }
+    .vpn-check-section {
+        display: grid;
+        gap: 8px;
+    }
+    .vpn-check-section + .vpn-check-section {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255,255,255,0.055);
+    }
+    .vpn-check-section-title {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 28px;
+        align-items: center;
+        padding: 0 10px;
+        border: 1px solid rgba(84, 100, 134, 0.74);
+        border-radius: 999px;
+        color: #afc4e4;
+        background: rgba(15, 21, 33, 0.62);
+        font-size: 12px;
+        font-weight: 900;
+    }
+    .vpn-check-row,
+    .vpn-check-empty {
+        border-color: rgba(255,255,255,0.07);
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.028), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.018)),
+            rgba(12, 16, 24, 0.48);
+        transition: border-color .14s ease, background .14s ease, box-shadow .14s ease, transform .14s ease;
+    }
+    .vpn-check-row:hover {
+        border-color: rgba(108, 162, 255, 0.24);
+        background:
+            radial-gradient(circle at 94% 18%, rgba(47, 211, 238, 0.08), transparent 38%),
+            linear-gradient(90deg, rgba(108, 162, 255, 0.055), rgba(255,255,255,0.016) 54%, rgba(255,255,255,0.028));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 10px 20px rgba(0,0,0,0.11);
+        transform: translateY(-1px);
+    }
+    .vpn-remote-host {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        color: #f4f8ff;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .vpn-remote-port {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 24px;
+        align-items: center;
+        margin-top: 8px;
+        padding: 0 8px;
+        border: 1px solid rgba(47, 211, 238, 0.24);
+        border-radius: 999px;
+        color: #9beafe;
+        background: rgba(47, 211, 238, 0.10);
+        font-size: 12px;
+    }
+    .vpn-copy-feedback.is-visible {
+        display: inline-flex;
+        min-height: 28px;
+        align-items: center;
+        width: fit-content;
+        padding: 0 10px;
+        border: 1px solid rgba(47, 211, 238, 0.28);
+        border-radius: 999px;
+        background: rgba(47, 211, 238, 0.09);
+    }
+    .vpn-copy-feedback.warn {
+        color: #ffd982;
+        border-color: rgba(247, 198, 103, 0.30);
+        background: rgba(247, 198, 103, 0.10);
+    }
+    .vpn-copy-feedback.ok {
+        color: #8ef0bd;
+        border-color: rgba(61, 220, 151, 0.30);
+        background: rgba(61, 220, 151, 0.10);
+    }
+    .vpn-orb-ring.ok {
+        color: #bbf7d0;
+        border-color: rgba(61, 220, 151, 0.42);
+        background:
+            radial-gradient(circle, rgba(61, 220, 151, 0.16), transparent 58%),
+            #07111f;
+        box-shadow: 0 0 0 8px rgba(61, 220, 151, 0.055), 0 0 34px rgba(61, 220, 151, 0.24), inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .vpn-orb-ring.warn,
+    .vpn-orb-ring.ready,
+    .vpn-orb-ring.profile-ready {
+        border-color: rgba(247, 198, 103, 0.42);
+        background:
+            radial-gradient(circle, rgba(247, 198, 103, 0.14), transparent 58%),
+            #07111f;
+        box-shadow: 0 0 0 8px rgba(247, 198, 103, 0.050), 0 0 34px rgba(247, 198, 103, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .vpn-orb-ring.bad,
+    .vpn-orb-ring.empty {
+        border-color: rgba(255, 118, 118, 0.42);
+        background:
+            radial-gradient(circle, rgba(255, 118, 118, 0.14), transparent 58%),
+            #07111f;
+        box-shadow: 0 0 0 8px rgba(255, 118, 118, 0.050), 0 0 34px rgba(255, 118, 118, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .vpn-card.is-ok {
+        border-color: rgba(61, 220, 151, 0.26);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-card.is-warn,
+    .vpn-card.is-ready,
+    .vpn-card.is-profile-ready {
+        border-color: rgba(247, 198, 103, 0.26);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .vpn-card.is-bad,
+    .vpn-card.is-empty {
+        border-color: rgba(255, 118, 118, 0.24);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(255, 118, 118, 0.11), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(14, 18, 28, 0.64);
+    }
+    .cbi-map ul.cbi-tabmenu,
+    .cbi-map .cbi-tabmenu {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 14px !important;
+        padding: 8px !important;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 8px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
+            rgba(7, 10, 17, 0.48);
+    }
+    .cbi-map ul.cbi-tabmenu > li,
+    .cbi-map .cbi-tabmenu > li {
+        margin: 0 !important;
+    }
+    .cbi-map ul.cbi-tabmenu > li > a,
+    .cbi-map ul.cbi-tabmenu > li > span,
+    .cbi-map .cbi-tabmenu > li > a,
+    .cbi-map .cbi-tabmenu > li > span {
+        display: inline-flex !important;
+        min-height: 34px;
+        align-items: center;
+        padding: 0 12px !important;
+        border: 1px solid rgba(84, 100, 134, 0.74) !important;
+        border-radius: 8px !important;
+        color: #cbd5e1 !important;
+        background:
+            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92)) !important;
+        text-decoration: none !important;
+    }
+    .cbi-map ul.cbi-tabmenu > li.cbi-tab > a,
+    .cbi-map ul.cbi-tabmenu > li.cbi-tab > span,
+    .cbi-map .cbi-tabmenu > li.cbi-tab > a,
+    .cbi-map .cbi-tabmenu > li.cbi-tab > span {
+        color: #f4f8ff !important;
+        border-color: rgba(47, 211, 238, 0.50) !important;
+        background: linear-gradient(180deg, #2a9cff, #1177de) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px rgba(17,119,222,0.18);
+    }
+    .cbi-map input[type="text"],
+    .cbi-map input[type="password"],
+    .cbi-map input[type="file"],
+    .cbi-map textarea,
+    .cbi-map select,
+    .vpn-entry-card input[type="text"],
+    .vpn-entry-card input[type="file"],
+    .vpn-entry-card select {
+        border-color: rgba(84, 100, 134, 0.90) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 30%),
+            linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985)) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .cbi-map input[type="text"]:hover,
+    .cbi-map input[type="password"]:hover,
+    .cbi-map input[type="file"]:hover,
+    .cbi-map textarea:hover,
+    .cbi-map select:hover,
+    .vpn-entry-card input[type="text"]:hover,
+    .vpn-entry-card input[type="file"]:hover,
+    .vpn-entry-card select:hover {
+        border-color: rgba(47, 211, 238, 0.34) !important;
+    }
+    .cbi-map input[type="checkbox"],
+    .cbi-map input[type="radio"] {
+        accent-color: #2a9cff;
+    }
+    .vpn-cbi-section-mk5 {
+        isolation: isolate;
+    }
+    .vpn-cbi-section-mk5 .vpn-section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .vpn-cbi-section-mk5 .vpn-section-title::after {
+        content: "";
+        height: 1px;
+        min-width: 48px;
+        flex: 1 1 auto;
+        background: linear-gradient(90deg, rgba(108,162,255,0.48), rgba(47,211,238,0));
+        opacity: 0.72;
+    }
+    .cbi-map .cbi-section-table-row,
+    .cbi-map tr {
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.024), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.014));
+    }
+    .cbi-map .cbi-section-table-row:hover,
+    .cbi-map tr:hover {
+        background:
+            radial-gradient(circle at 96% 20%, rgba(47, 211, 238, 0.07), transparent 36%),
+            linear-gradient(90deg, rgba(108, 162, 255, 0.050), rgba(255,255,255,0.010) 52%, rgba(255,255,255,0.020));
+    }
+    @media (max-width: 980px) {
+        .vpn-shell-secondary .vpn-hero-actions::before {
+            display: none;
+        }
+        .vpn-entry-card {
+            min-height: auto;
+        }
+    }
+    @media (max-width: 640px) {
+        .vpn-shell-secondary .vpn-page-title {
+            font-size: 22px;
+        }
+        .vpn-shell-secondary .vpn-secondary-summary span {
+            min-height: 70px;
+        }
+        .vpn-entry-grid-mk5 {
+            margin-top: 10px;
+        }
+    }
+</style>
+EOF_OPENVPN_MK5_LOCAL_DEPTH_POLISH
+
+    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_ROUND_FINISH_POLISH'
+<style type="text/css">
+    /* OpenVPN Mk5 live polish: AdGuard-style glass depth, applied only to local page files. */
+    .vpn-shell-mk5 {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        border-color: rgba(78, 96, 131, 0.82);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(35, 200, 228, 0.16), transparent 28%),
+            radial-gradient(circle at 0% 0%, rgba(100, 153, 255, 0.12), transparent 30%),
+            linear-gradient(180deg, rgba(33, 38, 52, 0.985), rgba(18, 22, 33, 0.992));
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.050),
+            inset 0 0 0 1px rgba(255,255,255,0.018),
+            0 26px 62px rgba(0,0,0,0.30);
+    }
+    .vpn-shell-mk5::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.055), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.026), transparent 22%);
+        pointer-events: none;
+    }
+    .vpn-shell-mk5 > * {
+        position: relative;
+        z-index: 1;
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5,
+    .vpn-shell-secondary .vpn-hero-secondary {
+        border-color: rgba(83, 103, 139, 0.70);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.18), transparent 26%),
+            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.095), transparent 30%),
+            linear-gradient(180deg, rgba(34, 40, 55, 0.965), rgba(21, 26, 38, 0.975)),
+            rgba(16, 20, 29, 0.58);
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.052),
+            0 22px 52px rgba(0,0,0,0.24);
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5::before,
+    .vpn-shell-secondary .vpn-hero-secondary::before {
+        inset: 1px;
+        border-color: rgba(255,255,255,0.035);
+        background:
+            linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.30), rgba(47,211,238,0.26), rgba(47,211,238,0));
+        height: 1px;
+        border-width: 0;
+    }
+    .vpn-shell-mk5 .vpn-brand-block,
+    .vpn-shell-mk5 .vpn-command-card,
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-card,
+    .vpn-shell-mk5 .vpn-quick-rail,
+    .vpn-shell-mk5 .vpn-panel-shell,
+    .vpn-shell-mk5 .vpn-subcard,
+    .vpn-entry-card,
+    .vpn-shell-secondary + .cbi-map,
+    .cbi-map .cbi-section,
+    .cbi-map .cbi-section-node,
+    .cbi-map fieldset.cbi-section,
+    .cbi-map fieldset.cbi-section-table {
+        border-color: rgba(78, 96, 131, 0.70) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.078), transparent 28%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(16, 20, 29, 0.60) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.044),
+            0 14px 30px rgba(0,0,0,0.16) !important;
+    }
+    .vpn-shell-mk5 .vpn-brand-block,
+    .vpn-shell-mk5 .vpn-command-card {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.13), transparent 30%),
+            linear-gradient(180deg, rgba(37, 43, 59, 0.955), rgba(24, 29, 41, 0.965)),
+            rgba(16, 20, 29, 0.68) !important;
+    }
+    .vpn-shell-mk5 .vpn-brand-block h2,
+    .vpn-shell-secondary .vpn-page-title {
+        color: #f4f8ff;
+        text-shadow: 0 0 18px rgba(47, 211, 238, 0.18), 0 12px 26px rgba(0,0,0,0.24);
+    }
+    .vpn-shell-mk5 .vpn-sub,
+    .vpn-shell-secondary .vpn-sub,
+    .vpn-panel-shell-head p,
+    .vpn-panel-head span,
+    .vpn-quick-rail-sub,
+    .vpn-action-tile span,
+    .vpn-card-note,
+    .vpn-mini-note,
+    .vpn-stat-meta,
+    .vpn-stat-note {
+        color: #a7b8d3;
+    }
+    .vpn-shell-mk5 .vpn-pill,
+    .vpn-shell-mk5 .vpn-health-chip,
+    .vpn-shell-mk5 .vpn-inline-note,
+    .vpn-shell-mk5 .vpn-status-chip,
+    .vpn-shell-mk5 .vpn-card-badge,
+    .vpn-shell-mk5 .vpn-inline-badge,
+    .vpn-shell-mk5 .vpn-panel-live-badge,
+    .vpn-shell-mk5 .vpn-focus-pill,
+    .vpn-shell-mk5 .vpn-micro-badge,
+    .vpn-entry-badge {
+        border-color: rgba(143, 164, 199, 0.22);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.014)),
+            rgba(15, 21, 33, 0.58);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.040);
+    }
+    .vpn-shell-mk5 .vpn-pill,
+    .vpn-shell-mk5 .vpn-focus-pill:not(.vpn-focus-pill-muted) {
+        color: #b2fbff;
+        border-color: rgba(47, 211, 238, 0.32);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.13), transparent 42%),
+            linear-gradient(180deg, rgba(47, 211, 238, 0.16), rgba(47, 211, 238, 0.055));
+    }
+    .vpn-shell-mk5 .vpn-hero-summary,
+    .vpn-shell-secondary .vpn-secondary-summary,
+    .vpn-tabbar,
+    .vpn-focus-strip,
+    .vpn-shell-secondary .vpn-hero-actions {
+        border-color: rgba(255,255,255,0.07);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)),
+            rgba(7, 10, 17, 0.46);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.026);
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item,
+    .vpn-shell-secondary .vpn-secondary-summary span {
+        border-color: rgba(84, 100, 134, 0.66);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.065), transparent 34%),
+            linear-gradient(180deg, rgba(34, 39, 54, 0.80), rgba(22, 27, 38, 0.82));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item:hover,
+    .vpn-shell-mk5 .vpn-mini-card:hover,
+    .vpn-shell-mk5 .vpn-stat-card:hover,
+    .vpn-shell-mk5 .vpn-action-tile:hover,
+    .vpn-entry-card:hover,
+    .cbi-map .cbi-section:hover {
+        border-color: rgba(108, 162, 255, 0.38) !important;
+        background:
+            radial-gradient(circle at 96% 0%, rgba(63, 132, 255, 0.14), transparent 40%),
+            linear-gradient(180deg, rgba(255,255,255,0.056), rgba(255,255,255,0.020)),
+            rgba(18, 23, 34, 0.66) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.055),
+            0 18px 34px rgba(0,0,0,0.20) !important;
+        transform: translateY(-1px);
+    }
+    .vpn-shell-mk5 .vpn-command-kicker,
+    .vpn-panel-shell-kicker,
+    .vpn-section-title {
+        color: #b2fbff;
+    }
+    .vpn-shell-mk5 .vpn-orb-wrap {
+        border-color: rgba(84, 100, 134, 0.74);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.10), transparent 30%),
+            linear-gradient(180deg, rgba(12, 16, 24, 0.58), rgba(9, 12, 19, 0.72));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring {
+        border: 0;
+        background:
+            radial-gradient(circle, rgba(7,17,31,0.92) 0 53%, transparent 54%),
+            conic-gradient(from 220deg, rgba(var(--vpn-state-rgb), 0.20), rgba(var(--vpn-state-rgb), 0.98), rgba(var(--vpn-state-rgb), 0.18));
+        box-shadow:
+            0 0 0 8px rgba(var(--vpn-state-rgb), 0.055),
+            0 0 36px rgba(var(--vpn-state-rgb), 0.26),
+            inset 0 0 0 1px rgba(255,255,255,0.060);
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
+    .cbi-map input[type="submit"],
+    .cbi-map input[type="button"],
+    .cbi-map .cbi-button,
+    .vpn-entry-actions .cbi-button {
+        border-color: rgba(57, 160, 255, 0.70) !important;
+        background:
+            linear-gradient(180deg, rgba(42, 156, 255, 0.92), rgba(17, 119, 222, 0.88)) !important;
+        color: #f0f7ff !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.16),
+            0 10px 20px rgba(26, 124, 215, 0.18) !important;
+    }
+    .vpn-shell-mk5 .vpn-button-muted,
+    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-muted,
+    .cbi-map .cbi-button-reset,
+    .cbi-map .cbi-button-remove {
+        border-color: rgba(106, 115, 140, 0.88) !important;
+        background:
+            linear-gradient(180deg, rgba(63, 69, 88, 0.96), rgba(52, 57, 73, 0.96)) !important;
+        color: #e7eefc !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.08),
+            0 8px 16px rgba(0,0,0,0.14) !important;
+    }
+    .vpn-shell-mk5 .vpn-button-muted:not([disabled]):not(.is-disabled):hover,
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button:not([disabled]):not(.is-disabled):hover,
+    .cbi-map input[type="submit"]:hover,
+    .cbi-map input[type="button"]:hover,
+    .cbi-map .cbi-button:hover {
+        border-color: rgba(47, 211, 238, 0.52) !important;
+        background:
+            linear-gradient(180deg, rgba(59, 176, 255, 0.94), rgba(26, 143, 224, 0.90)) !important;
+        transform: translateY(-1px);
+    }
+    .vpn-shell-mk5 .vpn-panel-shell-head {
+        border-bottom-color: rgba(255,255,255,0.07);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.07), transparent 28%),
+            linear-gradient(180deg, rgba(255,255,255,0.040), rgba(255,255,255,0.012)),
+            rgba(12, 16, 24, 0.54);
+    }
+    .vpn-shell-mk5 .vpn-tabbar {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        -webkit-backdrop-filter: blur(12px) saturate(112%);
+        backdrop-filter: blur(12px) saturate(112%);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn {
+        border-color: rgba(84, 100, 134, 0.74);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.036), rgba(255,255,255,0.012)),
+            rgba(15, 21, 33, 0.56);
+        color: #a8bcdb;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.028);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn:hover {
+        color: #e8f2ff;
+        border-color: rgba(108, 162, 255, 0.32);
+        background:
+            radial-gradient(circle at top right, rgba(108, 162, 255, 0.13), transparent 42%),
+            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.018)),
+            rgba(255,255,255,0.026);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn.is-active {
+        border-color: rgba(54, 163, 255, 0.48);
+        background:
+            linear-gradient(180deg, rgba(42, 156, 255, 0.92), rgba(17, 119, 222, 0.88)) !important;
+        color: #f7fbff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 12px 24px rgba(17, 119, 222, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-panel.is-active {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.045), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.008));
+    }
+    .vpn-shell-mk5 .vpn-panel pre,
+    .vpn-shell-mk5 .vpn-subcard pre,
+    .vpn-shell-mk5 #vpn-config-pre {
+        border-color: rgba(47, 211, 238, 0.30);
+        background:
+            linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px),
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 30%),
+            linear-gradient(180deg, rgba(8, 13, 22, 0.98), rgba(5, 9, 16, 0.99));
+        background-size: 100% 28px, 28px 100%, 100% 100%, 100% 100%;
+        color: #dce9ff;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.035),
+            0 0 0 1px rgba(47, 211, 238, 0.10),
+            0 10px 24px rgba(0,0,0,0.20);
+        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
+    }
+    .vpn-shell-mk5 .vpn-check-row,
+    .vpn-shell-mk5 .vpn-check-empty {
+        border-color: rgba(84, 100, 134, 0.62);
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.032), rgba(255,255,255,0.008) 52%, rgba(255,255,255,0.018)),
+            rgba(12, 16, 24, 0.56);
+    }
+    .cbi-map input[type="text"],
+    .cbi-map input[type="password"],
+    .cbi-map input[type="file"],
+    .cbi-map textarea,
+    .cbi-map select,
+    .vpn-entry-card input[type="text"],
+    .vpn-entry-card input[type="file"],
+    .vpn-entry-card select {
+        min-height: 48px;
+        border-color: rgba(84, 100, 134, 0.92) !important;
+        border-radius: 10px !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.062), transparent 28%),
+            linear-gradient(180deg, rgba(34, 39, 54, 0.985), rgba(22, 27, 38, 0.985)) !important;
+        color: #eef4ff !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.040),
+            0 8px 18px rgba(0,0,0,0.12) !important;
+    }
+    .cbi-map input[type="text"]:focus,
+    .cbi-map input[type="password"]:focus,
+    .cbi-map input[type="file"]:focus,
+    .cbi-map textarea:focus,
+    .cbi-map select:focus,
+    .vpn-entry-card input[type="text"]:focus,
+    .vpn-entry-card input[type="file"]:focus,
+    .vpn-entry-card select:focus {
+        border-color: #2fd3ee !important;
+        box-shadow:
+            0 0 0 3px rgba(47, 211, 238, 0.14),
+            0 10px 22px rgba(0,0,0,0.18) !important;
+        outline: 0;
+    }
+    .cbi-map select {
+        appearance: none;
+        -webkit-appearance: none;
+        padding-right: 42px !important;
+        background-image:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.062), transparent 28%),
+            linear-gradient(180deg, rgba(34, 39, 54, 0.985), rgba(22, 27, 38, 0.985)),
+            linear-gradient(45deg, transparent 50%, #8fbaff 50%),
+            linear-gradient(135deg, #8fbaff 50%, transparent 50%) !important;
+        background-repeat: no-repeat !important;
+        background-size: 100% 100%, 100% 100%, 6px 6px, 6px 6px !important;
+        background-position: 0 0, 0 0, calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px) !important;
+    }
+    .vpn-entry-card-template {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.10), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(16, 20, 29, 0.62) !important;
+    }
+    .vpn-entry-card-upload {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.11), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
+            rgba(16, 20, 29, 0.62) !important;
+    }
+    .vpn-output {
+        border-color: rgba(47, 211, 238, 0.22);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 28%),
+            linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)),
+            rgba(12, 16, 24, 0.56);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.032);
+    }
+    /* OpenVPN Mk5 tactile glass pass: local page files only. */
+    .vpn-shell-mk5 .vpn-hero-mk5,
+    .vpn-shell-mk5 .vpn-brand-block,
+    .vpn-shell-mk5 .vpn-command-card,
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-card,
+    .vpn-shell-mk5 .vpn-quick-rail,
+    .vpn-shell-mk5 .vpn-panel-shell,
+    .vpn-shell-mk5 .vpn-subcard,
+    .vpn-entry-card,
+    .cbi-map .cbi-section,
+    .cbi-map .cbi-section-node,
+    .cbi-map fieldset.cbi-section,
+    .cbi-map fieldset.cbi-section-table {
+        background-blend-mode: screen, screen, normal, normal;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.070),
+            inset 0 0 0 1px rgba(255,255,255,0.022),
+            0 18px 38px rgba(0,0,0,0.22) !important;
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5 {
+        border-color: rgba(92, 128, 178, 0.72);
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.085),
+            inset 0 0 0 1px rgba(255,255,255,0.026),
+            0 22px 48px rgba(0,0,0,0.26) !important;
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5::after {
+        content: "";
+        position: absolute;
+        left: 22px;
+        right: 22px;
+        bottom: 0;
+        height: 1px;
+        border-radius: 999px;
+        pointer-events: none;
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.54), rgba(47,211,238,0.56), rgba(108,162,255,0));
+        opacity: 0.72;
+    }
+    .vpn-shell-mk5 .vpn-brand-block::before,
+    .vpn-shell-mk5 .vpn-command-card::before,
+    .vpn-shell-mk5 .vpn-mini-card::before,
+    .vpn-shell-mk5 .vpn-stat-card::before,
+    .vpn-shell-mk5 .vpn-card::before,
+    .vpn-shell-mk5 .vpn-quick-rail::before,
+    .vpn-shell-mk5 .vpn-panel-shell::before,
+    .vpn-shell-mk5 .vpn-subcard::before,
+    .vpn-entry-card::before {
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.090), rgba(255,255,255,0.028) 34%, transparent 62%),
+            radial-gradient(circle at 12% 0%, rgba(255,255,255,0.040), transparent 38%);
+        opacity: 0.80;
+    }
+    .vpn-shell-mk5 .vpn-mini-card::after,
+    .vpn-shell-mk5 .vpn-stat-card::after,
+    .vpn-shell-mk5 .vpn-card::after,
+    .vpn-shell-mk5 .vpn-quick-rail::after,
+    .vpn-shell-mk5 .vpn-panel-shell::after,
+    .vpn-shell-mk5 .vpn-subcard::after,
+    .vpn-entry-card::after {
+        left: 12px;
+        right: 12px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(var(--vpn-state-rgb), 0.78), rgba(47,211,238,0));
+        opacity: 0.70;
+    }
+    .vpn-shell-mk5 .vpn-card-head,
+    .vpn-shell-mk5 .vpn-quick-rail-head,
+    .vpn-shell-mk5 .vpn-panel-head,
+    .vpn-entry-head {
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.065);
+    }
+    .vpn-shell-mk5 .vpn-kv {
+        margin-top: 8px;
+        padding: 10px 12px;
+        border: 1px solid rgba(84, 100, 134, 0.42);
+        border-radius: 8px;
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.034), rgba(255,255,255,0.010) 58%, rgba(47,211,238,0.024)),
+            rgba(8, 12, 20, 0.34);
+    }
+    .vpn-shell-mk5 .vpn-kv:first-of-type {
+        margin-top: 12px;
+        border-top-color: rgba(84, 100, 134, 0.42);
+    }
+    .vpn-shell-mk5 .vpn-kv strong,
+    .vpn-shell-mk5 .vpn-mini-card strong,
+    .vpn-shell-mk5 .vpn-stat-value {
+        color: #f3f8ff;
+        text-shadow: 0 1px 10px rgba(47, 211, 238, 0.10);
+    }
+    .vpn-shell-mk5 .vpn-mini-note,
+    .vpn-shell-mk5 .vpn-stat-meta,
+    .vpn-shell-mk5 .vpn-card-note,
+    .vpn-field-help {
+        color: #a9bad6;
+    }
+    .vpn-shell-mk5 .vpn-orb-wrap {
+        min-height: 148px;
+        align-items: center;
+        border-color: rgba(var(--vpn-state-rgb), 0.30);
+        background:
+            radial-gradient(circle at 50% 22%, rgba(var(--vpn-state-rgb), 0.18), transparent 42%),
+            linear-gradient(180deg, rgba(255,255,255,0.040), rgba(255,255,255,0.012)),
+            rgba(8, 12, 20, 0.54);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring {
+        box-shadow:
+            0 0 0 8px rgba(var(--vpn-state-rgb), 0.060),
+            0 0 42px rgba(var(--vpn-state-rgb), 0.30),
+            inset 0 0 0 1px rgba(255,255,255,0.078),
+            inset 0 8px 18px rgba(255,255,255,0.026);
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
+    .cbi-map .cbi-button,
+    .vpn-entry-actions .cbi-button {
+        min-height: 46px;
+        letter-spacing: 0;
+        text-shadow: 0 1px 10px rgba(0,0,0,0.22);
+    }
+    .vpn-shell-mk5 .vpn-button-muted,
+    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-muted,
+    .cbi-map .cbi-button-reset,
+    .cbi-map .cbi-button-remove {
+        background:
+            linear-gradient(180deg, rgba(77, 86, 110, 0.98), rgba(45, 52, 69, 0.98)) !important;
+    }
+    .vpn-shell-mk5 .vpn-tabbar {
+        top: 6px;
+        border-radius: 8px;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.045),
+            0 12px 24px rgba(0,0,0,0.18);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn {
+        min-height: 40px;
+        border-radius: 8px;
+    }
+    .vpn-shell-mk5 .vpn-panel pre,
+    .vpn-shell-mk5 .vpn-subcard pre,
+    .vpn-shell-mk5 #vpn-config-pre,
+    .vpn-output {
+        border-radius: 8px;
+        background-size: 100% 26px, 30px 100%, 100% 100%, 100% 100% !important;
+    }
+    .vpn-shell-mk5 .vpn-check-row,
+    .vpn-shell-mk5 .vpn-check-empty {
+        border-radius: 8px;
+    }
+    .vpn-entry-card input[type="file"]::file-selector-button,
+    .cbi-map input[type="file"]::file-selector-button {
+        min-height: 34px;
+        margin-right: 10px;
+        padding: 0 12px;
+        border: 1px solid rgba(47, 211, 238, 0.32);
+        border-radius: 8px;
+        color: #edf7ff;
+        background: linear-gradient(180deg, rgba(42, 156, 255, 0.86), rgba(17, 119, 222, 0.82));
+        font-weight: 850;
+    }
+    .cbi-map select option {
+        color: #eef4ff;
+        background: #151b27;
+    }
+    .cbi-map .cbi-value {
+        border-top-color: rgba(255,255,255,0.070);
+    }
+    .cbi-map .cbi-value:hover {
+        background:
+            radial-gradient(circle at 96% 20%, rgba(47, 211, 238, 0.055), transparent 36%),
+            linear-gradient(90deg, rgba(108, 162, 255, 0.038), rgba(255,255,255,0.008) 54%, rgba(255,255,255,0.018));
+    }
+    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+        .vpn-shell-mk5 .vpn-hero-mk5,
+        .vpn-shell-mk5 .vpn-brand-block,
+        .vpn-shell-mk5 .vpn-command-card,
+        .vpn-shell-mk5 .vpn-mini-card,
+        .vpn-shell-mk5 .vpn-stat-card,
+        .vpn-shell-mk5 .vpn-card,
+        .vpn-shell-mk5 .vpn-quick-rail,
+        .vpn-shell-mk5 .vpn-panel-shell,
+        .vpn-shell-mk5 .vpn-subcard,
+        .vpn-entry-card,
+        .cbi-map .cbi-section,
+        .cbi-map .cbi-section-node,
+        .cbi-map fieldset.cbi-section,
+        .cbi-map fieldset.cbi-section-table {
+            -webkit-backdrop-filter: blur(14px) saturate(118%);
+            backdrop-filter: blur(14px) saturate(118%);
+        }
+    }
+    /* OpenVPN Mk5 closure polish: overflow-safe glass refinements. */
+    .vpn-shell-mk5,
+    .vpn-shell-mk5 *,
+    .vpn-entry-grid-mk5,
+    .vpn-entry-grid-mk5 *,
+    .vpn-shell-secondary + .cbi-map,
+    .vpn-shell-secondary + .cbi-map * {
+        min-width: 0;
+    }
+    .vpn-shell-mk5 .vpn-brand-block h2,
+    .vpn-shell-secondary .vpn-page-title,
+    .vpn-shell-mk5 .vpn-card-title,
+    .vpn-shell-mk5 .vpn-quick-rail-title,
+    .vpn-shell-mk5 .vpn-panel-shell-head h3,
+    .vpn-shell-mk5 .vpn-panel-head h3,
+    .vpn-shell-mk5 .vpn-stat-value,
+    .vpn-shell-mk5 .vpn-hero-summary-item strong,
+    .vpn-shell-mk5 .vpn-mini-card strong,
+    .vpn-entry-card h4 {
+        overflow-wrap: anywhere;
+        text-wrap: balance;
+    }
+    .vpn-shell-mk5 .vpn-sub,
+    .vpn-shell-mk5 .vpn-mini-note,
+    .vpn-shell-mk5 .vpn-stat-meta,
+    .vpn-shell-mk5 .vpn-stat-note,
+    .vpn-shell-mk5 .vpn-card-note,
+    .vpn-shell-mk5 .vpn-action-tile span,
+    .vpn-shell-mk5 .vpn-panel-shell-head p,
+    .vpn-shell-mk5 .vpn-panel-head span,
+    .vpn-entry-card .vpn-entry-lead,
+    .vpn-entry-card .vpn-field-help {
+        overflow-wrap: anywhere;
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
+    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
+    .vpn-shell-secondary .vpn-hero-actions a.cbi-button,
+    .cbi-map .cbi-button,
+    .vpn-entry-actions .cbi-button {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        white-space: normal !important;
+        line-height: 1.18 !important;
+        word-break: keep-all;
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button[disabled],
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button.is-disabled,
+    .vpn-shell-mk5 .vpn-button-muted[aria-disabled="true"] {
+        filter: saturate(0.78);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.055) !important;
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button:not([disabled]):not(.is-disabled):active,
+    .vpn-shell-secondary .vpn-hero-actions .cbi-button:not([disabled]):active,
+    .cbi-map .cbi-button:not([disabled]):active,
+    .vpn-entry-actions .cbi-button:not([disabled]):active {
+        transform: translateY(0);
+        box-shadow:
+            inset 0 2px 8px rgba(0,0,0,0.18),
+            0 6px 14px rgba(0,0,0,0.18) !important;
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item,
+    .vpn-shell-secondary .vpn-secondary-summary span {
+        min-width: 0;
+        overflow: hidden;
+    }
+    .vpn-shell-mk5 .vpn-summary-line,
+    .vpn-shell-secondary .vpn-secondary-summary strong {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .vpn-shell-mk5 .vpn-action-tile {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 7px;
+    }
+    .vpn-shell-mk5 .vpn-action-tile strong {
+        color: #f4f8ff;
+    }
+    .vpn-shell-mk5 .vpn-action-tile:hover::after {
+        opacity: 0.92;
+    }
+    .vpn-shell-mk5 .vpn-check-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .vpn-shell-mk5 .vpn-check-badges {
+        align-items: center;
+    }
+    .vpn-shell-mk5 .vpn-check-main span,
+    .vpn-shell-mk5 .vpn-remote-host {
+        overflow-wrap: anywhere;
+    }
+    .vpn-shell-mk5 .vpn-panel pre,
+    .vpn-shell-mk5 .vpn-subcard pre,
+    .vpn-shell-mk5 #vpn-config-pre {
+        max-width: 100%;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .vpn-shell-secondary + .cbi-map {
+        max-width: 1220px;
+        margin: 0 auto 18px;
+        padding: 0 8px;
+        color: var(--vpn-text);
+    }
+    .cbi-map .cbi-section-table,
+    .cbi-map table {
+        width: 100% !important;
+        max-width: 100%;
+        border-collapse: separate !important;
+        border-spacing: 0 6px !important;
+    }
+    .cbi-map .cbi-section-table-cell,
+    .cbi-map td,
+    .cbi-map th {
+        vertical-align: middle;
+        overflow-wrap: anywhere;
+    }
+    .cbi-map .cbi-section-table-row,
+    .cbi-map tr {
+        border-radius: 8px;
+    }
+    .cbi-map input[type="text"],
+    .cbi-map input[type="password"],
+    .cbi-map input[type="file"],
+    .cbi-map textarea,
+    .cbi-map select,
+    .vpn-entry-card input[type="text"],
+    .vpn-entry-card input[type="file"],
+    .vpn-entry-card select {
+        max-width: 100%;
+        caret-color: #2fd3ee;
+    }
+    .vpn-entry-card input[type="file"],
+    .cbi-map input[type="file"] {
+        line-height: 1.25;
+    }
+    .vpn-output {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        padding: 10px 12px;
+    }
+    .vpn-output span,
+    .vpn-output em {
+        overflow-wrap: anywhere;
+    }
+    .vpn-cbi-section-mk5 {
+        border-color: rgba(78, 96, 131, 0.72) !important;
+    }
+    .vpn-cbi-section-mk5 .vpn-section-title {
+        min-width: 0;
+    }
+    /* OpenVPN Mk5 title repair: prevent the hero title from collapsing to one glyph. */
+    .vpn-shell-mk5 .vpn-brand-block h2,
+    .vpn-shell-secondary .vpn-page-title {
+        display: inline-block;
+        width: auto;
+        max-width: 100%;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: clip;
+        word-break: keep-all;
+        overflow-wrap: normal;
+        text-wrap: nowrap;
+    }
+    .vpn-shell-mk5 .vpn-brand-block h2::after {
+        width: min(100%, 188px);
+        max-width: 100%;
+    }
+    .vpn-shell-mk5 .vpn-toolbar,
+    .vpn-shell-mk5 .vpn-pill,
+    .vpn-shell-mk5 .vpn-health-chip,
+    .vpn-shell-mk5 .vpn-inline-note {
+        min-width: 0;
+    }
+    .vpn-shell-mk5 .vpn-health-chip,
+    .vpn-shell-mk5 .vpn-inline-note {
+        white-space: nowrap;
+    }
+    /* OpenVPN Mk5 summary repair: keep the three cards visible and identifiers readable. */
+    .vpn-shell-mk5 .vpn-hero-summary-item strong {
+        display: block;
+        max-width: 100%;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: nowrap;
+        word-break: keep-all;
+        overflow-wrap: normal;
+        text-wrap: nowrap;
+        font-size: 12px;
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item strong .vpn-summary-line {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    @media (max-width: 760px) {
+        .vpn-shell-mk5 .vpn-check-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .vpn-shell-mk5 .vpn-check-badges {
+            justify-content: flex-start;
+        }
+        .vpn-shell-secondary .vpn-hero-actions,
+        .vpn-entry-actions {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .cbi-map .cbi-value {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .vpn-shell-mk5 *,
+        .vpn-shell-secondary *,
+        .cbi-map * {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+        }
+    }
+</style>
+EOF_OPENVPN_MK5_ROUND_FINISH_POLISH
 
     cat > /usr/lib/lua/luci/model/cbi/openvpn.lua <<'EOF_OPENVPN_STANDARD_MODEL'
 -- Copyright 2008 Steven Barth <steven@midlink.org>
@@ -30989,6 +35672,15 @@ run_menu_feature() {
                 return "$hakimi_rc"
             fi
             ;;
+        20)
+            if manage_rootfs_2nd_storage_expand; then
+                :
+            else
+                storage_expand_rc="$?"
+                [ "$storage_expand_rc" = '2' ] && return 2
+                return "$storage_expand_rc"
+            fi
+            ;;
         15)
             install_appcenter_polish
             show_support_page_hint='1'
@@ -31024,7 +35716,7 @@ common_plugin_menu() {
     while :; do
         submenu_feature=''
         printf '\n常用插件安装:\n'
-        printf '1. 扩容 swap 虚拟内存\n'
+        printf '1. 扩容 swap 虚拟内存（仅支持NRadio_C2000MAX）\n'
         printf '2. 哈基米\n'
         printf '3. ttyd / Web SSH\n'
         printf '4. AdGuardHome\n'
@@ -31659,14 +36351,16 @@ maintenance_test_menu() {
         printf '1. 统一体检增强版\n'
         printf '2. NRadio_C8-688 / C2000MAX 风扇控制\n'
         printf '3. 哈基米傻瓜分流助手\n'
+        printf '4. C8/C5800 eMMC 存储扩展\n'
         printf '0. 返回功能分类\n'
-        printf '请选择 0、1、2 或 3: '
+        printf '请选择 0、1、2、3 或 4: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
             1) submenu_feature='13' ;;
             2) submenu_feature='14' ;;
             3) submenu_feature='19' ;;
+            4) submenu_feature='20' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then
