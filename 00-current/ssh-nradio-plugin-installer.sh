@@ -4,7 +4,7 @@ umask 077
 
 SCRIPT_VERSION="V2.0.60"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-14"
+SCRIPT_RELEASE_DATE="2026-05-15"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -7452,6 +7452,949 @@ patch_appcenter_card_polish() {
             gap: 6px;
         }
     }
+    /* NRadio appcenter router hot polish: user pass 3 */
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.34);
+        background:
+            radial-gradient(circle at 16% -4%, rgba(103,232,249,.178), transparent 39%),
+            radial-gradient(circle at 96% 8%, rgba(61,220,151,.048), transparent 32%),
+            radial-gradient(circle at 104% 104%, rgba(96,165,250,.080), transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.008)),
+            linear-gradient(145deg, rgba(16,31,50,.986), rgba(4,10,19,.948));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.058),
+            inset 0 0 0 .0625rem rgba(103,232,249,.070),
+            inset 0 -.08em 0 rgba(3,7,14,.68),
+            0 1em 1.92em rgba(0,0,0,.245);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(103,232,249,.44);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            inset 0 0 0 .0625rem rgba(103,232,249,.088),
+            inset 0 -.08em 0 rgba(3,7,14,.62),
+            0 1.05em 1.94em rgba(0,0,0,.255);
+    }
+    .container_right .app_box::before{
+        opacity: .58;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.026), transparent 43%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.072), transparent 46%);
+    }
+    .container_right .app_box::after{
+        opacity: .40;
+        background: linear-gradient(90deg, transparent, rgba(var(--nr-card-accent),.52), rgba(var(--nr-card-accent-2),.34), transparent);
+    }
+    .container_right .app_icon::before{
+        background:
+            radial-gradient(circle at 50% 0%, rgba(103,232,249,.118), transparent 62%),
+            linear-gradient(180deg, rgba(125,211,252,.090), rgba(255,255,255,.010)),
+            rgba(4,10,19,.50);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            inset 0 0 0 .0625rem rgba(125,211,252,.080),
+            0 .55em .86em rgba(0,0,0,.12);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(125,211,252,.38);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.066),
+            0 .42em .78em rgba(0,0,0,.16),
+            0 0 0 .0625rem rgba(103,232,249,.052);
+        filter: saturate(1.10) contrast(1.035);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        border-color: rgba(103,232,249,.48);
+        filter: saturate(1.15) contrast(1.045);
+    }
+    .container_right .app_name{
+        color: #fbfdff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.38);
+    }
+    .container_right .app_version{
+        color: #e1effb;
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.050), rgba(125,211,252,.010)),
+            rgba(5,12,22,.66);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.034);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.040),
+            0 .30em .56em rgba(0,0,0,.10);
+    }
+    .container_right .app_state_1{
+        border-color: rgba(61,220,151,.38);
+        background:
+            linear-gradient(180deg, rgba(61,220,151,.128), rgba(34,197,94,.050)),
+            rgba(34,197,94,.042);
+    }
+    .container_right .app_state_2{
+        border-color: rgba(245,158,11,.36);
+        background:
+            linear-gradient(180deg, rgba(245,158,11,.116), rgba(180,83,9,.046)),
+            rgba(245,158,11,.038);
+    }
+    .container_right .app_open_1{
+        border-color: rgba(35,200,228,.38);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.132), rgba(8,145,178,.050)),
+            rgba(35,200,228,.042);
+    }
+    .container_right .app_des{
+        height: 18px !important;
+        line-height: 18px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        color: #d3deec;
+    }
+    .container_right .action_list_li{
+        border-color: rgba(125,211,252,.34);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.009)),
+            rgba(5,12,22,.69);
+        color: #f6fbff;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            0 .48em .86em rgba(0,0,0,.15);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(103,232,249,.54);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.178), rgba(35,200,228,.052)),
+            rgba(5,12,22,.74);
+    }
+    .container_right .action_list_li:last-child{
+        border-color: rgba(37,212,240,.48);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.168), rgba(35,200,228,.046)),
+            rgba(5,12,22,.74);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.32);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.040), rgba(255,255,255,.008) 38%, rgba(125,211,252,.020)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.104), transparent 34%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.090), transparent 36%),
+            linear-gradient(180deg, rgba(13,23,38,.966), rgba(5,11,21,.884)),
+            rgba(4,8,16,.84);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.056),
+            inset 0 0 0 .0625rem rgba(103,232,249,.058),
+            0 1.04em 1.98em rgba(0,0,0,.24);
+    }
+    .app_status_head{
+        color: #f1f9ff;
+        border-bottom-color: rgba(125,211,252,.18);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.20);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.044),
+            0 .38em .72em rgba(0,0,0,.11);
+    }
+    .app_status_tile strong,
+    .app_status_metric_row strong{
+        color: #f9fdff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.32);
+    }
+    .app_status_bar{
+        box-shadow:
+            inset 0 .08em .18em rgba(0,0,0,.40),
+            inset 0 0 0 .0625rem rgba(103,232,249,.090);
+    }
+    .app_status_bar span{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.16),
+            0 0 .70em rgba(35,200,228,.18);
+    }
+    /* NRadio appcenter router hot polish: user pass 4 final */
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.36);
+        background:
+            radial-gradient(circle at 17% -5%, rgba(103,232,249,.188), transparent 39%),
+            radial-gradient(circle at 86% 8%, rgba(61,220,151,.050), transparent 31%),
+            radial-gradient(circle at 104% 104%, rgba(96,165,250,.086), transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,.036), rgba(255,255,255,.008)),
+            linear-gradient(145deg, rgba(16,31,50,.988), rgba(4,10,19,.952));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.062),
+            inset 0 0 0 .0625rem rgba(103,232,249,.078),
+            inset 0 -.08em 0 rgba(3,7,14,.70),
+            0 1.02em 1.98em rgba(0,0,0,.255);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(103,232,249,.50);
+        background:
+            radial-gradient(circle at 17% -5%, rgba(103,232,249,.212), transparent 39%),
+            radial-gradient(circle at 86% 8%, rgba(61,220,151,.062), transparent 31%),
+            radial-gradient(circle at 104% 104%, rgba(96,165,250,.096), transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.010)),
+            linear-gradient(145deg, rgba(18,34,55,.988), rgba(5,12,22,.954));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.066),
+            inset 0 0 0 .0625rem rgba(103,232,249,.102),
+            inset 0 -.08em 0 rgba(3,7,14,.64),
+            0 1.08em 2.04em rgba(0,0,0,.265);
+    }
+    .container_right .app_box::before{
+        opacity: .62;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.028), transparent 43%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.078), transparent 46%);
+    }
+    .container_right .app_box::after{
+        opacity: .46;
+        background: linear-gradient(90deg, transparent, rgba(var(--nr-card-accent),.58), rgba(var(--nr-card-accent-2),.38), transparent);
+    }
+    .container_right .app_title::after{
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent),.28), rgba(125,211,252,.10), transparent);
+        opacity: .72;
+    }
+    .container_right .app_icon::before{
+        background:
+            radial-gradient(circle at 50% 0%, rgba(103,232,249,.126), transparent 62%),
+            linear-gradient(180deg, rgba(125,211,252,.100), rgba(255,255,255,.012)),
+            rgba(4,10,19,.52);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.066),
+            inset 0 0 0 .0625rem rgba(125,211,252,.092),
+            0 .58em .90em rgba(0,0,0,.13);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(125,211,252,.42);
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.092), rgba(255,255,255,.012)),
+            rgba(4,10,19,.68);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.072),
+            0 .44em .80em rgba(0,0,0,.17),
+            0 0 0 .0625rem rgba(103,232,249,.062);
+        filter: saturate(1.12) contrast(1.04);
+    }
+    .container_right .app_box:hover .app_icon::before,
+    .container_right .app_box:focus-within .app_icon::before{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.074),
+            inset 0 0 0 .0625rem rgba(103,232,249,.118),
+            0 .62em .96em rgba(0,0,0,.14);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        border-color: rgba(103,232,249,.54);
+        filter: saturate(1.18) contrast(1.052);
+    }
+    .container_right .app_name{
+        color: #fbfdff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.42), 0 0 .75em rgba(103,232,249,.08);
+    }
+    .container_right .app_box:hover .app_name,
+    .container_right .app_box:focus-within .app_name{
+        color: #ffffff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.44), 0 0 .86em rgba(103,232,249,.12);
+    }
+    .container_right .app_version{
+        border-color: rgba(125,211,252,.28);
+        color: #e5f2fc;
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.056), rgba(125,211,252,.012)),
+            rgba(5,12,22,.68);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(125,211,252,.28);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.032), rgba(255,255,255,.006)),
+            rgba(5,12,22,.58);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.046),
+            0 .30em .58em rgba(0,0,0,.11);
+    }
+    .container_right .app_state_badge::before,
+    .container_right .app_open_badge::before{
+        box-shadow: 0 0 .55em currentColor;
+    }
+    .container_right .app_state_0{
+        border-color: rgba(148,163,184,.24);
+        color: #d9e3ef;
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.055), rgba(148,163,184,.014)),
+            rgba(6,12,22,.46);
+    }
+    .container_right .app_state_1{
+        border-color: rgba(61,220,151,.42);
+        color: #dcffec;
+        background:
+            linear-gradient(180deg, rgba(61,220,151,.140), rgba(34,197,94,.054)),
+            rgba(34,197,94,.046);
+    }
+    .container_right .app_state_2{
+        border-color: rgba(245,158,11,.40);
+        color: #ffe8bc;
+        background:
+            linear-gradient(180deg, rgba(245,158,11,.128), rgba(180,83,9,.050)),
+            rgba(245,158,11,.042);
+    }
+    .container_right .app_open_1{
+        border-color: rgba(35,200,228,.42);
+        color: #e0fbff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.144), rgba(8,145,178,.052)),
+            rgba(35,200,228,.046);
+    }
+    .container_right .app_des{
+        color: #d7e2ef;
+        opacity: .96;
+        text-shadow: 0 1px 0 rgba(0,0,0,.22);
+    }
+    .container_right .app_action::before{
+        background: linear-gradient(90deg, transparent, rgba(125,211,252,.24), rgba(61,220,151,.095), transparent);
+    }
+    .container_right .action_list_li{
+        border-color: rgba(125,211,252,.36);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.044), rgba(255,255,255,.010)),
+            rgba(5,12,22,.72);
+        color: #f8fcff;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.056),
+            0 .50em .88em rgba(0,0,0,.16);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(103,232,249,.58);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.190), rgba(35,200,228,.058)),
+            rgba(5,12,22,.76);
+        color: #ffffff;
+    }
+    .container_right .action_list_li:first-child{
+        border-color: rgba(148,163,184,.28);
+        color: #dce7f3;
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.042), rgba(148,163,184,.010)),
+            rgba(5,12,22,.62);
+    }
+    .container_right .action_list_li:last-child{
+        border-color: rgba(37,212,240,.52);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.182), rgba(35,200,228,.052)),
+            rgba(5,12,22,.76);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.34);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.044), rgba(255,255,255,.008) 38%, rgba(125,211,252,.022)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.112), transparent 34%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.096), transparent 36%),
+            linear-gradient(180deg, rgba(13,23,38,.970), rgba(5,11,21,.890)),
+            rgba(4,8,16,.85);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            inset 0 0 0 .0625rem rgba(103,232,249,.066),
+            0 1.06em 2.02em rgba(0,0,0,.25);
+    }
+    .app_status_panel::before{
+        opacity: .62;
+    }
+    .app_status_panel::after{
+        opacity: .60;
+    }
+    .app_status_head{
+        color: #f5fbff;
+        border-bottom-color: rgba(125,211,252,.20);
+    }
+    .app_status_head span::before{
+        box-shadow: 0 0 0 .30em rgba(96,165,250,.118), 0 0 .72em rgba(103,232,249,.46);
+    }
+    .app_status_time{
+        border-color: rgba(37,212,240,.32);
+        color: #f2feff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.126), rgba(35,200,228,.044)),
+            rgba(5,13,25,.72);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.22);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-tile-accent, 96,165,250),.122), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.010)),
+            rgba(5,13,25,.66);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.048),
+            0 .40em .76em rgba(0,0,0,.12);
+    }
+    .app_status_metric:nth-of-type(3){
+        border-color: rgba(248,113,113,.24);
+    }
+    .app_status_metric:nth-of-type(4){
+        border-color: rgba(96,165,250,.24);
+    }
+    .app_status_metric:nth-of-type(5){
+        border-color: rgba(61,220,151,.24);
+    }
+    .app_status_tile strong,
+    .app_status_metric_row strong{
+        color: #fbfdff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.36);
+    }
+    .app_status_tile span,
+    .app_status_metric_row span{
+        color: #bfcede;
+    }
+    .app_status_bar{
+        background:
+            linear-gradient(180deg, rgba(15,23,42,.86), rgba(4,9,17,.80)),
+            rgba(4,8,16,.76);
+        box-shadow:
+            inset 0 .08em .18em rgba(0,0,0,.42),
+            inset 0 0 0 .0625rem rgba(103,232,249,.100);
+    }
+    .app_status_bar span{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.18),
+            0 0 .76em rgba(35,200,228,.20);
+    }
+    /* NRadio appcenter router hot polish: user pass 5 deep finish */
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.38);
+        background:
+            radial-gradient(circle at 18% -6%, rgba(103,232,249,.210), transparent 40%),
+            radial-gradient(circle at 82% 7%, rgba(61,220,151,.064), transparent 32%),
+            radial-gradient(circle at 108% 104%, rgba(96,165,250,.104), transparent 49%),
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.009)),
+            linear-gradient(145deg, rgba(15,32,53,.992), rgba(4,10,19,.956));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.070),
+            inset 0 0 0 .0625rem rgba(103,232,249,.090),
+            inset 0 -.08em 0 rgba(3,7,14,.72),
+            0 1.08em 2.12em rgba(0,0,0,.272);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(103,232,249,.56);
+        background:
+            radial-gradient(circle at 18% -6%, rgba(103,232,249,.240), transparent 40%),
+            radial-gradient(circle at 82% 7%, rgba(61,220,151,.078), transparent 32%),
+            radial-gradient(circle at 108% 104%, rgba(96,165,250,.120), transparent 49%),
+            linear-gradient(180deg, rgba(255,255,255,.046), rgba(255,255,255,.012)),
+            linear-gradient(145deg, rgba(19,37,59,.992), rgba(5,12,22,.958));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.076),
+            inset 0 0 0 .0625rem rgba(103,232,249,.124),
+            inset 0 -.08em 0 rgba(3,7,14,.66),
+            0 1.12em 2.18em rgba(0,0,0,.282),
+            0 0 1.55em rgba(35,200,228,.060);
+    }
+    .container_right .app_box::before{
+        opacity: .68;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.034), transparent 43%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.090), transparent 47%);
+    }
+    .container_right .app_box::after{
+        opacity: .54;
+        background: linear-gradient(90deg, transparent, rgba(var(--nr-card-accent),.66), rgba(var(--nr-card-accent-2),.44), transparent);
+    }
+    .container_right .app_info::after{
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent),.18), transparent);
+        opacity: .48;
+    }
+    .container_right .app_title::after{
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent),.34), rgba(125,211,252,.13), transparent);
+        opacity: .82;
+    }
+    .container_right .app_icon::before{
+        background:
+            radial-gradient(circle at 50% 0%, rgba(103,232,249,.150), transparent 63%),
+            linear-gradient(180deg, rgba(125,211,252,.118), rgba(255,255,255,.014)),
+            rgba(4,10,19,.56);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.078),
+            inset 0 0 0 .0625rem rgba(125,211,252,.112),
+            0 .62em .98em rgba(0,0,0,.15);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(125,211,252,.48);
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.106), rgba(255,255,255,.014)),
+            rgba(4,10,19,.72);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.086),
+            0 .48em .88em rgba(0,0,0,.19),
+            0 0 0 .0625rem rgba(103,232,249,.080),
+            0 0 .95em rgba(103,232,249,.060);
+        filter: saturate(1.16) contrast(1.055);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        border-color: rgba(103,232,249,.62);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.092),
+            0 .50em .90em rgba(0,0,0,.20),
+            0 0 0 .0625rem rgba(103,232,249,.105),
+            0 0 1.08em rgba(103,232,249,.090);
+        filter: saturate(1.22) contrast(1.065);
+    }
+    .container_right .app_name{
+        color: #fcfeff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.48), 0 0 .90em rgba(103,232,249,.11);
+    }
+    .container_right .app_box:hover .app_name,
+    .container_right .app_box:focus-within .app_name{
+        color: #ffffff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.50), 0 0 1.05em rgba(103,232,249,.16);
+    }
+    .container_right .app_version{
+        border-color: rgba(125,211,252,.32);
+        color: #e9f5ff;
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.070), rgba(125,211,252,.014)),
+            rgba(5,12,22,.72);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.044), 0 .24em .52em rgba(0,0,0,.090);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(125,211,252,.30);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.008)),
+            rgba(5,12,22,.62);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            0 .32em .60em rgba(0,0,0,.12);
+    }
+    .container_right .app_state_badge::before,
+    .container_right .app_open_badge::before{
+        box-shadow: 0 0 .64em currentColor;
+    }
+    .container_right .app_state_0{
+        border-color: rgba(148,163,184,.28);
+        color: #dde7f2;
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.065), rgba(148,163,184,.016)),
+            rgba(6,12,22,.50);
+    }
+    .container_right .app_state_1{
+        border-color: rgba(61,220,151,.48);
+        color: #e4fff0;
+        background:
+            linear-gradient(180deg, rgba(61,220,151,.160), rgba(34,197,94,.060)),
+            rgba(34,197,94,.052);
+    }
+    .container_right .app_state_2{
+        border-color: rgba(245,158,11,.46);
+        color: #ffedc7;
+        background:
+            linear-gradient(180deg, rgba(245,158,11,.145), rgba(180,83,9,.056)),
+            rgba(245,158,11,.048);
+    }
+    .container_right .app_open_1{
+        border-color: rgba(35,200,228,.48);
+        color: #e5fcff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.162), rgba(8,145,178,.060)),
+            rgba(35,200,228,.052);
+    }
+    .container_right .app_des{
+        color: #dce6f2;
+        opacity: .98;
+        text-shadow: 0 1px 0 rgba(0,0,0,.24);
+    }
+    .container_right .app_box:hover .app_des,
+    .container_right .app_box:focus-within .app_des{
+        color: #e5edf7;
+    }
+    .container_right .app_action::before{
+        background: linear-gradient(90deg, transparent, rgba(125,211,252,.30), rgba(61,220,151,.118), transparent);
+        opacity: .92;
+    }
+    .container_right .action_list_li{
+        border-color: rgba(125,211,252,.40);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.052), rgba(255,255,255,.012)),
+            rgba(5,12,22,.76);
+        color: #f9fdff;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.064),
+            0 .52em .92em rgba(0,0,0,.18);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(103,232,249,.66);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.220), rgba(35,200,228,.070)),
+            rgba(5,12,22,.80);
+        color: #ffffff;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.074),
+            0 .54em .96em rgba(0,0,0,.19),
+            0 0 1.08em rgba(35,200,228,.070);
+    }
+    .container_right .action_list_li:first-child{
+        border-color: rgba(148,163,184,.32);
+        color: #e1ebf6;
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.050), rgba(148,163,184,.012)),
+            rgba(5,12,22,.66);
+    }
+    .container_right .action_list_li:last-child{
+        border-color: rgba(37,212,240,.60);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.205), rgba(35,200,228,.064)),
+            rgba(5,12,22,.80);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.38);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.052), rgba(255,255,255,.010) 38%, rgba(125,211,252,.026)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.128), transparent 35%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.108), transparent 37%),
+            linear-gradient(180deg, rgba(13,23,38,.976), rgba(5,11,21,.900)),
+            rgba(4,8,16,.87);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.070),
+            inset 0 0 0 .0625rem rgba(103,232,249,.078),
+            0 1.10em 2.14em rgba(0,0,0,.27);
+    }
+    .app_status_panel::before{
+        opacity: .72;
+        background: linear-gradient(90deg, transparent, rgba(103,232,249,.42), transparent);
+    }
+    .app_status_panel::after{
+        opacity: .68;
+        background: linear-gradient(90deg, transparent, rgba(96,165,250,.24), rgba(61,220,151,.17), transparent);
+    }
+    .app_status_head{
+        color: #f8fcff;
+        border-bottom-color: rgba(125,211,252,.24);
+        text-shadow: 0 1px 0 rgba(0,0,0,.30);
+    }
+    .app_status_head span::before{
+        background: #79f2ff;
+        box-shadow: 0 0 0 .30em rgba(96,165,250,.132), 0 0 .82em rgba(103,232,249,.54);
+    }
+    .app_status_time{
+        border-color: rgba(37,212,240,.38);
+        color: #f5feff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.146), rgba(35,200,228,.052)),
+            rgba(5,13,25,.76);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.052), 0 .32em .64em rgba(0,0,0,.12);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.25);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-tile-accent, 96,165,250),.140), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.046), rgba(255,255,255,.012)),
+            rgba(5,13,25,.70);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.056),
+            0 .42em .80em rgba(0,0,0,.14);
+    }
+    .app_status_metric:nth-of-type(3){
+        border-color: rgba(248,113,113,.30);
+    }
+    .app_status_metric:nth-of-type(4){
+        border-color: rgba(96,165,250,.30);
+    }
+    .app_status_metric:nth-of-type(5){
+        border-color: rgba(61,220,151,.30);
+    }
+    .app_status_tile strong,
+    .app_status_metric_row strong{
+        color: #ffffff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.42), 0 0 .72em rgba(103,232,249,.08);
+    }
+    .app_status_tile strong::after{
+        background: linear-gradient(90deg, rgba(var(--nr-tile-accent),.68), transparent);
+    }
+    .app_status_tile span,
+    .app_status_metric_row span{
+        color: #c6d4e4;
+    }
+    .app_status_bar{
+        background:
+            linear-gradient(180deg, rgba(15,23,42,.90), rgba(4,9,17,.82)),
+            rgba(4,8,16,.78);
+        box-shadow:
+            inset 0 .08em .18em rgba(0,0,0,.46),
+            inset 0 0 0 .0625rem rgba(103,232,249,.120);
+    }
+    .app_status_bar::after{
+        background: rgba(255,255,255,.085);
+    }
+    .app_status_bar span{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.22),
+            0 0 .88em rgba(35,200,228,.24);
+    }
+    /* NRadio appcenter router hot polish: user pass 6 precision finish */
+    .container_right .app_box{
+        border-color: rgba(125,211,252,.40);
+        background:
+            radial-gradient(circle at 18% -6%, rgba(103,232,249,.220), transparent 40%),
+            radial-gradient(circle at 78% 6%, rgba(61,220,151,.070), transparent 32%),
+            radial-gradient(circle at 108% 104%, rgba(96,165,250,.112), transparent 49%),
+            linear-gradient(180deg, rgba(255,255,255,.044), rgba(255,255,255,.010)),
+            linear-gradient(145deg, rgba(15,32,53,.994), rgba(4,10,19,.960));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.074),
+            inset 0 0 0 .0625rem rgba(103,232,249,.098),
+            inset 0 -.08em 0 rgba(3,7,14,.74),
+            0 1.10em 2.18em rgba(0,0,0,.286);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(103,232,249,.60);
+        background:
+            radial-gradient(circle at 18% -6%, rgba(103,232,249,.252), transparent 40%),
+            radial-gradient(circle at 78% 6%, rgba(61,220,151,.086), transparent 32%),
+            radial-gradient(circle at 108% 104%, rgba(96,165,250,.128), transparent 49%),
+            linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.013)),
+            linear-gradient(145deg, rgba(20,38,61,.994), rgba(5,12,22,.962));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.082),
+            inset 0 0 0 .0625rem rgba(103,232,249,.136),
+            inset 0 -.08em 0 rgba(3,7,14,.68),
+            0 1.14em 2.22em rgba(0,0,0,.294),
+            0 0 1.72em rgba(35,200,228,.070);
+    }
+    .container_right .app_box::before{
+        opacity: .72;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.038), transparent 43%),
+            linear-gradient(90deg, rgba(var(--nr-card-accent),.100), transparent 47%);
+    }
+    .container_right .app_box::after{
+        opacity: .60;
+        background: linear-gradient(90deg, transparent, rgba(var(--nr-card-accent),.72), rgba(var(--nr-card-accent-2),.48), transparent);
+    }
+    .container_right .app_info::after{
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent),.22), transparent);
+        opacity: .56;
+    }
+    .container_right .app_title::after{
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent),.38), rgba(125,211,252,.15), transparent);
+        opacity: .88;
+    }
+    .container_right .app_icon::before{
+        background:
+            radial-gradient(circle at 50% 0%, rgba(103,232,249,.166), transparent 63%),
+            linear-gradient(180deg, rgba(125,211,252,.130), rgba(255,255,255,.016)),
+            rgba(4,10,19,.58);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.086),
+            inset 0 0 0 .0625rem rgba(125,211,252,.126),
+            0 .64em 1.02em rgba(0,0,0,.16);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(125,211,252,.54);
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.118), rgba(255,255,255,.016)),
+            rgba(4,10,19,.75);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.094),
+            0 .50em .92em rgba(0,0,0,.21),
+            0 0 0 .0625rem rgba(103,232,249,.092),
+            0 0 1.05em rgba(103,232,249,.075);
+        filter: saturate(1.18) contrast(1.065);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        border-color: rgba(103,232,249,.68);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.100),
+            0 .52em .94em rgba(0,0,0,.22),
+            0 0 0 .0625rem rgba(103,232,249,.122),
+            0 0 1.18em rgba(103,232,249,.110);
+        filter: saturate(1.25) contrast(1.075);
+    }
+    .container_right .app_name{
+        color: #ffffff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.52), 0 0 1em rgba(103,232,249,.13);
+    }
+    .container_right .app_version{
+        border-color: rgba(125,211,252,.36);
+        color: #edf7ff;
+        background:
+            linear-gradient(180deg, rgba(125,211,252,.082), rgba(125,211,252,.016)),
+            rgba(5,12,22,.75);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.052), 0 .26em .56em rgba(0,0,0,.105);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(125,211,252,.34);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.046), rgba(255,255,255,.010)),
+            rgba(5,12,22,.66);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            0 .34em .64em rgba(0,0,0,.13);
+    }
+    .container_right .app_state_badge::before,
+    .container_right .app_open_badge::before{
+        box-shadow: 0 0 .72em currentColor;
+    }
+    .container_right .app_state_0{
+        border-color: rgba(148,163,184,.32);
+        color: #e2ebf5;
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.074), rgba(148,163,184,.018)),
+            rgba(6,12,22,.54);
+    }
+    .container_right .app_state_1{
+        border-color: rgba(61,220,151,.54);
+        color: #e9fff3;
+        background:
+            linear-gradient(180deg, rgba(61,220,151,.178), rgba(34,197,94,.066)),
+            rgba(34,197,94,.056);
+    }
+    .container_right .app_state_2{
+        border-color: rgba(245,158,11,.52);
+        color: #fff1d0;
+        background:
+            linear-gradient(180deg, rgba(245,158,11,.162), rgba(180,83,9,.062)),
+            rgba(245,158,11,.052);
+    }
+    .container_right .app_open_1{
+        border-color: rgba(35,200,228,.54);
+        color: #eafdff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.180), rgba(8,145,178,.066)),
+            rgba(35,200,228,.056);
+    }
+    .container_right .app_des{
+        color: #e0e9f4;
+        opacity: .99;
+        text-shadow: 0 1px 0 rgba(0,0,0,.26);
+    }
+    .container_right .app_action::before{
+        background: linear-gradient(90deg, transparent, rgba(125,211,252,.34), rgba(61,220,151,.132), transparent);
+        opacity: .96;
+    }
+    .container_right .action_list_li{
+        border-color: rgba(125,211,252,.44);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.058), rgba(255,255,255,.014)),
+            rgba(5,12,22,.80);
+        color: #fbfeff;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.070),
+            0 .54em .98em rgba(0,0,0,.19);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(103,232,249,.72);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.242), rgba(35,200,228,.078)),
+            rgba(5,12,22,.84);
+        color: #ffffff;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.082),
+            0 .56em 1em rgba(0,0,0,.20),
+            0 0 1.18em rgba(35,200,228,.085);
+    }
+    .container_right .action_list_li:first-child{
+        border-color: rgba(148,163,184,.36);
+        color: #e5eef8;
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.060), rgba(148,163,184,.014)),
+            rgba(5,12,22,.70);
+    }
+    .container_right .action_list_li:last-child{
+        border-color: rgba(37,212,240,.66);
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.226), rgba(35,200,228,.072)),
+            rgba(5,12,22,.84);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.42);
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.058), rgba(255,255,255,.012) 38%, rgba(125,211,252,.030)),
+            radial-gradient(circle at 0% 0%, rgba(96,165,250,.140), transparent 35%),
+            radial-gradient(circle at 100% 8%, rgba(61,220,151,.118), transparent 37%),
+            linear-gradient(180deg, rgba(13,23,38,.980), rgba(5,11,21,.908)),
+            rgba(4,8,16,.89);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.076),
+            inset 0 0 0 .0625rem rgba(103,232,249,.088),
+            0 1.12em 2.20em rgba(0,0,0,.285);
+    }
+    .app_status_panel::before{
+        opacity: .78;
+        background: linear-gradient(90deg, transparent, rgba(103,232,249,.48), transparent);
+    }
+    .app_status_panel::after{
+        opacity: .74;
+        background: linear-gradient(90deg, transparent, rgba(96,165,250,.28), rgba(61,220,151,.20), transparent);
+    }
+    .app_status_head{
+        color: #fbfeff;
+        border-bottom-color: rgba(125,211,252,.28);
+        text-shadow: 0 1px 0 rgba(0,0,0,.34);
+    }
+    .app_status_time{
+        border-color: rgba(37,212,240,.44);
+        color: #f8feff;
+        background:
+            linear-gradient(180deg, rgba(35,200,228,.165), rgba(35,200,228,.060)),
+            rgba(5,13,25,.80);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.060), 0 .34em .68em rgba(0,0,0,.14);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.28);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-tile-accent, 96,165,250),.154), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.052), rgba(255,255,255,.014)),
+            rgba(5,13,25,.74);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.064),
+            0 .44em .84em rgba(0,0,0,.15);
+    }
+    .app_status_metric:nth-of-type(3){
+        border-color: rgba(248,113,113,.34);
+    }
+    .app_status_metric:nth-of-type(4){
+        border-color: rgba(96,165,250,.34);
+    }
+    .app_status_metric:nth-of-type(5){
+        border-color: rgba(61,220,151,.34);
+    }
+    .app_status_tile strong,
+    .app_status_metric_row strong{
+        color: #ffffff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.46), 0 0 .82em rgba(103,232,249,.10);
+    }
+    .app_status_tile span,
+    .app_status_metric_row span{
+        color: #cbd9e8;
+    }
+    .app_status_bar{
+        background:
+            linear-gradient(180deg, rgba(15,23,42,.92), rgba(4,9,17,.84)),
+            rgba(4,8,16,.80);
+        box-shadow:
+            inset 0 .08em .18em rgba(0,0,0,.48),
+            inset 0 0 0 .0625rem rgba(103,232,249,.135);
+    }
+    .app_status_bar::after{
+        background: rgba(255,255,255,.10);
+    }
+    .app_status_bar span{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.24),
+            0 0 .96em rgba(35,200,228,.27);
+    }
 EOF_APPCENTER_CARD_POLISH_CSS
 
     awk -v css_file="$css_file" '
@@ -8098,6 +9041,10 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'NRadio appcenter card polish: visual-only layer' '应用商店卡片美化 CSS'
     verify_template_marker 'NRadio appcenter card polish V2.0.60 full repair layer' '应用商店 V2.0.60 修复美化 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 2' '应用商店本轮热更精修 CSS'
+    verify_template_marker 'NRadio appcenter router hot polish: user pass 3' '应用商店 pass 3 精修 CSS'
+    verify_template_marker 'NRadio appcenter router hot polish: user pass 4 final' '应用商店 pass 4 final 精修 CSS'
+    verify_template_marker 'NRadio appcenter router hot polish: user pass 5 deep finish' '应用商店 pass 5 deep finish 精修 CSS'
+    verify_template_marker 'NRadio appcenter router hot polish: user pass 6 precision finish' '应用商店 pass 6 precision finish 精修 CSS'
     verify_template_marker '<div class="app_meta_row"' '应用商店卡片状态徽标'
     verify_template_marker 'status_label: db.status_label' '应用商店卡片状态标签数据'
     verify_template_marker 'app_open_badge app_open_1' '应用商店后台状态徽标'
@@ -11911,40 +12858,6 @@ entry({"admin", "services", "AdGuardHome", "reloadconfig"}, call("reload_config"
 entry({"admin", "services", "AdGuardHome", "gettemplateconfig"}, call("get_template_config"))
 end
 
-local function adg_is_leap_year(year)
-return (year % 4 == 0 and year % 100 ~= 0) or (year % 400 == 0)
-end
-
-local function adg_days_before_month(year, month)
-local days = {0,31,59,90,120,151,181,212,243,273,304,334}
-local total = days[month] or 0
-if month > 2 and adg_is_leap_year(year) then
-total = total + 1
-end
-return total
-end
-
-local function adg_iso8601_to_epoch(iso8601)
-local year, month, day, hour, min, sec = iso8601:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
-if not year then
-return nil
-end
-year = tonumber(year)
-month = tonumber(month)
-day = tonumber(day)
-hour = tonumber(hour)
-min = tonumber(min)
-sec = tonumber(sec)
-if not year or not month or not day or not hour or not min or not sec then
-return nil
-end
-local leap_days = math.floor((year - 1) / 4) - math.floor((year - 1) / 100) + math.floor((year - 1) / 400)
-local base_leap_days = math.floor(1969 / 4) - math.floor(1969 / 100) + math.floor(1969 / 400)
-local days = (year - 1970) * 365 + (leap_days - base_leap_days)
-days = days + adg_days_before_month(year, month) + (day - 1)
-return days * 86400 + hour * 3600 + min * 60 + sec
-end
-
 local function adg_json_escape(value)
 value = tostring(value or "")
 value = value:gsub("\\", "\\\\")
@@ -12130,7 +13043,7 @@ local version=uci:get("AdGuardHome","AdGuardHome","version") or ""
 local coreversion=uci:get("AdGuardHome","AdGuardHome","coreversion") or ""
 local listen_hosts, dnsport = adg_read_local_dns_runtime(configpath)
 if dnsport == "" then
-dnsport=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..adg_shell_quote(configpath).." 2>/dev/null")
+dnsport="?"
 end
 e.running=(binpath ~= "" and sys.call("pgrep -f " .. adg_shell_quote(binpath) .. " >/dev/null")==0) or false
 e.redirect=(fs.readfile("/var/run/AdGredir")=="1")
@@ -12489,7 +13402,7 @@ local frame_url = base_url .. "/" .. tab
         </div>
     </div>
     <div class="adg-frame-wrap adg-frame-loading">
-        <iframe id="adg_frame" class="adg-frame" name="adg_frame" title="AdGuardHome 配置页" src="<%=frame_url%>" onload="adgAfterLoad()"></iframe>
+        <iframe id="adg_frame" class="adg-frame" name="adg_frame" title="AdGuardHome 配置页" src="<%=frame_url%>"></iframe>
     </div>
 </div>
 <script>
@@ -12578,6 +13491,13 @@ function adgAfterLoad() {
     setTimeout(function() { adgHideInnerChrome(); adgResizeFrame(); }, 900);
     setTimeout(function() { adgHideInnerChrome(); adgResizeFrame(); }, 1800);
 }
+(function() {
+    var frame = document.getElementById('adg_frame');
+    if (frame) {
+        frame.onload = adgAfterLoad;
+    }
+    setTimeout(adgAfterLoad, 80);
+})();
 window.addEventListener('resize', function() {
     setTimeout(adgResizeFrame, 120);
 });
@@ -13368,7 +14288,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #88a0c7;
 		font-size: 11px;
 		font-weight: 800;
-		letter-spacing: 0.11em;
+		letter-spacing: 0;
 		text-transform: uppercase;
 	}
 
@@ -13603,7 +14523,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #86a0c8;
 		font-size: 10px;
 		font-weight: 800;
-		letter-spacing: 0.08em;
+		letter-spacing: 0;
 		text-transform: uppercase;
 	}
 
@@ -13614,7 +14534,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		font-size: 24px;
 		font-weight: 800;
 		line-height: 1.1;
-		letter-spacing: -0.03em;
+		letter-spacing: 0;
 		text-shadow: 0 10px 24px rgba(0,0,0,0.20);
 		word-break: break-word;
 	}
@@ -13644,7 +14564,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #afc4e4;
 		font-size: 13px;
 		font-weight: 800;
-		letter-spacing: 0.06em;
+		letter-spacing: 0;
 		text-transform: uppercase;
 	}
 
@@ -13755,7 +14675,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #6f86aa;
 		font-size: 11px;
 		font-weight: 800;
-		letter-spacing: 0.05em;
+		letter-spacing: 0;
 		text-transform: uppercase;
 	}
 
@@ -13766,7 +14686,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
         font-size: 54px;
         line-height: 1;
         font-weight: 800;
-        letter-spacing: -0.02em;
+        letter-spacing: 0;
         text-shadow: 0 14px 30px rgba(0,0,0,0.34);
 		font-variant-numeric: tabular-nums;
 		font-feature-settings: "tnum" 1;
@@ -13841,7 +14761,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		font-size: 15px;
 		color: #ffadad;
 		font-weight: 700;
-		letter-spacing: 0.01em;
+		letter-spacing: 0;
 		box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 	}
 
@@ -14107,7 +15027,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #f3f7ff;
 		font-size: 19px;
 		font-weight: 800;
-		letter-spacing: -0.02em;
+		letter-spacing: 0;
 	}
 
 	.cbi-map .adg-themed-section legend::before,
@@ -14226,7 +15146,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #dce9fd;
 		font-size: 14px;
 		font-weight: 800;
-		letter-spacing: 0.015em;
+		letter-spacing: 0;
 		line-height: 1.38;
 		text-align: left;
 		white-space: normal;
@@ -14866,7 +15786,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		color: #9fc8ff;
 		font-size: 11px;
 		font-weight: 700;
-		letter-spacing: 0.08em;
+		letter-spacing: 0;
 		text-transform: uppercase;
 	}
 
@@ -15354,7 +16274,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		line-height: 52px !important;
 		font-family: Arial, "Segoe UI", sans-serif !important;
 		font-size: 14px !important;
-		letter-spacing: 1px !important;
+		letter-spacing: 0 !important;
 		flex: 1 1 auto !important;
 		min-width: 0 !important;
 		max-width: none !important;
@@ -16101,9 +17021,20 @@ local function shellquote(value)
 	value = tostring(value or "")
 	return "'" .. value:gsub("'", "'\\''") .. "'"
 end
+local function adg_read_dns_port(path)
+	local data = fs.readfile(path) or ""
+	local line
+	for line in data:gmatch("[^\r\n]+") do
+		local port = line:match("^%s*port:%s*(%d+)")
+		if port then
+			return port
+		end
+	end
+	return "?"
+end
 local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
 local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
-httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
+local httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
 m = Map("AdGuardHome", "AdGuardHome")
 m.description = translate("运行状态、统计读取、路径与维护选项集中管理。")
 m:section(SimpleSection).template  = "AdGuardHome/AdGuardHome_status"
@@ -16146,8 +17077,11 @@ else
 	local version
 	local testtime=fs.stat(binpath,"mtime")
 	if testtime~=tonumber(binmtime) then
-		local tmp=luci.sys.exec("touch /var/run/AdGfakeconfig;"..shellquote(binpath).." -c /var/run/AdGfakeconfig --check-config 2>&1| grep -m 1 -E 'v[0-9.]+' -o ;rm /var/run/AdGfakeconfig")
-		version=string.sub(tmp, 1, -2)
+		local fakeconfig="/var/run/AdGfakeconfig"
+		fs.writefile(fakeconfig, "")
+		local tmp=luci.sys.exec(shellquote(binpath).." -c "..shellquote(fakeconfig).." --check-config 2>&1")
+		fs.remove(fakeconfig)
+		version=tmp:match("v[%d%.]+") or ""
 		uci:set("AdGuardHome","AdGuardHome","version",version)
 		uci:set("AdGuardHome","AdGuardHome","binmtime",testtime)
 		uci:save("AdGuardHome")
@@ -16163,8 +17097,7 @@ o.template = "AdGuardHome/AdGuardHome_check"
 o.showfastconfig=(not fs.access(configpath))
 o.description=string.format(translate("核心版本：").."<strong><font id=\"updateversion\" color=\"green\">%s </font></strong>",e)
 ---- port warning not safe
-local port=luci.sys.exec("awk '/  port:/{printf($2);exit;}' "..shellquote(configpath).." 2>/dev/null")
-if (port=="") then port="?" end
+local port=adg_read_dns_port(configpath)
 ---- Redirect
 o = s:option(ListValue, "redirect", port..translate(" DNS 重定向"), translate("选择 AdGuardHome 与 dnsmasq 的接入方式"))
 o.placeholder = "none"
@@ -16264,8 +17197,9 @@ o = s:option(Flag, "verbose", translate("详细日志"))
 o.default = 0
 o.optional = true
 ---- gfwlist 
-local a=luci.sys.call("grep -m 1 -q programadd "..shellquote(configpath))
-if (a==0) then
+local configtext=fs.readfile(configpath) or ""
+local a
+if configtext:find("programadd", 1, true) then
 a="已加入"
 else
 a="未加入"
@@ -22563,9 +23497,9 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
 <%+openvpn/ovpn_css%>
 
 <div class="vpn-shell vpn-shell-refined vpn-shell-mk5 is-loading">
-  <section class="vpn-hero vpn-hero-mk5">
+  <section class="vpn-hero vpn-hero-mk5 vpn-hero-console">
     <div class="vpn-hero-main">
-      <div class="vpn-brand-block">
+      <div class="vpn-brand-block vpn-brand-console">
         <h2>OpenVPN 控制台</h2>
         <div class="vpn-toolbar">
           <span class="vpn-pill">OpenVPN</span>
@@ -22574,22 +23508,22 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
         </div>
         <p class="vpn-sub">启动、停止、刷新、复制配置；下方查看运行、认证、路由和日志。</p>
         <div class="vpn-hero-summary" aria-label="OpenVPN 摘要">
-          <div class="vpn-hero-summary-item">
+          <div class="vpn-hero-summary-item vpn-summary-instance">
             <span>实例</span>
             <strong>custom_config</strong>
           </div>
-          <div class="vpn-hero-summary-item">
+          <div class="vpn-hero-summary-item vpn-summary-path">
             <span>配置文件</span>
             <strong><span class="vpn-summary-line">/etc/openvpn</span><span class="vpn-summary-line">/client.ovpn</span></strong>
           </div>
-          <div class="vpn-hero-summary-item">
+          <div class="vpn-hero-summary-item vpn-summary-entry">
             <span>入口</span>
             <strong>基础 / 高级 / 标准</strong>
           </div>
         </div>
       </div>
 
-      <aside class="vpn-command-card">
+      <aside class="vpn-command-card vpn-command-card-live">
         <div class="vpn-command-kicker">运行控制</div>
         <div class="vpn-orb-wrap">
           <div id="vpn-orb-ring" class="vpn-orb-ring bad">
@@ -22621,17 +23555,17 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
         <strong id="vpn-mini-action">等待更新</strong>
         <span id="vpn-mini-action-note" class="vpn-mini-note">主按钮会按状态自动切换。</span>
       </div>
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-service">
         <span class="vpn-mini-label">服务接管</span>
         <strong id="vpn-mini-managed">等待更新</strong>
         <span id="vpn-mini-managed-note" class="vpn-mini-note">运行链路和接管状态将在此汇总。</span>
       </div>
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-auth">
         <span class="vpn-mini-label">认证准备</span>
         <strong id="vpn-mini-auth">等待更新</strong>
         <span id="vpn-mini-auth-note" class="vpn-mini-note">账号、证书和 TLS 密钥准备情况。</span>
       </div>
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-route">
         <span class="vpn-mini-label">路由健康</span>
         <strong id="vpn-mini-route">等待更新</strong>
         <span id="vpn-mini-route-note" class="vpn-mini-note">远端目标和 DNAT 规则会一起汇总。</span>
@@ -22639,7 +23573,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
     </div>
 
     <div class="vpn-stat-grid">
-      <div class="vpn-stat-card">
+      <div class="vpn-stat-card vpn-stat-card-tunnel">
         <span class="vpn-stat-label">隧道 IP</span>
         <strong id="vpn-stat-tun-ip" class="vpn-stat-value">-</strong>
         <span id="vpn-stat-tun-meta" class="vpn-stat-meta">tun0 当前地址</span>
@@ -22652,7 +23586,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
         <span id="vpn-stat-remote-note" class="vpn-stat-note">实际链路解析结果请以下方关键日志为准。</span>
       </div>
 
-      <div class="vpn-stat-card">
+      <div class="vpn-stat-card vpn-stat-card-auth">
         <span class="vpn-stat-label">认证方式</span>
         <strong id="vpn-stat-auth-mode" class="vpn-stat-value">-</strong>
         <span id="vpn-stat-auth-meta" class="vpn-stat-meta">TLS: - · Cipher: -</span>
@@ -22667,7 +23601,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
   </section>
 
   <section class="vpn-overview-grid">
-    <article id="vpn-runtime-card" class="vpn-card">
+    <article id="vpn-runtime-card" class="vpn-card vpn-card-runtime">
       <div class="vpn-card-head">
         <div class="vpn-card-title">运行与启动</div>
         <span id="vpn-runtime-badge" class="vpn-card-badge vpn-badge-bad">等待更新</span>
@@ -22681,7 +23615,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <div id="vpn-runtime-note" class="vpn-card-note">断开后如条件满足，可直接从当前页启动或接管启动。</div>
     </article>
 
-    <article id="vpn-auth-card" class="vpn-card">
+    <article id="vpn-auth-card" class="vpn-card vpn-card-auth">
       <div class="vpn-card-head">
         <div class="vpn-card-title">认证与准备</div>
         <span id="vpn-auth-badge" class="vpn-card-badge vpn-badge-neutral">等待更新</span>
@@ -22694,7 +23628,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <div id="vpn-auth-note" class="vpn-card-note">配置文件和认证材料齐全后，当前页才能直接启动。</div>
     </article>
 
-    <article id="vpn-route-card" class="vpn-card">
+    <article id="vpn-route-card" class="vpn-card vpn-card-route">
       <div class="vpn-card-head">
         <div class="vpn-card-title">路由与映射</div>
         <span id="vpn-route-badge" class="vpn-card-badge vpn-badge-neutral">等待更新</span>
@@ -22708,7 +23642,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
     </article>
   </section>
 
-  <section class="vpn-quick-rail">
+  <section class="vpn-quick-rail vpn-quick-rail-console">
     <div class="vpn-quick-rail-head">
       <div>
         <div class="vpn-quick-rail-title">配置入口</div>
@@ -22717,22 +23651,22 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <span class="vpn-card-badge vpn-badge-neutral">导航</span>
     </div>
     <div class="vpn-action-list vpn-action-list-compact">
-        <a class="vpn-action-tile" href="<%=url('admin/services/openvpn/basic', 'custom_config')%>">
+        <a class="vpn-action-tile vpn-action-tile-basic" href="<%=url('admin/services/openvpn/basic', 'custom_config')%>">
           <strong>基础配置</strong>
           <span>适合修改远端、协议、端口和证书。</span>
         </a>
-        <a class="vpn-action-tile" href="<%=url('admin/services/openvpn/advanced', 'custom_config')%>">
+        <a class="vpn-action-tile vpn-action-tile-advanced" href="<%=url('admin/services/openvpn/advanced', 'custom_config')%>">
           <strong>高级配置</strong>
           <span>适合调整更细粒度的 OpenVPN 指令。</span>
         </a>
-        <a class="vpn-action-tile" href="<%=url('admin/services/openvpn')%>">
+        <a class="vpn-action-tile vpn-action-tile-native" href="<%=url('admin/services/openvpn')%>">
           <strong>标准 OpenVPN</strong>
           <span>进入原生实例管理页和兼容配置入口。</span>
         </a>
       </div>
   </section>
 
-  <section class="vpn-panel-shell">
+  <section class="vpn-panel-shell vpn-panel-shell-diagnostics">
     <div class="vpn-panel-shell-head">
       <div>
         <span class="vpn-panel-shell-kicker">诊断</span>
@@ -22741,7 +23675,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       </div>
       <span id="vpn-panel-live-badge" class="vpn-panel-live-badge">等待更新</span>
     </div>
-    <div class="vpn-tabbar" role="tablist" aria-label="OpenVPN 诊断面板">
+    <div class="vpn-tabbar vpn-tabbar-diagnostics" role="tablist" aria-label="OpenVPN 诊断面板">
       <button class="vpn-tab-btn vpn-tab-btn-major is-active" type="button" data-target="vpn-focus-panel" role="tab" aria-selected="true" aria-controls="vpn-focus-panel">关键日志</button>
       <button class="vpn-tab-btn vpn-tab-btn-major" type="button" data-target="vpn-route-panel" role="tab" aria-selected="false" aria-controls="vpn-route-panel">目标检查</button>
       <button class="vpn-tab-btn" type="button" data-target="vpn-config-panel" role="tab" aria-selected="false" aria-controls="vpn-config-panel">客户端配置</button>
@@ -22749,7 +23683,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <button class="vpn-tab-btn" type="button" data-target="vpn-tun-panel" role="tab" aria-selected="false" aria-controls="vpn-tun-panel">隧道信息</button>
     </div>
 
-    <div id="vpn-focus-panel" class="vpn-panel vpn-panel-major is-active" role="tabpanel" aria-hidden="false">
+    <div id="vpn-focus-panel" class="vpn-panel vpn-panel-major vpn-panel-focus is-active" role="tabpanel" aria-hidden="false">
       <div class="vpn-panel-head">
         <h3>关键日志</h3>
         <span id="vpn-focus-meta">优先展示连接、认证、路由相关行。</span>
@@ -22761,7 +23695,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <pre id="vpn-focus-log">等待更新</pre>
     </div>
 
-    <div id="vpn-route-panel" class="vpn-panel vpn-panel-major" role="tabpanel" aria-hidden="true">
+    <div id="vpn-route-panel" class="vpn-panel vpn-panel-major vpn-panel-route" role="tabpanel" aria-hidden="true">
       <div class="vpn-panel-head">
         <h3>目标检查</h3>
         <span id="vpn-route-meta">基于当前内核状态与目标探测的实时结果。优先看离线和缺规则项。</span>
@@ -22772,14 +23706,14 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
         <span id="vpn-route-strip-dnat" class="vpn-focus-pill vpn-focus-pill-muted">DNAT: -</span>
       </div>
       <div class="vpn-split-grid">
-        <div class="vpn-subcard">
+        <div class="vpn-subcard vpn-subcard-route-targets">
           <div class="vpn-subcard-title">远端目标</div>
           <div id="vpn-route-check-list" class="vpn-check-list">
             <div class="vpn-check-empty">等待更新</div>
           </div>
         </div>
 
-        <div class="vpn-subcard">
+        <div class="vpn-subcard vpn-subcard-route-map">
           <div class="vpn-subcard-title">本地映射</div>
           <div id="vpn-nat-check-list" class="vpn-check-list">
             <div class="vpn-check-empty">等待更新</div>
@@ -22788,7 +23722,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       </div>
     </div>
 
-    <div id="vpn-config-panel" class="vpn-panel" role="tabpanel" aria-hidden="true">
+    <div id="vpn-config-panel" class="vpn-panel vpn-panel-config" role="tabpanel" aria-hidden="true">
       <div class="vpn-panel-head">
         <h3>客户端配置</h3>
         <span>只读展示当前写入的 client.ovpn 内容。</span>
@@ -22797,7 +23731,7 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <pre id="vpn-config-pre"><%=esc(cfg ~= "" and cfg or "no config")%></pre>
     </div>
 
-    <div id="vpn-runtime-panel" class="vpn-panel" role="tabpanel" aria-hidden="true">
+    <div id="vpn-runtime-panel" class="vpn-panel vpn-panel-runtime" role="tabpanel" aria-hidden="true">
       <div class="vpn-panel-head">
         <h3>运行日志</h3>
         <span id="vpn-runtime-meta">完整日志更适合排查重连、认证和 TLS 问题。</span>
@@ -22805,17 +23739,17 @@ local cfg = cmd("sed -n '1,240p' /etc/openvpn/client.ovpn 2>/dev/null")
       <pre id="vpn-runtime-log">等待更新</pre>
     </div>
 
-    <div id="vpn-tun-panel" class="vpn-panel" role="tabpanel" aria-hidden="true">
+    <div id="vpn-tun-panel" class="vpn-panel vpn-panel-tunnel" role="tabpanel" aria-hidden="true">
       <div class="vpn-panel-head">
         <h3>隧道信息</h3>
         <span id="vpn-tun-meta">展示 tun0 与 br-lan 的当前地址信息。</span>
       </div>
       <div class="vpn-split-grid">
-        <div class="vpn-subcard">
+        <div class="vpn-subcard vpn-subcard-tun">
           <div class="vpn-subcard-title">tun0</div>
           <pre id="vpn-tun-pre">等待更新</pre>
         </div>
-        <div class="vpn-subcard">
+        <div class="vpn-subcard vpn-subcard-lan">
           <div class="vpn-subcard-title">br-lan</div>
           <pre id="vpn-lan-pre">等待更新</pre>
         </div>
@@ -23008,7 +23942,15 @@ function vpnCopyConfig() {
   function setCardState(id, stateClass) {
     var el = document.getElementById(id);
     if (el) {
-      el.className = 'vpn-card' + (stateClass ? (' ' + stateClass) : '');
+      var baseClass = 'vpn-card';
+      if (id === 'vpn-runtime-card') {
+        baseClass += ' vpn-card-runtime';
+      } else if (id === 'vpn-auth-card') {
+        baseClass += ' vpn-card-auth';
+      } else if (id === 'vpn-route-card') {
+        baseClass += ' vpn-card-route';
+      }
+      el.className = baseClass + (stateClass ? (' ' + stateClass) : '');
     }
   }
 
@@ -26933,11 +27875,11 @@ elseif mode == "file" then
 end
 %>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary">
-  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary">
+<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary vpn-shell-config">
+  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary vpn-hero-config">
     <div class="vpn-toolbar">
       <span class="vpn-pill">OpenVPN</span>
-      <span class="vpn-status-chip"><%=mode_label%></span>
+      <span class="vpn-status-chip vpn-mode-chip"><%=mode_label%></span>
     </div>
     <h2 class="vpn-page-title">
       <a href="<%=url('admin/services/openvpn')%>">标准 OpenVPN</a> &#187;
@@ -26947,23 +27889,23 @@ end
       <%=mode_desc%>
     </p>
     <div class="vpn-secondary-summary">
-      <span>实例 <strong><%=pcdata(instance)%></strong></span>
-      <span>配置 <strong><%=pcdata(cfg_path)%></strong></span>
-      <span>路由 <strong><%=route_noexec%></strong></span>
+      <span class="vpn-summary-instance">实例 <strong><%=pcdata(instance)%></strong></span>
+      <span class="vpn-summary-path">配置 <strong><%=pcdata(cfg_path)%></strong></span>
+      <span class="vpn-summary-route">路由 <strong><%=route_noexec%></strong></span>
     </div>
-    <div class="vpn-hero-actions">
+    <div class="vpn-hero-actions vpn-hero-actions-config">
       <a class="cbi-button cbi-button-apply" href="<%=primary_href%>"><%=primary_label%></a>
       <a class="cbi-button" href="<%=url('nradioadv/system/openvpnfull')%>">返回控制台</a>
     </div>
   </div>
 
   <div class="vpn-mini-grid">
-    <div class="vpn-mini-card vpn-mini-card-accent">
+    <div class="vpn-mini-card vpn-mini-card-accent vpn-mini-card-instance">
       <span class="vpn-mini-label">当前实例</span>
       <strong><%=pcdata(instance)%></strong>
       <span class="vpn-mini-note">当前正在编辑的 OpenVPN UCI 节点</span>
     </div>
-    <div class="vpn-mini-card">
+    <div class="vpn-mini-card vpn-mini-card-source">
       <span class="vpn-mini-label">配置来源</span>
       <strong><%=pcdata(cfg_path)%></strong>
       <span class="vpn-mini-note">若使用外部 ovpn 文件，这里显示其落盘路径</span>
@@ -26981,7 +27923,7 @@ end
   </div>
 
   <% if mode == "advanced" then %>
-    <div class="vpn-card vpn-category-rail">
+    <div class="vpn-card vpn-category-rail vpn-category-rail-mk5">
       <div class="vpn-card-title">高级分类</div>
       <div class="vpn-toolbar">
         <% for i, c in ipairs(self.categories or {}) do %>
@@ -26993,7 +27935,7 @@ end
         <% end %>
       </div>
       <% if category_title then %>
-        <div class="vpn-mini-note">当前分类：<strong><%=category_title%></strong></div>
+        <div class="vpn-mini-note vpn-category-current">当前分类：<strong><%=category_title%></strong></div>
       <% end %>
     </div>
   <% end %>
@@ -27076,11 +28018,11 @@ EOF_OPENVPN_PAGESWITCH
 
 <%+openvpn/ovpn_css%>
 
-<div class="vpn-entry-grid vpn-entry-grid-mk5">
+<div class="vpn-entry-grid vpn-entry-grid-mk5 vpn-entry-grid-import">
 	<div class="vpn-entry-card vpn-entry-card-template" id="div_add">
 		<div class="vpn-entry-head">
 			<h4>模板创建</h4>
-			<span class="vpn-entry-badge">模板</span>
+			<span class="vpn-entry-badge vpn-entry-badge-template">模板</span>
 		</div>
 		<p class="vpn-entry-lead">适合快速生成一个标准 OpenVPN 实例，再进入基础配置或高级配置继续细化。</p>
 		<label class="vpn-field-label" for="instance_name1">实例名称</label>
@@ -27094,7 +28036,7 @@ EOF_OPENVPN_PAGESWITCH
 			<% end -%>
 		</select>
 		<div class="vpn-field-help">模板会预填一组常用参数，后续仍可继续编辑。</div>
-		<div class="vpn-entry-actions">
+		<div class="vpn-entry-actions vpn-entry-actions-template">
 			<input class="btn cbi-button cbi-button-add" type="submit" onclick="vpn_add(); return false;" value="创建实例" title="创建模板实例" />
 		</div>
 	</div>
@@ -27102,7 +28044,7 @@ EOF_OPENVPN_PAGESWITCH
 	<div class="vpn-entry-card vpn-entry-card-upload" id="div_upload">
 		<div class="vpn-entry-head">
 			<h4>OVPN 文件上传</h4>
-			<span class="vpn-entry-badge vpn-badge-neutral">兼容</span>
+			<span class="vpn-entry-badge vpn-badge-neutral vpn-entry-badge-upload">兼容</span>
 		</div>
 		<p class="vpn-entry-lead">适合直接导入现成客户端文件。上传后将创建实例并把配置落盘到 <code>/etc/openvpn/&lt;name&gt;.ovpn</code>。</p>
 		<label class="vpn-field-label" for="instance_name2">实例名称</label>
@@ -27111,13 +28053,13 @@ EOF_OPENVPN_PAGESWITCH
 		<label class="vpn-field-label" for="ovpn_file">配置文件</label>
 		<input type="file" name="ovpn_file" id="ovpn_file" accept="application/x-openvpn-profile,.ovpn" />
 		<div class="vpn-field-help">支持标准 `.ovpn` 客户端配置文件，上传后可回到控制台核对运行状态。</div>
-		<div class="vpn-entry-actions">
+		<div class="vpn-entry-actions vpn-entry-actions-upload">
 			<input class="btn cbi-button cbi-button-add" type="submit" onclick="vpn_upload(); return false;" value="上传导入" title="上传 ovpn 文件" />
 		</div>
 	</div>
 </div>
 
-<div class="vpn-output" role="status" aria-live="polite">
+<div class="vpn-output vpn-output-entry" role="status" aria-live="polite">
 	<span id="vpn_output"></span>
 </div>
 EOF_OPENVPN_SELECT_INPUT_ADD
@@ -27125,8 +28067,8 @@ EOF_OPENVPN_SELECT_INPUT_ADD
     cat > /usr/lib/lua/luci/view/openvpn/overview_intro.htm <<'EOF_OPENVPN_OVERVIEW_INTRO'
 <%+openvpn/ovpn_css%>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary">
-  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary">
+<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary vpn-shell-overview">
+  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary vpn-hero-overview">
     <div class="vpn-hero-top">
       <div class="vpn-brand-block">
         <div class="vpn-toolbar">
@@ -27136,12 +28078,12 @@ EOF_OPENVPN_SELECT_INPUT_ADD
         <h2>标准 OpenVPN</h2>
         <p class="vpn-sub">新建模板实例、导入 ovpn 文件，或维护原生 OpenVPN 节点；运行状态回到控制台查看。</p>
         <div class="vpn-secondary-summary">
-          <span>实例 <strong><%=self.instance_count or 0%></strong></span>
-          <span>启用 <strong><%=self.enabled_count or 0%></strong></span>
-          <span>运行 <strong><%=self.running_count or 0%></strong></span>
+          <span class="vpn-summary-instance">实例 <strong><%=self.instance_count or 0%></strong></span>
+          <span class="vpn-summary-enabled">启用 <strong><%=self.enabled_count or 0%></strong></span>
+          <span class="vpn-summary-running">运行 <strong><%=self.running_count or 0%></strong></span>
         </div>
       </div>
-      <div class="vpn-hero-actions">
+      <div class="vpn-hero-actions vpn-hero-actions-overview">
         <a class="cbi-button cbi-button-apply" href="<%=url('nradioadv/system/openvpnfull')%>">返回控制台</a>
       </div>
     </div>
@@ -27152,7 +28094,7 @@ EOF_OPENVPN_SELECT_INPUT_ADD
         <strong><%=self.instance_count or 0%></strong>
         <span class="vpn-mini-note">当前 UCI 中已注册的 OpenVPN 实例数量</span>
       </div>
-      <div class="vpn-mini-card">
+      <div class="vpn-mini-card vpn-mini-card-enabled">
         <span class="vpn-mini-label">启用实例</span>
         <strong><%=self.enabled_count or 0%></strong>
         <span class="vpn-mini-note">已开启 `enabled` 的实例数量</span>
@@ -27174,12 +28116,12 @@ EOF_OPENVPN_OVERVIEW_INTRO
 
     cat > /usr/lib/lua/luci/view/openvpn/nsection.htm <<'EOF_OPENVPN_NSECTION'
 <% if self:cfgvalue(self.section) then section = self.section %>
-	<fieldset class="cbi-section vpn-cbi-section vpn-cbi-section-mk5">
+	<fieldset class="cbi-section vpn-cbi-section vpn-cbi-section-mk5 vpn-cbi-section-active">
 		<% if self.title and #self.title > 0 then -%>
 			<div class="vpn-section-title"><%=self.title%></div>
 		<%- end %>
 		<% if self.description and #self.description > 0 then -%>
-			<div class="cbi-section-descr"><%=self.description%></div>
+			<div class="cbi-section-descr vpn-cbi-descr"><%=self.description%></div>
 		<%- end %>
 		<% if self.addremove then -%>
 			<div class="cbi-section-remove right">
@@ -27194,11 +28136,11 @@ EOF_OPENVPN_OVERVIEW_INTRO
 	</fieldset>
 <% elseif self.addremove then %>
 	<% if self.template_addremove then include(self.template_addremove) else -%>
-	<fieldset class="cbi-section vpn-cbi-section vpn-cbi-section-mk5" id="cbi-<%=self.config%>-<%=self.section%>">
+	<fieldset class="cbi-section vpn-cbi-section vpn-cbi-section-mk5 vpn-cbi-section-empty" id="cbi-<%=self.config%>-<%=self.section%>">
 		<% if self.title and #self.title > 0 then -%>
 			<div class="vpn-section-title"><%=self.title%></div>
 		<%- end %>
-		<div class="cbi-section-descr"><%=self.description%></div>
+		<div class="cbi-section-descr vpn-cbi-descr"><%=self.description%></div>
 		<input type="submit" class="cbi-button cbi-button-add" name="cbi.cns.<%=self.config%>.<%=self.section%>" value="<%:Add%>" />
 	</fieldset>
 	<%- end %>
@@ -30963,6 +31905,641 @@ EOF_OPENVPN_MK5_LOCAL_DEPTH_POLISH
 </style>
 EOF_OPENVPN_MK5_ROUND_FINISH_POLISH
 
+    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_PASS7_TO_PASS9_POLISH'
+<style type="text/css">
+    /* OpenVPN Mk5 pass 7 precision finish: local six-file polish. */
+    .vpn-shell-mk5 {
+        --vpn-pass7-line: rgba(101, 124, 162, 0.74);
+        --vpn-pass7-panel: rgba(13, 18, 28, 0.72);
+        --vpn-pass7-panel-strong: rgba(18, 24, 36, 0.86);
+    }
+    .vpn-shell-mk5 .vpn-hero-console .vpn-hero-main {
+        gap: 16px;
+    }
+    .vpn-shell-mk5 .vpn-brand-console,
+    .vpn-shell-mk5 .vpn-command-card-live {
+        border-color: rgba(var(--vpn-state-rgb), 0.24) !important;
+    }
+    .vpn-shell-mk5 .vpn-command-card-live {
+        display: flex;
+        min-height: 100%;
+        flex-direction: column;
+    }
+    .vpn-shell-mk5 .vpn-command-card-live .vpn-hero-actions {
+        margin-top: auto;
+    }
+    .vpn-shell-mk5 .vpn-summary-instance,
+    .vpn-shell-mk5 .vpn-summary-entry,
+    .vpn-shell-mk5 .vpn-summary-enabled,
+    .vpn-shell-mk5 .vpn-summary-running,
+    .vpn-shell-mk5 .vpn-summary-route {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.085), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.040), rgba(255,255,255,0.012)),
+            rgba(8, 13, 22, 0.58) !important;
+    }
+    .vpn-shell-mk5 .vpn-summary-path {
+        border-color: rgba(108, 162, 255, 0.30) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.11), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,0.042), rgba(255,255,255,0.014)),
+            rgba(8, 13, 22, 0.62) !important;
+    }
+    .vpn-shell-mk5 .vpn-mini-card-wide,
+    .vpn-shell-mk5 .vpn-mini-card-instance {
+        border-color: rgba(var(--vpn-state-rgb), 0.38) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.20), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.016)),
+            rgba(13, 18, 28, 0.78) !important;
+    }
+    .vpn-shell-mk5 .vpn-mini-card-service,
+    .vpn-shell-mk5 .vpn-mini-card-enabled,
+    .vpn-shell-mk5 .vpn-mini-card-source {
+        border-color: rgba(108, 162, 255, 0.24) !important;
+    }
+    .vpn-shell-mk5 .vpn-mini-card-auth {
+        border-color: rgba(247, 198, 103, 0.28) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(13, 18, 28, 0.66) !important;
+    }
+    .vpn-shell-mk5 .vpn-mini-card-route,
+    .vpn-shell-mk5 .vpn-stat-card-remote,
+    .vpn-shell-mk5 .vpn-card-route {
+        border-color: rgba(47, 211, 238, 0.28) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.13), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
+            rgba(13, 18, 28, 0.68) !important;
+    }
+    .vpn-shell-mk5 .vpn-stat-card-tunnel,
+    .vpn-shell-mk5 .vpn-card-runtime {
+        border-color: rgba(61, 220, 151, 0.26) !important;
+    }
+    .vpn-shell-mk5 .vpn-stat-card-auth,
+    .vpn-shell-mk5 .vpn-card-auth {
+        border-color: rgba(247, 198, 103, 0.24) !important;
+    }
+    .vpn-shell-mk5 .vpn-stat-card-remote .vpn-stat-value {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .vpn-shell-mk5 .vpn-button-passive,
+    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-passive {
+        opacity: 1 !important;
+        cursor: default !important;
+        border-color: rgba(61, 220, 151, 0.42) !important;
+        color: #d8ffe9 !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.22), transparent 40%),
+            linear-gradient(180deg, rgba(36, 121, 85, 0.96), rgba(22, 86, 66, 0.96)) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.14),
+            0 10px 22px rgba(30, 126, 87, 0.18) !important;
+    }
+    .vpn-shell-mk5 .vpn-button-passive[disabled] {
+        filter: none !important;
+    }
+    .vpn-shell-mk5 .vpn-quick-rail-console .vpn-action-tile,
+    .vpn-shell-mk5 .vpn-category-rail-mk5 .vpn-pill {
+        border-color: rgba(108, 162, 255, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-quick-rail-console .vpn-action-tile:focus-visible,
+    .vpn-shell-mk5 .vpn-category-rail-mk5 .vpn-pill:focus-visible {
+        outline: 0;
+        box-shadow:
+            0 0 0 3px rgba(47, 211, 238, 0.14),
+            0 16px 30px rgba(0,0,0,0.18) !important;
+    }
+    .vpn-shell-mk5 .vpn-panel-shell-diagnostics {
+        border-color: rgba(92, 128, 178, 0.64) !important;
+    }
+    .vpn-shell-mk5 .vpn-panel-shell-diagnostics .vpn-panel-shell-head {
+        align-items: center;
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics {
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.50);
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn {
+        position: relative;
+        overflow: hidden;
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn::after {
+        content: "";
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 0;
+        height: 1px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, rgba(47,211,238,0.72), transparent);
+        opacity: 0;
+        transition: opacity .16s ease;
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn:hover::after,
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn.is-active::after {
+        opacity: 0.86;
+    }
+    .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log,
+    .vpn-shell-mk5 .vpn-panel-runtime #vpn-runtime-log,
+    .vpn-shell-mk5 .vpn-panel-config #vpn-config-pre,
+    .vpn-shell-mk5 .vpn-panel-tunnel pre {
+        min-height: 240px;
+        border-color: rgba(47, 211, 238, 0.32);
+    }
+    .vpn-shell-mk5 .vpn-panel-route .vpn-split-grid {
+        align-items: stretch;
+    }
+    .vpn-shell-mk5 .vpn-check-row {
+        padding: 11px 12px;
+    }
+    .vpn-shell-mk5 .vpn-check-main strong {
+        color: #f2f8ff;
+    }
+    .vpn-shell-mk5 .vpn-check-badges .vpn-micro-badge {
+        min-height: 26px;
+    }
+    .vpn-entry-grid-import .vpn-entry-card {
+        border-color: rgba(92, 128, 178, 0.68) !important;
+    }
+    .vpn-entry-grid-import .vpn-entry-card-template {
+        border-color: rgba(61, 220, 151, 0.30) !important;
+    }
+    .vpn-entry-grid-import .vpn-entry-card-upload {
+        border-color: rgba(108, 162, 255, 0.32) !important;
+    }
+    .vpn-entry-grid-import .vpn-entry-badge-template {
+        color: #c8ffe3;
+        border-color: rgba(61, 220, 151, 0.34);
+        background: rgba(61, 220, 151, 0.12);
+    }
+    .vpn-entry-grid-import .vpn-entry-badge-upload {
+        color: #d7e7ff;
+        border-color: rgba(108, 162, 255, 0.34);
+        background: rgba(108, 162, 255, 0.12);
+    }
+    .vpn-output-entry {
+        margin-top: 12px;
+        border-color: rgba(47, 211, 238, 0.24) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.034), rgba(255,255,255,0.010)),
+            rgba(9, 13, 22, 0.62) !important;
+    }
+    .vpn-cbi-section-mk5.vpn-cbi-section-active,
+    .vpn-cbi-section-mk5.vpn-cbi-section-empty {
+        position: relative;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,0.036), rgba(255,255,255,0.010)),
+            var(--vpn-pass7-panel) !important;
+    }
+    .vpn-cbi-section-mk5.vpn-cbi-section-empty {
+        border-style: dashed !important;
+        border-color: rgba(108, 162, 255, 0.42) !important;
+    }
+    .vpn-cbi-section-mk5 .cbi-section-descr {
+        color: #a9bad6;
+        line-height: 1.62;
+    }
+    .vpn-cbi-section-mk5 .cbi-section-remove .cbi-button {
+        min-width: 88px;
+    }
+    @media (max-width: 980px) {
+        .vpn-shell-mk5 .vpn-panel-shell-diagnostics .vpn-panel-shell-head {
+            align-items: flex-start;
+        }
+        .vpn-shell-mk5 .vpn-tabbar-diagnostics {
+            display: flex;
+            gap: 8px;
+            padding-bottom: 12px;
+        }
+        .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn {
+            flex: 0 0 auto;
+            min-width: 126px;
+            white-space: nowrap !important;
+        }
+    }
+    @media (max-width: 760px) {
+        .vpn-shell-mk5 .vpn-command-card-live .vpn-hero-actions {
+            margin-top: 16px;
+        }
+        .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log,
+        .vpn-shell-mk5 .vpn-panel-runtime #vpn-runtime-log,
+        .vpn-shell-mk5 .vpn-panel-config #vpn-config-pre,
+        .vpn-shell-mk5 .vpn-panel-tunnel pre {
+            min-height: 190px;
+        }
+    }
+    /* OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish. */
+    .vpn-shell-mk5 .vpn-action-tile-basic {
+        border-color: rgba(61, 220, 151, 0.24) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.12), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.044), rgba(255,255,255,0.012)),
+            rgba(12, 17, 27, 0.66) !important;
+    }
+    .vpn-shell-mk5 .vpn-action-tile-advanced {
+        border-color: rgba(247, 198, 103, 0.24) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.044), rgba(255,255,255,0.012)),
+            rgba(12, 17, 27, 0.66) !important;
+    }
+    .vpn-shell-mk5 .vpn-action-tile-native {
+        border-color: rgba(108, 162, 255, 0.26) !important;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.13), transparent 38%),
+            linear-gradient(180deg, rgba(255,255,255,0.044), rgba(255,255,255,0.012)),
+            rgba(12, 17, 27, 0.66) !important;
+    }
+    .vpn-shell-mk5 .vpn-action-tile-basic:hover,
+    .vpn-shell-mk5 .vpn-action-tile-advanced:hover,
+    .vpn-shell-mk5 .vpn-action-tile-native:hover {
+        transform: translateY(-2px);
+    }
+    .vpn-shell-mk5 .vpn-subcard-route-targets,
+    .vpn-shell-mk5 .vpn-subcard-route-map,
+    .vpn-shell-mk5 .vpn-subcard-tun,
+    .vpn-shell-mk5 .vpn-subcard-lan {
+        min-height: 100%;
+    }
+    .vpn-shell-mk5 .vpn-subcard-route-targets {
+        border-color: rgba(47, 211, 238, 0.28) !important;
+    }
+    .vpn-shell-mk5 .vpn-subcard-route-map {
+        border-color: rgba(108, 162, 255, 0.28) !important;
+    }
+    .vpn-shell-mk5 .vpn-subcard-tun {
+        border-color: rgba(61, 220, 151, 0.26) !important;
+    }
+    .vpn-shell-mk5 .vpn-subcard-lan {
+        border-color: rgba(247, 198, 103, 0.24) !important;
+    }
+    .vpn-shell-mk5 .vpn-check-empty {
+        min-height: 52px;
+        justify-content: center;
+        color: #9fb1cd;
+        text-align: center;
+    }
+    .vpn-shell-mk5 .vpn-check-section-title,
+    .vpn-shell-mk5 .vpn-subcard-title,
+    .vpn-shell-mk5 .vpn-card-title,
+    .vpn-shell-mk5 .vpn-quick-rail-title {
+        letter-spacing: 0;
+    }
+    .vpn-shell-config .vpn-mode-chip,
+    .vpn-shell-overview .vpn-status-chip {
+        border-color: rgba(var(--vpn-state-rgb), 0.32);
+        color: #baf7ff;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.14), transparent 42%),
+            rgba(15, 21, 33, 0.66);
+    }
+    .vpn-shell-config .vpn-hero-actions-config,
+    .vpn-shell-overview .vpn-hero-actions-overview {
+        align-content: start;
+    }
+    .vpn-shell-config .vpn-category-current {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(108, 162, 255, 0.18);
+        border-radius: 8px;
+        background: rgba(8, 13, 22, 0.46);
+    }
+    .vpn-entry-grid-import .vpn-entry-actions-template .cbi-button,
+    .vpn-entry-grid-import .vpn-entry-actions-upload .cbi-button {
+        min-height: 48px;
+    }
+    .vpn-entry-grid-import .vpn-entry-actions-template .cbi-button {
+        border-color: rgba(61, 220, 151, 0.42) !important;
+        background:
+            linear-gradient(180deg, rgba(54, 190, 132, 0.92), rgba(24, 132, 92, 0.88)) !important;
+    }
+    .vpn-entry-grid-import .vpn-entry-actions-upload .cbi-button {
+        border-color: rgba(108, 162, 255, 0.48) !important;
+        background:
+            linear-gradient(180deg, rgba(67, 151, 255, 0.94), rgba(28, 108, 218, 0.90)) !important;
+    }
+    .vpn-entry-grid-import .vpn-field-label {
+        color: #d7e7ff;
+        font-weight: 850;
+    }
+    .vpn-entry-grid-import code {
+        color: #baf7ff;
+        background: rgba(47, 211, 238, 0.08);
+        border: 1px solid rgba(47, 211, 238, 0.16);
+        border-radius: 6px;
+        padding: 1px 5px;
+    }
+    .vpn-cbi-section-mk5 .vpn-cbi-descr {
+        margin: 8px 0 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(108, 162, 255, 0.16);
+        border-radius: 8px;
+        background: rgba(8, 13, 22, 0.42);
+    }
+    .vpn-cbi-section-mk5 .cbi-tabmenu {
+        border-color: rgba(92, 128, 178, 0.24);
+    }
+    .vpn-cbi-section-mk5 .cbi-tab,
+    .vpn-cbi-section-mk5 .cbi-tab-disabled {
+        border-radius: 8px 8px 0 0;
+    }
+    .vpn-cbi-section-mk5 .cbi-value-title {
+        color: #c8d8f2;
+        font-weight: 820;
+    }
+    .vpn-cbi-section-mk5 .cbi-value-description {
+        color: #96aac8;
+        line-height: 1.56;
+    }
+    .vpn-cbi-section-mk5 .cbi-section-table-row:hover td,
+    .vpn-cbi-section-mk5 tr:hover td {
+        background: rgba(47, 211, 238, 0.035);
+    }
+    .vpn-shell-mk5 .vpn-copy-feedback.is-visible {
+        white-space: normal;
+        max-width: 100%;
+    }
+    @media (max-width: 640px) {
+        .vpn-shell-mk5 .vpn-action-list-compact {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .vpn-shell-mk5 .vpn-action-tile {
+            min-height: 76px;
+        }
+        .vpn-entry-grid-import .vpn-entry-card {
+            padding: 16px;
+        }
+        .vpn-cbi-section-mk5 .cbi-section-remove.right {
+            float: none;
+            margin: 0 0 12px;
+            text-align: left;
+        }
+    }
+    /* OpenVPN Mk5 pass 9: 250-line webpage precision layer. */
+    .vpn-shell-mk5 {
+        --vpn-pass9-surface: rgba(11, 16, 25, 0.78);
+        --vpn-pass9-surface-soft: rgba(17, 23, 35, 0.66);
+        --vpn-pass9-ring: rgba(122, 147, 188, 0.28);
+        --vpn-pass9-hi: rgba(255,255,255,0.072);
+    }
+    .vpn-shell-mk5::before {
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--vpn-state-rgb), 0.105), transparent 28%),
+            radial-gradient(circle at 88% 0%, rgba(108, 162, 255, 0.090), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,0.030), transparent 26%);
+        opacity: 0.94;
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5 {
+        background:
+            radial-gradient(circle at 50% 0%, rgba(var(--vpn-state-rgb), 0.100), transparent 30%),
+            radial-gradient(circle at 100% 12%, rgba(108, 162, 255, 0.105), transparent 32%),
+            linear-gradient(180deg, rgba(34, 41, 58, 0.980), rgba(17, 23, 35, 0.988)),
+            var(--vpn-pass9-surface) !important;
+    }
+    .vpn-shell-mk5 .vpn-brand-console,
+    .vpn-shell-mk5 .vpn-command-card-live,
+    .vpn-shell-mk5 .vpn-quick-rail-console,
+    .vpn-shell-mk5 .vpn-panel-shell-diagnostics {
+        box-shadow:
+            inset 0 1px 0 var(--vpn-pass9-hi),
+            inset 0 0 0 1px rgba(255,255,255,0.018),
+            0 20px 42px rgba(0,0,0,0.24) !important;
+    }
+    .vpn-shell-mk5 .vpn-brand-console::after,
+    .vpn-shell-mk5 .vpn-command-card-live::after {
+        content: "";
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 0;
+        height: 1px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, rgba(var(--vpn-state-rgb), 0.70), rgba(108,162,255,0.42), transparent);
+        opacity: 0.78;
+        pointer-events: none;
+    }
+    .vpn-shell-mk5 .vpn-toolbar {
+        gap: 7px;
+    }
+    .vpn-shell-mk5 .vpn-pill,
+    .vpn-shell-mk5 .vpn-health-chip,
+    .vpn-shell-mk5 .vpn-inline-note,
+    .vpn-shell-mk5 .vpn-status-chip,
+    .vpn-shell-mk5 .vpn-card-badge,
+    .vpn-shell-mk5 .vpn-inline-badge,
+    .vpn-shell-mk5 .vpn-panel-live-badge,
+    .vpn-shell-mk5 .vpn-focus-pill,
+    .vpn-shell-mk5 .vpn-micro-badge,
+    .vpn-entry-badge {
+        min-height: 32px;
+        border-color: rgba(137, 159, 198, 0.24);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.014)),
+            rgba(12, 18, 29, 0.68);
+    }
+    .vpn-shell-mk5 .vpn-hero-summary {
+        gap: 9px;
+        padding: 8px;
+        border: 1px solid rgba(255,255,255,0.055);
+        border-radius: 8px;
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item {
+        min-height: 72px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item span:first-child,
+    .vpn-shell-secondary .vpn-secondary-summary span {
+        color: #9fb4d2;
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item strong,
+    .vpn-shell-secondary .vpn-secondary-summary strong {
+        color: #eef7ff;
+    }
+    .vpn-shell-mk5 .vpn-orb-wrap {
+        grid-template-columns: 120px minmax(0, 1fr);
+        min-height: 138px;
+        gap: 16px;
+    }
+    .vpn-shell-mk5 .vpn-orb-ring {
+        width: 120px;
+        height: 120px;
+        min-width: 120px;
+        font-size: 20px;
+    }
+    .vpn-shell-mk5 .vpn-orb-copy strong {
+        font-size: 22px;
+        line-height: 1.24;
+    }
+    .vpn-shell-mk5 .vpn-orb-copy span {
+        color: #a8bbd8;
+    }
+    .vpn-shell-mk5 .vpn-hero-note {
+        border-color: rgba(var(--vpn-state-rgb), 0.28);
+        background:
+            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.10), transparent 36%),
+            rgba(8, 13, 22, 0.54);
+    }
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-card {
+        transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .vpn-shell-mk5 .vpn-mini-card:hover,
+    .vpn-shell-mk5 .vpn-stat-card:hover,
+    .vpn-shell-mk5 .vpn-card:hover {
+        transform: translateY(-1px);
+    }
+    .vpn-shell-mk5 .vpn-mini-label,
+    .vpn-shell-mk5 .vpn-stat-label {
+        color: #9fb4d2;
+        font-weight: 760;
+    }
+    .vpn-shell-mk5 .vpn-mini-card strong,
+    .vpn-shell-mk5 .vpn-stat-value {
+        font-size: 18px;
+    }
+    .vpn-shell-mk5 .vpn-kv {
+        grid-template-columns: minmax(92px, 0.36fr) minmax(0, 1fr);
+        gap: 10px;
+    }
+    .vpn-shell-mk5 .vpn-kv span:first-child {
+        color: #9fb4d2;
+        font-weight: 760;
+    }
+    .vpn-shell-mk5 .vpn-kv strong {
+        color: #eef7ff;
+    }
+    .vpn-shell-mk5 .vpn-action-tile {
+        isolation: isolate;
+    }
+    .vpn-shell-mk5 .vpn-action-tile::before {
+        content: "";
+        position: absolute;
+        inset: 1px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.055), transparent 45%);
+        opacity: 0.65;
+        pointer-events: none;
+        z-index: -1;
+    }
+    .vpn-shell-mk5 .vpn-panel-shell-head {
+        gap: 18px;
+    }
+    .vpn-shell-mk5 .vpn-panel-live-badge {
+        flex: 0 0 auto;
+        margin-top: 2px;
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics {
+        border-bottom-color: rgba(92, 128, 178, 0.24);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)),
+            rgba(8, 13, 22, 0.74);
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn {
+        min-height: 42px;
+        font-size: 12px;
+    }
+    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn.is-active {
+        color: #f7fbff;
+    }
+    .vpn-shell-mk5 .vpn-focus-strip {
+        margin: 12px 0;
+    }
+    .vpn-shell-mk5 .vpn-panel pre,
+    .vpn-shell-mk5 .vpn-subcard pre,
+    .vpn-shell-mk5 #vpn-config-pre {
+        font-size: 12px;
+        line-height: 1.62;
+        tab-size: 2;
+    }
+    .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log {
+        color: #e4f0ff;
+    }
+    .vpn-shell-mk5 .vpn-subcard-title {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid rgba(108, 162, 255, 0.16);
+        border-radius: 999px;
+        background: rgba(8, 13, 22, 0.42);
+        font-size: 12px;
+    }
+    .vpn-shell-mk5 .vpn-check-row {
+        border-color: rgba(101, 124, 162, 0.46);
+    }
+    .vpn-shell-mk5 .vpn-check-row:hover {
+        border-color: rgba(47, 211, 238, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-micro-badge {
+        padding: 0 9px;
+    }
+    .vpn-entry-grid-import {
+        gap: 14px;
+    }
+    .vpn-entry-grid-import .vpn-entry-card {
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.064),
+            0 18px 36px rgba(0,0,0,0.22) !important;
+    }
+    .vpn-entry-grid-import .vpn-entry-head {
+        align-items: center;
+    }
+    .vpn-entry-grid-import .vpn-entry-lead {
+        color: #a9bad6;
+    }
+    .vpn-cbi-section-mk5 {
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.060),
+            0 14px 30px rgba(0,0,0,0.18) !important;
+    }
+    .vpn-cbi-section-mk5 .vpn-section-title {
+        color: #f2f8ff;
+        font-size: 17px;
+    }
+    .vpn-cbi-section-mk5 .cbi-value {
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+    @media (max-width: 760px) {
+        .vpn-shell-mk5 .vpn-hero-summary {
+            padding: 7px;
+        }
+        .vpn-shell-mk5 .vpn-hero-summary-item {
+            min-height: 64px;
+        }
+        .vpn-shell-mk5 .vpn-orb-wrap {
+            grid-template-columns: minmax(0, 1fr);
+            text-align: center;
+        }
+        .vpn-shell-mk5 .vpn-orb-ring {
+            margin: 0 auto;
+        }
+        .vpn-shell-mk5 .vpn-panel-shell-head {
+            flex-direction: column;
+        }
+        .vpn-shell-mk5 .vpn-panel-live-badge {
+            align-self: flex-start;
+        }
+        .vpn-shell-mk5 .vpn-kv {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+</style>
+EOF_OPENVPN_MK5_PASS7_TO_PASS9_POLISH
+
     cat > /usr/lib/lua/luci/model/cbi/openvpn.lua <<'EOF_OPENVPN_STANDARD_MODEL'
 -- Copyright 2008 Steven Barth <steven@midlink.org>
 -- Licensed to the public under the Apache License 2.0.
@@ -32823,6 +34400,14 @@ install_openvpn() {
         /usr/lib/lua/luci/model/cbi/openvpn-advanced.lua; do
         verify_file_exists "$openvpn_ui_file" "OpenVPN"
     done
+    grep -Fq 'OpenVPN Mk5 pass 7 precision finish: local six-file polish.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 7 CSS"
+    grep -Fq 'OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 8 CSS"
+    grep -Fq 'OpenVPN Mk5 pass 9: 250-line webpage precision layer.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 9 CSS"
+    grep -Fq 'vpn-hero-console' /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm || die "OpenVPN verify failed: missing Mk5 console classes"
+    grep -Fq 'vpn-shell-config' /usr/lib/lua/luci/view/openvpn/pageswitch.htm || die "OpenVPN verify failed: missing Mk5 config classes"
+    grep -Fq 'vpn-entry-grid-import' /usr/lib/lua/luci/view/openvpn/cbi-select-input-add.htm || die "OpenVPN verify failed: missing Mk5 import classes"
+    grep -Fq 'vpn-shell-overview' /usr/lib/lua/luci/view/openvpn/overview_intro.htm || die "OpenVPN verify failed: missing Mk5 overview classes"
+    grep -Fq 'vpn-cbi-descr' /usr/lib/lua/luci/view/openvpn/nsection.htm || die "OpenVPN verify failed: missing Mk5 CBI classes"
     verify_luci_route admin/services/openvpn "OpenVPN"
     verify_luci_route nradioadv/system/openvpnfull "OpenVPN"
 

@@ -40,7 +40,7 @@ jobs:
       - name: Verify V2.0.60 script state
         run: |
           grep -q 'SCRIPT_VERSION="V2.0.60"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-05-14"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-05-15"' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q '测试中' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '3. 游戏加速器" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '1. 奇游联机宝" 00-current/ssh-nradio-plugin-installer.sh
@@ -85,6 +85,15 @@ jobs:
           grep -q 'EOF_OPENVPN_LEGACY_UNUSED_CSS_OLD' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'EOF_OPENVPN_STANDARD_MODEL' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'vpn-shell-mk3' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'vpn-shell-mk5' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'OpenVPN Mk5 pass 7 precision finish: local six-file polish.' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish.' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'OpenVPN Mk5 pass 9: 250-line webpage precision layer.' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'vpn-hero-console' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'vpn-shell-config' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'vpn-entry-grid-import' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'vpn-shell-overview' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'vpn-cbi-descr' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'Mk2' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'mk2' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'MK2' 00-current/ssh-nradio-plugin-installer.sh
@@ -132,6 +141,10 @@ jobs:
           grep -q 'openclash_require_asn_mmdb' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '扩容 swap 虚拟内存仅支持 NRadio_C2000MAX' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '扩容 swap 虚拟内存（仅支持NRadio_C2000MAX）' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio appcenter router hot polish: user pass 3' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio appcenter router hot polish: user pass 4 final' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio appcenter router hot polish: user pass 5 deep finish' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio appcenter router hot polish: user pass 6 precision finish' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '2>/dev/null' 00-current/ssh-nradio-plugin-installer.sh
 
       - name: Verify support page state
@@ -205,13 +218,13 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498' CHECKSUMS.txt
-          grep -q '1420683  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q 'ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132' CHECKSUMS.txt
+          grep -q '1483057  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
           grep -q '82f7a503d78cdda8672308b850cd9abc437c6264971382fcfca6dac11cb8967a' CHECKSUMS.txt
           grep -q '244366  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
           grep -q '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' CHECKSUMS.txt
           grep -q '564  vercel.json' CHECKSUMS.txt
-          printf '%s  %s\n' 'fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' 'ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
           printf '%s  %s\n' '82f7a503d78cdda8672308b850cd9abc437c6264971382fcfca6dac11cb8967a' '40-server-web/mayebano-support/index.html' | sha256sum -c -
           printf '%s  %s\n' '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' 'vercel.json' | sha256sum -c -
 
@@ -247,8 +260,8 @@ jobs:
           grep -q 'OpenList lite 包' CHANGELOG.md
           grep -q 'AdGuardHome' README.md
           grep -q 'AdGuardHome' CHANGELOG.md
-          grep -q 'fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498' README.md
-          grep -q '1420683' README.md
+          grep -q 'ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132' README.md
+          grep -q '1483057' README.md
           grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
           grep -q 'Only the current public script is maintained' SECURITY.md
           grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml

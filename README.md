@@ -54,10 +54,10 @@ sh ssh-nradio-plugin-installer.sh
 - OpenClash / AdGuardHome 还原支持 hybrid 保留策略，overlay 空间不足时保留大项子链接，避免误删扩展盘真实内容。
 - OpenClash 扩展盘迁移和哈基米分流助手重载前新增 `ASN.mmdb` 有效性校验，缺失或异常时先停止并提示补齐。
 - 修复 DDNS-GO 迁移到扩展盘后以 `ddns-go` 用户启动失败的问题，迁移/还原菜单会修正 `nradio-apps` 路径可穿透权限。
-- OpenVPN 页面升级到 Mk5 深色玻璃界面，补强标题、摘要卡、按钮、日志和小屏防溢出细节。
-- AdGuardHome 与应用商店页面美化继续回写总脚本，保留状态卡采样、深色卡片和还原入口收口。
+- OpenVPN 页面升级到 Mk5 深色玻璃界面，pass 7 / pass 8 / pass 9 精修已回写总脚本，补强标题、摘要卡、按钮、日志、诊断区和小屏防溢出细节。
+- AdGuardHome 与应用商店页面美化继续回写总脚本，应用商店 pass 3 至 pass 6 精修已进入安装输出，保留状态卡采样、深色卡片和还原入口收口。
 - 常用插件菜单中的 **扩容 swap 虚拟内存** 仅支持 `NRadio_C2000MAX`，菜单文案同步标明限制。
-- 当前脚本 SHA256：`fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498`（大小 1420683 字节）。
+- 当前脚本 SHA256：`ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132`（大小 1483057 字节）。
 
 ## V2.0.50 更新
 
@@ -105,8 +105,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  fd4f4931f4c62e455d617252963f2f497eacfe3a002a00eadc757c2703ab8498
-Bytes   1420683
+SHA256  ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132
+Bytes   1483057
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
