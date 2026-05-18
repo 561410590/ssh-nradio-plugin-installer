@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.0.60"
+SCRIPT_VERSION="V2.0.70"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-15"
+SCRIPT_RELEASE_DATE="2026-05-19"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -15,6 +15,7 @@ TPL="/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm"
 APPCENTER_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua"
 CFG="/etc/config/appcenter"
 FEEDS="/etc/opkg/distfeeds.conf"
+OPKG_LOCK_FILE="${OPKG_LOCK_FILE:-/var/lock/opkg.lock}"
 BACKUP_DIR="/root/nradio-plugin-fix"
 STATE_DIR="/root/.nradio-plugin-menu"
 CURRENT_DETECTED_MODEL=""
@@ -90,6 +91,9 @@ OPENLIST_BIN_PATH="${OPENLIST_BIN_PATH:-$OPENLIST_BIN_DIR/openlist}"
 OPENLIST_DATA_DIR="${OPENLIST_DATA_DIR:-$OPENLIST_ROOT_DIR/data}"
 OPENLIST_TEMP_DIR="${OPENLIST_TEMP_DIR:-$OPENLIST_ROOT_DIR/tmp}"
 OPENLIST_LOG_PATH="${OPENLIST_LOG_PATH:-$OPENLIST_ROOT_DIR/openlist.log}"
+OPENLIST_DEFAULT_DATA_DIR="${OPENLIST_DEFAULT_DATA_DIR:-$OPENLIST_DATA_DIR}"
+OPENLIST_DEFAULT_TEMP_DIR="${OPENLIST_DEFAULT_TEMP_DIR:-$OPENLIST_TEMP_DIR}"
+OPENLIST_DEFAULT_LOG_PATH="${OPENLIST_DEFAULT_LOG_PATH:-$OPENLIST_LOG_PATH}"
 OPENLIST_DEFAULT_ADMIN_PASSWORD="${OPENLIST_DEFAULT_ADMIN_PASSWORD:-admin}"
 OPENLIST_LINK_PATH="${OPENLIST_LINK_PATH:-/usr/bin/openlist}"
 OPENLIST_PACKAGE_STALL_TIME="${OPENLIST_PACKAGE_STALL_TIME:-15}"
@@ -206,7 +210,7 @@ OPENLIST_ICON_NAME="${OPENLIST_ICON_NAME:-openlist.svg}"
 OPENLIST_ICON_URLS="${OPENLIST_ICON_URLS:-https://res.oplist.org/logo/OpenList.svg https://res.oplist.org/logo/logo.svg}"
 ZEROTIER_ICON_NAME="${ZEROTIER_ICON_NAME:-zerotier.svg}"
 ZEROTIER_ICON_URLS="${ZEROTIER_ICON_URLS:-https://fastly.jsdelivr.net/npm/simple-icons@latest/icons/zerotier.svg https://testingcf.jsdelivr.net/npm/simple-icons@latest/icons/zerotier.svg https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/zerotier.svg}"
-EASYTIER_ICON_NAME="${EASYTIER_ICON_NAME:-easytier.png}"
+EASYTIER_ICON_NAME="${EASYTIER_ICON_NAME:-easytier.svg}"
 FANCTRL_ICON_NAME="${FANCTRL_ICON_NAME:-nradio-fanctrl}"
 DOWNLOAD_CONNECT_TIMEOUT="${DOWNLOAD_CONNECT_TIMEOUT:-15}"
 DOWNLOAD_MAX_TIME="${DOWNLOAD_MAX_TIME:-900}"
@@ -220,6 +224,10 @@ DOWNLOAD_PARTIAL_RETRY_MIN_BYTES="${DOWNLOAD_PARTIAL_RETRY_MIN_BYTES:-1048576}"
 DOWNLOAD_PARTIAL_RETRY_STALL_TIME="${DOWNLOAD_PARTIAL_RETRY_STALL_TIME:-45}"
 DOWNLOAD_PARTIAL_RETRY_STALL_SPEED="${DOWNLOAD_PARTIAL_RETRY_STALL_SPEED:-2048}"
 DOWNLOAD_PROGRESS_POLL_USEC="${DOWNLOAD_PROGRESS_POLL_USEC:-250000}"
+FEED_INDEX_DOWNLOAD_CONNECT_TIMEOUT="${FEED_INDEX_DOWNLOAD_CONNECT_TIMEOUT:-10}"
+FEED_INDEX_DOWNLOAD_MAX_TIME="${FEED_INDEX_DOWNLOAD_MAX_TIME:-90}"
+FEED_INDEX_DOWNLOAD_STALL_TIME="${FEED_INDEX_DOWNLOAD_STALL_TIME:-12}"
+FEED_INDEX_DOWNLOAD_STALL_SPEED="${FEED_INDEX_DOWNLOAD_STALL_SPEED:-512}"
 OPENCLASH_PACKAGE_MAX_TIME="${OPENCLASH_PACKAGE_MAX_TIME:-3600}"
 OPENCLASH_PACKAGE_STALL_TIME="${OPENCLASH_PACKAGE_STALL_TIME:-90}"
 OPENCLASH_PACKAGE_STALL_SPEED="${OPENCLASH_PACKAGE_STALL_SPEED:-1024}"
@@ -403,19 +411,12 @@ estimate_archive_extract_bytes() {
     printf '%s\n' $(( archive_size * 2 + 16777216 ))
 }
 
-validate_tar_gzip_archive() {
+validate_tar_archive() {
     archive_path="$1"
     archive_label="${2:-压缩包}"
     validate_log="${3:-/tmp/archive-validate.log}"
 
     [ -s "$archive_path" ] || die "$archive_label 文件为空或不存在"
-
-    if command -v gzip >/dev/null 2>&1; then
-        if ! gzip -t "$archive_path" >"$validate_log" 2>&1; then
-            sed -n '1,20p' "$validate_log" >&2 || true
-            die "$archive_label 完整性校验失败，请查看 $validate_log"
-        fi
-    fi
 
     if ! tar -tzf "$archive_path" > /dev/null 2>"$validate_log"; then
         sed -n '1,20p' "$validate_log" >&2 || true
@@ -953,6 +954,114 @@ detect_c2000max_storage_mount() {
     }
 
     return 1
+}
+
+openlist_dir_is_writable() {
+    local target_dir="$1"
+    local probe_file
+
+    [ -d "$target_dir" ] || return 1
+    probe_file="$target_dir/.nradio-openlist-write-test.$$"
+    : > "$probe_file" 2>/dev/null || return 1
+    rm -f "$probe_file" 2>/dev/null || true
+    return 0
+}
+
+resolve_openlist_storage_paths() {
+    local prepare_mode="${1:-}"
+    local storage_base storage_mount storage_path openlist_bin_real openlist_existing_root openlist_config_data_dir
+
+    storage_base=""
+
+    if [ -L "$OPENLIST_LINK_PATH" ]; then
+        openlist_bin_real="$(readlink -f "$OPENLIST_LINK_PATH" 2>/dev/null || true)"
+        case "$openlist_bin_real" in
+            */openlist/bin/openlist)
+                openlist_existing_root="$(dirname "$(dirname "$openlist_bin_real")")"
+                storage_base="$(dirname "$openlist_existing_root")"
+                ;;
+        esac
+    fi
+
+    if [ -z "$storage_base" ] && command -v uci >/dev/null 2>&1; then
+        openlist_config_data_dir="$(uci -q get openlist.main.data_dir 2>/dev/null || true)"
+        case "$openlist_config_data_dir" in
+            */openlist/data)
+                openlist_existing_root="${openlist_config_data_dir%/data}"
+                storage_base="$(dirname "$openlist_existing_root")"
+                ;;
+        esac
+    fi
+
+    if [ -z "$storage_base" ] && openlist_dir_is_writable /mnt/app_data; then
+        storage_base="/mnt/app_data"
+    fi
+
+    if [ -z "$storage_base" ]; then
+        storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+        if [ -n "$storage_mount" ] && openlist_dir_is_writable "$storage_mount"; then
+            storage_base="$storage_mount"
+        fi
+    fi
+
+    if [ -z "$storage_base" ]; then
+        for storage_path in /tmp/storage/*; do
+            [ -d "$storage_path" ] || continue
+            openlist_dir_is_writable "$storage_path" || continue
+            storage_base="$storage_path"
+            break
+        done
+    fi
+
+    if [ -z "$storage_base" ] && [ -f "$ROOTFS_2ND_STORAGE_MARKER" ] && openlist_dir_is_writable "$ROOTFS_2ND_STORAGE_MOUNT_POINT"; then
+        storage_base="$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+    fi
+
+    [ -n "$storage_base" ] || storage_base="/overlay/app_data"
+
+    if [ "$prepare_mode" = "prepare" ]; then
+        mkdir -p "$storage_base" || die "创建 OpenList 存储根失败：$storage_base"
+        ensure_dir_writable "$storage_base" "$storage_base"
+    fi
+
+    OPENLIST_ROOT_DIR="$storage_base/openlist"
+    OPENLIST_BIN_DIR="$OPENLIST_ROOT_DIR/bin"
+    OPENLIST_BIN_PATH="$OPENLIST_BIN_DIR/openlist"
+    OPENLIST_DATA_DIR="$OPENLIST_ROOT_DIR/data"
+    OPENLIST_TEMP_DIR="$OPENLIST_ROOT_DIR/tmp"
+    OPENLIST_LOG_PATH="$OPENLIST_ROOT_DIR/openlist.log"
+    OPENLIST_DEFAULT_DATA_DIR="$OPENLIST_DATA_DIR"
+    OPENLIST_DEFAULT_TEMP_DIR="$OPENLIST_TEMP_DIR"
+    OPENLIST_DEFAULT_LOG_PATH="$OPENLIST_LOG_PATH"
+}
+
+prepare_openlist_install_dirs() {
+    local root_link_target root_real root_parent
+
+    if [ -L "$OPENLIST_ROOT_DIR" ]; then
+        root_link_target="$(readlink "$OPENLIST_ROOT_DIR" 2>/dev/null || true)"
+        [ -n "$root_link_target" ] || die "OpenList 存储扩展链接读取失败：$OPENLIST_ROOT_DIR"
+        case "$root_link_target" in
+            /*)
+                root_real="$root_link_target"
+                ;;
+            *)
+                root_parent="$(dirname "$OPENLIST_ROOT_DIR")"
+                root_real="$root_parent/$root_link_target"
+                ;;
+        esac
+        log "提示: OpenList 检测到存储扩展链接：$OPENLIST_ROOT_DIR -> $root_real"
+        log "提示: 正在修复 OpenList 存储扩展目标目录..."
+        mkdir -p "$root_real" "$root_real/bin" "$root_real/data" "$root_real/tmp" || die "创建 OpenList 存储扩展目标目录失败：$root_real"
+    else
+        log "提示: OpenList 使用普通存储目录：$OPENLIST_ROOT_DIR"
+        mkdir -p "$OPENLIST_ROOT_DIR" "$OPENLIST_BIN_DIR" "$OPENLIST_DATA_DIR" "$OPENLIST_TEMP_DIR" || die "创建 OpenList 存储目录失败：$OPENLIST_ROOT_DIR"
+    fi
+
+    ensure_dir_writable "$OPENLIST_ROOT_DIR" "$OPENLIST_ROOT_DIR"
+    ensure_dir_writable "$OPENLIST_BIN_DIR" "$OPENLIST_BIN_DIR"
+    ensure_dir_writable "$OPENLIST_DATA_DIR" "$OPENLIST_DATA_DIR"
+    ensure_dir_writable "$OPENLIST_TEMP_DIR" "$OPENLIST_TEMP_DIR"
 }
 
 get_mount_available_kib() {
@@ -1541,7 +1650,7 @@ rank_hosts_by_partial_download_probe() {
     rank_tmp="$WORKDIR/${rank_prefix}-partial-rank.txt"
     : > "$rank_tmp"
 
-    log "提示: 正在精排 $rank_label 镜像优先级（部分下载探测，并行）..."
+    log "镜像:   $rank_label 小包测速"
     _pdl_dir="$WORKDIR/${rank_prefix}-partial-parallel"
     mkdir -p "$_pdl_dir" 2>/dev/null
     _pdl_pids=''
@@ -1580,7 +1689,7 @@ rank_hosts_by_partial_download_probe() {
                 else
                     _pdl_label="${_pdl_ms_clean}ms"
                 fi
-                log "探测-包: $_pdl_host 耗时=$_pdl_label"
+                log "下载:   $_pdl_host 小包=$_pdl_label"
                 printf '%s\n' "$_pdl_line" >> "$rank_tmp"
             fi
         fi
@@ -1618,7 +1727,7 @@ refine_ranked_hosts_by_http_probe() {
 
     [ "$refine_candidate_count" -ge 2 ] || return 0
 
-    log "提示: 正在精排 $refine_label CDN 优先级（HTTP 探测，并行）..."
+    log "CDN:    $refine_label HTTP 延迟复测"
     _http_dir="$WORKDIR/${refine_prefix}-http-parallel"
     mkdir -p "$_http_dir" 2>/dev/null
     _http_i=0
@@ -1655,7 +1764,7 @@ refine_ranked_hosts_by_http_probe() {
                 else
                     _http_label="${_http_ms_val}ms"
                 fi
-                log "探测-HTTP: $_http_host 首字节=$_http_label"
+                log "HTTP:   $_http_host 首字节=$_http_label"
                 printf '%s\n' "$_http_line" >> "$refine_probe_results"
             fi
         fi
@@ -1689,7 +1798,7 @@ rank_url_list_hosts() {
 
     RANKED_URL_HOSTS=""
     if ! command -v ping >/dev/null 2>&1; then
-        log "备注:     未找到 ping，保持默认 $rank_label CDN 顺序"
+        log "CDN:    $rank_label 缺少 ping，沿用默认顺序"
         return 0
     fi
     mkdir -p "$WORKDIR" >/dev/null 2>&1 || return 0
@@ -1710,7 +1819,7 @@ rank_url_list_hosts() {
 
     [ -s "$hosts_tmp" ] || return 0
 
-    log "提示: 正在探测 $rank_label CDN 节点（ping 并行）..."
+    log "CDN:    $rank_label 节点测速"
     _ping_dir="$WORKDIR/${rank_prefix}-ping-parallel"
     mkdir -p "$_ping_dir" 2>/dev/null
     _ping_pids=''
@@ -1760,7 +1869,7 @@ rank_url_list_hosts() {
                 _ptmp="${_pl#*|}"
                 _pavg_raw="${_ptmp%%|*}"
                 _pavg_label="$(format_probe_ping_avg_label "$_pavg_raw")"
-                log "探测:    $_ph 丢包=${_ploss_val}% 延迟=$_pavg_label"
+                log "ping:   $_ph 丢包=${_ploss_val}% 延迟=$_pavg_label"
                 printf '%s\n' "$_pl" >> "$rank_tmp"
             fi
         fi
@@ -1793,7 +1902,7 @@ optimize_openclash_cdn_order() {
     OPENCLASH_GEOASN_MIRRORS="$(reorder_urls_by_host_rank "$OPENCLASH_GEOASN_MIRRORS" "$RANKED_URL_HOSTS")"
     OPENCLASH_CDN_RANKED='1'
 
-    log "提示: $OPENCLASH_DISPLAY_NAME CDN 优先级: $RANKED_URL_HOSTS"
+    log "CDN:    $OPENCLASH_DISPLAY_NAME 顺序 = $RANKED_URL_HOSTS"
 }
 
 optimize_adguardhome_cdn_order() {
@@ -1811,7 +1920,7 @@ optimize_adguardhome_cdn_order() {
     ADGUARDHOME_CORE_MIRRORS="$(reorder_urls_by_host_rank "$ADGUARDHOME_CORE_MIRRORS" "$RANKED_URL_HOSTS")"
     ADGUARDHOME_CDN_RANKED='1'
 
-    log "提示: AdGuardHome CDN 优先级: $RANKED_URL_HOSTS"
+    log "CDN:    AdGuardHome 顺序 = $RANKED_URL_HOSTS"
 }
 
 optimize_mosdns_cdn_order() {
@@ -1820,7 +1929,7 @@ optimize_mosdns_cdn_order() {
     [ -n "${RANKED_URL_HOSTS:-}" ] || return 0
     MOSDNS_DOWNLOAD_URLS="$(reorder_urls_by_host_rank "$MOSDNS_DOWNLOAD_URLS" "$RANKED_URL_HOSTS")"
     MOSDNS_CDN_RANKED='1'
-    log "提示: MosDNS CDN 优先级: $RANKED_URL_HOSTS"
+    log "CDN:    MosDNS 顺序 = $RANKED_URL_HOSTS"
 }
 
 get_core_arch() {
@@ -2034,7 +2143,7 @@ ADGUARDHOME_ICON_NAME="adguard.svg"
 OPENVPN_ICON_NAME="openvpn.svg"
 OPENLIST_ICON_NAME="openlist.svg"
 ZEROTIER_ICON_NAME="zerotier.svg"
-EASYTIER_ICON_NAME="easytier.png"
+EASYTIER_ICON_NAME="easytier.svg"
 WEBSSH_ICON_NAME="webssh.svg"
 WEBSSH_ROUTE="nradioadv/system/webssh"
 WEBSSH_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/webssh.lua"
@@ -2047,9 +2156,43 @@ OPENLIST_ROOT_DIR="/mnt/app_data/openlist"
 OPENLIST_BIN_DIR="$OPENLIST_ROOT_DIR/bin"
 OPENLIST_BIN_PATH="$OPENLIST_BIN_DIR/openlist"
 OPENLIST_LINK_PATH="/usr/bin/openlist"
-OPENLIST_DEFAULT_DATA_DIR="/mnt/app_data/openlist/data"
-OPENLIST_DEFAULT_TEMP_DIR="/mnt/app_data/openlist/tmp"
-OPENLIST_DEFAULT_LOG_PATH="/mnt/app_data/openlist/openlist.log"
+OPENLIST_DEFAULT_DATA_DIR="$OPENLIST_ROOT_DIR/data"
+OPENLIST_DEFAULT_TEMP_DIR="$OPENLIST_ROOT_DIR/tmp"
+OPENLIST_DEFAULT_LOG_PATH="$OPENLIST_ROOT_DIR/openlist.log"
+
+resolve_openlist_uninstall_paths() {
+    openlist_uninstall_root=""
+    openlist_uninstall_bin_real=""
+    openlist_uninstall_data_dir=""
+
+    if [ -L "$OPENLIST_LINK_PATH" ]; then
+        openlist_uninstall_bin_real="$(readlink -f "$OPENLIST_LINK_PATH" 2>/dev/null || true)"
+        case "$openlist_uninstall_bin_real" in
+            */openlist/bin/openlist)
+                openlist_uninstall_root="$(dirname "$(dirname "$openlist_uninstall_bin_real")")"
+                ;;
+        esac
+    fi
+
+    if [ -z "$openlist_uninstall_root" ] && command -v uci >/dev/null 2>&1; then
+        openlist_uninstall_data_dir="$(uci -q get openlist.main.data_dir 2>/dev/null || true)"
+        case "$openlist_uninstall_data_dir" in
+            */openlist/data)
+                openlist_uninstall_root="${openlist_uninstall_data_dir%/data}"
+                ;;
+        esac
+    fi
+
+    [ -n "$openlist_uninstall_root" ] || return 0
+    OPENLIST_ROOT_DIR="$openlist_uninstall_root"
+    OPENLIST_BIN_DIR="$OPENLIST_ROOT_DIR/bin"
+    OPENLIST_BIN_PATH="$OPENLIST_BIN_DIR/openlist"
+    OPENLIST_DEFAULT_DATA_DIR="$OPENLIST_ROOT_DIR/data"
+    OPENLIST_DEFAULT_TEMP_DIR="$OPENLIST_ROOT_DIR/tmp"
+    OPENLIST_DEFAULT_LOG_PATH="$OPENLIST_ROOT_DIR/openlist.log"
+}
+
+resolve_openlist_uninstall_paths
 EASYTIER_PACKAGE_NAME="easytier"
 EASYTIER_LUCI_PACKAGE_NAME="luci-app-easytier"
 EASYTIER_I18N_PACKAGE_NAME="luci-i18n-easytier-zh-cn"
@@ -2645,6 +2788,7 @@ cleanup_openvpn() {
 }
 
 cleanup_openlist() {
+    resolve_openlist_storage_paths 2>/dev/null || true
     openlist_data_dir="$(get_openlist_config_value data_dir "$OPENLIST_DEFAULT_DATA_DIR")"
     openlist_temp_dir="$(get_openlist_config_value temp_dir "$OPENLIST_DEFAULT_TEMP_DIR")"
     openlist_log_path="$(get_openlist_config_value log_path "$OPENLIST_DEFAULT_LOG_PATH")"
@@ -3851,19 +3995,85 @@ get_feed_url() {
     awk -v n="$feed_name" '$1=="src/gz" && $2==n {print $3; exit}' "$FEEDS" 2>/dev/null
 }
 
-get_feed_package_field() {
-    feed_name="$1"
-    package_name="$2"
-    field_name="$3"
+feed_index_is_plain_packages() {
+    feed_idx="$1"
 
-    feed_url="$(get_feed_url "$feed_name")"
+    [ -s "$feed_idx" ] || return 1
+    sed -n '1,80p' "$feed_idx" 2>/dev/null | grep -q '^Package: '
+}
+
+find_local_feed_index_file() {
+    feed_name="$1"
+
+    for list_path in "/var/opkg-lists/$feed_name" "/tmp/opkg-lists/$feed_name" "$WORKDIR/feed-index/${feed_name}.Packages"; do
+        [ -s "$list_path" ] || continue
+        feed_index_is_plain_packages "$list_path" || continue
+        printf '%s\n' "$list_path"
+        return 0
+    done
+
+    return 1
+}
+
+download_feed_index_file() {
+    feed_name="$1"
+    feed_url="$2"
+    feed_idx="$WORKDIR/feed-index/${feed_name}.Packages"
+    saved_connect_timeout="$DOWNLOAD_CONNECT_TIMEOUT"
+    saved_max_time="$DOWNLOAD_MAX_TIME"
+    saved_stall_time="$DOWNLOAD_STALL_TIME"
+    saved_stall_speed="$DOWNLOAD_STALL_SPEED"
+    saved_retry="$DOWNLOAD_RETRY"
+    download_rc=1
+
+    [ -n "$feed_name" ] || return 1
     [ -n "$feed_url" ] || return 1
 
     mkdir -p "$WORKDIR/feed-index"
-    feed_idx="$WORKDIR/feed-index/${feed_name}.Packages.gz"
-    download_file "$feed_url/Packages.gz" "$feed_idx" >/dev/null 2>&1 || return 1
+    rm -f "$feed_idx" "$feed_idx.tmp" 2>/dev/null || true
 
-    gzip -dc "$feed_idx" 2>/dev/null | awk -v pkg="$package_name" -v fld="$field_name" '
+    DOWNLOAD_CONNECT_TIMEOUT="$FEED_INDEX_DOWNLOAD_CONNECT_TIMEOUT"
+    DOWNLOAD_MAX_TIME="$FEED_INDEX_DOWNLOAD_MAX_TIME"
+    DOWNLOAD_STALL_TIME="$FEED_INDEX_DOWNLOAD_STALL_TIME"
+    DOWNLOAD_STALL_SPEED="$FEED_INDEX_DOWNLOAD_STALL_SPEED"
+    DOWNLOAD_RETRY=0
+
+    if download_file "$feed_url/Packages" "$feed_idx" >/dev/null 2>&1 && feed_index_is_plain_packages "$feed_idx"; then
+        download_rc=0
+    else
+        rm -f "$feed_idx" "$feed_idx.tmp" 2>/dev/null || true
+    fi
+
+    DOWNLOAD_CONNECT_TIMEOUT="$saved_connect_timeout"
+    DOWNLOAD_MAX_TIME="$saved_max_time"
+    DOWNLOAD_STALL_TIME="$saved_stall_time"
+    DOWNLOAD_STALL_SPEED="$saved_stall_speed"
+    DOWNLOAD_RETRY="$saved_retry"
+
+    [ "$download_rc" -eq 0 ] || return 1
+    printf '%s\n' "$feed_idx"
+}
+
+resolve_feed_index_file() {
+    feed_name="$1"
+    feed_url="$2"
+
+    feed_idx="$(find_local_feed_index_file "$feed_name" 2>/dev/null || true)"
+    if [ -n "$feed_idx" ] && [ -s "$feed_idx" ]; then
+        printf '%s\n' "$feed_idx"
+        return 0
+    fi
+
+    download_feed_index_file "$feed_name" "$feed_url"
+}
+
+read_feed_package_field_from_index() {
+    feed_idx="$1"
+    package_name="$2"
+    field_name="$3"
+
+    [ -s "$feed_idx" ] || return 1
+    awk -v pkg="$package_name" -v fld="$field_name" '
         $0 == ("Package: " pkg) { found = 1; next }
         found && index($0, fld ": ") == 1 {
             sub("^" fld ": ", "")
@@ -3871,7 +4081,32 @@ get_feed_package_field() {
             exit
         }
         found && $0 == "" { exit }
-    '
+    ' "$feed_idx" </dev/null
+}
+
+get_feed_package_field() {
+    feed_name="$1"
+    package_name="$2"
+    field_name="$3"
+    field_value=""
+
+    feed_url="$(get_feed_url "$feed_name")"
+    [ -n "$feed_url" ] || return 1
+
+    feed_idx="$(find_local_feed_index_file "$feed_name" 2>/dev/null || true)"
+    if [ -n "$feed_idx" ]; then
+        field_value="$(read_feed_package_field_from_index "$feed_idx" "$package_name" "$field_name" 2>/dev/null || true)"
+        if [ -n "$field_value" ]; then
+            printf '%s\n' "$field_value"
+            return 0
+        fi
+    fi
+
+    feed_idx="$(download_feed_index_file "$feed_name" "$feed_url" 2>/dev/null || true)"
+    [ -n "$feed_idx" ] || return 1
+    field_value="$(read_feed_package_field_from_index "$feed_idx" "$package_name" "$field_name" 2>/dev/null || true)"
+    [ -n "$field_value" ] || return 1
+    printf '%s\n' "$field_value"
 }
 
 resolve_feed_package_url() {
@@ -4364,31 +4599,6 @@ EOF_EMBEDDED_ICON
     return 0
 }
 
-get_openclash_official_logo_base64() {
-    cat <<'EOF_OPENCLASH_LOGO_B64' | tr -d '\n'
-iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAMAAADDpiTIAAAC+lBMVEUAAAD////8/P7////+/v7////////////////////////////////////+/v////////////////////////////////+GkKH+/v7////////////////////////////////////////////////////4+fv7/Pz+/v7///////////////9thKL///8jRXT///////////////+XoK61u8ZNZIRVdJx6jqnL1N4mS3kkUIdxhqH+/v8+Um9Pb5dfc5FmfJmptsckOFfBxs9PZIKMnbMcN12Nl6coUoagqLUqU4kxUn8/WX1he59abYn///9NXXepsbwaM1lDaJaGmLCTo7pib4UtVYpBYIj////M1NwbNVt7iJs5Xo84UXNAZJNJXXstVoooRGzR2uQqSHQcMVIxRWRCU27W2uApUoaquMspSXMjPF8pQ2fi5Oj09vcrVIpDV3UeN1p5jqhRc50kSHoZLk4vQl47S2dVZX4iS4HM0dgySWotUH3///8rU4aap7lWc5q6xtcpTnwiS38iS4BHZ48fOF0vWY5xfZEiOl0dNVhxjbGbrMUuS3IySGrr7e8jTIIkToRXdJpxiqpqeI0lQWpte5K/xtHq7O8+YZAePmkqS3YcNVoYLlDa3uS0vMedqbmJlae+xc94hpzb3+XP1dyQp8QWL1UVLVEgSX4YNF0UKk4WMFceRHcXMVgVLlMbPGkTKEoZNmATKUwcP24cQHAXM1sbPWsgSX8XMloVLFAfSH0eQ3X///8ZN2IXMlkZN2EYNV4aOmYaO2ccPm0aOWUTKUsaO2gfRnkZOGMfSHwdQXEfR3sfRnoeRXgaOWQbPmwVK08dQnMdQXISJkcYNV8gSoASJ0ghTIMhTYUiT4chTYQhS4IUK08hS4EVLlQhToYZOGQdQnQgS4EiTocWMVkWMVggS4IdQ3YeRnv1
-9/lSbpLd4+rH0NtogKCTpbzs7/OaqsDl6e+GmbOxvs4uTHd3i6dIY4hfd5c+WoE0Unu/yNXWc3q0AAAAqXRSTlMAAgYICg4LGgQoESImLhbDHRM0dStBvvI6uaqcH9RUtGxNlFujhDM+N0avzsh+cP3f2oxg7+u/rG9OEfmVaNK7qotf/emxYPjw8O7p6NmcnH347NuEfG/2389kQfzx3NrSzbRSNi78+/rmoEtC9Ovk4cG+rYlC/v38+vjw6OGEd3JZVB8e99fHZF/06oghFOno4+LLcjT19NnX0Zv67sXw1bDcqofEuaVCzcN4wQAANGhJREFUeNrswYEAAAAAgKD9qRepAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZt+OWZwKggAAZ9+7xHiKeGBpbWd9ck8QLYQjYBUlVZCgjVYBUwkip80V2qhV/oC/aWfGYoqF/Avfzibvbc7Kp5B5MN9xlyPXDLOzu7P7csYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGNMf519HvTO68vLs4H5D9zZN8RqeekG/eFWdcx4/rlPMWvlygWKSX9KYPwBxaLsTch6FSvcWZ71Ip+uiCUbMAT80YuAVXPDxTaZAXGy6kFCXbHEnfVRDwLWrfhUyeAnlf5twBWLsIOzE/XxKueGjzFg5qPyjLriTSrYtGr9LAbmX7hrLxn3fNBdAcU0YBJC4PBspDtc9cpXGPVmDRhfVNgKYX5Lc7T6xR2gTxXgvpxjjqtXtgf84w6AojkJRGo7QTda4hX3jwamu/JmhQFFVgiV1tNgOc0LVX5/dKw01n4YPcg6amxMvqjM6nhVBZEVwOyaylB7wp2cIiPztggEMiLOvipMq/s6Y2xI3Iz4sxyYrsY35n8WQIjJXejrrVy5bgY+tAVwfzQw3Q+BFSNvtwARBDNPxwNlxitkzoqVE2sCunPD51wLNcxIctU1gvUGgIwcMhzNbisLtEfcrVMAKQDM
-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
-EOF_OPENCLASH_LOGO_B64
-    return 0
-}
 install_openclash_embedded_icon() {
     ensure_app_icon_dir
     backup_file "$APP_ICON_DIR/$OPENCLASH_ICON_NAME"
@@ -4402,8 +4612,10 @@ install_openclash_embedded_icon() {
   <rect x="84" y="84" width="856" height="856" rx="188" fill="url(#bg)" stroke="#9fd7ff" stroke-width="18" filter="url(#shadow)"/>
   <rect x="162" y="162" width="700" height="700" rx="154" fill="#f8fcff" stroke="#d8eefc" stroke-width="12"/>
   <rect x="222" y="222" width="580" height="580" rx="132" fill="#ffffff" opacity="0.92"/>
-  <image x="252" y="252" width="520" height="520" preserveAspectRatio="xMidYMid meet" href="data:image/png;base64,$(get_openclash_official_logo_base64)" xlink:href="data:image/png;base64,$(get_openclash_official_logo_base64)"/>
-  <circle cx="512" cy="292" r="54" fill="#ffffff" fill-opacity="0.24"/>
+  <path d="M323 643c-62-53-97-126-97-203 0-118 96-214 214-214 67 0 128 31 168 79 95 14 168 96 168 195 0 109-88 197-197 197H430c-40 0-77-20-107-54z" fill="#2563eb" opacity="0.12"/>
+  <path d="M344 622c-52-45-82-109-82-177 0-97 79-176 176-176 63 0 118 33 149 83 75 8 134 72 134 149 0 83-67 150-150 150H438c-36 0-68-10-94-29z" fill="#2f80ed"/>
+  <path d="M399 513l72 72 168-184" fill="none" stroke="#ffffff" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="352" cy="341" r="42" fill="#ffffff" fill-opacity="0.22"/>
 </svg>
 EOF_OPENCLASH_ICON
     chmod 644 "$APP_ICON_DIR/$OPENCLASH_ICON_NAME" 2>/dev/null || true
@@ -4462,40 +4674,21 @@ EOF_ZEROTIER_ICON
 install_easytier_embedded_icon() {
     ensure_app_icon_dir
     backup_file "$APP_ICON_DIR/$EASYTIER_ICON_NAME"
-    if [ "$EASYTIER_ICON_NAME" != "easytier.svg" ]; then
-        backup_file "$APP_ICON_DIR/easytier.svg"
-        rm -f "$APP_ICON_DIR/easytier.svg" 2>/dev/null || true
-    fi
-    cat <<'EOF_EASYTIER_ICON_PNG_GZ_B64' | decode_gzip_b64_to_file "$APP_ICON_DIR/$EASYTIER_ICON_NAME" "内置 EasyTier PNG 图标" || return 1
-H4sIAAAAAAAEAAGMBXP6iVBORw0KGgoAAAANSUhEUgAAAIAAAACABAMAAAAxEHz4AAAAD1BMVEVn
-m/1HcEwwSntNdMKZx/8fjVk1AAAABHRSTlP5AFKUNxJXPAAABShJREFUaN6lmVuagyAMRiN0AYob
-QLsBrBvoQ/e/ppF7EoK2Dg/zdVQOP+GSEGD6Z4Hz12Z9Lf8BzHCU7T7AQCjLbYCNAHUX4AU8riSc
-Acaj/ufzBhhuAqyv7wnqJgAyAG4DPqHcBZgKWO4AjK0AtfwMME8/fhkA0J3RHcAzTqEKOBC/ANIU
-JIDOYEoA42KTdRijIL18B4j1D7slK/q2je0RBIDL03/OU3nLK1N/A3C1qdR5qML0NcAic7HlbCVL
-grAHsfr0wXYOMOjzGUrZEGE5BVjUzTCU6/osVogGUmeAGbUwZlsaVMs0nQC2gOvryjJIwgxscQMT
-oNB+tqHnA+rk0AMYbCKHxxz9Y5gdgW6iA+rNQN7g30oG4K561dQ4GzaUDMC9Pv5RdHiHSbIIAZCZ
-bqmpCM9hCdAD0xlnoCcVZO4BWElhL3ULMESAgaYsRMLSAEbyyTkANwZVlpq+BfjpyAGGLRLrtAZX
-/2jF5vzCACPAT6FV6QOUMVC/AGofQO7BVal9gFs9QH2ALEnswbqD21e5D4oAxDholkaQGx2yCZae
-h5Y9c6kBiae7HrrjmV3SDD0TRP3vz+cBYrybqwDBsbn8iPHBW7JDFg0dE9gSXqQQQ7UtEIDQgc+H
-EBqnGJ+AbEMX9ZdA5w3CJ0MBWG6CGdfPhI0bQRVAY8MY3NRRTIFOF8BtaIKAUHXfE6GJmJPhRMCY
-asQZ+ITEG3qAZhBCD6rh5ySBRwahWQgf6DbOx+eMMT3gw7AlAHNjvkUvgHjn8GSbWncnAcbY3tYg
-hw7ANm88QFO5j8YIsd0I2BoTAHeu0BhhLgDXAPIpZT06r9d8emkAugC4J06toUg1qmLfdQBzACga
-qUa7bDKAkeMgDDRSzQ+bqSgoGFNjDnK4fzQVZQ09Bc0oHqLSBI6rajO5X8TYpwCXVnEg6N8BJuuP
-f5efAXPeiOLWtP1XwXrTBu/7NvhlFE7mQfIJfh48zuaBOBMNjtB+mYndtQC9tfDv1Wg5uewHxjnY
-l+5+oDpbmrABSjtSf0v7ck+sCr7alR8nu/K//ULPMynk6k49k+AbH5Jv1D3fyBdDzzuLxyjRvU9y
-fEBNhQHfRShMAo5QOjHSO9ePv3cqAQPGJgp0ZSWjKM35syA/moJwUMZx4rsmsxZDomYcJ05fRKq+
-qgWSlSCx8nYsvBePlXF9l3Y5L+Gp9TLjWPlAax7Uz9l8sfnNZzfGOBQ2AhU5L8QynJwXQoZMo31u
-oCcWlPSSTywpTW7ZUbacmcJ6bbYm/GnMMUXjvIGemUpwrfipzelyaksJBkeDb0BT9yKDnGYL0HQ1
-lB3rMgEcBy4ni99kGGv2dDtVsJFsM1GQj1fb6XFXT8HHRYCk4BxgvYQKgF+74NXrjgL3TRY9SujZ
-4PENYEqRRjsK9pubhJSCEufBXFPQV3kHbaWZOEE6JQ3TpQSdv2UZjHY1diSwjAAF6GW6liABLJxk
-O84lQNm+9PWtVknd65qUSCs0iDf28moups6XeBgqrm0ssYAVbwCYAFV+DSVOLF23FxJmmuSOgJmm
-bPWFALY/QHAKUy9r3K6mAdNUADS5UHV2/7iwbBbwFI7rE/gNR6gJPAMz9mZkvPwZeB4GeBard88q
-PfdVQTh6Q7pnYjd37WqbA+AQvOMSTzuQTt3RQaUHxgddqPhbA4iTm5TqQff9dXzm8uKZ22RxUNAC
-sGdGHloGODEFbRjitYjpat8F8+IFX1mG4vJ15ZOX5eLqfF3317qebjI/ZoPb8gfbXytTB9L2tgAA
-AABJRU5ErkJggvy4PY2MBQAA
-EOF_EASYTIER_ICON_PNG_GZ_B64
+    cat > "$APP_ICON_DIR/$EASYTIER_ICON_NAME" <<'EOF_EASYTIER_ICON'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="EasyTier">
+  <defs>
+    <linearGradient id="easytier-bg" x1="16" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b7cfa"/>
+      <stop offset="1" stop-color="#21b7a8"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#easytier-bg)"/>
+  <path d="M38 44h52M38 64h40M38 84h52" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="90" cy="64" r="9" fill="#fff"/>
+</svg>
+EOF_EASYTIER_ICON
     chmod 644 "$APP_ICON_DIR/$EASYTIER_ICON_NAME" 2>/dev/null || true
-    log "图标:   内置 EasyTier PNG 卡片"
+    log "图标:   内置 EasyTier SVG 卡片"
     return 0
 }
 
@@ -4854,15 +5047,68 @@ patch_common_template() {
     js_file="$WORKDIR/appcenter.js"
 
     cat > "$css_file" <<'EOF'
-    .app_frame_box{
+    .modal.app_frame .modal-dialog,
+    .modal.app_frame.in .modal-dialog{
+        width: 96vw;
+        max-width: none;
+        margin: 28px auto;
+    }
+    @media (min-width: 1200px) {
+        .modal.app_frame .modal-dialog,
+        .modal.app_frame.in .modal-dialog{
+            width: 88vw;
+            max-width: none;
+            margin: 42px 6vw;
+        }
+    }
+    .modal.app_frame .modal-content,
+    .modal.app_frame.in .modal-content{
         width: 100%;
+        height: auto;
+        min-height: calc(84vh + 34px);
+        max-width: none;
+        box-sizing: border-box;
+    }
+    .modal.app_frame .modal-body,
+    .modal.app_frame .bootstrap-dialog-body,
+    .modal.app_frame .bootstrap-dialog-message,
+    .modal.app_frame.in .modal-body,
+    .modal.app_frame.in .bootstrap-dialog-body,
+    .modal.app_frame.in .bootstrap-dialog-message{
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        box-sizing: border-box;
+        overflow: hidden !important;
+    }
+    .app_frame_box{
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        height: 84vh;
+        min-height: 690px;
+        box-sizing: border-box;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .app_frame_plain{
+        height: 84vh;
+        min-height: 690px;
+    }
+    .app_frame_tabs{
+        height: 84vh;
+        min-height: 690px;
     }
     .app_frame_nav{
+        flex: 0 0 auto;
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
         padding: 0 15px 12px;
-        border-bottom: 1px solid #e5e5e5;
+        border-bottom: 1px solid rgba(104, 130, 166, .24);
     }
     .app_frame_nav_item{
         display: inline-block;
@@ -4876,37 +5122,118 @@ patch_common_template() {
         border-bottom-color: #0088cc;
     }
     .app_frame_box iframe{
-        height: 78vh;
-        overflow: scroll;
+        display: block;
+        flex: 1 1 auto;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
         border: 0;
-        width: 100%;
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+        background: #101018;
+    }
+    .modal.app_frame #sub_frame,
+    .modal.app_frame.in #sub_frame{
+        display: block !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        border: 0 !important;
+        background: #101018 !important;
+    }
+    .modal.app_frame #sub_frame.nr-frame-loading,
+    .modal.app_frame.in #sub_frame.nr-frame-loading{
+        opacity: 0 !important;
+        visibility: hidden !important;
+    }
+    .modal.app_frame #sub_frame.nr-frame-ready,
+    .modal.app_frame.in #sub_frame.nr-frame-ready{
+        opacity: 1 !important;
+        visibility: visible !important;
     }
 EOF
 
     cat > "$js_file" <<'EOF'
     function reload_iframe(){
-        var iframe_main = $('#sub_frame').contents().find('.main');
-        var iframe_container = $('#sub_frame').contents().find('.body-container');
-        if(iframe_main)
-            $(iframe_main).addClass("inner_main");
-        if(iframe_container)
-            $(iframe_container).addClass("inner_container");
-
         try {
+            $(".app_frame .modal-dialog").css({
+                "width": "88vw",
+                "max-width": "none",
+                "margin-left": "6vw",
+                "margin-right": "6vw"
+            });
+            $(".app_frame .modal-content").css({
+                "width": "100%",
+                "max-width": "none",
+                "height": "auto",
+                "min-height": "calc(84vh + 34px)",
+                "box-sizing": "border-box"
+            });
+            $(".app_frame .modal-body, .app_frame .bootstrap-dialog-body, .app_frame .bootstrap-dialog-message").css({
+                "width": "100%",
+                "max-width": "none",
+                "min-width": "0",
+                "height": "auto",
+                "min-height": "0",
+                "overflow": "hidden",
+                "box-sizing": "border-box"
+            });
+            $("#sub_frame").css({
+                "display": "block",
+                "flex": "1 1 auto",
+                "width": "100%",
+                "max-width": "none",
+                "min-width": "0",
+                "height": "100%",
+                "min-height": "0",
+                "border": "0",
+                "background": "#101018"
+            });
+
             var frame = document.getElementById('sub_frame');
             if (!frame || !frame.src)
                 return;
 
-            if (frame.src.indexOf('/admin/services/openclash') === -1 && frame.src.indexOf('/admin/services/AdGuardHome') === -1 && frame.src.indexOf('/nradioadv/system/openvpnfull') === -1 && frame.src.indexOf('/nradioadv/system/openlist') === -1 && frame.src.indexOf('/nradioadv/system/zerotier') === -1 && frame.src.indexOf('/admin/vpn/easytier') === -1 && frame.src.indexOf('/nradioadv/system/webssh') === -1 && frame.src.indexOf('/nradioadv/system/ddnsgo') === -1)
+            if (frame.src.indexOf('/admin/services/openclash') === -1 && frame.src.indexOf('/admin/services/AdGuardHome') === -1 && frame.src.indexOf('/nradioadv/system/openvpnfull') === -1 && frame.src.indexOf('/nradioadv/system/openlist') === -1 && frame.src.indexOf('/nradioadv/system/zerotier') === -1 && frame.src.indexOf('/nradioadv/system/fanctrl') === -1 && frame.src.indexOf('/nradioadv/system/mosdns') === -1 && frame.src.indexOf('/admin/vpn/easytier') === -1 && frame.src.indexOf('/nradioadv/system/webssh') === -1 && frame.src.indexOf('/nradioadv/system/ddnsgo') === -1 && frame.src.indexOf('/nradioadv/system/qiyou') === -1 && frame.src.indexOf('/nradioadv/system/leigod') === -1) {
+                $(frame).removeClass("nr-frame-loading").addClass("nr-frame-ready").css({
+                    "opacity": "1",
+                    "visibility": "visible"
+                });
                 return;
+            }
 
             var d = frame.contentWindow.document;
+            var iframe_main = $('#sub_frame').contents().find('.main');
+            var iframe_container = $('#sub_frame').contents().find('.body-container');
+            if(iframe_main)
+                $(iframe_main).addClass("inner_main");
+            if(iframe_container)
+                $(iframe_container).addClass("inner_container");
+
             var hide_selectors = [
                 'header',
                 '.menu_mobile',
                 '.mobile_bg_color.container.body-container.visible-xs-block',
                 '.footer',
-                '.tail_wave'
+                '.tail_wave',
+                '.menu-top',
+                '.logo-nradio',
+                '.large_banner',
+                '.small_banner',
+                '.main-logo-size',
+                '.mobile-logo-size',
+                '.qmenu',
+                '.nradio-right-btn',
+                '.sub_icon_list',
+                '.menu-tab',
+                '#mainmenu',
+                '#modemenu',
+                '.navbar',
+                '.navbar-inner'
             ];
 
             $.each(hide_selectors, function(index, sel){
@@ -4915,32 +5242,53 @@ EOF
 
             $(d).find('.container.body-container').not('.visible-xs-block').css({
                 'width': '100%',
+                'max-width': 'none',
+                'min-width': '0',
                 'margin': '0',
                 'padding': '0 10px'
             });
             $(d).find('.main').css({
                 'width': '100%',
+                'max-width': 'none',
+                'min-width': '0',
                 'margin': '0'
             });
             $(d).find('.main-content').css({
                 'width': '100%',
+                'max-width': 'none',
+                'min-width': '0',
                 'margin': '0',
                 'padding': '0'
+            });
+            $(d).find('html, body').css({
+                'width': '100%',
+                'max-width': 'none',
+                'min-width': '0',
+                'overflow-x': 'hidden'
             });
             $(d.body).css({
                 'margin-top': '0',
                 'padding-top': '0'
             });
+            $(frame).removeClass("nr-frame-loading").addClass("nr-frame-ready").css({
+                "opacity": "1",
+                "visibility": "visible"
+            });
         }
-        catch(e) {}
+        catch(e) {
+            $("#sub_frame").removeClass("nr-frame-loading").addClass("nr-frame-ready").css({
+                "opacity": "1",
+                "visibility": "visible"
+            });
+        }
     }
     function get_app_route_url(route){
         return "<%=controller%>" + route;
     }
     function build_app_iframe(route){
         if(route && route.length > 0)
-            return "<iframe id='sub_frame' src='" + get_app_route_url(route) + "' name='subpage'></iframe>";
-        return "<iframe id='sub_frame' name='subpage'></iframe>";
+            return "<iframe id='sub_frame' class='app_frame_page nr-frame-loading' data-src='" + get_app_route_url(route) + "' name='subpage' scrolling='no'></iframe>";
+        return "<iframe id='sub_frame' class='app_frame_page nr-frame-loading' name='subpage' scrolling='no'></iframe>";
     }
     function is_openclash_route(route){
         return route && route.indexOf("admin/services/openclash") === 0;
@@ -4962,7 +5310,7 @@ EOF
             {route: "admin/services/openclash/log", title: "<%:Server Logs%>"}
         ];
 
-        var sub_web_ht = "<div class='app_frame_box'><div class='app_frame_nav'>";
+        var sub_web_ht = "<div class='app_frame_box app_frame_tabs'><div class='app_frame_nav'>";
         $.each(tabs, function(index, tab){
             var active_class = "";
             if(tab.route == current_route)
@@ -4984,7 +5332,7 @@ EOF
             {route: "admin/services/AdGuardHome/log", title: "Log"}
         ];
 
-        var sub_web_ht = "<div class='app_frame_box'><div class='app_frame_nav'>";
+        var sub_web_ht = "<div class='app_frame_box app_frame_tabs'><div class='app_frame_nav'>";
         $.each(tabs, function(index, tab){
             var active_class = "";
             if(tab.route == current_route)
@@ -5000,13 +5348,14 @@ EOF
             return get_openclash_frame(route);
         if(is_adguardhome_route(route))
             return get_adguardhome_frame(route);
-        return build_app_iframe(route);
+        return "<div class='app_frame_box app_frame_plain'>" + build_app_iframe(route) + "</div>";
     }
     function switch_app_frame_route(obj){
         var route = $(obj).data("route");
         $(".app_frame_nav_item").removeClass("app_frame_nav_item_active");
         $(obj).addClass("app_frame_nav_item_active");
-        $("#sub_frame").attr("src", get_app_route_url(route));
+        var frame_src = get_app_route_url(route);
+        $("#sub_frame").removeClass("nr-frame-ready").addClass("nr-frame-loading").attr("data-src", frame_src).attr("src", frame_src);
     }
     function nradio_plugin_uninstall_key(app_name){
         if(app_name == "luci-app-openclash" || app_name == "openclash")
@@ -5156,15 +5505,20 @@ EOF
             title: '',
             message: sub_web_ht,
             onhide:function(){
-                $(".modal-dialog").css("display","none");
                 $(".top_menu").removeClass("top_menu_active");
                 $(".top_menu").eq(0).addClass("top_menu_active");
             },
             onshown:function(){
-                reload_iframe();
-                $('#sub_frame').on('load', function() {
+                var frame = $('#sub_frame');
+                frame.off('load.nradioAppFrame').on('load.nradioAppFrame', function() {
                     reload_iframe();
                 });
+                frame.removeClass("nr-frame-ready").addClass("nr-frame-loading");
+                var initial_src = frame.attr("data-src");
+                if(initial_src && !frame.attr("src"))
+                    frame.attr("src", initial_src);
+                else
+                    reload_iframe();
             }
         });
     }
@@ -5189,13 +5543,42 @@ EOF
         ' "$TPL" > "$tmp1"
     fi
 
+    tmp_css_fix="$WORKDIR/appcenter.iframe-css-fix"
+    awk '
+        BEGIN { in_box = 0; in_nav = 0; in_frame = 0 }
+        /^    \.app_frame_box\{$/ { in_box = 1; print; next }
+        /^    \.app_frame_nav\{$/ { in_nav = 1; print; next }
+        /^    \.app_frame_box iframe\{$/ { in_frame = 1; print; next }
+        in_box && /^[[:space:]]*background: #2e2e38;[[:space:]]*$/ { next }
+        in_nav && /^[[:space:]]*background: #2e2e38;[[:space:]]*$/ { next }
+        in_nav && /^[[:space:]]*border-bottom: 1px solid #e5e5e5;[[:space:]]*$/ { print "        border-bottom: 1px solid rgba(104, 130, 166, .24);"; next }
+        in_nav && /^[[:space:]]*border-bottom: 1px solid rgba\(255,255,255,\.12\);[[:space:]]*$/ { print "        border-bottom: 1px solid rgba(104, 130, 166, .24);"; next }
+        in_frame && /^[[:space:]]*height: 78vh;[[:space:]]*$/ { print "        height: 100%;"; next }
+        in_frame && /^[[:space:]]*display: block;[[:space:]]*$/ { next }
+        in_frame && /^[[:space:]]*background: #2e2e38;[[:space:]]*$/ { next }
+        in_frame && /^[[:space:]]*visibility: hidden;[[:space:]]*$/ { next }
+        in_box && /^    }$/ { print "        background: #2e2e38;"; in_box = 0; print; next }
+        in_nav && /^    }$/ { print "        background: #2e2e38;"; in_nav = 0; print; next }
+        in_frame && /^    }$/ {
+            print "        display: block;"
+            print "        background: #2e2e38;"
+            print "        visibility: hidden;"
+            in_frame = 0
+            print
+            next
+        }
+        { print }
+    ' "$tmp1" > "$tmp_css_fix"
+    cp "$tmp_css_fix" "$tmp1"
+
     awk -v js_file="$js_file" '
-        BEGIN { skip = 0 }
+        BEGIN { skip = 0; inserted = 0 }
         {
-            if (!skip && $0 ~ /^    function reload_iframe\(\)\{$/) {
+            if (!skip && !inserted && ($0 ~ /^    function get_active_app_frame\(\)\{$/ || $0 ~ /^    function reload_iframe\([^)]*\)\{$/)) {
                 while ((getline extra < js_file) > 0) print extra
                 close(js_file)
                 skip = 1
+                inserted = 1
                 next
             }
 
@@ -5204,6 +5587,14 @@ EOF
                     skip = 0
                     print
                 }
+                next
+            }
+
+            if (!inserted && $0 ~ /^    function app_action\(app_name,action,id,route\)\{$/) {
+                while ((getline extra < js_file) > 0) print extra
+                close(js_file)
+                inserted = 1
+                print
                 next
             }
 
@@ -5327,7 +5718,7 @@ EOF
         cp "$tmp6" "$TPL"
     fi
 
-    icon_cache_tag="${SCRIPT_RELEASE_DATE}-${SCRIPT_VERSION}-unified-icons-v2"
+    icon_cache_tag="${SCRIPT_RELEASE_DATE}-${SCRIPT_VERSION}"
     tmp7="$WORKDIR/appcenter.icon-cache"
     awk -v tag="$icon_cache_tag" '
         {
@@ -5338,6 +5729,109 @@ EOF
     ' "$TPL" > "$tmp7"
     cp "$tmp7" "$TPL"
 
+    tmp_brand_clean="$WORKDIR/appcenter.footer-maye.clean"
+    awk '
+        /^<style>$/ {
+            style_open = $0
+            if ((getline style_line) > 0) {
+                if (style_line ~ /nr-appcenter-maye-mark/) {
+                    while ((getline) > 0 && $0 !~ /^<\/style>$/) {}
+                    skip_next_maye_script = 1
+                    next
+                }
+                print style_open
+                print style_line
+                next
+            }
+        }
+        /^<script/ && skip_next_maye_script {
+            while ((getline) > 0 && $0 !~ /^<\/script>$/) {}
+            skip_next_maye_script = 0
+            next
+        }
+        /data-nradio-maye-footer="1"/ {
+            while ((getline) > 0 && $0 !~ /^<\/script>$/) {}
+            next
+        }
+        { print }
+    ' "$TPL" > "$tmp_brand_clean"
+    cp "$tmp_brand_clean" "$TPL"
+
+    tmp_brand="$WORKDIR/appcenter.footer-maye"
+    awk '
+            $0 == "<%+footer%>" && !inserted {
+                print "<style>"
+                print ".nr-appcenter-maye-mark{"
+                print "    color:#25d4f0;"
+                print "    font-weight:800;"
+                print "    margin-left:.25em;"
+                print "    letter-spacing:0;"
+                print "    text-shadow:0 0 12px rgba(37,212,240,.22);"
+                print "}"
+                print "</style>"
+                print "<script type=\"text/javascript\">"
+                print "(function(){"
+                print "function nradioAppcenterBrandTextNode(node){"
+                print "var el = node && node.parentNode;"
+                print "while(el && el.nodeType === 1){"
+                print "if(/^(SCRIPT|STYLE)$/i.test(el.nodeName))"
+                print "return false;"
+                print "el = el.parentNode;"
+                print "}"
+                print "return true;"
+                print "}"
+                print "function nradioAppcenterBrandMark(){"
+                print "var roots = Array.prototype.slice.call(document.querySelectorAll(\"footer,.footer,.footer_container,.footer_container_body,#footer,.copyright,.copyright_info,#copyright_info\"));"
+                print "roots.push(document.body);"
+                print ""
+                print "for(var i = 0; i < roots.length; i++){"
+                print "var root = roots[i];"
+                print "if(!root || (root.querySelector && root.querySelector(\".nr-appcenter-maye-mark\")))"
+                print "continue;"
+                print "if((root.textContent || \"\").indexOf(\"Powered by\") < 0)"
+                print "continue;"
+                print ""
+                print "var walker = document.createTreeWalker(root, 4, null, false);"
+                print "var nodes = [];"
+                print "var node;"
+                print "while((node = walker.nextNode()))"
+                print "nodes.push(node);"
+                print ""
+                print "for(var j = 0; j < nodes.length; j++){"
+                print "var text = nodes[j].nodeValue || \"\";"
+                print "var poweredPos = text.indexOf(\"Powered by\");"
+                print "if(poweredPos >= 0 && text.indexOf(\"MaYe\") < 0 && nradioAppcenterBrandTextNode(nodes[j])){"
+                print "var mark = document.createElement(\"span\");"
+                print "mark.className = \"nr-appcenter-maye-mark\";"
+                print "mark.textContent = \"Design By MaYe\";"
+                print "if(nodes[j].parentNode){"
+                print "var afterText = text.slice(poweredPos);"
+                print "nodes[j].nodeValue = text.slice(0, poweredPos);"
+                print "nodes[j].parentNode.insertBefore(mark, nodes[j].nextSibling);"
+                print "nodes[j].parentNode.insertBefore(document.createTextNode(\" \" + afterText), mark.nextSibling);"
+                print "return;"
+                print "}"
+                print "}"
+                print "}"
+                print "}"
+                print "}"
+                print ""
+                print "if(document.readyState === \"loading\")"
+                print "document.addEventListener(\"DOMContentLoaded\", nradioAppcenterBrandMark);"
+                print "else"
+                print "nradioAppcenterBrandMark();"
+                print "window.setTimeout(nradioAppcenterBrandMark, 120);"
+                print "window.setTimeout(nradioAppcenterBrandMark, 500);"
+                print "window.setTimeout(nradioAppcenterBrandMark, 1200);"
+                print "window.setTimeout(nradioAppcenterBrandMark, 2500);"
+                print "})();"
+                print "</script>"
+                inserted = 1
+            }
+            { print }
+        ' "$TPL" > "$tmp_brand"
+    cp "$tmp_brand" "$TPL"
+
     verify_template_marker 'open_route = "admin/services/openclash";' '哈基米 打开路由'
     verify_template_marker 'open_route = "admin/services/AdGuardHome";' 'AdGuardHome 打开路由'
     verify_template_marker 'open_route = "nradioadv/system/openvpnfull";' 'OpenVPN 打开路由'
@@ -5345,13 +5839,24 @@ EOF
     verify_template_marker 'open_route = "nradioadv/system/zerotier/basic";' 'ZeroTier 打开路由'
     verify_template_marker 'open_route = "nradioadv/system/fanctrl";' 'FanControl 打开路由'
     verify_template_marker 'open_route = "nradioadv/system/ddnsgo";' 'DDNS-GO 打开路由'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/fanctrl') === -1" 'FanControl iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/mosdns') === -1" 'MosDNS iframe 白名单'
     verify_template_marker "frame.src.indexOf('/admin/vpn/easytier') === -1" 'EasyTier iframe 白名单'
     verify_template_marker "frame.src.indexOf('/nradioadv/system/webssh') === -1" 'Web SSH iframe 白名单'
     verify_template_marker "frame.src.indexOf('/nradioadv/system/ddnsgo') === -1" 'DDNS-GO iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/qiyou') === -1" '奇游 iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/leigod') === -1" '雷神 iframe 白名单'
+    verify_template_marker "'.menu-top'" 'iframe 厂商顶部隐藏选择器'
+    verify_template_marker "'.sub_icon_list'" 'iframe 厂商图标栏隐藏选择器'
+    verify_template_marker 'nr-frame-loading' 'iframe 首帧隐藏状态'
+    verify_template_marker 'app_frame_box app_frame_tabs' 'iframe 标签页弹窗容器'
+    verify_template_marker 'app_frame_box app_frame_plain' 'iframe 普通弹窗容器'
+    verify_template_marker 'rgba(104, 130, 166, .24)' 'iframe 标签栏暗色边线'
     verify_template_marker "action == 'uninstall' && nradio_plugin_uninstall_action(app_name)" '脚本插件异步卸载入口'
     verify_template_marker 'plugin_uninstall/start' '脚本插件异步卸载启动接口'
     verify_template_marker 'plugin_uninstall/check' '脚本插件异步卸载检查接口'
     verify_template_marker "/luci-static/nradio/images/icon/{{icon}}?v=$icon_cache_tag" '应用商店图标缓存刷新参数'
+    verify_template_marker 'mark.textContent = "Design By MaYe";' '应用商店 MaYe 产权标识运行块'
 }
 
 patch_appcenter_status_controller() {
@@ -5548,10 +6053,38 @@ patch_appcenter_card_polish() {
     tmp_name="$WORKDIR/appcenter-card-polish.name.tmp"
     status_js_file="$WORKDIR/appcenter-card-polish.status-panel.js"
     empty_js_file="$WORKDIR/appcenter-card-polish.empty-state.js"
+    preserved_css_file="$WORKDIR/appcenter-card-polish.preserved-premium.css"
+
+    if grep -q 'NRadio appcenter preserved premium live alignment' "$TPL" 2>/dev/null; then
+        awk '
+            /NRadio appcenter preserved premium live alignment/ {
+                capture = 1
+                next
+            }
+            capture && /^<\/style>$/ {
+                exit
+            }
+            capture {
+                print
+            }
+        ' "$TPL" > "$preserved_css_file"
+    else
+        awk '
+            /NRadio appcenter card polish: visual-only layer/ || /NRadio appcenter premium frontend finish: pass 7 optical depth and motion discipline/ {
+                capture = 1
+            }
+            capture && /^<\/style>$/ {
+                exit
+            }
+            capture {
+                print
+            }
+        ' "$TPL" > "$preserved_css_file"
+    fi
 
     cat > "$css_file" <<'EOF_APPCENTER_CARD_POLISH_CSS'
     /* NRadio appcenter card polish: visual-only layer */
-    /* NRadio appcenter card polish V2.0.60 full repair layer */
+    /* NRadio appcenter card polish V2.0.70 full repair layer */
     /* NRadio appcenter visual polish 1-5 safe refinement */
     /* NRadio appcenter square card calm refinement */
     /* NRadio appcenter large-card proportion repair */
@@ -5829,6 +6362,9 @@ patch_appcenter_card_polish() {
         -webkit-backdrop-filter: blur(8px) saturate(1.05);
         backdrop-filter: blur(8px) saturate(1.05);
         transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
+    }
+    .container_right .app_box:nth-child(3n+1)::after{
+        background: none;
     }
     .container_right .app_box:nth-child(3n+2)::after{
         background: none;
@@ -8395,7 +8931,1352 @@ patch_appcenter_card_polish() {
             inset 0 .08em 0 rgba(255,255,255,.24),
             0 0 .96em rgba(35,200,228,.27);
     }
+    /* NRadio appcenter premium built-in fallback: current 80-temp visual layer
+       NRadio appcenter premium frontend finish: pass 7 optical depth and motion discipline
+       NRadio appcenter premium frontend finish: pass 8 matte restraint override
+       NRadio appcenter product card refinement pass 8 */
+    .appcontainer{
+        --nr-premium-surface: rgba(6,10,18,.90);
+        --nr-premium-surface-strong: rgba(7,13,24,.96);
+        --nr-premium-line: rgba(116,137,161,.24);
+        --nr-premium-line-soft: rgba(148,163,184,.12);
+        --nr-premium-text: #f3f7fb;
+        --nr-premium-text-soft: #c6d2df;
+        --nr-premium-muted: #8ea0b3;
+        --nr-premium-cyan: 84,178,198;
+        --nr-premium-blue: 80,123,184;
+        --nr-premium-green: 58,150,120;
+        --nr-premium-amber: 178,128,62;
+        --nr-premium-red: 184,88,88;
+        --nr-premium-shadow: rgba(0,0,0,.42);
+        --nr-premium-shadow-soft: rgba(0,0,0,.25);
+        --nr-premium-glow: rgba(84,178,198,.055);
+        color-scheme: dark;
+    }
+    .container_right .app_box{
+        border-color: rgba(111,134,156,.28);
+        outline: .0625rem solid rgba(255,255,255,.020);
+        outline-offset: -.0625rem;
+        background:
+            radial-gradient(circle at 18% -6%, rgba(var(--nr-card-accent, 84,178,198),.072), transparent 42%),
+            radial-gradient(circle at 82% 4%, rgba(var(--nr-card-accent-2, 58,130,112),.030), transparent 34%),
+            radial-gradient(circle at 108% 104%, rgba(80,123,184,.038), transparent 50%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.006)),
+            linear-gradient(145deg, rgba(9,18,29,.988), rgba(3,7,13,.964));
+        background-blend-mode: screen, screen, screen, normal, normal;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.056),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 84,178,198),.060),
+            inset 0 -.08em 0 rgba(0,0,0,.72),
+            0 1.08em 2.24em rgba(0,0,0,.38);
+        filter: saturate(.96) contrast(1.012);
+        transition:
+            background-color .18s ease,
+            background-image .18s ease,
+            border-color .18s ease,
+            box-shadow .18s ease,
+            filter .18s ease,
+            outline-color .18s ease;
+        will-change: auto;
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 84,178,198),.34);
+        outline-color: rgba(var(--nr-card-accent, 84,178,198),.16);
+        background:
+            radial-gradient(circle at 18% -6%, rgba(var(--nr-card-accent, 84,178,198),.092), transparent 42%),
+            radial-gradient(circle at 82% 4%, rgba(var(--nr-card-accent-2, 58,130,112),.040), transparent 34%),
+            radial-gradient(circle at 108% 104%, rgba(80,123,184,.048), transparent 50%),
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.008)),
+            linear-gradient(145deg, rgba(10,20,32,.992), rgba(4,8,15,.968));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.064),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 84,178,198),.088),
+            inset 0 -.08em 0 rgba(0,0,0,.66),
+            0 1.14em 2.30em rgba(0,0,0,.41);
+        filter: saturate(.98) contrast(1.018);
+    }
+    .container_right .app_box:nth-child(24n+1){--nr-card-accent:78,150,166;--nr-card-accent-2:58,130,112;--nr-tile-accent:78,150,166;}
+    .container_right .app_box:nth-child(24n+2){--nr-card-accent:75,118,172;--nr-card-accent-2:58,130,112;--nr-tile-accent:75,118,172;}
+    .container_right .app_box:nth-child(24n+3){--nr-card-accent:58,130,112;--nr-card-accent-2:78,150,166;--nr-tile-accent:58,130,112;}
+    .container_right .app_box:nth-child(24n+4){--nr-card-accent:98,142,170;--nr-card-accent-2:160,119,72;--nr-tile-accent:98,142,170;}
+    .container_right .app_box:nth-child(24n+5){--nr-card-accent:48,132,126;--nr-card-accent-2:75,118,172;--nr-tile-accent:48,132,126;}
+    .container_right .app_box:nth-child(24n+6){--nr-card-accent:62,136,166;--nr-card-accent-2:72,138,108;--nr-tile-accent:62,136,166;}
+    .container_right .app_box:nth-child(24n+7){--nr-card-accent:54,142,156;--nr-card-accent-2:92,102,170;--nr-tile-accent:54,142,156;}
+    .container_right .app_box:nth-child(24n+8){--nr-card-accent:72,138,108;--nr-card-accent-2:78,150,166;--nr-tile-accent:72,138,108;}
+    .container_right .app_box:nth-child(24n+9){--nr-card-accent:92,102,170;--nr-card-accent-2:48,132,126;--nr-tile-accent:92,102,170;}
+    .container_right .app_box::before{
+        background:
+            radial-gradient(circle at 13% 0%, rgba(var(--nr-card-accent, 78,150,166),.080), transparent 44%),
+            radial-gradient(circle at 92% 8%, rgba(var(--nr-card-accent-2, 58,130,112),.042), transparent 40%),
+            linear-gradient(180deg, rgba(255,255,255,.018), transparent 46%);
+        opacity: .52;
+        mix-blend-mode: screen;
+    }
+    .container_right .app_box::after{
+        display: block;
+        left: 14px;
+        right: 14px;
+        top: 126px;
+        bottom: 64px;
+        width: auto;
+        height: auto;
+        border: 0;
+        border-radius: 0;
+        background:
+            linear-gradient(90deg, rgba(var(--nr-card-accent, 78,150,166), .085), rgba(148,163,184,.026) 34%, transparent 72%) top / 100% 1px no-repeat,
+            linear-gradient(90deg, transparent, rgba(var(--nr-card-accent-2, 58,130,112), .050), transparent) bottom / 100% 1px no-repeat,
+            radial-gradient(ellipse at 20% 18%, rgba(var(--nr-card-accent, 78,150,166), .040), transparent 48%),
+            radial-gradient(ellipse at 76% 68%, rgba(var(--nr-card-accent-2, 58,130,112), .024), transparent 54%),
+            linear-gradient(145deg, rgba(255,255,255,.006), transparent 62%);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.008);
+        opacity: .64;
+        filter: none;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .container_right .app_box:hover::after,
+    .container_right .app_box:focus-within::after{
+        opacity: .74;
+    }
+    .container_right .app_icon::before{
+        opacity: .92;
+        background:
+            radial-gradient(circle at 50% 8%, rgba(var(--nr-card-accent, 78,150,166),.120), transparent 66%),
+            radial-gradient(circle at 50% 100%, rgba(var(--nr-card-accent-2, 58,130,112),.052), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.008)),
+            rgba(4,10,18,.68);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 78,150,166),.090),
+            0 .62em 1.04em rgba(0,0,0,.24);
+    }
+    .container_right .app_icon_img{
+        outline: .0625rem solid rgba(var(--nr-card-accent, 78,150,166),.085);
+        outline-offset: -.0625rem;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(var(--nr-card-accent, 78,150,166),.075), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.008)),
+            rgba(4,10,18,.76);
+        filter: saturate(1.05) contrast(1.045) drop-shadow(0 .16em .22em rgba(0,0,0,.18));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            0 .48em .82em rgba(0,0,0,.20);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        outline-color: rgba(var(--nr-card-accent, 78,150,166),.150);
+        filter: saturate(1.10) contrast(1.055) drop-shadow(0 .18em .25em rgba(0,0,0,.22));
+    }
+    .container_right .app_name{
+        color: var(--nr-premium-text);
+        text-shadow: 0 1px 0 rgba(0,0,0,.56), 0 0 .76em rgba(var(--nr-card-accent, 78,150,166),.080);
+    }
+    .container_right .app_box:hover .app_name,
+    .container_right .app_box:focus-within .app_name{
+        color: #ffffff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.60), 0 0 .92em rgba(var(--nr-card-accent, 78,150,166),.105);
+    }
+    .container_right .app_version{
+        border-color: rgba(var(--nr-card-accent, 78,150,166),.230);
+        color: #dce9f5;
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166),.060), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.008)),
+            rgba(5,12,22,.72);
+    }
+    .container_right .app_des{
+        color: rgba(203,214,224,.760);
+        font-weight: 560;
+        text-shadow: 0 1px 0 rgba(0,0,0,.28);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(var(--nr-card-accent, 78,150,166),.220);
+        text-shadow: 0 1px 0 rgba(0,0,0,.38);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.010)),
+            rgba(5,12,22,.66);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.026);
+    }
+    .container_right .app_state_1{
+        color: #def6e9;
+        border-color: rgba(76,156,124,.42);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(58,150,120,.110), transparent 64%),
+            linear-gradient(180deg, rgba(58,150,120,.100), rgba(34,116,82,.036)),
+            rgba(4,26,20,.48);
+    }
+    .container_right .app_state_2{
+        color: #f3dfb7;
+        border-color: rgba(178,128,62,.40);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(178,128,62,.100), transparent 64%),
+            linear-gradient(180deg, rgba(178,128,62,.090), rgba(120,72,28,.034)),
+            rgba(30,18,5,.46);
+    }
+    .container_right .app_open_1{
+        color: #e5f8fb;
+        border-color: rgba(var(--nr-card-accent, 78,150,166),.42);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166),.125), transparent 62%),
+            linear-gradient(180deg, rgba(78,150,166,.112), rgba(30,92,110,.040)),
+            rgba(4,21,30,.48);
+    }
+    .container_right .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166),.270);
+        color: #e7eef6;
+        text-shadow: 0 1px 0 rgba(0,0,0,.42);
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166),.085), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.046), rgba(255,255,255,.010)),
+            rgba(5,12,22,.78);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.034),
+            0 .40em .76em rgba(0,0,0,.16);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(var(--nr-card-accent, 78,150,166),.460);
+        color: #ffffff;
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166),.120), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.056), rgba(255,255,255,.014)),
+            rgba(6,16,30,.84);
+    }
+    .container_right .action_list_li:first-child{
+        border-color: rgba(148,163,184,.30);
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.048), rgba(148,163,184,.010)),
+            rgba(5,12,22,.70);
+    }
+    .container_right .action_list_li:last-child{
+        border-color: rgba(var(--nr-card-accent, 78,150,166),.48);
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166),.135), transparent 72%),
+            linear-gradient(180deg, rgba(78,150,166,.146), rgba(78,150,166,.042)),
+            rgba(5,12,22,.82);
+    }
+    .app_status_panel{
+        border-color: rgba(84,118,142,.34);
+        outline: .0625rem solid rgba(255,255,255,.026);
+        outline-offset: -.0625rem;
+        background:
+            radial-gradient(circle at 16% 0%, rgba(84,178,198,.070), transparent 48%),
+            radial-gradient(circle at 100% 100%, rgba(58,150,120,.034), transparent 54%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.006)),
+            rgba(5,11,20,.92);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            inset 0 0 0 .0625rem rgba(84,178,198,.070),
+            0 1.08em 2.24em rgba(0,0,0,.40);
+    }
+    .app_status_head{
+        color: #edf6fb;
+        border-bottom-color: rgba(116,137,161,.26);
+        text-shadow: 0 1px 0 rgba(0,0,0,.42);
+    }
+    .app_status_time{
+        border-color: rgba(84,178,198,.34);
+        color: #eaf8fb;
+        background:
+            linear-gradient(180deg, rgba(84,178,198,.120), rgba(84,178,198,.038)),
+            rgba(5,13,25,.82);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(84,118,142,.32);
+        background:
+            radial-gradient(circle at 14% 0%, rgba(var(--nr-tile-accent, 80,123,184),.110), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.010)),
+            rgba(5,13,25,.74);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.046),
+            0 .44em .84em rgba(0,0,0,.18);
+    }
+    .app_status_tile strong,
+    .app_status_metric_row strong{
+        color: #f6fbff;
+        text-shadow: 0 1px 0 rgba(0,0,0,.46);
+    }
+    .app_status_tile span,
+    .app_status_metric_row span{
+        color: #c6d2df;
+    }
+    .app_status_bar{
+        background:
+            linear-gradient(180deg, rgba(12,18,28,.96), rgba(4,9,17,.88)),
+            rgba(4,8,16,.84);
+        box-shadow:
+            inset 0 .08em .18em rgba(0,0,0,.52),
+            inset 0 0 0 .0625rem rgba(84,178,198,.105);
+    }
+    .app_status_bar span{
+        background:
+            linear-gradient(90deg, rgba(84,178,198,.92), rgba(58,150,120,.82)),
+            rgba(84,178,198,.82);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.20),
+            0 0 .78em rgba(84,178,198,.18);
+    }
+    .app_status_temp_bar{
+        background:
+            linear-gradient(90deg, rgba(184,88,88,.92), rgba(178,128,62,.82)),
+            rgba(184,88,88,.82);
+    }
+    .app_status_cpu_bar{
+        background:
+            linear-gradient(90deg, rgba(80,123,184,.92), rgba(84,178,198,.82)),
+            rgba(80,123,184,.82);
+    }
+    .app_status_mem_bar{
+        background:
+            linear-gradient(90deg, rgba(58,150,120,.92), rgba(84,178,198,.76)),
+            rgba(58,150,120,.82);
+    }
+    /* 80-temp source layer map:
+       NRadio appcenter premium matte optical token matrix
+       NRadio appcenter premium matte token consumers
+       NRadio appcenter premium matte lens bank
+       NRadio appcenter premium stability tone bank
+       NRadio appcenter premium stability consumers
+       NRadio appcenter premium final depth bank
+       NRadio appcenter premium final depth consumers
+       NRadio appcenter premium final seal bank
+       NRadio appcenter premium final seal consumers
+       NRadio appcenter card content logic finish */
+    .appcontainer{
+        --nr-matte-bg: rgba(3,7,13,.965);
+        --nr-matte-panel: rgba(6,12,22,.925);
+        --nr-matte-panel-2: rgba(9,18,29,.985);
+        --nr-matte-edge: rgba(95,118,142,.32);
+        --nr-matte-edge-soft: rgba(148,163,184,.11);
+        --nr-matte-ink: #eef4fa;
+        --nr-matte-ink-2: #c8d4df;
+        --nr-matte-ink-3: #8d9aaa;
+        --nr-matte-shadow: rgba(0,0,0,.43);
+        --nr-matte-blue: 72,118,174;
+        --nr-matte-cyan: 78,150,166;
+        --nr-matte-green: 58,130,112;
+        --nr-matte-amber: 160,119,72;
+        --nr-matte-red: 172,82,82;
+    }
+    .container_right .app_box{
+        color: var(--nr-matte-ink);
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .28);
+        background:
+            radial-gradient(circle at 16% -4%, rgba(var(--nr-card-accent, 78,150,166), .020), transparent 42%),
+            radial-gradient(circle at 84% 2%, rgba(var(--nr-card-accent-2, 58,130,112), .012), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.004)),
+            linear-gradient(145deg, rgba(9,18,29,.988), rgba(3,7,13,.964));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.044),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 78,150,166), .050),
+            inset 0 -.08em 0 rgba(0,0,0,.70),
+            0 1.12em 2.22em rgba(0,0,0,.38);
+        transform: none;
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .38);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 78,150,166), .076),
+            inset 0 -.08em 0 rgba(0,0,0,.66),
+            0 1.16em 2.30em rgba(0,0,0,.42);
+        transform: none;
+    }
+    .container_right .app_box::before{
+        background:
+            radial-gradient(circle at 18% 0%, rgba(var(--nr-card-accent, 78,150,166), .078), transparent 44%),
+            radial-gradient(circle at 86% 7%, rgba(var(--nr-card-accent-2, 58,130,112), .038), transparent 42%),
+            linear-gradient(180deg, rgba(255,255,255,.014), transparent 48%);
+        opacity: .50;
+    }
+    .container_right .app_box::after{
+        display: block;
+        border-color: transparent;
+        background:
+            linear-gradient(90deg, rgba(var(--nr-card-accent, 78,150,166), .085), rgba(148,163,184,.026) 34%, transparent 72%) top / 100% 1px no-repeat,
+            linear-gradient(90deg, transparent, rgba(var(--nr-card-accent-2, 58,130,112), .050), transparent) bottom / 100% 1px no-repeat,
+            radial-gradient(ellipse at 20% 18%, rgba(var(--nr-card-accent, 78,150,166), .040), transparent 48%),
+            radial-gradient(ellipse at 76% 68%, rgba(var(--nr-card-accent-2, 58,130,112), .024), transparent 54%),
+            linear-gradient(145deg, rgba(255,255,255,.006), transparent 62%);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.008);
+        opacity: .64;
+    }
+    .container_right .app_icon::before{
+        background:
+            radial-gradient(circle at 50% 8%, rgba(var(--nr-card-accent, 78,150,166), .12), transparent 66%),
+            radial-gradient(circle at 50% 100%, rgba(var(--nr-card-accent-2, 58,130,112), .052), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.008)),
+            rgba(4,10,18,.68);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.060),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 78,150,166), .090),
+            0 .62em 1.04em rgba(0,0,0,.24);
+    }
+    .container_right .app_icon_img{
+        outline-color: rgba(var(--nr-card-accent, 78,150,166), .085);
+        background:
+            radial-gradient(circle at 50% 0%, rgba(var(--nr-card-accent, 78,150,166), .075), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.008)),
+            rgba(4,10,18,.76);
+        filter: saturate(1.05) contrast(1.045) drop-shadow(0 .16em .22em rgba(0,0,0,.18));
+    }
+    .container_right .app_name{
+        color: var(--nr-matte-ink);
+        text-shadow:
+            0 1px 0 rgba(0,0,0,.56),
+            0 0 .76em rgba(var(--nr-card-accent, 78,150,166), .080);
+    }
+    .container_right .app_version{
+        color: #dce9f5;
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .23);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166), .060), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.008)),
+            rgba(5,12,22,.72);
+    }
+    .container_right .app_des{
+        color: rgba(203,214,224,.760);
+        font-weight: 560;
+        text-shadow: 0 1px 0 rgba(0,0,0,.28);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .22);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.040), rgba(255,255,255,.010)),
+            rgba(5,12,22,.66);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.026);
+    }
+    .container_right .app_state_1{
+        color: #def6e9;
+        border-color: rgba(76,156,124,.42);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(58,150,120,.110), transparent 64%),
+            linear-gradient(180deg, rgba(58,150,120,.100), rgba(34,116,82,.036)),
+            rgba(4,26,20,.48);
+    }
+    .container_right .app_state_2{
+        color: #f3dfb7;
+        border-color: rgba(178,128,62,.40);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(178,128,62,.100), transparent 64%),
+            linear-gradient(180deg, rgba(178,128,62,.090), rgba(120,72,28,.034)),
+            rgba(30,18,5,.46);
+    }
+    .container_right .app_open_1{
+        color: #e5f8fb;
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .42);
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166), .125), transparent 62%),
+            linear-gradient(180deg, rgba(78,150,166,.112), rgba(30,92,110,.040)),
+            rgba(4,21,30,.48);
+    }
+    .container_right .action_list_li{
+        color: #e7eef6;
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .27);
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166), .085), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.046), rgba(255,255,255,.010)),
+            rgba(5,12,22,.78);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.034),
+            0 .40em .76em rgba(0,0,0,.16);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        color: #ffffff;
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .46);
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166), .120), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.056), rgba(255,255,255,.014)),
+            rgba(6,16,30,.84);
+        transform: none;
+    }
+    .container_right .app_card_context{
+        display: none !important;
+    }
+    .app_status_panel{
+        border-color: rgba(84,118,142,.34);
+        outline-color: rgba(255,255,255,.026);
+        background:
+            radial-gradient(circle at 16% 0%, rgba(84,178,198,.070), transparent 48%),
+            radial-gradient(circle at 100% 100%, rgba(58,150,120,.034), transparent 54%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.006)),
+            rgba(5,11,20,.92);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            inset 0 0 0 .0625rem rgba(84,178,198,.070),
+            0 1.08em 2.24em rgba(0,0,0,.40);
+    }
+    .app_status_bar span{
+        background:
+            linear-gradient(90deg, rgba(84,178,198,.92), rgba(58,150,120,.82)),
+            rgba(84,178,198,.82);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.20),
+            0 0 .78em rgba(84,178,198,.18);
+    }
+    /* NRadio appcenter card content logic finish */
+    .container_right .app_card_context{
+        position: absolute;
+        z-index: 2;
+        left: 14px;
+        right: 14px;
+        bottom: 58px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        box-sizing: border-box;
+        pointer-events: none;
+    }
+    .container_right .app_card_context_item{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 0;
+        border: 1px solid rgba(var(--nr-card-accent, 78,150,166), .075);
+        border-radius: 8px;
+        background:
+            radial-gradient(circle at 8% 0%, rgba(var(--nr-card-accent, 78,150,166), .030), transparent 64%),
+            linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.006)),
+            rgba(4,9,16,.46);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.026),
+            0 .32em .62em rgba(0,0,0,.16);
+        -webkit-backdrop-filter: blur(8px) saturate(.94);
+        backdrop-filter: blur(8px) saturate(.94);
+        color: rgba(222,232,242,.86);
+        text-shadow: 0 1px 0 rgba(0,0,0,.42);
+    }
+    .container_right .app_card_context_item em,
+    .container_right .app_card_context_item strong{
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-style: normal;
+        letter-spacing: 0;
+        line-height: 1;
+    }
+    .container_right .app_card_context_item em{
+        color: rgba(157,173,190,.76);
+        font-weight: 650;
+    }
+    .container_right .app_card_context_item strong{
+        color: rgba(243,248,252,.94);
+        font-weight: 780;
+        text-align: right;
+    }
+    .container_right .app_action{
+        border: 1px solid rgba(var(--nr-card-accent, 78,150,166), .070);
+        border-radius: 10px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.020), rgba(255,255,255,.006)),
+            rgba(3,8,15,.40);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.024),
+            0 .34em .68em rgba(0,0,0,.18);
+        -webkit-backdrop-filter: blur(8px) saturate(.92);
+        backdrop-filter: blur(8px) saturate(.92);
+    }
+    .container_right .app_action::before{
+        opacity: .34;
+        background:
+            linear-gradient(90deg, transparent, rgba(var(--nr-card-accent, 78,150,166), .115), rgba(148,163,184,.050), transparent);
+    }
+    .container_right .action_list{
+        justify-content: stretch;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .container_right .action_list_li{
+        flex: 1 1 0;
+        min-width: 0;
+        border-radius: 8px;
+        text-align: center;
+        color: rgba(234,242,249,.92);
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .082);
+        background:
+            radial-gradient(circle at 50% -28%, rgba(var(--nr-card-accent, 78,150,166), .042), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.008)),
+            rgba(5,11,20,.76);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.030),
+            0 .22em .48em rgba(0,0,0,.18);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        color: rgba(248,252,255,.98);
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .150);
+        background:
+            radial-gradient(circle at 50% -28%, rgba(var(--nr-card-accent, 78,150,166), .066), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.010)),
+            rgba(7,14,25,.82);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.036),
+            0 .24em .52em rgba(0,0,0,.20);
+        transform: none;
+    }
+    .container_right .action_list_li:first-child{
+        color: rgba(209,219,231,.86);
+        border-color: rgba(138,150,164,.180);
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.026), rgba(148,163,184,.006)),
+            rgba(4,9,16,.56);
+    }
+    .container_right .action_list_li:last-child{
+        color: rgba(244,250,253,.96);
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .190);
+        background:
+            radial-gradient(circle at 50% -28%, rgba(var(--nr-card-accent, 78,150,166), .086), transparent 70%),
+            linear-gradient(180deg, rgba(84,178,198,.048), rgba(42,108,122,.018)),
+            rgba(5,12,22,.78);
+    }
+    .container_right .app_action_count_1 .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .190);
+        color: rgba(244,250,253,.96);
+        background:
+            radial-gradient(circle at 50% -28%, rgba(var(--nr-card-accent, 78,150,166), .086), transparent 70%),
+            linear-gradient(180deg, rgba(84,178,198,.048), rgba(42,108,122,.018)),
+            rgba(5,12,22,.78);
+    }
+    .container_right .app_action_count_3 .action_list_li{
+        font-size: 12px;
+    }
+    .container_right .app_box:hover .app_card_context_item,
+    .container_right .app_box:focus-within .app_card_context_item{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .110);
+        background:
+            radial-gradient(circle at 8% 0%, rgba(var(--nr-card-accent, 78,150,166), .042), transparent 64%),
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.007)),
+            rgba(4,9,16,.50);
+    }
+    /* NRadio appcenter product card refinement pass 8 exact layout constraints */
+    .container_right .app_box::after{
+        display: block;
+        left: 14px;
+        right: 14px;
+        top: 126px;
+        bottom: 64px;
+        width: auto;
+        height: auto;
+        border: 0;
+        border-radius: 0;
+        background:
+            linear-gradient(90deg, rgba(var(--nr-card-accent, 78,150,166), .085), rgba(148,163,184,.026) 34%, transparent 72%) top / 100% 1px no-repeat,
+            linear-gradient(90deg, transparent, rgba(var(--nr-card-accent-2, 58,130,112), .050), transparent) bottom / 100% 1px no-repeat,
+            radial-gradient(ellipse at 20% 18%, rgba(var(--nr-card-accent, 78,150,166), .040), transparent 48%),
+            radial-gradient(ellipse at 76% 68%, rgba(var(--nr-card-accent-2, 58,130,112), .024), transparent 54%),
+            linear-gradient(145deg, rgba(255,255,255,.006), transparent 62%);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.008);
+        opacity: .64;
+        filter: none;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .container_right .app_title::after{
+        width: 58px;
+        margin-top: 1px;
+        opacity: .22;
+        background: linear-gradient(90deg, rgba(var(--nr-card-accent, 78,150,166), .180), transparent);
+    }
+    .container_right .app_des{
+        position: relative;
+        z-index: 2;
+        height: 18px;
+        min-height: 0;
+        margin-top: 8px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: rgba(203,214,224,.760);
+        font-size: 12.5px;
+        font-weight: 560;
+        line-height: 18px;
+        white-space: nowrap;
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-shadow: none;
+    }
+    .container_right .app_des_empty{
+        display: none;
+    }
+    .container_right .app_card_context{
+        display: none !important;
+        left: 14px;
+        right: 14px;
+        bottom: 61px;
+        align-items: center;
+        min-height: 27px;
+        padding: 0 10px;
+        gap: 0;
+        border: 1px solid rgba(var(--nr-card-accent, 78,150,166), .060);
+        border-radius: 8px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.018), rgba(255,255,255,.004)),
+            rgba(3,8,14,.460);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.016),
+            0 .24em .54em rgba(0,0,0,.140);
+        -webkit-backdrop-filter: blur(6px) saturate(.92);
+        backdrop-filter: blur(6px) saturate(.92);
+    }
+    .container_right .app_card_context::before{
+        content: "";
+        flex: 0 0 auto;
+        width: 5px;
+        height: 5px;
+        margin-right: 8px;
+        border-radius: 999px;
+        background: rgba(var(--nr-card-accent, 78,150,166), .680);
+        box-shadow: 0 0 0 4px rgba(var(--nr-card-accent, 78,150,166), .055);
+    }
+    .container_right .app_card_context_item{
+        flex: 0 1 auto;
+        gap: 5px;
+        height: 25px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    .container_right .app_card_context_item + .app_card_context_item{
+        margin-left: 10px;
+        padding-left: 10px;
+        border-left: 1px solid rgba(148,163,184,.100);
+    }
+    .container_right .app_card_context_item em{
+        flex: 0 0 auto;
+        color: rgba(146,160,176,.680);
+        font-size: 10px;
+        font-weight: 720;
+    }
+    .container_right .app_card_context_item strong{
+        max-width: 112px;
+        color: rgba(230,238,246,.900);
+        font-size: 11.5px;
+        font-weight: 760;
+        text-align: left;
+    }
+    .container_right .app_action{
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    .container_right .app_action::before{
+        top: -9px;
+        opacity: .24;
+        background: linear-gradient(90deg, transparent, rgba(var(--nr-card-accent, 78,150,166), .170), rgba(148,163,184,.055), transparent);
+    }
+    .container_right .action_list{
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+    }
+    .container_right .action_list_li{
+        flex: 0 0 auto;
+        min-width: 82px;
+        max-width: 96px;
+        height: 33px;
+        border-radius: 7px;
+        font-size: 12.5px;
+        font-weight: 780;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,.020), rgba(255,255,255,.004)),
+            rgba(3,8,15,.660);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.020),
+            0 .20em .42em rgba(0,0,0,.145);
+    }
+    .container_right .app_action_count_2 .action_list_li:first-child{
+        flex: 0 0 auto;
+        color: rgba(202,213,224,.780);
+        border-color: rgba(148,163,184,.135);
+        background:
+            linear-gradient(180deg, rgba(148,163,184,.018), rgba(148,163,184,.004)),
+            rgba(3,8,15,.520);
+    }
+    .container_right .app_action_count_2 .action_list_li:last-child,
+    .container_right .app_action_count_1 .action_list_li{
+        flex: 0 0 auto;
+        color: rgba(241,250,253,.960);
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .185);
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166), .080), transparent 68%),
+            linear-gradient(180deg, rgba(84,178,198,.044), rgba(42,108,122,.014)),
+            rgba(4,11,20,.760);
+    }
+    .container_right .app_action_count_3 .action_list_li{
+        padding: 0 6px;
+        min-width: 60px;
+        font-size: 11.5px;
+    }
+    .container_right .app_action_count_1{
+        justify-content: flex-end;
+    }
+    .container_right .app_action_count_1 .action_list_li{
+        min-width: 118px;
+        max-width: 160px;
+    }
+    .container_right .app_action_count_3 .action_list_li:first-child{
+        color: rgba(248,220,168,.940);
+        border-color: rgba(245,158,11,.190);
+        background:
+            radial-gradient(circle at 50% -30%, rgba(245,158,11,.070), transparent 68%),
+            rgba(28,18,8,.520);
+    }
+    .container_right .app_box:hover .app_des,
+    .container_right .app_box:focus-within .app_des{
+        color: rgba(218,228,238,.820);
+        border-color: transparent;
+        background: transparent;
+    }
+    .container_right .app_box:hover .app_card_context_item,
+    .container_right .app_box:focus-within .app_card_context_item{
+        border-color: transparent;
+        background: transparent;
+    }
 EOF_APPCENTER_CARD_POLISH_CSS
+
+    cat >> "$css_file" <<'EOF_APPCENTER_CARD_POLISH_ALIGN_CSS'
+
+    /* NRadio appcenter premium frontend finish: pass 7 optical depth and motion discipline */
+    /* NRadio appcenter premium frontend finish: pass 8 matte restraint override */
+    /* NRadio appcenter product card refinement pass 8 */
+    /* NRadio appcenter card content logic finish */
+    /* NRadio appcenter premium script alignment closeout: pass 7 optical depth */
+    /* NRadio appcenter premium script alignment closeout: pass 8 matte restraint */
+    .container_right .app_box{
+        --nr-align-ink: #f3f7fb;
+        --nr-align-ink-soft: #c7d3df;
+        --nr-align-muted: #8f9dac;
+        color: var(--nr-align-ink);
+        background:
+            radial-gradient(circle at 18% -8%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-sheen-alpha, .030)), transparent 42%),
+            radial-gradient(circle at 86% 4%, rgba(var(--nr-card-accent-2, 58,130,112), var(--nr-card-glass-alpha, .022)), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,var(--nr-card-topline-alpha, .042)), rgba(255,255,255,.007)),
+            linear-gradient(145deg, rgba(8,17,28,.980), rgba(3,7,13,.956));
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-border-alpha, .250));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,var(--nr-card-topline-alpha, .042)),
+            inset 0 0 0 .0625rem rgba(148,163,184,var(--nr-card-line-alpha, .094)),
+            inset 0 -.08em 0 rgba(0,0,0,.58),
+            0 1.08em 2.18em rgba(0,0,0,var(--nr-card-shadow-alpha, .370)),
+            0 0 .48em rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-ambient-alpha, .034));
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        background:
+            radial-gradient(circle at 18% -8%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-emphasis-alpha, .055)), transparent 42%),
+            radial-gradient(circle at 86% 4%, rgba(var(--nr-card-accent-2, 58,130,112), .030), transparent 36%),
+            linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.009)),
+            linear-gradient(145deg, rgba(10,21,34,.988), rgba(4,9,16,.972));
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-hover-border-alpha, .330));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.045),
+            inset 0 0 0 .0625rem rgba(166,188,206,.090),
+            inset 0 -.08em 0 rgba(0,0,0,.55),
+            0 1.10em 2.22em rgba(0,0,0,var(--nr-card-hover-shadow-alpha, .390)),
+            0 0 .58em rgba(var(--nr-card-accent, 78,150,166), .030);
+    }
+    .container_right .app_box::before{
+        opacity: .30;
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-sheen-alpha, .030)), transparent 46%),
+            radial-gradient(circle at 92% 8%, rgba(var(--nr-card-accent-2, 58,130,112), var(--nr-card-glass-alpha, .022)), transparent 42%),
+            linear-gradient(180deg, rgba(255,255,255,.012), transparent 48%);
+    }
+    .container_right .app_box::after{
+        opacity: .20;
+        background:
+            linear-gradient(90deg, transparent, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-underbar-alpha, .260)), rgba(148,163,184,.060), transparent);
+        box-shadow: 0 0 .44em rgba(var(--nr-card-accent, 78,150,166), .024);
+    }
+    .container_right .app_icon::before{
+        opacity: .62;
+        background:
+            radial-gradient(circle at 50% 8%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-icon-alpha, .038)), transparent 68%),
+            radial-gradient(circle at 50% 100%, rgba(var(--nr-card-accent-2, 58,130,112), .016), transparent 74%),
+            linear-gradient(180deg, rgba(255,255,255,.024), rgba(255,255,255,.006)),
+            rgba(4,9,16,.72);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-icon-edge-alpha, .122));
+        background:
+            radial-gradient(circle at 50% 0%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-icon-glow-alpha, .040)), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.006)),
+            rgba(4,9,16,.82);
+        filter: saturate(.90) contrast(1.040);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-hover-border-alpha, .330));
+        filter: saturate(.94) contrast(1.048);
+    }
+    .container_right .app_name{
+        color: rgba(245,249,252,.950);
+        text-shadow: 0 1px 0 rgba(0,0,0,.58), 0 0 .42em rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-title-glow-alpha, .030));
+    }
+    .container_right .app_des,
+    .container_right .app_version{
+        color: rgba(203,214,224,var(--nr-card-muted-alpha, .720));
+    }
+    .container_right .app_version{
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-version-alpha, .042)), transparent 68%),
+            linear-gradient(180deg, rgba(255,255,255,.026), rgba(255,255,255,.006)),
+            rgba(5,11,20,.72);
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .072);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-badge-alpha, .048));
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-badge-alpha, .048)), transparent 64%),
+            linear-gradient(180deg, rgba(255,255,255,.024), rgba(255,255,255,.006)),
+            rgba(5,11,20,.70);
+    }
+    .container_right .app_state_1{
+        border-color: rgba(58,150,120,var(--nr-card-green-alpha, .640));
+        background:
+            radial-gradient(circle at 12% 0%, rgba(58,150,120,.050), transparent 64%),
+            linear-gradient(180deg, rgba(58,150,120,.050), rgba(34,105,82,.018)),
+            rgba(4,20,17,.40);
+    }
+    .container_right .app_state_2{
+        border-color: rgba(178,128,62,var(--nr-card-amber-alpha, .600));
+        background:
+            radial-gradient(circle at 12% 0%, rgba(178,128,62,.050), transparent 64%),
+            linear-gradient(180deg, rgba(178,128,62,.050), rgba(110,72,30,.018)),
+            rgba(24,17,8,.38);
+    }
+    .container_right .app_open_1{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-open-alpha, .070));
+        background:
+            radial-gradient(circle at 12% 0%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-open-alpha, .070)), transparent 62%),
+            linear-gradient(180deg, rgba(84,178,198,.046), rgba(42,108,122,.018)),
+            rgba(4,18,24,.40);
+    }
+    .container_right .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-action-alpha, .054));
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-action-alpha, .054)), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.030), rgba(255,255,255,.008)),
+            rgba(5,11,20,.82);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-action-hover-alpha, .076));
+        background:
+            radial-gradient(circle at 50% -30%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-card-action-hover-alpha, .076)), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.034), rgba(255,255,255,.010)),
+            rgba(7,14,25,.84);
+    }
+    .app_status_panel{
+        border-color: rgba(84,178,198,.28);
+        background:
+            radial-gradient(circle at 18% 0%, rgba(84,178,198,.050), transparent 58%),
+            radial-gradient(circle at 100% 100%, rgba(58,150,120,.028), transparent 72%),
+            linear-gradient(180deg, rgba(255,255,255,.030), rgba(255,255,255,.008)),
+            rgba(5,11,20,.82);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(126,149,170,.22);
+        background:
+            radial-gradient(circle at 14% 0%, rgba(var(--nr-tile-accent, 84,178,198),.060), transparent 72%),
+            radial-gradient(circle at 100% 100%, rgba(58,150,120,.022), transparent 70%),
+            linear-gradient(180deg, rgba(255,255,255,.036), rgba(255,255,255,.010)),
+            rgba(5,12,22,.74);
+    }
+EOF_APPCENTER_CARD_POLISH_ALIGN_CSS
+
+    awk '
+        function dec(v, s) {
+            s = sprintf("%.3f", v)
+            sub(/^0/, "", s)
+            return s
+        }
+        BEGIN {
+            split("78,150,166|76,118,166|62,138,124|98,142,170|66,124,138|70,120,158|82,134,144|72,138,108|92,102,170|54,142,156|48,132,126|88,128,160|74,130,118|86,116,154|60,136,148|80,126,136", accent, "|")
+            split("58,130,112|70,138,122|82,120,162|160,119,72|62,106,146|60,128,110|82,106,142|78,150,166|48,132,126|92,102,170|75,118,172|58,130,112|82,106,142|72,138,108|98,142,170|58,130,112", accent2, "|")
+            print "    /* NRadio appcenter premium matte optical token matrix */"
+            print "    /* NRadio appcenter premium matte optical token matrix generated alignment */"
+            for (i = 1; i <= 64; i++) {
+                k = (i - 1) % 16
+                printf "    .container_right .app_box:nth-child(64n+%d){\n", i
+                printf "        --nr-card-accent: %s;\n", accent[k + 1]
+                printf "        --nr-card-accent-2: %s;\n", accent2[k + 1]
+                printf "        --nr-tile-accent: %s;\n", accent[k + 1]
+                printf "        --nr-card-sheen-alpha: %s;\n", dec(.030 + (k % 8) * .002)
+                printf "        --nr-card-glass-alpha: %s;\n", dec(.022 + (k % 7) * .001)
+                printf "        --nr-card-edge-alpha: %s;\n", dec(.142 + (k % 8) * .004)
+                printf "        --nr-card-line-alpha: %s;\n", dec(.094 + (k % 7) * .002)
+                printf "        --nr-card-icon-alpha: %s;\n", dec(.038 + (k % 6) * .001)
+                printf "        --nr-card-icon-edge-alpha: %s;\n", dec(.122 + (k % 8) * .002)
+                printf "        --nr-card-icon-glow-alpha: %s;\n", dec(.040 + (k % 6) * .001)
+                printf "        --nr-card-title-glow-alpha: %s;\n", dec(.030 + (k % 6) * .001)
+                printf "        --nr-card-version-alpha: %s;\n", dec(.042 + (k % 8) * .001)
+                printf "        --nr-card-badge-alpha: %s;\n", dec(.048 + (k % 7) * .001)
+                printf "        --nr-card-action-alpha: %s;\n", dec(.054 + (k % 7) * .001)
+                printf "        --nr-card-action-hover-alpha: %s;\n", dec(.076 + (k % 7) * .002)
+                printf "        --nr-card-open-alpha: %s;\n", dec(.070 + (k % 7) * .001)
+                printf "        --nr-card-installed-alpha: %s;\n", dec(.062 + (k % 7) * .001)
+                printf "        --nr-card-update-alpha: %s;\n", dec(.058 + (k % 7) * .001)
+                printf "        --nr-card-shadow-alpha: %s;\n", dec(.370 + (k % 8) * .001)
+                printf "        --nr-card-hover-shadow-alpha: %s;\n", dec(.390 + (k % 8) * .001)
+                printf "        --nr-card-border-alpha: %s;\n", dec(.250 + (k % 8) * .002)
+                printf "        --nr-card-hover-border-alpha: %s;\n", dec(.330 + (k % 8) * .002)
+                printf "        --nr-card-topline-alpha: %s;\n", dec(.042 + (k % 7) * .001)
+                printf "        --nr-card-underbar-alpha: %s;\n", dec(.260 + (k % 7) * .002)
+                printf "        --nr-card-panel-alpha: %s;\n", dec(.042 + (k % 7) * .001)
+                printf "        --nr-card-panel-edge-alpha: %s;\n", dec(.112 + (k % 7) * .002)
+                printf "        --nr-card-panel-shadow-alpha: %s;\n", dec(.350 + (k % 8) * .001)
+                printf "        --nr-card-meter-alpha: %s;\n", dec(.620 + (k % 8) * .002)
+                printf "        --nr-card-meter-glow-alpha: %s;\n", dec(.120 + (k % 7) * .001)
+                printf "        --nr-card-focus-alpha: %s;\n", dec(.100 + (k % 7) * .002)
+                printf "        --nr-card-noise-alpha: %s;\n", dec(.020 + (k % 5) * .001)
+                printf "        --nr-card-ambient-alpha: %s;\n", dec(.034 + (k % 7) * .001)
+                printf "        --nr-card-emphasis-alpha: %s;\n", dec(.055 + (k % 7) * .001)
+                printf "        --nr-card-muted-alpha: %s;\n", dec(.720 + (k % 8) * .003)
+                printf "        --nr-card-red-alpha: %s;\n", dec(.650 + (k % 6) * .002)
+                printf "        --nr-card-amber-alpha: %s;\n", dec(.600 + (k % 6) * .002)
+                printf "        --nr-card-green-alpha: %s;\n", dec(.640 + (k % 6) * .002)
+                printf "        --nr-card-blue-alpha: %s;\n", dec(.610 + (k % 6) * .002)
+                printf "        --nr-card-cyan-alpha: %s;\n", dec(.630 + (k % 6) * .002)
+                print "    }"
+            }
+            print "    /* NRadio appcenter premium matte lens bank */"
+            print "    /* NRadio appcenter premium matte lens bank generated source alignment */"
+            for (i = 1; i <= 64; i++) {
+                k = i - 1
+                j = k % 8
+                g8 = int(k / 8)
+                g16 = int(k / 16)
+                printf "    .container_right .app_box:nth-child(64n+%d){\n", i
+                printf "        --nr-lens-ink: %s;\n", dec(.972 + g16 * .001 + j * .002)
+                printf "        --nr-lens-vellum: %s;\n", dec(.034 + j * .001)
+                printf "        --nr-lens-frost: %s;\n", dec(.018 + j * .001)
+                printf "        --nr-lens-rim: %s;\n", dec(.118 + (g8 % 2) * .001 + int(g8 / 6) * .002 + j * .002)
+                printf "        --nr-lens-hairline: %s;\n", dec(.072 + (g8 % 4) * .002 + j * .001)
+                printf "        --nr-lens-glint: %s;\n", dec(.030 + (g8 % 4) * .001 + j * .001)
+                printf "        --nr-lens-quiet: %s;\n", dec(.690 + (g8 % 4) * .001 + j * .004)
+                printf "        --nr-lens-text: %s;\n", dec(.940 + int(k / 16) * .001 + j * .002)
+                printf "        --nr-lens-pin: %s;\n", dec(.600 + int(k / 16) * .004 + j * .004)
+                printf "        --nr-lens-meter: %s;\n", dec(.610 + (g8 % 2) * .016 + int(g8 / 6) * .002 + j * .002)
+                printf "        --nr-lens-depth: %s;\n", dec(.360 + (g8 % 2) * .008 + int(g8 / 6) * .002 + j * .001)
+                printf "        --nr-lens-depth-hover: %s;\n", dec(.382 + (g8 % 2) * .008 + int(g8 / 6) * .002 + j * .001)
+                print "    }"
+            }
+            print "    /* NRadio appcenter premium stability tone bank */"
+            print "    /* NRadio appcenter premium stability tone bank generated source alignment */"
+            for (i = 1; i <= 32; i++) {
+                k = i - 1
+                j = k % 8
+                g8 = int(k / 8)
+                printf "    .container_right .app_box:nth-child(32n+%d){\n", i
+                printf "        --nr-stable-rim: %s;\n", dec(.210 + g8 * .002 + j * .004)
+                printf "        --nr-stable-rim-hover: %s;\n", dec(.286 + g8 * .002 + j * .004)
+                printf "        --nr-stable-top: %s;\n", dec(.038 + (g8 % 2) * .001 + j * .001)
+                printf "        --nr-stable-core: %s;\n", dec(.982 + g8 * .001 + j * .002)
+                printf "        --nr-stable-mist: %s;\n", dec(.030 + g8 * .001 + j * .001)
+                printf "        --nr-stable-ink: %s;\n", dec(.930 + g8 * .001 + j * .002)
+                printf "        --nr-stable-muted: %s;\n", dec(.710 + g8 * .002 + j * .003)
+                printf "        --nr-stable-button: %s;\n", dec(.050 + int(g8 / 2) * .001 + j * .001)
+                printf "        --nr-stable-button-hover: %s;\n", dec(.070 + g8 * .001 + j * .001)
+                printf "        --nr-stable-meter: %s;\n", dec(.600 + g8 * .002 + j * .004)
+                printf "        --nr-stable-meter-glow: %s;\n", dec(.110 + int(g8 / 2) * .001 + j * .002)
+                printf "        --nr-stable-shadow: %s;\n", dec(.365 + g8 * .001 + j * .001)
+                print "    }"
+            }
+            print "    /* NRadio appcenter premium final depth bank */"
+            print "    /* NRadio appcenter premium final depth bank generated alignment */"
+            for (i = 1; i <= 48; i++) {
+                k = (i - 1) % 16
+                printf "    .container_right .app_box:nth-child(48n+%d){\n", i
+                printf "        --nr-final-edge: %s;\n", dec(.190 + k * .003)
+                printf "        --nr-final-edge-hover: %s;\n", dec(.252 + k * .003)
+                printf "        --nr-final-top: %s;\n", dec(.030 + k * .001)
+                printf "        --nr-final-surface: %s;\n", dec(.984 + k * .001)
+                printf "        --nr-final-surface-2: %s;\n", dec(.944 + k * .001)
+                printf "        --nr-final-haze: %s;\n", dec(.020 + k * .001)
+                printf "        --nr-final-haze-2: %s;\n", dec(.014 + k * .001)
+                printf "        --nr-final-text: %s;\n", dec(.930 + k * .002)
+                printf "        --nr-final-muted: %s;\n", dec(.700 + k * .003)
+                printf "        --nr-final-pin: %s;\n", dec(.560 + k * .004)
+                printf "        --nr-final-button: %s;\n", dec(.046 + k * .001)
+                printf "        --nr-final-button-hover: %s;\n", dec(.064 + k * .001)
+                printf "        --nr-final-meter: %s;\n", dec(.580 + k * .003)
+                printf "        --nr-final-meter-glow: %s;\n", dec(.096 + k * .002)
+                printf "        --nr-final-shadow: %s;\n", dec(.360 + k * .001)
+                printf "        --nr-final-shadow-hover: %s;\n", dec(.382 + k * .001)
+                print "    }"
+            }
+            print "    /* NRadio appcenter premium final seal bank */"
+            print "    /* NRadio appcenter premium final seal bank generated alignment */"
+            for (i = 1; i <= 16; i++) {
+                k = i - 1
+                j = k % 8
+                g8 = int(k / 8)
+                printf "    .container_right .app_box:nth-child(16n+%d){\n", i
+                printf "        --nr-seal-edge: %s;\n", dec(.176 + g8 * .002 + j * .004)
+                printf "        --nr-seal-edge-hover: %s;\n", dec(.236 + g8 * .002 + j * .004)
+                printf "        --nr-seal-top: %s;\n", dec(.026 + g8 * .001 + j * .001)
+                printf "        --nr-seal-core: %s;\n", dec(.986 + g8 * .001 + j * .001)
+                printf "        --nr-seal-haze: %s;\n", dec(.016 + g8 * .001 + j * .001)
+                printf "        --nr-seal-text: %s;\n", dec(.920 + g8 * .003 + j * .002)
+                printf "        --nr-seal-muted: %s;\n", dec(.690 + g8 * .006 + j * .004)
+                printf "        --nr-seal-control: %s;\n", dec(.040 + g8 * .001 + j * .001)
+                printf "        --nr-seal-control-hover: %s;\n", dec(.058 + g8 * .001 + j * .001)
+                printf "        --nr-seal-meter: %s;\n", dec(.560 + g8 * .006 + j * .004)
+                printf "        --nr-seal-shadow: %s;\n", dec(.356 + g8 * .001 + j * .001)
+                printf "        --nr-seal-shadow-hover: %s;\n", dec(.374 + g8 * .001 + j * .001)
+                print "    }"
+            }
+        }
+    ' >> "$css_file"
+
+    cat >> "$css_file" <<'EOF_APPCENTER_CARD_POLISH_ALIGN_CONSUMERS'
+    /* NRadio appcenter premium matte token consumers */
+    /* NRadio appcenter premium matte lens bank */
+    /* NRadio appcenter premium stability tone bank */
+    /* NRadio appcenter premium stability consumers */
+    /* NRadio appcenter premium matte token consumers generated alignment */
+    /* NRadio appcenter premium stability consumers source alignment */
+    .container_right .app_box,
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within,
+    .container_right .app_icon_img,
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img,
+    .container_right .action_list_li,
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible,
+    .app_status_tile,
+    .app_status_tile:hover{
+        transform: none;
+    }
+    .container_right .app_box{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-stable-rim, .210));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,var(--nr-stable-top, .038)),
+            inset 0 0 0 .0625rem rgba(146,169,190,var(--nr-lens-hairline, .072)),
+            inset 0 -.08em 0 rgba(0,0,0,.62),
+            0 1.08em 2.18em rgba(0,0,0,var(--nr-stable-shadow, .365)),
+            0 0 .66em rgba(var(--nr-card-accent, 78,150,166), var(--nr-lens-glint, .030));
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-stable-rim-hover, .286));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.044),
+            inset 0 0 0 .0625rem rgba(166,188,206,.106),
+            inset 0 -.08em 0 rgba(0,0,0,.58),
+            0 1.10em 2.22em rgba(0,0,0,var(--nr-lens-depth-hover, .382)),
+            0 0 .74em rgba(var(--nr-card-accent, 78,150,166), .038);
+    }
+    .container_right .app_icon::before{
+        opacity: .66;
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.040),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 78,150,166), var(--nr-lens-rim, .118)),
+            0 .64em 1.02em rgba(0,0,0,.25);
+    }
+    .container_right .app_icon_img{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-lens-rim, .118));
+        filter: saturate(.92) contrast(1.045);
+    }
+    .container_right .app_name{
+        color: rgba(245,249,252,var(--nr-stable-ink, .930));
+    }
+    .container_right .app_des{
+        color: rgba(203,214,224,var(--nr-stable-muted, .710));
+    }
+    .container_right .app_version{
+        color: rgba(221,231,240,var(--nr-stable-muted, .710));
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-lens-hairline, .072));
+    }
+    .container_right .app_state_1,
+    .container_right .app_open_1{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-lens-pin, .600));
+    }
+    .container_right .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-stable-button, .050));
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-stable-button-hover, .070));
+        filter: saturate(.96) contrast(1.012);
+    }
+    .app_status_bar span{
+        background:
+            linear-gradient(90deg, rgba(84,178,198,var(--nr-stable-meter, .600)), rgba(58,150,120,.500)),
+            rgba(84,178,198,.62);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.13),
+            0 0 .34em rgba(84,178,198,var(--nr-stable-meter-glow, .110));
+    }
+    .container_right .app_box{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-final-edge, var(--nr-card-border-alpha, .250)));
+        background:
+            radial-gradient(circle at 18% -6%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-final-haze, var(--nr-card-sheen-alpha, .030))), transparent 42%),
+            radial-gradient(circle at 84% 4%, rgba(var(--nr-card-accent-2, 58,130,112), var(--nr-final-haze-2, var(--nr-card-glass-alpha, .022))), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,var(--nr-final-top, .030)), rgba(255,255,255,.006)),
+            linear-gradient(145deg, rgba(10,20,32,var(--nr-final-surface, .984)), rgba(4,8,15,var(--nr-final-surface-2, .944)));
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-final-edge-hover, var(--nr-card-hover-border-alpha, .330)));
+    }
+    .container_right .app_name{
+        color: rgba(245,249,252,var(--nr-final-text, .930));
+    }
+    .container_right .app_des,
+    .container_right .app_version{
+        color: rgba(203,214,224,var(--nr-final-muted, .700));
+    }
+    .container_right .app_state_1{
+        border-color: rgba(58,150,120,var(--nr-final-pin, var(--nr-card-green-alpha, .640)));
+    }
+    .container_right .app_open_1{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-final-pin, var(--nr-card-cyan-alpha, .630)));
+    }
+    .container_right .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-final-button, var(--nr-card-action-alpha, .054)));
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-final-button-hover, var(--nr-card-action-hover-alpha, .076)));
+    }
+    .app_status_bar span{
+        background:
+            linear-gradient(90deg, rgba(84,178,198,var(--nr-final-meter, .580)), rgba(58,150,120,.480)),
+            rgba(84,178,198,.60);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.12),
+            0 0 .30em rgba(84,178,198,var(--nr-final-meter-glow, .096));
+    }
+    .container_right .app_box,
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within,
+    .container_right .app_icon_img,
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img,
+    .container_right .action_list_li,
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible,
+    .app_status_tile,
+    .app_status_tile:hover,
+    .app_status_metric,
+    .app_status_time{
+        transform: none;
+    }
+    /* NRadio appcenter premium final depth consumers */
+    /* NRadio appcenter premium final seal consumers */
+    /* NRadio appcenter premium final seal consumers generated alignment */
+    .container_right .app_box{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-edge, var(--nr-final-edge, .190)));
+        background:
+            radial-gradient(circle at 18% -6%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-haze, var(--nr-final-haze, .020))), transparent 42%),
+            radial-gradient(circle at 84% 4%, rgba(var(--nr-card-accent-2, 58,130,112), .018), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,var(--nr-seal-line, .060)), rgba(255,255,255,.006)),
+            linear-gradient(145deg, rgba(10,20,32,var(--nr-seal-surface, .965)), rgba(4,8,15,var(--nr-seal-surface-2, .936)));
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-edge-hover, var(--nr-final-edge-hover, .252)));
+    }
+    .container_right .app_name{
+        color: rgba(245,249,252,var(--nr-seal-text, var(--nr-final-text, .930)));
+    }
+    .container_right .app_des,
+    .container_right .app_version{
+        color: rgba(203,214,224,var(--nr-seal-muted, var(--nr-final-muted, .700)));
+    }
+    .container_right .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-button, var(--nr-final-button, .046)));
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-button-hover, var(--nr-final-button-hover, .064)));
+    }
+    /* NRadio appcenter premium final seal consumers source alignment */
+    .container_right .app_box{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-edge, .176));
+        background:
+            radial-gradient(circle at 18% -6%, rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-haze, .016)), transparent 42%),
+            radial-gradient(circle at 84% 4%, rgba(var(--nr-card-accent-2, 58,130,112), .012), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,var(--nr-seal-top, .026)), rgba(255,255,255,.006)),
+            linear-gradient(145deg, rgba(10,20,32,var(--nr-seal-core, .986)), rgba(4,8,15,.946));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,var(--nr-seal-top, .026)),
+            inset 0 0 0 .0625rem rgba(146,169,190,.052),
+            inset 0 -.08em 0 rgba(0,0,0,.62),
+            0 1.08em 2.18em rgba(0,0,0,var(--nr-seal-shadow, .356));
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-edge-hover, .236));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.036),
+            inset 0 0 0 .0625rem rgba(166,188,206,.080),
+            inset 0 -.08em 0 rgba(0,0,0,.58),
+            0 1.10em 2.22em rgba(0,0,0,var(--nr-seal-shadow-hover, .374));
+    }
+    .container_right .app_name{
+        color: rgba(245,249,252,var(--nr-seal-text, .920));
+    }
+    .container_right .app_des,
+    .container_right .app_version{
+        color: rgba(203,214,224,var(--nr-seal-muted, .690));
+    }
+    .container_right .action_list_li{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-control, .040));
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), var(--nr-seal-control-hover, .058));
+    }
+    .app_status_bar span{
+        background:
+            linear-gradient(90deg, rgba(84,178,198,var(--nr-seal-meter, .560)), rgba(58,150,120,.460)),
+            rgba(84,178,198,.58);
+    }
+EOF_APPCENTER_CARD_POLISH_ALIGN_CONSUMERS
+
+    {
+        printf '\n'
+        cat <<'EOF_APPCENTER_CARD_POLISH_PRESERVED_ALIGN'
+    /* NRadio appcenter preserved premium live alignment */
+EOF_APPCENTER_CARD_POLISH_PRESERVED_ALIGN
+        if [ -s "$preserved_css_file" ] && grep -q 'NRadio appcenter premium frontend finish: pass 7 optical depth and motion discipline' "$preserved_css_file" 2>/dev/null; then
+            printf '\n'
+            cat "$preserved_css_file"
+        fi
+        printf '\n'
+    } >> "$css_file"
+
+    if [ -s "$preserved_css_file" ] && \
+       grep -q 'NRadio appcenter premium frontend finish: pass 7 optical depth and motion discipline' "$preserved_css_file" 2>/dev/null && \
+       grep -q 'NRadio appcenter premium frontend finish: pass 8 matte restraint override' "$preserved_css_file" 2>/dev/null && \
+       grep -q 'NRadio appcenter premium matte optical token matrix' "$preserved_css_file" 2>/dev/null && \
+       grep -q 'NRadio appcenter premium final seal consumers' "$preserved_css_file" 2>/dev/null && \
+       grep -q 'NRadio appcenter product card refinement pass 8' "$preserved_css_file" 2>/dev/null; then
+        cp "$preserved_css_file" "$css_file"
+    fi
 
     awk -v css_file="$css_file" '
         /NRadio appcenter card polish: visual-only layer/ || /NRadio appcenter card polish V1\.60\.5 full repair layer/ {
@@ -8532,7 +10413,8 @@ EOF_APPCENTER_CARD_POLISH_CSS
             set_status_width(".app_status_cpu_bar", cpu);
         }
 
-        $(".app_status_mem").text(format_kib(data.mem_used) + " / " + format_kib(data.mem_total) + " · " + mem_percent.toFixed(1) + "%");
+        var mem_text = format_kib(data.mem_used) + " / " + format_kib(data.mem_total);
+        $(".app_status_mem").text(mem_text).attr("title", mem_text + " · " + mem_percent.toFixed(1) + "%");
         set_status_width(".app_status_mem_bar", mem_percent);
     }
 
@@ -8578,6 +10460,7 @@ EOF_APPCENTER_EMPTY_STATE_JS
         /^[[:space:]]*<div id="app_status_mount"><\/div>[[:space:]]*$/ { next }
         /^[[:space:]]*get_system_status\(\);[[:space:]]*$/ { next }
         /^[[:space:]]*start_app_status_polling\(\);[[:space:]]*$/ { next }
+        /^[[:space:]]*if \(typeof start_app_status_polling == "function"\) start_app_status_polling\(\);[[:space:]]*$/ { next }
         /^[[:space:]]*window\.setInterval\(get_system_status, (1000|2000|5000|6000)\);[[:space:]]*$/ { next }
         /^[[:space:]]*var APP_STATUS_LAST = null;[[:space:]]*$/ {
             skip_status = 1
@@ -8601,6 +10484,10 @@ EOF_APPCENTER_EMPTY_STATE_JS
         }
         /var status_panel = build_app_status_panel_from_data\(data\);/ { next }
         /var status_panel = build_app_status_panel\(installed_count, open_count, all_count\);/ { next }
+        /^[[:space:]]*render_app_status_panel\(data\);[[:space:]]*$/ { next }
+        /^[[:space:]]*if \(typeof render_app_status_panel == "function"\) render_app_status_panel\(data\);[[:space:]]*$/ { next }
+        /^[[:space:]]*\$\("\.app_all"\)\.html\(htm\);[[:space:]]*$/ { next }
+        /^[[:space:]]*\$\("\.app_installed"\)\.html\(htm_installed\);[[:space:]]*$/ { next }
         /^[[:space:]]*if\(!htm_installed\)[[:space:]]*$/ {
             skip_installed_empty = 1
             next
@@ -8907,6 +10794,61 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_name" "$TPL"
     fi
 
+    if ! grep -q 'function nr_appcenter_display_version' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                print
+                if ($0 ~ /^[[:space:]]*function nr_appcenter_desc_fallback\(name\)\{[[:space:]]*$/)
+                    in_desc_fallback = 1
+                else if (in_desc_fallback && $0 ~ /^[[:space:]]*}[[:space:]]*$/) {
+                    print "            function nr_appcenter_display_version(name, version){"
+                    print "                var raw = version || \"\";"
+                    print "                var key = (name || \"\").toLowerCase();"
+                    print "                var match = raw.match(/^(git-[0-9]+[.][0-9]+[.][0-9]+)-[0-9a-f]+$/i);"
+                    print "                if (key.indexOf(\"openvpn\") >= 0 && match)"
+                    print "                    return match[1];"
+                    print "                return raw;"
+                    print "            }"
+                    in_desc_fallback = 0
+                }
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
+    if ! grep -q 'display_version: nr_appcenter_display_version' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                print
+                if ($0 ~ /^[[:space:]]*version:[[:space:]]*db\.version,[[:space:]]*$/) {
+                    prefix = substr($0, 1, index($0, "version:") - 1)
+                    print prefix "display_version: nr_appcenter_display_version(db.name, db.version),"
+                }
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
+    if ! grep -q '{{display_version}}' "$TPL" 2>/dev/null; then
+        awk '
+            {
+                if ($0 ~ /<div class="app_version"/) {
+                    in_app_version = 1
+                    print
+                    next
+                }
+                if (in_app_version && $0 ~ /\{\{[[:space:]]*version[[:space:]]*\}\}/) {
+                    gsub(/\{\{[[:space:]]*version[[:space:]]*\}\}/, "{{display_version}}")
+                    in_app_version = 0
+                }
+                if (in_app_version && $0 ~ /<\/div>/)
+                    in_app_version = 0
+                print
+            }
+        ' "$TPL" > "$tmp_name"
+        cp "$tmp_name" "$TPL"
+    fi
+
     if ! grep -q '{{display_name}}' "$TPL" 2>/dev/null; then
         awk '
             {
@@ -8972,7 +10914,9 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_compose" "$TPL"
     fi
 
-    if ! grep -q 'function render_app_status_panel(data)' "$TPL" 2>/dev/null; then
+    if ! grep -q 'function render_app_status_panel(data)' "$TPL" 2>/dev/null || \
+       ! grep -q 'function start_app_status_polling()' "$TPL" 2>/dev/null || \
+       ! grep -q 'function build_app_status_panel_from_data(data)' "$TPL" 2>/dev/null; then
         awk -v js_file="$status_js_file" '
             /^    var loading_htm = / && !inserted {
                 while ((getline extra < js_file) > 0) print extra
@@ -8984,7 +10928,7 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_panel" "$TPL"
     fi
 
-    if ! grep -q 'render_app_status_panel(data);' "$TPL" 2>/dev/null; then
+    if ! grep -q 'typeof render_app_status_panel == "function"' "$TPL" 2>/dev/null; then
         awk '
             {
                 if ($0 ~ /\$\("#app_top_menu"\)\.html\(top_menu_ht\);/) {
@@ -8993,7 +10937,9 @@ EOF_APPCENTER_EMPTY_STATE_JS
                     print "            htm_installed = build_app_empty_state(\"暂无已安装应用\");"
                     print "        if(!htm)"
                     print "            htm = build_app_empty_state(\"暂无应用\");"
-                    print "        render_app_status_panel(data);"
+                    print "        $(\".app_all\").html(htm);"
+                    print "        $(\".app_installed\").html(htm_installed);"
+                    print "        if (typeof render_app_status_panel == \"function\") render_app_status_panel(data);"
                     next
                 }
                 print
@@ -9019,12 +10965,12 @@ EOF_APPCENTER_EMPTY_STATE_JS
         cp "$tmp_panel" "$TPL"
     fi
 
-    if ! grep -q 'start_app_status_polling();' "$TPL" 2>/dev/null; then
+    if ! grep -q 'typeof start_app_status_polling == "function"' "$TPL" 2>/dev/null; then
         awk '
             {
                 print
                 if ($0 ~ /^[[:space:]]*get_memory\(\);[[:space:]]*$/)
-                    print "        start_app_status_polling();"
+                    print "        if (typeof start_app_status_polling == \"function\") start_app_status_polling();"
             }
         ' "$TPL" > "$tmp_ready"
         cp "$tmp_ready" "$TPL"
@@ -9039,12 +10985,25 @@ EOF_APPCENTER_EMPTY_STATE_JS
     cp "$tmp_ready" "$TPL"
 
     verify_template_marker 'NRadio appcenter card polish: visual-only layer' '应用商店卡片美化 CSS'
-    verify_template_marker 'NRadio appcenter card polish V2.0.60 full repair layer' '应用商店 V2.0.60 修复美化 CSS'
+    verify_template_marker 'NRadio appcenter card polish V2.0.70 full repair layer' '应用商店 V2.0.70 修复美化 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 2' '应用商店本轮热更精修 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 3' '应用商店 pass 3 精修 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 4 final' '应用商店 pass 4 final 精修 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 5 deep finish' '应用商店 pass 5 deep finish 精修 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 6 precision finish' '应用商店 pass 6 precision finish 精修 CSS'
+    verify_template_marker 'NRadio appcenter premium frontend finish: pass 7 optical depth and motion discipline' '应用商店 pass 7 premium CSS'
+    verify_template_marker 'NRadio appcenter premium frontend finish: pass 8 matte restraint override' '应用商店 pass 8 premium CSS'
+    verify_template_marker 'NRadio appcenter product card refinement pass 8' '应用商店卡片逻辑 pass 8 CSS'
+    verify_template_marker 'NRadio appcenter premium matte optical token matrix' '应用商店 matte token matrix 层'
+    verify_template_marker 'NRadio appcenter premium matte token consumers' '应用商店 matte token consumer 层'
+    verify_template_marker 'NRadio appcenter premium matte lens bank' '应用商店 matte lens 层'
+    verify_template_marker 'NRadio appcenter premium stability tone bank' '应用商店 stability tone 层'
+    verify_template_marker 'NRadio appcenter premium stability consumers' '应用商店 stability consumer 层'
+    verify_template_marker 'NRadio appcenter premium final depth bank' '应用商店 final depth 层'
+    verify_template_marker 'NRadio appcenter premium final depth consumers' '应用商店 final depth consumer 层'
+    verify_template_marker 'NRadio appcenter premium final seal bank' '应用商店 final seal 层'
+    verify_template_marker 'NRadio appcenter premium final seal consumers' '应用商店 final seal consumer 层'
+    verify_template_marker 'NRadio appcenter card content logic finish' '应用商店卡片内容逻辑层'
     verify_template_marker '<div class="app_meta_row"' '应用商店卡片状态徽标'
     verify_template_marker 'status_label: db.status_label' '应用商店卡片状态标签数据'
     verify_template_marker 'app_open_badge app_open_1' '应用商店后台状态徽标'
@@ -9055,13 +11014,18 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'function nr_appcenter_display_name' '应用商店显示名映射'
     verify_template_marker 'display_name: nr_appcenter_display_name(db.name)' '应用商店显示名数据'
     verify_template_marker '{{display_name}}' '应用商店卡片显示名挂载'
+    verify_template_marker 'function nr_appcenter_display_version' '应用商店 OpenVPN 版本号显示映射'
+    verify_template_marker 'display_version: nr_appcenter_display_version(db.name, db.version)' '应用商店 OpenVPN 版本号显示数据'
+    verify_template_marker '{{display_version}}' '应用商店 OpenVPN 版本号挂载'
+    verify_template_marker 'app_status_mem").text(mem_text)' '应用商店系统卡片内存显示'
     verify_template_marker 'build_app_status_panel_from_data' '应用商店右侧系统状态面板'
+    verify_template_marker 'function start_app_status_polling()' '应用商店系统状态刷新函数'
     verify_template_marker 'id="app_status_mount"' '应用商店右侧系统状态面板挂载点'
-    verify_template_marker 'render_app_status_panel(data);' '应用商店右侧系统状态面板挂载'
+    verify_template_marker 'typeof render_app_status_panel == "function"' '应用商店右侧系统状态面板保护挂载'
     verify_template_marker 'function build_app_empty_state' '应用商店空列表提示'
     verify_template_marker 'build_app_empty_state("暂无已安装应用")' '应用商店已安装空列表提示'
     verify_template_marker 'APP_STATUS_INTERVAL = 2000' '应用商店系统状态两秒采样'
-    verify_template_marker 'start_app_status_polling();' '应用商店系统状态刷新入口'
+    verify_template_marker 'typeof start_app_status_polling == "function"' '应用商店系统状态刷新保护入口'
 }
 
 install_appcenter_polish() {
@@ -9086,265 +11050,60 @@ install_appcenter_polish() {
     verify_luci_route "nradioadv/system/appcenter" "应用商店美化"
 
     log "应用商店美化完成"
+    log "提示: 如果已启用存储扩展后存储扩展条未显示，请使用 5>4>4 修复应用商店存储空间显示。"
     log "范围: 应用卡片、状态徽标、右侧系统状态面板、按钮、图标与打开弹窗视觉层"
     log "说明: 不修改插件下载链、安装链和卸载链；仅补应用商店模板与只读系统状态接口"
 }
 
-decode_gzip_b64_to_file() {
-    decode_gzip_b64_target="$1"
-    decode_gzip_b64_label="$2"
+copy_verified_factory_appcenter_file() {
+    factory_src="$1"
+    factory_dst="$2"
+    allowed_sha256="$3"
+    factory_label="$4"
+    factory_match=0
 
-    command -v gzip >/dev/null 2>&1 || die "系统缺少 gzip，无法写入${decode_gzip_b64_label}"
+    [ -f "$factory_src" ] || die "${factory_label}原厂源文件不存在: $factory_src"
+    command -v sha256sum >/dev/null 2>&1 || die "${factory_label}无法校验 SHA256：系统缺少 sha256sum"
 
-    if command -v base64 >/dev/null 2>&1; then
-        base64 -d | gzip -dc > "$decode_gzip_b64_target" || return 1
-        return 0
-    fi
+    factory_actual_sha256="$(sha256sum "$factory_src" 2>/dev/null | awk '{print $1}')"
+    [ -n "$factory_actual_sha256" ] || die "${factory_label}SHA256 读取失败: $factory_src"
 
-    if command -v openssl >/dev/null 2>&1; then
-        openssl enc -base64 -d 2>/dev/null | gzip -dc > "$decode_gzip_b64_target" || return 1
-        return 0
-    fi
+    for factory_expected_sha256 in $allowed_sha256; do
+        if [ "$factory_actual_sha256" = "$factory_expected_sha256" ]; then
+            factory_match=1
+            break
+        fi
+    done
 
-    if command -v lua >/dev/null 2>&1; then
-        lua -e '
-local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-local map = {}
-for i = 1, #alphabet do
-    map[alphabet:sub(i, i)] = i - 1
-end
+    [ "$factory_match" = "1" ] || die "${factory_label}SHA256 不在允许列表: $factory_actual_sha256"
 
-local data = io.read("*a")
-local buf = {}
-local n = 0
-
-for c in data:gmatch(".") do
-    if c == "=" then
-        break
-    end
-    local v = map[c]
-    if v then
-        n = n + 1
-        buf[n] = v
-        if n == 4 then
-            io.write(string.char(
-                buf[1] * 4 + math.floor(buf[2] / 16),
-                (buf[2] % 16) * 16 + math.floor(buf[3] / 4),
-                (buf[3] % 4) * 64 + buf[4]
-            ))
-            n = 0
-        end
-    end
-end
-
-if n == 2 then
-    io.write(string.char(buf[1] * 4 + math.floor(buf[2] / 16)))
-elseif n == 3 then
-    io.write(string.char(
-        buf[1] * 4 + math.floor(buf[2] / 16),
-        (buf[2] % 16) * 16 + math.floor(buf[3] / 4)
-    ))
-elseif n ~= 0 then
-    os.exit(1)
-end
-' | gzip -dc > "$decode_gzip_b64_target" || return 1
-        return 0
-    fi
-
-    die "系统缺少 base64/openssl/lua，无法写入${decode_gzip_b64_label}"
+    mkdir -p "$(dirname "$factory_dst")" || die "创建${factory_label}目录失败"
+    cp "$factory_src" "$factory_dst" || die "写入${factory_label}失败"
+    chmod 644 "$factory_dst" 2>/dev/null || true
 }
 
 write_original_appcenter_template() {
-    mkdir -p "$(dirname "$TPL")" || die "创建应用商店模板目录失败"
-    cat <<'EOF_ORIGINAL_APPCENTER_FACTORY_TEMPLATE_GZ_B64' | decode_gzip_b64_to_file "$TPL" "内置原厂应用商店模板" || die "写入内置原厂应用商店模板失败"
-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
-EOF_ORIGINAL_APPCENTER_FACTORY_TEMPLATE_GZ_B64
-    chmod 644 "$TPL" 2>/dev/null || true
+    copy_verified_factory_appcenter_file \
+        "/rom/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm" \
+        "$TPL" \
+        "c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23 dd9b637ec1e9cac9a92680cc04014b395f447b5b82cb1fb563c18f7cd45cce97" \
+        "原厂应用商店模板"
 }
 
 write_original_appcenter_controller() {
-    mkdir -p "$(dirname "$APPCENTER_CONTROLLER")" || die "创建应用商店控制器目录失败"
-    cat <<'EOF_ORIGINAL_APPCENTER_FACTORY_CONTROLLER_GZ_B64' | decode_gzip_b64_to_file "$APPCENTER_CONTROLLER" "内置原厂应用商店控制器" || die "写入内置原厂应用商店控制器失败"
-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
-3gAobPorm+gcXbI3AAA=
-EOF_ORIGINAL_APPCENTER_FACTORY_CONTROLLER_GZ_B64
-    chmod 644 "$APPCENTER_CONTROLLER" 2>/dev/null || true
+    copy_verified_factory_appcenter_file \
+        "/rom/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua" \
+        "$APPCENTER_CONTROLLER" \
+        "754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2 c9956341cfcba406b990a494bbca30fafd6740282fce760871e94f6c51e07a48" \
+        "原厂应用商店控制器"
 }
 
 restore_appcenter_original() {
     log_stage 1 4 "检查 NRadio 应用商店原厂还原环境"
     require_nradio_oem_appcenter
-    log "说明: 直接使用脚本内置 C2000MAX 2.1.7 原厂应用商店模板和控制器，不读取备份，不覆盖 /etc/config/appcenter"
+    log "说明: 使用 /rom 只读原厂应用商店模板和控制器，写入前校验 SHA256；不读取备份，不覆盖 /etc/config/appcenter"
 
-    log_stage 2 4 "回写内置原厂应用商店文件"
+    log_stage 2 4 "回写校验通过的原厂应用商店文件"
     write_original_appcenter_template
     write_original_appcenter_controller
 
@@ -9357,7 +11116,7 @@ restore_appcenter_original() {
     verify_file_exists "$APPCENTER_CONTROLLER" "NRadio 应用商店控制器"
     verify_luci_route "nradioadv/system/appcenter" "应用商店还原"
 
-    log "应用商店已还原为脚本内置原厂模板和控制器"
+    log "应用商店已还原为 /rom 校验通过的原厂模板和控制器"
     log "入口: nradioadv/system/appcenter"
 }
 
@@ -9769,6 +11528,54 @@ selfcheck_print_luci_route_state() {
     esac
 }
 
+selfcheck_required_paths_present() {
+    for needed_path in "$@"; do
+        [ -e "$needed_path" ] || return 1
+    done
+    return 0
+}
+
+selfcheck_print_luci_route_state_when_ready() {
+    label="$1"
+    route="$2"
+    shift 2
+
+    for needed_path in "$@"; do
+        if [ ! -e "$needed_path" ]; then
+            log "路由:    $label = 跳过 (缺少 $needed_path)"
+            return 0
+        fi
+    done
+
+    selfcheck_print_luci_route_state "$label" "$route"
+}
+
+selfcheck_luci_route_ok_when_ready() {
+    route="$1"
+    shift
+
+    selfcheck_required_paths_present "$@" || return 2
+    selfcheck_luci_route_ok "$route"
+}
+
+selfcheck_appcenter_controller_fallback_matches() {
+    plugin_name="$1"
+    actual_controller="$2"
+
+    case "$plugin_name" in
+        luci-app-openclash) [ "$actual_controller" = "/usr/lib/lua/luci/controller/openclash.lua" ] && return 0 ;;
+        luci-app-adguardhome) [ "$actual_controller" = "/usr/lib/lua/luci/controller/AdGuardHome.lua" ] && return 0 ;;
+        OpenVPN) [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && return 0 ;;
+        DDNS-GO) [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && return 0 ;;
+        MosDNS) [ "$actual_controller" = "$MOSDNS_CONTROLLER" ] && return 0 ;;
+        FanControl) [ "$actual_controller" = "$FANCTRL_CONTROLLER" ] && return 0 ;;
+        奇游联机宝) [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/qiyou.lua" ] && return 0 ;;
+        雷神加速器) [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/leigod.lua" ] && return 0 ;;
+    esac
+
+    return 1
+}
+
 selfcheck_appcenter_route_matches() {
     plugin_name="$1"
     expect_route="$2"
@@ -9805,12 +11612,7 @@ selfcheck_appcenter_route_matches() {
         actual_route="$(uci -q get appcenter.$sec.luci_module_route 2>/dev/null || true)"
         [ "$actual_route" = "$expect_route" ] && return 0
         actual_controller="$(uci -q get appcenter.$sec.luci_module_file 2>/dev/null || true)"
-        case "$plugin_name" in
-            luci-app-openclash) [ "$actual_controller" = "/usr/lib/lua/luci/controller/openclash.lua" ] && return 0 ;;
-            luci-app-adguardhome) [ "$actual_controller" = "/usr/lib/lua/luci/controller/AdGuardHome.lua" ] && return 0 ;;
-            OpenVPN) [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && return 0 ;;
-            DDNS-GO) [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && return 0 ;;
-        esac
+        selfcheck_appcenter_controller_fallback_matches "$plugin_name" "$actual_controller" && return 0
     done
     return 1
 }
@@ -9845,32 +11647,10 @@ selfcheck_print_appcenter_route_state() {
         log "应用商店: $label = 正常 ($actual_route)"
     else
         actual_controller="$(uci -q get appcenter.$sec.luci_module_file 2>/dev/null || true)"
-        case "$plugin_name" in
-            luci-app-openclash)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/openclash.lua" ] && {
-                    log "应用商店: $label = 正常 (controller fallback)"
-                    return 0
-                }
-                ;;
-            luci-app-adguardhome)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/AdGuardHome.lua" ] && {
-                    log "应用商店: $label = 正常 (controller fallback)"
-                    return 0
-                }
-                ;;
-            OpenVPN)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && {
-                    log "应用商店: $label = 正常 (controller fallback)"
-                    return 0
-                }
-                ;;
-            DDNS-GO)
-                [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && {
-                    log "应用商店: $label = 正常 (controller fallback)"
-                    return 0
-                }
-                ;;
-        esac
+        selfcheck_appcenter_controller_fallback_matches "$plugin_name" "$actual_controller" && {
+            log "应用商店: $label = 正常 (controller fallback)"
+            return 0
+        }
         log "应用商店: $label = 不匹配 (${actual_route:-缺失})"
     fi
 }
@@ -9914,7 +11694,7 @@ set_last_selfcheck_status() {
     NRADIO_LAST_SELFCHECK_ERRORS="$errors"
     NRADIO_LAST_SELFCHECK_WARNINGS="$warnings"
     case "$status" in
-        FAIL|PASS|WARN)
+        FAIL|PASS|WARN|SKIP)
             NRADIO_LAST_SELFCHECK_STATUS="$status"
             ;;
         *)
@@ -9923,8 +11703,30 @@ set_last_selfcheck_status() {
     esac
 }
 
+unified_now_s() {
+    date +%s 2>/dev/null || printf '%s\n' '0'
+}
+
 record_unified_selfcheck_summary() {
     label="$1"
+    now_s="$(unified_now_s)"
+    elapsed_text=''
+
+    case "${NRADIO_UNIFIED_SECTION_START:-}" in
+        ''|*[!0-9]*)
+            ;;
+        *)
+            case "$now_s" in
+                ''|*[!0-9]*)
+                    ;;
+                *)
+                    elapsed_s=$((now_s - NRADIO_UNIFIED_SECTION_START))
+                    [ "$elapsed_s" -ge 0 ] 2>/dev/null && elapsed_text=" 耗时=${elapsed_s}s"
+                    ;;
+            esac
+            ;;
+    esac
+
     case "${NRADIO_LAST_SELFCHECK_STATUS:-WARN}" in
         FAIL)
             NRADIO_UNIFIED_FAILS=$((NRADIO_UNIFIED_FAILS + 1))
@@ -9932,12 +11734,16 @@ record_unified_selfcheck_summary() {
         PASS)
             NRADIO_UNIFIED_PASSES=$((NRADIO_UNIFIED_PASSES + 1))
             ;;
+        SKIP)
+            NRADIO_UNIFIED_SKIPS=$((NRADIO_UNIFIED_SKIPS + 1))
+            ;;
         *)
             NRADIO_UNIFIED_WARNS=$((NRADIO_UNIFIED_WARNS + 1))
             NRADIO_LAST_SELFCHECK_STATUS='WARN'
             ;;
     esac
-    log "overall:  $label = ${NRADIO_LAST_SELFCHECK_STATUS}"
+    log "overall:  $label = ${NRADIO_LAST_SELFCHECK_STATUS}${elapsed_text}"
+    NRADIO_UNIFIED_SECTION_START="$now_s"
 }
 
 run_openclash_cdn_selfcheck() {
@@ -9977,18 +11783,37 @@ run_openclash_selfcheck() {
     require_root
     oc_selfcheck_failures=0
     oc_selfcheck_warnings=0
+    oc_present='0'
+    openclash_core_path="/etc/openclash/core/clash"
+    [ -x "$openclash_core_path" ] || [ ! -x /etc/openclash/clash ] || openclash_core_path="/etc/openclash/clash"
     selfcheck_print_header "$OPENCLASH_DISPLAY_NAME 自检"
+
+    for oc_path in \
+        /etc/init.d/openclash \
+        /usr/lib/lua/luci/controller/openclash.lua \
+        /etc/config/openclash \
+        /etc/openclash/core_version \
+        "$openclash_core_path" \
+        /etc/openclash/core/clash_meta; do
+        [ -e "$oc_path" ] && oc_present='1'
+    done
+    if [ "$oc_present" != '1' ]; then
+        log "插件:   $OPENCLASH_DISPLAY_NAME = 未安装，跳过可选插件自检"
+        log "summary:  SKIP (optional plugin not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
 
     selfcheck_print_service_state "openclash" "/etc/init.d/openclash"
     selfcheck_print_file_state "controller" "/usr/lib/lua/luci/controller/openclash.lua"
     selfcheck_print_file_state "uci config" "/etc/config/openclash"
     selfcheck_print_file_state "core version" "/etc/openclash/core_version"
-    selfcheck_print_file_state "smart core clash" "/etc/openclash/core/clash"
+    selfcheck_print_file_state "smart core clash" "$openclash_core_path"
     selfcheck_print_file_state "smart core clash_meta" "/etc/openclash/core/clash_meta"
     selfcheck_print_file_state "ASN.mmdb" "/etc/openclash/ASN.mmdb"
     selfcheck_print_appcenter_route_state "$OPENCLASH_DISPLAY_NAME" "luci-app-openclash" "admin/services/openclash"
-    selfcheck_print_luci_route_state "$OPENCLASH_DISPLAY_NAME overview" "admin/services/openclash"
-    selfcheck_print_luci_route_state "$OPENCLASH_DISPLAY_NAME settings" "admin/services/openclash/settings"
+    selfcheck_print_luci_route_state_when_ready "$OPENCLASH_DISPLAY_NAME overview" "admin/services/openclash" /usr/lib/lua/luci/controller/openclash.lua
+    selfcheck_print_luci_route_state_when_ready "$OPENCLASH_DISPLAY_NAME settings" "admin/services/openclash/settings" /usr/lib/lua/luci/controller/openclash.lua
     [ -x /etc/init.d/openclash ] || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
     if [ -x /etc/init.d/openclash ]; then
         openclash_enabled='0'
@@ -10010,15 +11835,25 @@ run_openclash_selfcheck() {
     [ -f /usr/lib/lua/luci/controller/openclash.lua ] || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
     [ -f /etc/config/openclash ] || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
     [ -s /etc/openclash/core_version ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
-    [ -x /etc/openclash/core/clash ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
+    [ -x "$openclash_core_path" ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
     [ -x /etc/openclash/core/clash_meta ] || oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
     if ! openclash_asn_mmdb_valid; then
         log "runtime:  $OPENCLASH_DISPLAY_NAME ASN.mmdb missing or invalid"
         oc_selfcheck_warnings=$((oc_selfcheck_warnings + 1))
     fi
     selfcheck_appcenter_route_matches "luci-app-openclash" "admin/services/openclash" || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "admin/services/openclash" || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "admin/services/openclash/settings" || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/services/openclash" /usr/lib/lua/luci/controller/openclash.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/services/openclash/settings" /usr/lib/lua/luci/controller/openclash.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || oc_selfcheck_failures=$((oc_selfcheck_failures + 1))
 
     if [ -s /etc/openclash/core_version ]; then
         core_version_text="$(tr '\n' ' ' < /etc/openclash/core_version 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
@@ -10046,7 +11881,26 @@ run_adguardhome_selfcheck() {
     [ -n "$adg_binpath" ] || adg_binpath="/usr/bin/AdGuardHome/AdGuardHome"
     adg_configpath="$(get_adguard_configpath)"
     adg_core_present='0'
+    adg_present='0'
     [ -x "$adg_binpath" ] && adg_core_present='1'
+
+    for adg_path in \
+        /etc/init.d/AdGuardHome \
+        /usr/lib/lua/luci/controller/AdGuardHome.lua \
+        /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua \
+        /usr/lib/lua/luci/model/cbi/AdGuardHome/manual.lua \
+        /usr/lib/lua/luci/model/cbi/AdGuardHome/log.lua \
+        /usr/lib/lua/luci/view/AdGuardHome/oem_wrapper.htm \
+        "$adg_binpath" \
+        "$adg_configpath"; do
+        [ -e "$adg_path" ] && adg_present='1'
+    done
+    if [ "$adg_present" != '1' ]; then
+        log "插件:   AdGuardHome = 未安装，跳过可选插件自检"
+        log "summary:  SKIP (optional plugin not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
 
     selfcheck_print_service_state "AdGuardHome" "/etc/init.d/AdGuardHome"
     selfcheck_print_file_state "controller" "/usr/lib/lua/luci/controller/AdGuardHome.lua"
@@ -10057,10 +11911,10 @@ run_adguardhome_selfcheck() {
     selfcheck_print_file_state "core binary" "$adg_binpath"
     selfcheck_print_file_state "config" "$adg_configpath"
     selfcheck_print_appcenter_route_state "AdGuardHome" "luci-app-adguardhome" "admin/services/AdGuardHome"
-    selfcheck_print_luci_route_state "AdGuardHome overview" "admin/services/AdGuardHome"
-    selfcheck_print_luci_route_state "AdGuardHome base" "admin/services/AdGuardHome/base"
-    selfcheck_print_luci_route_state "AdGuardHome manual" "admin/services/AdGuardHome/manual"
-    selfcheck_print_luci_route_state "AdGuardHome log" "admin/services/AdGuardHome/log"
+    selfcheck_print_luci_route_state_when_ready "AdGuardHome overview" "admin/services/AdGuardHome" /usr/lib/lua/luci/controller/AdGuardHome.lua
+    selfcheck_print_luci_route_state_when_ready "AdGuardHome base" "admin/services/AdGuardHome/base" /usr/lib/lua/luci/controller/AdGuardHome.lua /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua
+    selfcheck_print_luci_route_state_when_ready "AdGuardHome manual" "admin/services/AdGuardHome/manual" /usr/lib/lua/luci/controller/AdGuardHome.lua /usr/lib/lua/luci/model/cbi/AdGuardHome/manual.lua
+    selfcheck_print_luci_route_state_when_ready "AdGuardHome log" "admin/services/AdGuardHome/log" /usr/lib/lua/luci/controller/AdGuardHome.lua /usr/lib/lua/luci/model/cbi/AdGuardHome/log.lua
     [ -x /etc/init.d/AdGuardHome ] || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
     if [ "$adg_core_present" = '1' ]; then
         if ! /etc/init.d/AdGuardHome enabled >/dev/null 2>&1; then
@@ -10084,10 +11938,30 @@ run_adguardhome_selfcheck() {
         [ -f "$needed" ] || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
     done
     selfcheck_appcenter_route_matches "luci-app-adguardhome" "admin/services/AdGuardHome" || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "admin/services/AdGuardHome" || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "admin/services/AdGuardHome/base" || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "admin/services/AdGuardHome/manual" || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "admin/services/AdGuardHome/log" || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/services/AdGuardHome" /usr/lib/lua/luci/controller/AdGuardHome.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/services/AdGuardHome/base" /usr/lib/lua/luci/controller/AdGuardHome.lua /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/services/AdGuardHome/manual" /usr/lib/lua/luci/controller/AdGuardHome.lua /usr/lib/lua/luci/model/cbi/AdGuardHome/manual.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/services/AdGuardHome/log" /usr/lib/lua/luci/controller/AdGuardHome.lua /usr/lib/lua/luci/model/cbi/AdGuardHome/log.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || adg_selfcheck_failures=$((adg_selfcheck_failures + 1))
 
     if [ "$adg_core_present" = '1' ]; then
         adg_version="$("$adg_binpath" --version 2>/dev/null | sed -n '1p' | tr -d '\r' || true)"
@@ -10125,10 +11999,28 @@ run_ttyd_webssh_selfcheck() {
 
     ttyd_selfcheck_failures=0
     ttyd_selfcheck_warnings=0
+    ttyd_present='0'
     ttyd_port="$(get_ttyd_bind_value "port")"
     [ -n "$ttyd_port" ] || ttyd_port='7681'
     ttyd_iface="$(get_ttyd_bind_value "interface")"
     [ -n "$ttyd_iface" ] || ttyd_iface='all'
+
+    for ttyd_path in \
+        /usr/bin/ttyd \
+        /etc/init.d/ttyd \
+        /etc/config/ttyd \
+        /usr/lib/lua/luci/controller/ttyd.lua \
+        /usr/lib/lua/luci/view/ttyd/overview.htm \
+        /usr/lib/lua/luci/controller/nradio_adv/webssh.lua \
+        /usr/lib/lua/luci/view/nradio_adv/webssh.htm; do
+        [ -e "$ttyd_path" ] && ttyd_present='1'
+    done
+    if [ "$ttyd_present" != '1' ]; then
+        log "插件:   Web SSH / ttyd = 未安装，跳过可选插件自检"
+        log "summary:  SKIP (optional plugin not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
 
     selfcheck_print_service_state "ttyd" "/etc/init.d/ttyd"
     selfcheck_print_file_state "ttyd binary" "/usr/bin/ttyd"
@@ -10139,8 +12031,8 @@ run_ttyd_webssh_selfcheck() {
     selfcheck_print_file_state "Web SSH controller" "/usr/lib/lua/luci/controller/nradio_adv/webssh.lua"
     selfcheck_print_file_state "Web SSH view" "/usr/lib/lua/luci/view/nradio_adv/webssh.htm"
     selfcheck_print_file_state "Web SSH icon" "/www/luci-static/nradio/images/icon/webssh.svg"
-    selfcheck_print_luci_route_state "ttyd overview" "admin/system/ttyd/overview"
-    selfcheck_print_luci_route_state "Web SSH wrapper" "nradioadv/system/webssh"
+    selfcheck_print_luci_route_state_when_ready "ttyd overview" "admin/system/ttyd/overview" /usr/lib/lua/luci/controller/ttyd.lua /usr/lib/lua/luci/view/ttyd/overview.htm
+    selfcheck_print_luci_route_state_when_ready "Web SSH wrapper" "nradioadv/system/webssh" /usr/lib/lua/luci/controller/nradio_adv/webssh.lua /usr/lib/lua/luci/view/nradio_adv/webssh.htm
     [ -x /etc/init.d/ttyd ] || ttyd_selfcheck_failures=$((ttyd_selfcheck_failures + 1))
     if ! /etc/init.d/ttyd enabled >/dev/null 2>&1; then
         ttyd_selfcheck_warnings=$((ttyd_selfcheck_warnings + 1))
@@ -10160,8 +12052,18 @@ run_ttyd_webssh_selfcheck() {
         /usr/lib/lua/luci/view/nradio_adv/webssh.htm; do
         [ -f "$needed" ] || ttyd_selfcheck_failures=$((ttyd_selfcheck_failures + 1))
     done
-    selfcheck_luci_route_ok "admin/system/ttyd/overview" || ttyd_selfcheck_failures=$((ttyd_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "nradioadv/system/webssh" || ttyd_selfcheck_failures=$((ttyd_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "admin/system/ttyd/overview" /usr/lib/lua/luci/controller/ttyd.lua /usr/lib/lua/luci/view/ttyd/overview.htm; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || ttyd_selfcheck_failures=$((ttyd_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "nradioadv/system/webssh" /usr/lib/lua/luci/controller/nradio_adv/webssh.lua /usr/lib/lua/luci/view/nradio_adv/webssh.htm; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || ttyd_selfcheck_failures=$((ttyd_selfcheck_failures + 1))
 
     if grep -q 'name:"Web SSH"' "$TPL" 2>/dev/null && grep -q 'nradioadv/system/webssh' "$TPL" 2>/dev/null; then
         log "应用商店: Web SSH 快捷入口 = 正常"
@@ -10171,7 +12073,8 @@ run_ttyd_webssh_selfcheck() {
     fi
 
     if grep -q "frame.src.indexOf('/admin/vpn/easytier') === -1" "$TPL" 2>/dev/null \
-        && grep -q "frame.src.indexOf('/nradioadv/system/webssh') === -1" "$TPL" 2>/dev/null; then
+        && grep -q "frame.src.indexOf('/nradioadv/system/webssh') === -1" "$TPL" 2>/dev/null \
+        && grep -q "frame.src.indexOf('/nradioadv/system/ddnsgo') === -1" "$TPL" 2>/dev/null; then
         log "应用商店: Web SSH iframe 白名单 = 正常"
     else
         log "应用商店: Web SSH iframe 白名单 = 缺失"
@@ -10249,11 +12152,29 @@ run_ttyd_webssh_selfcheck() {
 
 run_openlist_selfcheck() {
     require_root
+    resolve_openlist_storage_paths 2>/dev/null || true
     selfcheck_print_header "OpenList 自检"
 
     openlist_selfcheck_failures=0
     openlist_selfcheck_warnings=0
     openlist_data_dir="$(get_openlist_effective_data_dir)"
+    openlist_present='0'
+
+    for openlist_path in \
+        /etc/init.d/openlist \
+        "$OPENLIST_BIN_PATH" \
+        "$OPENLIST_LINK_PATH" \
+        /usr/libexec/openlist-sync-config \
+        /etc/config/openlist \
+        /usr/lib/lua/luci/controller/nradio_adv/openlist.lua; do
+        [ -e "$openlist_path" ] && openlist_present='1'
+    done
+    if [ "$openlist_present" != '1' ]; then
+        log "插件:   OpenList = 未安装，跳过可选插件自检"
+        log "summary:  SKIP (optional plugin not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
 
     selfcheck_print_service_state "openlist" "/etc/init.d/openlist"
     selfcheck_print_file_state "openlist binary" "$OPENLIST_BIN_PATH"
@@ -10266,9 +12187,9 @@ run_openlist_selfcheck() {
     selfcheck_print_file_state "openlist cbi" "/usr/lib/lua/luci/model/cbi/nradio_adv/openlist_basic.lua"
     selfcheck_print_file_state "openlist logs view" "/usr/lib/lua/luci/view/nradio_adv/openlist_logs.htm"
     selfcheck_print_appcenter_route_state "OpenList" "OpenList" "nradioadv/system/openlist/basic"
-    selfcheck_print_luci_route_state "OpenList overview" "nradioadv/system/openlist"
-    selfcheck_print_luci_route_state "OpenList basic" "nradioadv/system/openlist/basic"
-    selfcheck_print_luci_route_state "OpenList logs" "nradioadv/system/openlist/logs"
+    selfcheck_print_luci_route_state_when_ready "OpenList overview" "nradioadv/system/openlist" /usr/lib/lua/luci/controller/nradio_adv/openlist.lua
+    selfcheck_print_luci_route_state_when_ready "OpenList basic" "nradioadv/system/openlist/basic" /usr/lib/lua/luci/controller/nradio_adv/openlist.lua /usr/lib/lua/luci/model/cbi/nradio_adv/openlist_basic.lua
+    selfcheck_print_luci_route_state_when_ready "OpenList logs" "nradioadv/system/openlist/logs" /usr/lib/lua/luci/controller/nradio_adv/openlist.lua /usr/lib/lua/luci/view/nradio_adv/openlist_logs.htm
 
     [ -x /etc/init.d/openlist ] || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
     [ -x "$OPENLIST_BIN_PATH" ] || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
@@ -10283,9 +12204,24 @@ run_openlist_selfcheck() {
     done
     [ -f "$openlist_data_dir/config.json" ] || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
     selfcheck_appcenter_route_matches "OpenList" "nradioadv/system/openlist/basic" || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "nradioadv/system/openlist" || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "nradioadv/system/openlist/basic" || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "nradioadv/system/openlist/logs" || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "nradioadv/system/openlist" /usr/lib/lua/luci/controller/nradio_adv/openlist.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "nradioadv/system/openlist/basic" /usr/lib/lua/luci/controller/nradio_adv/openlist.lua /usr/lib/lua/luci/model/cbi/nradio_adv/openlist_basic.lua; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "nradioadv/system/openlist/logs" /usr/lib/lua/luci/controller/nradio_adv/openlist.lua /usr/lib/lua/luci/view/nradio_adv/openlist_logs.htm; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || openlist_selfcheck_failures=$((openlist_selfcheck_failures + 1))
 
     if [ -x /etc/init.d/openlist ]; then
         /etc/init.d/openlist enabled >/dev/null 2>&1 || openlist_selfcheck_warnings=$((openlist_selfcheck_warnings + 1))
@@ -10313,14 +12249,30 @@ run_zerotier_selfcheck() {
 
     zerotier_selfcheck_failures=0
     zerotier_selfcheck_warnings=0
+    zerotier_present='0'
+
+    for zerotier_path in \
+        /etc/init.d/zerotier \
+        /etc/config/zerotier \
+        "$ZEROTIER_CONTROLLER" \
+        "$ZEROTIER_CBI" \
+        /usr/sbin/zerotier-one; do
+        [ -e "$zerotier_path" ] && zerotier_present='1'
+    done
+    if [ "$zerotier_present" != '1' ]; then
+        log "插件:   ZeroTier = 未安装，跳过可选插件自检"
+        log "summary:  SKIP (optional plugin not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
 
     selfcheck_print_service_state "zerotier" "/etc/init.d/zerotier"
     selfcheck_print_file_state "zerotier config" "/etc/config/zerotier"
     selfcheck_print_file_state "zerotier controller" "$ZEROTIER_CONTROLLER"
     selfcheck_print_file_state "zerotier cbi" "$ZEROTIER_CBI"
     selfcheck_print_appcenter_route_state "ZeroTier" "ZeroTier" "$ZEROTIER_ROUTE"
-    selfcheck_print_luci_route_state "ZeroTier overview" "nradioadv/system/zerotier"
-    selfcheck_print_luci_route_state "ZeroTier basic" "nradioadv/system/zerotier/basic"
+    selfcheck_print_luci_route_state_when_ready "ZeroTier overview" "nradioadv/system/zerotier" "$ZEROTIER_CONTROLLER"
+    selfcheck_print_luci_route_state_when_ready "ZeroTier basic" "nradioadv/system/zerotier/basic" "$ZEROTIER_CONTROLLER" "$ZEROTIER_CBI"
 
     [ -x /etc/init.d/zerotier ] || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
     for needed in \
@@ -10330,8 +12282,18 @@ run_zerotier_selfcheck() {
         [ -f "$needed" ] || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
     done
     selfcheck_appcenter_route_matches "ZeroTier" "$ZEROTIER_ROUTE" || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "nradioadv/system/zerotier" || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "nradioadv/system/zerotier/basic" || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "nradioadv/system/zerotier" "$ZEROTIER_CONTROLLER"; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "nradioadv/system/zerotier/basic" "$ZEROTIER_CONTROLLER" "$ZEROTIER_CBI"; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || zerotier_selfcheck_failures=$((zerotier_selfcheck_failures + 1))
 
     if [ -x /etc/init.d/zerotier ]; then
         /etc/init.d/zerotier enabled >/dev/null 2>&1 || zerotier_selfcheck_warnings=$((zerotier_selfcheck_warnings + 1))
@@ -10361,6 +12323,25 @@ run_easytier_selfcheck() {
     easytier_selfcheck_warnings=0
     easytier_core_bin="$(uci -q get easytier.@easytier[0].easytierbin 2>/dev/null || true)"
     [ -n "$easytier_core_bin" ] || easytier_core_bin="/usr/bin/easytier-core"
+    easytier_present='0'
+
+    for easytier_path in \
+        /etc/init.d/easytier \
+        /etc/config/easytier \
+        "$EASYTIER_CONTROLLER" \
+        /usr/lib/lua/luci/model/cbi/easytier.lua \
+        /usr/lib/lua/luci/view/easytier/easytier_status.htm \
+        /usr/bin/easytier-core \
+        /usr/bin/easytier-cli \
+        /usr/bin/easytier-web; do
+        [ -e "$easytier_path" ] && easytier_present='1'
+    done
+    if [ "$easytier_present" != '1' ]; then
+        log "插件:   $EASYTIER_DISPLAY_NAME = 未安装，跳过可选插件自检"
+        log "summary:  SKIP (optional plugin not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
 
     selfcheck_print_service_state "easytier" "/etc/init.d/easytier"
     selfcheck_print_file_state "easytier config" "/etc/config/easytier"
@@ -10371,7 +12352,7 @@ run_easytier_selfcheck() {
     selfcheck_print_file_state "easytier cli" "/usr/bin/easytier-cli"
     selfcheck_print_file_state "easytier web" "/usr/bin/easytier-web"
     selfcheck_print_appcenter_route_state "$EASYTIER_DISPLAY_NAME" "$EASYTIER_DISPLAY_NAME" "$EASYTIER_ROUTE"
-    selfcheck_print_luci_route_state "$EASYTIER_DISPLAY_NAME page" "$EASYTIER_ROUTE"
+    selfcheck_print_luci_route_state_when_ready "$EASYTIER_DISPLAY_NAME page" "$EASYTIER_ROUTE" "$EASYTIER_CONTROLLER"
 
     [ -x /etc/init.d/easytier ] || easytier_selfcheck_failures=$((easytier_selfcheck_failures + 1))
     for needed in \
@@ -10385,7 +12366,12 @@ run_easytier_selfcheck() {
         [ -f "$needed" ] || easytier_selfcheck_failures=$((easytier_selfcheck_failures + 1))
     done
     selfcheck_appcenter_route_matches "$EASYTIER_DISPLAY_NAME" "$EASYTIER_ROUTE" || easytier_selfcheck_failures=$((easytier_selfcheck_failures + 1))
-    selfcheck_luci_route_ok "$EASYTIER_ROUTE" || easytier_selfcheck_failures=$((easytier_selfcheck_failures + 1))
+    if selfcheck_luci_route_ok_when_ready "$EASYTIER_ROUTE" "$EASYTIER_CONTROLLER"; then
+        route_rc='0'
+    else
+        route_rc="$?"
+    fi
+    [ "$route_rc" = '0' ] || [ "$route_rc" = '2' ] || easytier_selfcheck_failures=$((easytier_selfcheck_failures + 1))
 
     if [ -x /etc/init.d/easytier ]; then
         /etc/init.d/easytier enabled >/dev/null 2>&1 || easytier_selfcheck_warnings=$((easytier_selfcheck_warnings + 1))
@@ -10584,6 +12570,790 @@ unified_default_gateway_summary() {
     ip route show default 2>/dev/null | sed -n '1,3p' | tr '\n' ';' | sed 's/;$/ /; s/[[:space:]]\+/ /g; s/^ //; s/ $//' || true
 }
 
+unified_default_gateway_ip() {
+    ip route show default 2>/dev/null | awk '
+        /^default / {
+            for (i = 1; i <= NF; i++) {
+                if ($i == "via" && (i + 1) <= NF) {
+                    print $(i + 1)
+                    exit
+                }
+            }
+        }
+    ' || true
+}
+
+unified_first_enabled_feed_url() {
+    awk '$1 == "src/gz" && $3 != "" { print $3; exit }' "$FEEDS" 2>/dev/null || true
+}
+
+unified_network_warn() {
+    log "$1"
+    UNIFIED_NETWORK_WARNINGS=$((UNIFIED_NETWORK_WARNINGS + 1))
+}
+
+unified_ping_probe() {
+    ping_label="$1"
+    ping_host="$2"
+    ping_warn="${3:-warn}"
+
+    [ -n "$ping_host" ] || {
+        if [ "$ping_warn" = 'warn' ]; then
+            unified_network_warn "网络:   $ping_label ping = 无目标"
+        else
+            log "网络:   $ping_label ping = 无目标"
+        fi
+        return 0
+    }
+    if ! command -v ping >/dev/null 2>&1; then
+        if [ "$ping_warn" = 'warn' ]; then
+            unified_network_warn "网络:   $ping_label ping = 缺少 ping"
+        else
+            log "网络:   $ping_label ping = 缺少 ping"
+        fi
+        return 0
+    fi
+    if ping -c 1 -W 2 "$ping_host" >/dev/null 2>&1; then
+        log "网络:   $ping_label ping = 可达 ($ping_host)"
+    else
+        if [ "$ping_warn" = 'warn' ]; then
+            unified_network_warn "网络:   $ping_label ping = 不通 ($ping_host)"
+        else
+            log "网络:   $ping_label ping = 不通或禁 ICMP ($ping_host)"
+        fi
+    fi
+}
+
+unified_dns_probe() {
+    dns_label="$1"
+    dns_host="$2"
+    dns_addr=""
+
+    if command -v nslookup >/dev/null 2>&1; then
+        dns_addr="$(nslookup "$dns_host" 2>/dev/null | awk '
+            /^Name:/ { seen = 1; next }
+            seen && /^Address[[:space:]]+[0-9]+:/ { print $3; exit }
+            seen && /^Address[[:space:]]/ { print $2; exit }
+        ' || true)"
+    fi
+    if [ -z "$dns_addr" ] && command -v ping >/dev/null 2>&1; then
+        dns_addr="$(ping -c 1 -W 2 "$dns_host" 2>/dev/null | awk -F'[()]' '/^PING / { print $2; exit }' || true)"
+    fi
+
+    if [ -n "$dns_addr" ]; then
+        log "DNS:    $dns_label = $dns_addr"
+    else
+        unified_network_warn "DNS:    $dns_label = 解析失败"
+    fi
+}
+
+unified_http_probe() {
+    http_label="$1"
+    http_url="$2"
+    http_warn="${3:-warn}"
+    http_host="$(extract_url_host "$http_url" 2>/dev/null || true)"
+
+    [ -n "$http_url" ] || {
+        if [ "$http_warn" = 'warn' ]; then
+            unified_network_warn "HTTP:   $http_label = 无目标"
+        else
+            log "HTTP:   $http_label = 无目标"
+        fi
+        return 0
+    }
+    if ! command -v curl >/dev/null 2>&1; then
+        if [ "$http_warn" = 'warn' ]; then
+            unified_network_warn "HTTP:   $http_label = 缺少 curl"
+        else
+            log "HTTP:   $http_label = 缺少 curl"
+        fi
+        return 0
+    fi
+
+    http_out="$(curl -k -L -I -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}|%{time_starttransfer}' "$http_url" 2>/dev/null || true)"
+    http_code="${http_out%%|*}"
+    http_time="${http_out#*|}"
+    if [ -z "$http_code" ] || [ "$http_code" = '000' ] || [ "$http_code" = "$http_out" ]; then
+        http_out="$(curl -k -L -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}|%{time_starttransfer}' "$http_url" 2>/dev/null || true)"
+        http_code="${http_out%%|*}"
+        http_time="${http_out#*|}"
+    fi
+    http_ms="$(printf '%s\n' "$http_time" | awk '$1 ~ /^[0-9.]+$/ { printf "%dms\n", ($1 * 1000) + 0.5 }' 2>/dev/null || true)"
+    [ -n "$http_ms" ] || http_ms='?'
+
+    case "$http_code" in
+        200|204|301|302|307|308|403)
+            log "HTTP:   $http_label = HTTP $http_code ${http_ms} host=${http_host:-未知}"
+            ;;
+        *)
+            if [ "$http_warn" = 'warn' ]; then
+                unified_network_warn "HTTP:   $http_label = 异常或超时 HTTP ${http_code:-000} host=${http_host:-未知}"
+            else
+                log "HTTP:   $http_label = 旁路探测异常 HTTP ${http_code:-000} host=${http_host:-未知}"
+            fi
+            ;;
+    esac
+}
+
+run_unified_network_path_check() {
+    UNIFIED_NETWORK_WARNINGS=0
+    gateway_ip="$(unified_default_gateway_ip)"
+    feed_url="$(unified_first_enabled_feed_url)"
+
+    selfcheck_print_header "网络出口快测"
+    unified_ping_probe "默认网关" "$gateway_ip" "info"
+    unified_dns_probe "github.com" "github.com"
+    unified_dns_probe "清华镜像" "mirrors.tuna.tsinghua.edu.cn"
+    unified_http_probe "GitHub" "https://github.com/"
+    if [ -n "$feed_url" ]; then
+        unified_http_probe "当前首个软件源" "$feed_url/Packages"
+    else
+        unified_network_warn "HTTP:   当前首个软件源 = 未找到启用源"
+    fi
+    unified_http_probe "OpenWrt 官方" "https://downloads.openwrt.org/" "info"
+
+    if [ "$UNIFIED_NETWORK_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_NETWORK_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_outlet_iface_summary() {
+    outlet_dev="$1"
+    [ -n "$outlet_dev" ] || return 0
+    [ -d "/sys/class/net/$outlet_dev" ] || return 0
+
+    outlet_state="$(cat "/sys/class/net/$outlet_dev/operstate" 2>/dev/null || true)"
+    [ -n "$outlet_state" ] || outlet_state='unknown'
+    outlet_ipv4="$(ip -4 addr show dev "$outlet_dev" 2>/dev/null | awk '/inet / { print $2; exit }' || true)"
+    outlet_ipv6_global="$(ip -6 addr show dev "$outlet_dev" 2>/dev/null | awk '/inet6 / && $0 !~ / scope link / { print $2; exit }' || true)"
+    outlet_ipv6_link="$(ip -6 addr show dev "$outlet_dev" 2>/dev/null | awk '/inet6 / && $0 ~ / scope link / { print $2; exit }' || true)"
+
+    log "出口:   dev=$outlet_dev state=$outlet_state ipv4=${outlet_ipv4:-无} ipv6_global=${outlet_ipv6_global:-无} ipv6_link=${outlet_ipv6_link:-无}"
+}
+
+unified_ifstatus_summary() {
+    outlet_iface="$1"
+    [ -n "$outlet_iface" ] || return 0
+    command -v ifstatus >/dev/null 2>&1 || return 0
+
+    ifstatus_text="$(ifstatus "$outlet_iface" 2>/dev/null || true)"
+    [ -n "$ifstatus_text" ] || return 0
+    iface_up="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"up":[[:space:]]*\(true\|false\).*/\1/p' | sed -n '1p')"
+    iface_pending="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"pending":[[:space:]]*\(true\|false\).*/\1/p' | sed -n '1p')"
+    iface_proto="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"proto":[[:space:]]*"\\([^"]*\\)".*/\1/p' | sed -n '1p')"
+    iface_device="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"device":[[:space:]]*"\\([^"]*\\)".*/\1/p' | sed -n '1p')"
+    log "ifstatus: $outlet_iface up=${iface_up:-?} pending=${iface_pending:-?} proto=${iface_proto:-?} device=${iface_device:-?}"
+}
+
+run_unified_nros_outlet_health_check() {
+    outlet_warnings=0
+    outlet_v4_defaults="$(ip -4 route show default 2>/dev/null | sed -n '1,3p' || true)"
+    outlet_v6_defaults="$(ip -6 route show default 2>/dev/null | sed -n '1,3p' || true)"
+    outlet_devs="$( { ip -4 route show default 2>/dev/null; ip -6 route show default 2>/dev/null; } | awk '{ for (i = 1; i <= NF; i++) if ($i == "dev" && (i + 1) <= NF) print $(i + 1) }' | awk '!seen[$0]++' || true )"
+    outlet_need_v6='0'
+    outlet_global_v6="$(ip -6 addr show 2>/dev/null | awk '/inet6 / && $0 !~ / scope link / && $0 !~ / ::1/ { print $2; exit }' || true)"
+
+    selfcheck_print_header "NROS 出口与 IPv6 链路体检"
+    if [ -n "$outlet_v4_defaults" ]; then
+        printf '%s\n' "$outlet_v4_defaults" | sed 's/^/IPv4默认: /'
+    else
+        log "IPv4默认: 缺失"
+        outlet_warnings=$((outlet_warnings + 1))
+    fi
+
+    if [ -n "$outlet_v6_defaults" ]; then
+        printf '%s\n' "$outlet_v6_defaults" | sed 's/^/IPv6默认: /'
+    else
+        log "IPv6默认: 缺失"
+    fi
+
+    if awk '$1=="proto" && ($2=="udp6" || $2=="tcp6" || $2=="tcp6-client") { found=1 } END { exit found ? 0 : 1 }' /etc/openvpn/client.ovpn 2>/dev/null; then
+        outlet_need_v6='1'
+    fi
+    if [ "$outlet_need_v6" = '1' ] && [ -z "$outlet_v6_defaults" ]; then
+        log "IPv6诊断: OpenVPN 当前使用 IPv6 transport，但系统无 IPv6 default route"
+        outlet_warnings=$((outlet_warnings + 1))
+    elif [ -n "$outlet_global_v6" ] && [ -z "$outlet_v6_defaults" ]; then
+        log "IPv6诊断: 存在全局 IPv6 地址但无 IPv6 default route"
+        outlet_warnings=$((outlet_warnings + 1))
+    fi
+
+    for candidate_dev in cpe1 cpe1_4 cpe1_6 port5 eth1 wwan0 usb0; do
+        [ -d "/sys/class/net/$candidate_dev" ] || continue
+        printf '%s\n' "$outlet_devs" | grep -Fx "$candidate_dev" >/dev/null 2>&1 && continue
+        outlet_devs="$(printf '%s\n%s\n' "$outlet_devs" "$candidate_dev" | sed '/^$/d' | awk '!seen[$0]++')"
+    done
+    if [ -n "$outlet_devs" ]; then
+        for outlet_dev in $outlet_devs; do
+            unified_outlet_iface_summary "$outlet_dev"
+        done
+    else
+        log "出口:   未发现默认路由接口"
+        outlet_warnings=$((outlet_warnings + 1))
+    fi
+
+    for outlet_iface in wan wan6 cpe1 cpe1_4 cpe1_6; do
+        unified_ifstatus_summary "$outlet_iface"
+    done
+
+    if [ "$outlet_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$outlet_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+nradio_5g_aggregation_current_model() {
+    if [ -n "${CURRENT_DETECTED_MODEL:-}" ]; then
+        printf '%s\n' "$CURRENT_DETECTED_MODEL"
+        return 0
+    fi
+
+    normalize_nradio_model "$(detect_board_model_raw)" "$(detect_board_name_raw)" "$(detect_board_compatible_raw)" 2>/dev/null || true
+}
+
+nradio_5g_aggregation_model_supported() {
+    case "$(nradio_5g_aggregation_current_model 2>/dev/null || true)" in
+        NRadio_C5800-688|NRadio_C8-688)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+nradio_5g_aggregation_ifstatus_field() {
+    agg_text="$1"
+    agg_field="$2"
+
+    printf '%s\n' "$agg_text" | sed -n "s/^[[:space:]]*\"$agg_field\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" | sed -n '1p'
+}
+
+nradio_5g_aggregation_ifstatus_bool() {
+    agg_text="$1"
+    agg_field="$2"
+
+    printf '%s\n' "$agg_text" | sed -n "s/^[[:space:]]*\"$agg_field\":[[:space:]]*\(true\|false\).*/\1/p" | sed -n '1p'
+}
+
+nradio_5g_aggregation_ifstatus_summary() {
+    agg_iface="$1"
+    agg_ifstatus_text=''
+    agg_up=''
+    agg_pending=''
+    agg_proto=''
+    agg_device=''
+
+    command -v ifstatus >/dev/null 2>&1 || {
+        log "ifstatus: 缺少 ifstatus 命令"
+        return 1
+    }
+
+    agg_ifstatus_text="$(ifstatus "$agg_iface" 2>/dev/null || true)"
+    if [ -z "$agg_ifstatus_text" ]; then
+        log "ifstatus: $agg_iface = 无返回"
+        return 1
+    fi
+
+    agg_up="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" up)"
+    agg_pending="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" pending)"
+    agg_proto="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" proto)"
+    agg_device="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" device)"
+    log "ifstatus: $agg_iface up=${agg_up:-?} pending=${agg_pending:-?} proto=${agg_proto:-?} device=${agg_device:-?}"
+}
+
+nradio_5g_aggregation_iface_abnormal() {
+    agg_iface="$1"
+    agg_ifstatus_text="$(ifstatus "$agg_iface" 2>/dev/null || true)"
+    [ -n "$agg_ifstatus_text" ] || return 1
+
+    agg_up="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" up)"
+    agg_pending="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" pending)"
+    [ "$agg_up" = 'true' ] && [ "$agg_pending" != 'true' ] && return 1
+    return 0
+}
+
+nradio_5g_aggregation_dev_summary() {
+    agg_dev="$1"
+    [ -d "/sys/class/net/$agg_dev" ] || {
+        log "网口:   $agg_dev = 不存在"
+        return 1
+    }
+
+    agg_state="$(cat "/sys/class/net/$agg_dev/operstate" 2>/dev/null || true)"
+    agg_ipv4="$(ip -4 addr show dev "$agg_dev" 2>/dev/null | awk '/inet / { print $2; exit }' || true)"
+    agg_ipv6_global="$(ip -6 addr show dev "$agg_dev" 2>/dev/null | awk '/inet6 / && $0 !~ / scope link / { print $2; exit }' || true)"
+    agg_ipv6_link="$(ip -6 addr show dev "$agg_dev" 2>/dev/null | awk '/inet6 / && $0 ~ / scope link / { print $2; exit }' || true)"
+    log "网口:   $agg_dev state=${agg_state:-unknown} ipv4=${agg_ipv4:-无} ipv6_global=${agg_ipv6_global:-无} ipv6_link=${agg_ipv6_link:-无}"
+}
+
+nradio_5g_aggregation_service_summary() {
+    agg_label="$1"
+    agg_init="$2"
+    agg_config="$3"
+
+    if [ -x "$agg_init" ]; then
+        agg_status="$( ( "$agg_init" status 2>/dev/null || true ) | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+        log "服务:   $agg_label = ${agg_status:-已安装，状态未知}"
+        return 0
+    fi
+
+    if [ -n "$agg_config" ] && [ -e "$agg_config" ]; then
+        log "服务:   $agg_label = 有配置，未发现 init 脚本"
+        return 0
+    fi
+
+    log "服务:   $agg_label = 未安装"
+}
+
+nradio_5g_aggregation_mwan_members_for_iface() {
+    agg_iface="$1"
+    command -v uci >/dev/null 2>&1 || return 1
+    uci -q show mwan3 2>/dev/null | sed -n "s/^mwan3\.\([^.=]*\)\.interface='$agg_iface'$/\1/p"
+}
+
+nradio_5g_aggregation_print_mwan_weight() {
+    agg_iface="$1"
+    agg_members="$(nradio_5g_aggregation_mwan_members_for_iface "$agg_iface" 2>/dev/null || true)"
+
+    if [ -z "$agg_members" ]; then
+        log "mwan3权重: $agg_iface = 未找到 member"
+        return 1
+    fi
+
+    for agg_member in $agg_members; do
+        agg_weight="$(uci -q get "mwan3.${agg_member}.weight" 2>/dev/null || true)"
+        agg_metric="$(uci -q get "mwan3.${agg_member}.metric" 2>/dev/null || true)"
+        log "mwan3权重: $agg_iface member=$agg_member metric=${agg_metric:-?} weight=${agg_weight:-?}"
+    done
+}
+
+nradio_5g_aggregation_print_mwan_status() {
+    if ! command -v mwan3 >/dev/null 2>&1; then
+        log "mwan3:  未安装或命令不可用"
+        return 1
+    fi
+
+    agg_mwan_status="$(mwan3 status 2>/dev/null || true)"
+    if [ -z "$agg_mwan_status" ]; then
+        log "mwan3:  status 无返回"
+        return 1
+    fi
+
+    printf '%s\n' "$agg_mwan_status" | sed -n '1,120p' | sed 's/^/mwan3:  /'
+
+    if printf '%s\n' "$agg_mwan_status" | grep -F 'cpe_4 (' >/dev/null 2>&1 && printf '%s\n' "$agg_mwan_status" | grep -F 'cpe1_4 (' >/dev/null 2>&1; then
+        log "IPv4聚合: 检测到 cpe_4 + cpe1_4，mwan3 多线策略存在"
+    else
+        log "IPv4聚合: 未同时检测到 cpe_4 + cpe1_4，IPv4 可能未按双线分流"
+    fi
+
+    if printf '%s\n' "$agg_mwan_status" | grep -F 'cpe_6 (' >/dev/null 2>&1 && printf '%s\n' "$agg_mwan_status" | grep -F 'cpe1_6 (' >/dev/null 2>&1; then
+        log "IPv6聚合: 检测到 cpe_6 + cpe1_6"
+    elif printf '%s\n' "$agg_mwan_status" | grep -F 'cpe_6 (' >/dev/null 2>&1 || printf '%s\n' "$agg_mwan_status" | grep -F 'cpe1_6 (' >/dev/null 2>&1; then
+        log "IPv6聚合: 仅检测到一条 IPv6 线路，IPv6 不会双线叠加"
+    else
+        log "IPv6聚合: 未检测到 IPv6 聚合策略"
+    fi
+}
+
+nradio_5g_aggregation_print_accelerator_state() {
+    agg_flow="$(uci -q get firewall.@defaults[0].flow_offloading 2>/dev/null || true)"
+    agg_hw_flow="$(uci -q get firewall.@defaults[0].flow_offloading_hw 2>/dev/null || true)"
+    agg_sfe="$(uci -q get shortcut-fe.@shortcut-fe[0].enabled 2>/dev/null || true)"
+
+    nradio_5g_aggregation_service_summary "$OPENCLASH_DISPLAY_NAME" /etc/init.d/openclash /etc/config/openclash
+    nradio_5g_aggregation_service_summary "AdGuardHome" /etc/init.d/AdGuardHome /etc/config/AdGuardHome
+    nradio_5g_aggregation_service_summary "QoS" /etc/init.d/qos /etc/config/qos
+    nradio_5g_aggregation_service_summary "SQM" /etc/init.d/sqm /etc/config/sqm
+    log "硬件加速: firewall.flow_offloading=${agg_flow:-未配置} flow_offloading_hw=${agg_hw_flow:-未配置} shortcut-fe=${agg_sfe:-未配置}"
+}
+
+nradio_5g_aggregation_restart_mwan() {
+    if [ -x /etc/init.d/mwan3 ]; then
+        log "mwan3:  重启 /etc/init.d/mwan3"
+        /etc/init.d/mwan3 restart >/dev/null 2>&1 || return 1
+    elif command -v mwan3 >/dev/null 2>&1; then
+        log "mwan3:  重启 /usr/sbin/mwan3"
+        mwan3 restart >/dev/null 2>&1 || return 1
+    else
+        log "mwan3:  未发现可用重启入口"
+        return 1
+    fi
+}
+
+nradio_5g_aggregation_print_diagnostics() {
+    agg_model="$(nradio_5g_aggregation_current_model 2>/dev/null || true)"
+
+    selfcheck_print_header "5G聚合修复检查"
+    log "机型:   ${agg_model:-未知}"
+    log "说明:   mwan3 是多连接负载均衡，不是单连接 bonding；测速建议使用 IPv4 多线程"
+
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G 聚合功能入口"
+        return 2
+    fi
+
+    for agg_iface in cpe_4 cpe1_4 cpe_6 cpe1_6; do
+        nradio_5g_aggregation_ifstatus_summary "$agg_iface"
+    done
+
+    for agg_dev in eth1 port5; do
+        nradio_5g_aggregation_dev_summary "$agg_dev"
+    done
+
+    agg_v4_defaults="$(ip -4 route show default 2>/dev/null | sed -n '1,3p' || true)"
+    agg_v6_defaults="$(ip -6 route show default 2>/dev/null | sed -n '1,3p' || true)"
+    if [ -n "$agg_v4_defaults" ]; then
+        printf '%s\n' "$agg_v4_defaults" | sed 's/^/IPv4默认: /'
+    else
+        log "IPv4默认: 缺失"
+    fi
+    if [ -n "$agg_v6_defaults" ]; then
+        printf '%s\n' "$agg_v6_defaults" | sed 's/^/IPv6默认: /'
+    else
+        log "IPv6默认: 缺失"
+    fi
+
+    nradio_5g_aggregation_print_mwan_status
+    nradio_5g_aggregation_print_mwan_weight cpe_4
+    nradio_5g_aggregation_print_mwan_weight cpe1_4
+    nradio_5g_aggregation_print_accelerator_state
+}
+
+nradio_5g_aggregation_restart_abnormal_ifaces() {
+    agg_restarted='0'
+
+    command -v ifdown >/dev/null 2>&1 || return 0
+    command -v ifup >/dev/null 2>&1 || return 0
+    command -v ifstatus >/dev/null 2>&1 || return 0
+
+    for agg_iface in cpe_4 cpe1_4 cpe_6 cpe1_6; do
+        if nradio_5g_aggregation_iface_abnormal "$agg_iface"; then
+            log "修复:   重拉异常接口 $agg_iface"
+            ifdown "$agg_iface" >/dev/null 2>&1 || true
+            sleep 2
+            ifup "$agg_iface" >/dev/null 2>&1 || true
+            agg_restarted='1'
+        fi
+    done
+
+    [ "$agg_restarted" = '1' ] || log "修复:   未发现需要重拉的异常接口"
+}
+
+nradio_5g_aggregation_light_repair() {
+    selfcheck_print_header "5G聚合轻量修复"
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G 聚合修复动作"
+        return 0
+    fi
+
+    if [ -x /etc/init.d/net_switch ]; then
+        log "修复:   重新应用 net_switch"
+        /etc/init.d/net_switch restart >/dev/null 2>&1 || true
+        sleep 2
+    else
+        log "修复:   未发现 net_switch init"
+    fi
+
+    if [ -x /etc/init.d/net6_switch ]; then
+        log "修复:   重新应用 net6_switch"
+        /etc/init.d/net6_switch restart >/dev/null 2>&1 || true
+        sleep 2
+    else
+        log "修复:   未发现 net6_switch init"
+    fi
+
+    nradio_5g_aggregation_restart_abnormal_ifaces
+
+    if [ -x /etc/init.d/mwan3 ]; then
+        log "修复:   重启 mwan3"
+        /etc/init.d/mwan3 restart >/dev/null 2>&1 || true
+    elif command -v mwan3 >/dev/null 2>&1; then
+        log "修复:   reload mwan3"
+        mwan3 restart >/dev/null 2>&1 || true
+    else
+        log "修复:   未发现 mwan3"
+    fi
+
+    sleep 5
+}
+
+nradio_5g_aggregation_fix_mwan_weight() {
+    agg_changed='0'
+
+    selfcheck_print_header "负载均衡"
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G 聚合权重修复动作"
+        return 0
+    fi
+    command -v uci >/dev/null 2>&1 || {
+        log "mwan3权重: 缺少 uci，无法修复"
+        return 1
+    }
+
+    printf '请输入副5G权重 [2]: '
+    if ui_read_line; then
+        agg_cpe1_weight="$UI_READ_RESULT"
+    else
+        agg_cpe1_weight=''
+    fi
+    [ -n "$agg_cpe1_weight" ] || agg_cpe1_weight='2'
+    case "$agg_cpe1_weight" in
+        *[!0-9]*|0)
+            log "mwan3权重: 副5G(cpe1_4)权重无效"
+            return 1
+            ;;
+    esac
+
+    printf '请输入蜂窝权重 [1]: '
+    if ui_read_line; then
+        agg_cpe_weight="$UI_READ_RESULT"
+    else
+        agg_cpe_weight=''
+    fi
+    [ -n "$agg_cpe_weight" ] || agg_cpe_weight='1'
+    case "$agg_cpe_weight" in
+        *[!0-9]*|0)
+            log "mwan3权重: 蜂窝(cpe_4)权重无效"
+            return 1
+            ;;
+    esac
+
+    log "负载均衡: 副5G:蜂窝 = ${agg_cpe1_weight}:${agg_cpe_weight}"
+
+    if [ -f /etc/config/mwan3 ]; then
+        agg_backup="/etc/config/mwan3.nradio-5gagg.$(date +%Y%m%d%H%M%S 2>/dev/null || printf '%s' "$$").bak"
+        cp -p /etc/config/mwan3 "$agg_backup" 2>/dev/null && log "备份:   $agg_backup"
+    fi
+
+    for agg_iface in cpe_4 cpe1_4; do
+        case "$agg_iface" in
+            cpe1_4)
+                agg_target_weight="$agg_cpe1_weight"
+                ;;
+            cpe_4)
+                agg_target_weight="$agg_cpe_weight"
+                ;;
+            *)
+                agg_target_weight='1'
+                ;;
+        esac
+        agg_members="$(nradio_5g_aggregation_mwan_members_for_iface "$agg_iface" 2>/dev/null || true)"
+        if [ -z "$agg_members" ]; then
+            log "mwan3权重: $agg_iface = 未找到 member"
+            continue
+        fi
+        for agg_member in $agg_members; do
+            log "mwan3权重: 设置 $agg_member ($agg_iface) weight=${agg_target_weight}"
+            uci set "mwan3.${agg_member}.weight=${agg_target_weight}" >/dev/null 2>&1 && agg_changed='1'
+        done
+    done
+
+    if [ "$agg_changed" = '1' ]; then
+        uci commit mwan3 >/dev/null 2>&1 || true
+        nradio_5g_aggregation_restart_mwan || true
+        sleep 3
+    else
+        log "mwan3权重: 未产生变更"
+    fi
+}
+
+nradio_5g_aggregation_print_hw_offload_state() {
+    agg_flow="$(uci -q get firewall.@defaults[0].flow_offloading 2>/dev/null || true)"
+    agg_hw_flow="$(uci -q get firewall.@defaults[0].flow_offloading_hw 2>/dev/null || true)"
+    log "硬件加速: firewall.flow_offloading=${agg_flow:-未配置} flow_offloading_hw=${agg_hw_flow:-未配置}"
+
+    if iptables -j FLOWOFFLOAD -h 2>&1 | grep -F -- '--hw' >/dev/null 2>&1; then
+        log "硬件加速: FLOWOFFLOAD 支持 --hw"
+    else
+        log "硬件加速: FLOWOFFLOAD 未显示 --hw 支持"
+    fi
+
+    agg_rule_text="$(iptables -t filter -S FORWARD 2>/dev/null | grep -F 'FLOWOFFLOAD' | sed -n '1,3p' || true)"
+    if [ -n "$agg_rule_text" ]; then
+        printf '%s\n' "$agg_rule_text" | sed 's/^/规则:   /'
+    else
+        log "规则:   未发现 FLOWOFFLOAD FORWARD 规则"
+    fi
+
+    agg_rule_hit="$(iptables -t filter -L FORWARD -v -n 2>/dev/null | grep -F 'FLOWOFFLOAD' | sed -n '1,3p' || true)"
+    if [ -n "$agg_rule_hit" ]; then
+        printf '%s\n' "$agg_rule_hit" | sed 's/^/计数:   /'
+    else
+        log "计数:   未发现 FLOWOFFLOAD 命中行"
+    fi
+
+    if [ -r /sys/kernel/debug/hnat/hnat_entry ]; then
+        sed -n '1,8p' /sys/kernel/debug/hnat/hnat_entry 2>/dev/null | sed 's/^/HNAT:   /'
+    fi
+}
+
+nradio_5g_aggregation_enable_hw_offload() {
+    selfcheck_print_header "硬件 offload 开启验证"
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G 聚合硬件 offload 修复动作"
+        return 0
+    fi
+    command -v uci >/dev/null 2>&1 || {
+        log "硬件加速: 缺少 uci，无法写入"
+        return 1
+    }
+    command -v fw3 >/dev/null 2>&1 || {
+        log "硬件加速: 缺少 fw3，无法重载防火墙"
+        return 1
+    }
+
+    log "写入:   flow_offloading=1 flow_offloading_hw=1"
+    uci set firewall.@defaults[0].flow_offloading='1' >/dev/null 2>&1 || return 1
+    uci set firewall.@defaults[0].flow_offloading_hw='1' >/dev/null 2>&1 || return 1
+    uci commit firewall >/dev/null 2>&1 || return 1
+
+    log "重载:   fw3 reload"
+    fw3 reload >/tmp/nradio-hwoffload-fw3.log 2>&1 || log "提示:   fw3 reload 返回非 0，查看 /tmp/nradio-hwoffload-fw3.log"
+    if [ -x /etc/init.d/mtkhnat ]; then
+        log "重启:   mtkhnat"
+        /etc/init.d/mtkhnat restart >/dev/null 2>&1 || true
+    fi
+    sleep 2
+    nradio_5g_aggregation_print_hw_offload_state
+}
+
+nradio_5g_aggregation_restore_hw_offload() {
+    selfcheck_print_header "硬件 offload 直接还原"
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G 聚合硬件 offload 还原动作"
+        return 0
+    fi
+    command -v fw3 >/dev/null 2>&1 || {
+        log "硬件加速: 缺少 fw3，无法重载防火墙"
+        return 1
+    }
+
+    log "写入:   flow_offloading=1，删除 flow_offloading_hw"
+    uci set firewall.@defaults[0].flow_offloading='1' >/dev/null 2>&1 || return 1
+    uci -q delete firewall.@defaults[0].flow_offloading_hw >/dev/null 2>&1 || true
+    uci commit firewall >/dev/null 2>&1 || return 1
+
+    log "重载:   fw3 reload"
+    fw3 reload >/tmp/nradio-hwoffload-restore-fw3.log 2>&1 || log "提示:   fw3 reload 返回非 0，查看 /tmp/nradio-hwoffload-restore-fw3.log"
+    if [ -x /etc/init.d/mtkhnat ]; then
+        log "重启:   mtkhnat"
+        /etc/init.d/mtkhnat restart >/dev/null 2>&1 || true
+    fi
+    sleep 2
+    nradio_5g_aggregation_print_hw_offload_state
+}
+
+nradio_5g_aggregation_counter_value() {
+    agg_dev="$1"
+    agg_name="$2"
+
+    cat "/sys/class/net/$agg_dev/statistics/$agg_name" 2>/dev/null | sed -n '1p'
+}
+
+nradio_5g_aggregation_traffic_monitor() {
+    agg_seconds="${1:-30}"
+    agg_eth1_rx_start="$(nradio_5g_aggregation_counter_value eth1 rx_bytes)"
+    agg_eth1_tx_start="$(nradio_5g_aggregation_counter_value eth1 tx_bytes)"
+    agg_port5_rx_start="$(nradio_5g_aggregation_counter_value port5 rx_bytes)"
+    agg_port5_tx_start="$(nradio_5g_aggregation_counter_value port5 tx_bytes)"
+
+    selfcheck_print_header "5G聚合测速流量监控"
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G 聚合流量监控"
+        return 0
+    fi
+
+    log "提示:   接下来 ${agg_seconds} 秒请用 IPv4 多线程测速"
+    ip -4 route show default 2>/dev/null | sed -n '1,3p' | sed 's/^/IPv4默认: /'
+    ip -6 route show default 2>/dev/null | sed -n '1,3p' | sed 's/^/IPv6默认: /'
+    sleep "$agg_seconds"
+
+    agg_eth1_rx_end="$(nradio_5g_aggregation_counter_value eth1 rx_bytes)"
+    agg_eth1_tx_end="$(nradio_5g_aggregation_counter_value eth1 tx_bytes)"
+    agg_port5_rx_end="$(nradio_5g_aggregation_counter_value port5 rx_bytes)"
+    agg_port5_tx_end="$(nradio_5g_aggregation_counter_value port5 tx_bytes)"
+
+    agg_eth1_rx_delta=$(( ${agg_eth1_rx_end:-0} - ${agg_eth1_rx_start:-0} ))
+    agg_eth1_tx_delta=$(( ${agg_eth1_tx_end:-0} - ${agg_eth1_tx_start:-0} ))
+    agg_port5_rx_delta=$(( ${agg_port5_rx_end:-0} - ${agg_port5_rx_start:-0} ))
+    agg_port5_tx_delta=$(( ${agg_port5_tx_end:-0} - ${agg_port5_tx_start:-0} ))
+    agg_eth1_total_delta=$((agg_eth1_rx_delta + agg_eth1_tx_delta))
+    agg_port5_total_delta=$((agg_port5_rx_delta + agg_port5_tx_delta))
+    log "流量:   eth1  RX=${agg_eth1_rx_delta} TX=${agg_eth1_tx_delta} TOTAL=${agg_eth1_total_delta} bytes / ${agg_seconds}s"
+    log "流量:   port5 RX=${agg_port5_rx_delta} TX=${agg_port5_tx_delta} TOTAL=${agg_port5_total_delta} bytes / ${agg_seconds}s"
+
+    if [ "$agg_eth1_rx_delta" -gt 1048576 ] 2>/dev/null && [ "$agg_port5_rx_delta" -gt 1048576 ] 2>/dev/null; then
+        log "下载判断: eth1 与 port5 均有明显 RX，下行已双线分流"
+    elif [ "$agg_eth1_rx_delta" -gt 1048576 ] 2>/dev/null || [ "$agg_port5_rx_delta" -gt 1048576 ] 2>/dev/null; then
+        log "下载判断: 主要只有一条线路 RX 明显，下行偏单线"
+    else
+        log "下载判断: RX 流量不足，无法判断下行聚合"
+    fi
+
+    if [ "$agg_eth1_tx_delta" -gt 1048576 ] 2>/dev/null && [ "$agg_port5_tx_delta" -gt 1048576 ] 2>/dev/null; then
+        log "上传判断: eth1 与 port5 均有明显 TX，上行已双线分流"
+    elif [ "$agg_eth1_tx_delta" -gt 1048576 ] 2>/dev/null || [ "$agg_port5_tx_delta" -gt 1048576 ] 2>/dev/null; then
+        log "上传判断: 主要只有一条线路 TX 明显，上行偏单线"
+    else
+        log "上传判断: TX 流量不足，无法判断上行聚合"
+    fi
+}
+
+run_5g_aggregation_repair_check() {
+    nradio_5g_aggregation_print_diagnostics
+
+    if ! nradio_5g_aggregation_model_supported; then
+        return 0
+    fi
+
+    printf '\n5G聚合修复检查:\n'
+    printf '1. 轻量修复后复查\n'
+    printf '2. 负载均衡（副5G:蜂窝）\n'
+    printf '3. 30秒测速流量监控\n'
+    printf '4. 开启硬件 offload 并验证\n'
+    printf '5. 还原为软件 offload 并验证\n'
+    printf '0. 结束\n'
+    printf '请选择 0、1、2、3、4 或 5: '
+    if ! ui_read_line; then
+        log "提示:   已完成诊断；需要修复或监控时请交互式选择 1/2/3/4/5"
+        return 0
+    fi
+
+    case "$UI_READ_RESULT" in
+        0|'')
+            return 0
+            ;;
+        1)
+            nradio_5g_aggregation_light_repair
+            nradio_5g_aggregation_print_diagnostics
+            ;;
+        2)
+            confirm_or_exit "确认备份并设置负载均衡（副5G:蜂窝）吗？"
+            nradio_5g_aggregation_fix_mwan_weight
+            nradio_5g_aggregation_print_diagnostics
+            ;;
+        3)
+            nradio_5g_aggregation_traffic_monitor 30
+            ;;
+        4)
+            confirm_or_exit "确认直接开启硬件 offload 吗？"
+            nradio_5g_aggregation_enable_hw_offload
+            ;;
+        5)
+            confirm_or_exit "确认直接还原为软件 offload 吗？"
+            nradio_5g_aggregation_restore_hw_offload
+            ;;
+        *)
+            die_menu_input_issue "$UI_READ_RESULT"
+            ;;
+    esac
+}
+
 run_unified_system_health_summary() {
     health_warnings=0
     detected_model="$(unified_detect_model_name 2>/dev/null || true)"
@@ -10617,11 +13387,13 @@ run_unified_system_health_summary() {
         log "存储:   /mnt/app_data = 不存在"
     fi
 
-    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
-    if [ -n "$storage_mount" ]; then
-        unified_health_print_path_usage "存储卡" "$storage_mount" || health_warnings=$((health_warnings + 1))
-    else
-        log "存储:   存储卡 = 未检测到"
+    if [ "$detected_model" = 'NRadio_C2000MAX' ]; then
+        storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+        if [ -n "$storage_mount" ]; then
+            unified_health_print_path_usage "存储卡" "$storage_mount" || health_warnings=$((health_warnings + 1))
+        else
+            log "存储:   存储卡 = 未检测到"
+        fi
     fi
 
     log "网络:   DNS=${dns_servers:-未检测到} 默认网关=${gateway_text:-未检测到}"
@@ -10636,6 +13408,230 @@ run_unified_system_health_summary() {
     fi
 }
 
+run_unified_clock_tls_health_check() {
+    clock_warnings=0
+    clock_epoch="$(date +%s 2>/dev/null || printf '')"
+    clock_text="$(date -R 2>/dev/null || date 2>/dev/null || true)"
+    tls_err_file="$WORKDIR/unified-clock-tls.err"
+
+    selfcheck_print_header "系统时间与 HTTPS 证书体检"
+    log "时间:   当前系统时间 = ${clock_text:-未知}"
+
+    case "$clock_epoch" in
+        ''|*[!0-9]*)
+            log "时间:   无法读取 Unix 时间戳"
+            clock_warnings=$((clock_warnings + 1))
+            ;;
+        *)
+            if [ "$clock_epoch" -lt 1704067200 ] 2>/dev/null; then
+                log "时间:   早于 2024-01-01，HTTPS 证书校验和软件源访问可能异常"
+                clock_warnings=$((clock_warnings + 1))
+            elif [ "$clock_epoch" -gt 1893456000 ] 2>/dev/null; then
+                log "时间:   晚于 2030-01-01，HTTPS 证书校验可能异常"
+                clock_warnings=$((clock_warnings + 1))
+            else
+                log "时间:   时间范围 = 正常"
+            fi
+            ;;
+    esac
+
+    if command -v curl >/dev/null 2>&1; then
+        tls_code="$(curl -L -I -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}' https://github.com/ 2>"$tls_err_file" || true)"
+        tls_err="$(sed -n '1p' "$tls_err_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+        case "$tls_code" in
+            200|204|301|302|307|308|403)
+                log "HTTPS: github.com = 证书校验正常 (HTTP $tls_code)"
+                ;;
+            *)
+                if printf '%s\n' "$tls_err" | grep -qiE 'certificate|SSL|TLS|x509|CAfile|issuer|handshake'; then
+                    log "HTTPS: github.com = 证书/时间校验异常 (${tls_err:-HTTP ${tls_code:-000}})"
+                    clock_warnings=$((clock_warnings + 1))
+                else
+                    log "HTTPS: github.com = 探测异常或超时 HTTP ${tls_code:-000}"
+                fi
+                ;;
+        esac
+    else
+        log "HTTPS: github.com = 缺少 curl，跳过证书校验"
+    fi
+
+    if [ "$clock_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$clock_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+run_unified_storage_expand_health_check() {
+    storage_warnings=0
+    detected_model="$(unified_detect_model_name 2>/dev/null || true)"
+    rootfs_device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    rootfs_mount_source=''
+    rootfs_mount_point=''
+
+    selfcheck_print_header "eMMC 存储扩展体检"
+    log "环境:   机型=${detected_model:-未知} 扩展挂载点=$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+
+    if [ -z "$rootfs_device" ]; then
+        log "rootfs_2nd: 未发现 PARTLABEL=rootfs_2nd 分区，跳过 eMMC 存储扩展体检"
+        log "summary:  SKIP (rootfs_2nd not present)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
+
+    log "rootfs_2nd: 分区=$rootfs_device"
+    if storage_expand_is_booted_from_rootfs_2nd; then
+        log "启动:   当前疑似从 rootfs_2nd 启动，禁止把该分区作为扩展盘"
+        storage_warnings=$((storage_warnings + 1))
+    else
+        log "启动:   当前未从 rootfs_2nd 启动"
+    fi
+
+    if [ -f "$ROOTFS_2ND_STORAGE_MARKER" ]; then
+        log "标记:   $ROOTFS_2ND_STORAGE_MARKER = 存在"
+    else
+        log "标记:   $ROOTFS_2ND_STORAGE_MARKER = 未启用"
+    fi
+
+    rootfs_mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    rootfs_mount_point="$(storage_expand_device_mountpoint "$rootfs_device" 2>/dev/null || true)"
+    if [ -n "$rootfs_mount_source" ]; then
+        if storage_expand_mount_source_matches_device "$rootfs_mount_source" "$rootfs_device"; then
+            log "挂载:   $ROOTFS_2ND_STORAGE_MOUNT_POINT <- $rootfs_mount_source = 正常"
+            unified_health_print_path_usage "eMMC 存储扩展" "$ROOTFS_2ND_STORAGE_MOUNT_POINT" || storage_warnings=$((storage_warnings + 1))
+        else
+            log "挂载:   $ROOTFS_2ND_STORAGE_MOUNT_POINT <- $rootfs_mount_source = 异常，来源不是 rootfs_2nd"
+            storage_warnings=$((storage_warnings + 1))
+        fi
+    elif [ -n "$rootfs_mount_point" ]; then
+        log "挂载:   rootfs_2nd 当前挂载在 $rootfs_mount_point，未接入 $ROOTFS_2ND_STORAGE_MOUNT_POINT"
+        [ -f "$ROOTFS_2ND_STORAGE_MARKER" ] && storage_warnings=$((storage_warnings + 1))
+    else
+        log "挂载:   rootfs_2nd 当前未挂载"
+        [ -f "$ROOTFS_2ND_STORAGE_MARKER" ] && storage_warnings=$((storage_warnings + 1))
+    fi
+
+    if [ -s "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ]; then
+        migrated_count="$(wc -l < "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null | tr -d ' ' || printf '0')"
+        log "迁移:   记录=$migrated_count file=$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+        sed -n '1,10p' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null | sed 's/^/迁移项: /'
+    else
+        log "迁移:   未发现迁移记录"
+    fi
+
+    if [ "$storage_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$storage_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+run_unified_storage_migration_integrity_check() {
+    migration_warnings=0
+    migration_count=0
+    migration_rows="$WORKDIR/storage-migration.rows"
+    rootfs_device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+
+    selfcheck_print_header "eMMC 迁移链一致性"
+    if [ -z "$rootfs_device" ]; then
+        log "迁移链: 未发现 PARTLABEL=rootfs_2nd 分区，跳过迁移链检查"
+        log "summary:  SKIP (rootfs_2nd not present)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
+    if [ ! -s "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ]; then
+        log "迁移链: 未发现迁移记录，跳过迁移链检查"
+        log "summary:  SKIP (no migrated apps)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
+
+    awk -F '\t' 'NF >= 4 { gsub(/\|/, "/", $1); gsub(/\|/, "/", $3); gsub(/\|/, "/", $4); gsub(/\|/, "/", $5); printf "%s|%s|%s|%s|%s\n", NR, $1, $3, $4, $5 }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" > "$migration_rows" 2>/dev/null || true
+    while IFS='|' read -r mig_line mig_label mig_src mig_target mig_kind; do
+        [ -n "$mig_line" ] || continue
+        migration_count=$((migration_count + 1))
+        if [ -z "$mig_src" ] || [ -z "$mig_target" ]; then
+            log "迁移链: line=$mig_line 字段不完整"
+            migration_warnings=$((migration_warnings + 1))
+            continue
+        fi
+
+        if [ ! -e "$mig_target" ]; then
+            log "迁移链: ${mig_label:-line $mig_line} = 目标缺失 ($mig_target)"
+            migration_warnings=$((migration_warnings + 1))
+        fi
+
+        if [ -L "$mig_src" ]; then
+            mig_src_real="$(storage_expand_canonical_path "$mig_src" 2>/dev/null || true)"
+            mig_target_real="$(storage_expand_canonical_path "$mig_target" 2>/dev/null || true)"
+            if [ -n "$mig_src_real" ] && [ "$mig_src_real" = "$mig_target_real" ]; then
+                log "迁移链: ${mig_label:-line $mig_line} = 正常 ($mig_src -> $mig_target, kind=${mig_kind:-?})"
+            else
+                log "迁移链: ${mig_label:-line $mig_line} = 源软链接目标不匹配 ($mig_src -> ${mig_src_real:-未知}, expect=$mig_target)"
+                migration_warnings=$((migration_warnings + 1))
+            fi
+        elif storage_expand_path_has_child_links_to_target "$mig_src" "$mig_target"; then
+            log "迁移链: ${mig_label:-line $mig_line} = 混合迁移正常 ($mig_src => $mig_target, kind=${mig_kind:-?})"
+        else
+            log "迁移链: ${mig_label:-line $mig_line} = 源路径未指向扩展盘 ($mig_src -> $mig_target)"
+            migration_warnings=$((migration_warnings + 1))
+        fi
+
+        if storage_expand_path_has_self_loop_child_links "$mig_target"; then
+            log "迁移链: ${mig_label:-line $mig_line} = 目标目录存在自指软链接风险 ($mig_target)"
+            migration_warnings=$((migration_warnings + 1))
+        fi
+    done < "$migration_rows"
+
+    if [ "$migration_count" -eq 0 ]; then
+        log "迁移链: 迁移记录格式异常，未解析到有效条目"
+        migration_warnings=$((migration_warnings + 1))
+    else
+        log "迁移链: 已检查 $migration_count 条迁移记录"
+    fi
+
+    if [ "$migration_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$migration_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+run_unified_c2000max_storage_card_health_check() {
+    c2k_warnings=0
+    c2k_storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+
+    selfcheck_print_header "C2000MAX 存储卡健康"
+    if [ -z "$c2k_storage_mount" ]; then
+        log "存储卡: 未检测到 C2000MAX 存储卡挂载"
+        set_last_selfcheck_status WARN 0 1
+        return 0
+    fi
+
+    log "存储卡: 挂载点=$c2k_storage_mount"
+    unified_health_print_path_usage "C2000MAX 存储卡" "$c2k_storage_mount" || c2k_warnings=$((c2k_warnings + 1))
+    if openlist_dir_is_writable "$c2k_storage_mount"; then
+        log "存储卡: 写入测试 = 正常"
+    else
+        log "存储卡: 写入测试 = 失败"
+        c2k_warnings=$((c2k_warnings + 1))
+    fi
+
+    c2k_tmp_free="$(unified_num_or_zero "$(unified_health_path_free_kib /tmp 2>/dev/null || true)")"
+    c2k_storage_free="$(unified_num_or_zero "$(unified_health_path_free_kib "$c2k_storage_mount" 2>/dev/null || true)")"
+    log "OpenList: /tmp 可用=$(unified_health_kib_display "$c2k_tmp_free") 存储卡可用=$(unified_health_kib_display "$c2k_storage_free")"
+    if [ "$c2k_storage_free" -lt 262144 ] 2>/dev/null; then
+        log "OpenList: 存储卡可用空间低于 256M，大包下载或解压风险偏高"
+        c2k_warnings=$((c2k_warnings + 1))
+    fi
+
+    if [ "$c2k_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$c2k_warnings"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
 run_unified_big_package_risk_check() {
     risk_warnings=0
     detected_model="$(unified_detect_model_name 2>/dev/null || true)"
@@ -10645,11 +13641,10 @@ run_unified_big_package_risk_check() {
     work_mem_kib="$((mem_available_kib + swap_free_kib))"
     tmp_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /tmp 2>/dev/null || true)")"
     overlay_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /overlay 2>/dev/null || true)")"
-    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    storage_mount=''
     github_code="$(curl -L -m 8 -s -o /dev/null -w '%{http_code}' https://github.com/ 2>/dev/null || true)"
 
     selfcheck_print_header "大包安装风险检查"
-    log "说明:   只读评估 OpenList / AdGuardHome / OpenVPN 这类大文件安装前风险，不安装、不改配置"
     log "资源:   可用内存+swap=$(unified_health_kib_display "$work_mem_kib") /tmp 可用=$(unified_health_kib_display "$tmp_free_kib") /overlay 可用=$(unified_health_kib_display "$overlay_free_kib")"
 
     case "$github_code" in
@@ -10676,6 +13671,7 @@ run_unified_big_package_risk_check() {
     fi
 
     if [ "$detected_model" = 'NRadio_C2000MAX' ]; then
+        storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
         if [ -n "$storage_mount" ] && [ -w "$storage_mount" ]; then
             log "OpenList: C2000MAX 文件过大风险已降级：安装链会使用 lite 包，并把下载包与解压目录放到存储卡 ($storage_mount)"
         else
@@ -10683,7 +13679,7 @@ run_unified_big_package_risk_check() {
             risk_warnings=$((risk_warnings + 1))
         fi
     else
-        log "OpenList: 当前机型沿用常规安装路径；如遇文件过大或内存紧张，建议先扩容 swap 并清理 /tmp"
+        log "OpenList: 常规安装路径"
     fi
 
     [ -f "$FEEDS" ] && log "OpenVPN: 软件源文件存在 ($FEEDS)" || {
@@ -10771,20 +13767,20 @@ run_unified_install_preflight_check() {
     detected_model="$(unified_detect_model_name 2>/dev/null || true)"
     target_arch="$(get_primary_arch 2>/dev/null || true)"
     [ -n "$target_arch" ] || target_arch="$(unified_detect_arch_name)"
-    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    storage_mount=''
     openlist_preflight_asset="$OPENLIST_ASSET_NAME"
 
     selfcheck_print_header "安装前一键预检"
-    log "说明:   只读预检下载源、架构、依赖源、空间和基础工具，不安装、不写配置"
     log "环境:   机型=${detected_model:-未知} 架构=${target_arch:-未知}"
 
-    for tool_name in uci opkg curl tar gzip awk df; do
+    for tool_name in uci opkg curl tar awk df; do
         unified_preflight_check_tool "$tool_name"
     done
 
     unified_preflight_check_space "/tmp" "/tmp" 128
     unified_preflight_check_space "/overlay" "/overlay" 64
     if [ "${detected_model:-}" = 'NRadio_C2000MAX' ]; then
+        storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
         if [ -n "$storage_mount" ]; then
             unified_preflight_check_space "C2000MAX 存储卡" "$storage_mount" 256
             openlist_preflight_asset="openlist-linux-musl-arm64-lite.tar.gz"
@@ -10812,6 +13808,469 @@ run_unified_install_preflight_check() {
 
     if [ "$UNIFIED_PREFLIGHT_WARNINGS" -gt 0 ]; then
         set_last_selfcheck_status WARN 0 "$UNIFIED_PREFLIGHT_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_install_log_filter_noise() {
+    sed "/opkg_conf_deinit: Couldn't unlink \/var\/lock\/opkg\.lock: No such file or directory/d; /Updated list of available packages in Collected errors:/d; /^uci: Entry not found$/d; /^[0-9][0-9]*:uci: Entry not found$/d; /^uci: Invalid argument$/d; /^[0-9][0-9]*:uci: Invalid argument$/d; /^Command failed: Not found$/d; /^[0-9][0-9]*:Command failed: Not found$/d"
+}
+
+unified_install_log_without_noise() {
+    log_file="$1"
+    unified_install_log_filter_noise < "$log_file" 2>/dev/null || true
+}
+
+unified_install_log_noise_note() {
+    log_file="$1"
+    log_label="$2"
+
+    if grep -Fq "opkg_conf_deinit: Couldn't unlink /var/lock/opkg.lock: No such file or directory." "$log_file" 2>/dev/null; then
+        log "噪声:   $log_label = opkg lock 清理残留，已从失败判定中忽略"
+    fi
+    if grep -Fq "Updated list of available packages in Collected errors:" "$log_file" 2>/dev/null; then
+        log "噪声:   $log_label = opkg 输出混行，已从失败判定中忽略"
+    fi
+    if grep -Eq '^(uci: Entry not found|uci: Invalid argument|Command failed: Not found)$' "$log_file" 2>/dev/null; then
+        log "噪声:   $log_label = UCI 清理残留，已从失败判定中忽略"
+    fi
+}
+
+unified_install_stage_error_line() {
+    stage_log_file="$1"
+    grep -Ein 'error|failed|fail|cannot|missing|not found|No space|parse_from_stream|Missing new line|Collected errors|incompatible|architecture|dependency|depends|timeout|invalid|corrupt|Unknown package' "$stage_log_file" 2>/dev/null | unified_install_log_filter_noise | sed -n '1p' || true
+}
+
+unified_install_stage_check() {
+    stage_label="$1"
+    stage_log_file="$2"
+
+    if [ ! -f "$stage_log_file" ]; then
+        log "阶段:   $stage_label = NOLOG log=$stage_log_file"
+        return 0
+    fi
+
+    if [ ! -s "$stage_log_file" ]; then
+        log "阶段:   $stage_label = EMPTY log=$stage_log_file"
+        return 0
+    fi
+
+    stage_error_line="$(unified_install_stage_error_line "$stage_log_file")"
+    if [ -n "$stage_error_line" ]; then
+        stage_error_lineno="${stage_error_line%%:*}"
+        log "阶段:   $stage_label = FAIL log=$stage_log_file line=$stage_error_lineno"
+        printf '%s\n' "$stage_error_line" | sed 's/^/命中:   /'
+        UNIFIED_INSTALL_STAGE_WARNINGS=$((UNIFIED_INSTALL_STAGE_WARNINGS + 1))
+        if [ -z "$UNIFIED_LAST_FAILED_STAGE" ]; then
+            UNIFIED_LAST_FAILED_STAGE="$stage_label"
+            UNIFIED_LAST_FAILED_LOG="$stage_log_file"
+            UNIFIED_LAST_FAILED_LINE="$stage_error_lineno"
+        fi
+    else
+        log "阶段:   $stage_label = PASS log=$stage_log_file"
+    fi
+}
+
+run_unified_install_failure_stage_summary() {
+    UNIFIED_INSTALL_STAGE_WARNINGS=0
+    UNIFIED_LAST_FAILED_STAGE=''
+    UNIFIED_LAST_FAILED_LOG=''
+    UNIFIED_LAST_FAILED_LINE=''
+
+    selfcheck_print_header "安装失败阶段"
+    unified_install_stage_check "opkg update" "/tmp/nradio-plugin-opkg.update.log"
+    unified_install_stage_check "opkg 依赖" "/tmp/nradio-plugin-opkg.install.log"
+    unified_install_stage_check "通用 ipk" "/tmp/nradio-plugin-ipk.install.log"
+    unified_install_stage_check "$OPENCLASH_DISPLAY_NAME 安装" "/tmp/openclash-install.log"
+
+    if [ -n "$UNIFIED_LAST_FAILED_STAGE" ]; then
+        log "last_install=$UNIFIED_LAST_FAILED_STAGE status=FAIL log=$UNIFIED_LAST_FAILED_LOG line=$UNIFIED_LAST_FAILED_LINE"
+    else
+        log "last_install=none status=PASS"
+    fi
+
+    if [ "$UNIFIED_INSTALL_STAGE_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_INSTALL_STAGE_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_install_log_match() {
+    log_file="$1"
+    match_label="$2"
+    match_pattern="$3"
+
+    if unified_install_log_without_noise "$log_file" | grep -Eiq "$match_pattern" 2>/dev/null; then
+        log "命中:   $match_label"
+        UNIFIED_INSTALL_LOG_WARNINGS=$((UNIFIED_INSTALL_LOG_WARNINGS + 1))
+    fi
+}
+
+unified_install_log_summary_one() {
+    log_label="$1"
+    log_file="$2"
+
+    if [ ! -f "$log_file" ]; then
+        log "日志:   $log_label = 未找到 ($log_file)"
+        return 0
+    fi
+
+    log_size="$(wc -c < "$log_file" 2>/dev/null | tr -d ' ' || printf '0')"
+    [ -n "$log_size" ] || log_size='0'
+    log "日志:   $log_label = $log_file (${log_size} bytes)"
+    if [ ! -s "$log_file" ]; then
+        log "摘要:   $log_label = 空日志"
+        return 0
+    fi
+
+    unified_install_log_noise_note "$log_file" "$log_label"
+    unified_install_log_match "$log_file" "空间不足" 'No space left|not enough space|insufficient space'
+    unified_install_log_match "$log_file" "文件或路径缺失" 'No such file or directory'
+    unified_install_log_match "$log_file" "依赖缺失" 'Cannot satisfy|dependency|depends|missing|not found|Unknown package'
+    unified_install_log_match "$log_file" "opkg 数据解析" 'parse_from_stream|Missing new line|status file|Collected errors'
+    unified_install_log_match "$log_file" "下载/网络" 'wget|curl|timeout|Failed to download|Connection|SSL|TLS|resolve'
+    unified_install_log_match "$log_file" "架构/包格式" 'architecture|incompatible|invalid|corrupt|control.tar|data.tar|debian-binary'
+
+    key_lines="$(grep -Ein 'error|failed|fail|cannot|missing|not found|No space|parse_from_stream|Missing new line|Collected errors|incompatible|architecture|dependency|depends|timeout|invalid|corrupt' "$log_file" 2>/dev/null | unified_install_log_filter_noise | sed -n '1,20p' || true)"
+    if [ -n "$key_lines" ]; then
+        log "摘要:   $log_label 关键行:"
+        printf '%s\n' "$key_lines"
+    fi
+
+    log "尾部:   $log_label 最近 30 行:"
+    tail -n 30 "$log_file" 2>/dev/null || true
+}
+
+run_unified_install_log_summary() {
+    UNIFIED_INSTALL_LOG_WARNINGS=0
+
+    selfcheck_print_header "安装日志摘要"
+    unified_install_log_summary_one "$OPENCLASH_DISPLAY_NAME 安装" "/tmp/openclash-install.log"
+    unified_install_log_summary_one "opkg update" "/tmp/nradio-plugin-opkg.update.log"
+    unified_install_log_summary_one "opkg 依赖安装" "/tmp/nradio-plugin-opkg.install.log"
+    unified_install_log_summary_one "通用 ipk 安装" "/tmp/nradio-plugin-ipk.install.log"
+
+    if [ "$UNIFIED_INSTALL_LOG_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_INSTALL_LOG_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_opkg_hakimi_warn() {
+    log "$1"
+    UNIFIED_OPKG_HAKIMI_WARNINGS=$((UNIFIED_OPKG_HAKIMI_WARNINGS + 1))
+}
+
+unified_opkg_hakimi_package_check() {
+    package_name="$1"
+
+    if opkg status "$package_name" 2>/dev/null | grep -q '^Status: .* installed'; then
+        log "依赖:   $package_name = 已安装"
+        return 0
+    fi
+
+    package_meta="$(resolve_package_meta_any_feed "$package_name" 2>/dev/null || true)"
+    if [ -n "$package_meta" ]; then
+        package_feed="${package_meta%%|*}"
+        package_version="${package_meta##*|}"
+        [ -n "$package_version" ] || package_version='unknown'
+        log "依赖:   $package_name = 可解析 (feed=$package_feed version=$package_version)"
+        return 0
+    fi
+
+    unified_opkg_hakimi_warn "依赖:   $package_name = 当前软件源无法解析"
+}
+
+run_unified_opkg_openclash_readiness_check() {
+    UNIFIED_OPKG_HAKIMI_WARNINGS=0
+
+    selfcheck_print_header "opkg 与 $OPENCLASH_DISPLAY_NAME 安装就绪"
+
+    if command -v opkg >/dev/null 2>&1; then
+        log "工具:   opkg = 可用"
+    else
+        unified_opkg_hakimi_warn "工具:   opkg = 缺失"
+    fi
+
+    if [ -e "$OPKG_LOCK_FILE" ]; then
+        unified_opkg_hakimi_warn "opkg锁: $OPKG_LOCK_FILE = 存在"
+    else
+        log "opkg锁: $OPKG_LOCK_FILE = 未占用"
+    fi
+
+    if [ -f "$FEEDS" ]; then
+        enabled_feed_count="$(awk '$1=="src/gz" {c++} END{print c+0}' "$FEEDS" 2>/dev/null || printf '0')"
+        log "opkg源: $FEEDS = ${enabled_feed_count} 个启用源"
+        if grep -q 'mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7' "$FEEDS" 2>/dev/null; then
+            log "opkg源: 清华 OpenWrt 21.02.7 = 命中"
+        else
+            unified_opkg_hakimi_warn "opkg源: 清华 OpenWrt 21.02.7 = 未命中"
+        fi
+    else
+        unified_opkg_hakimi_warn "opkg源: $FEEDS = 缺失"
+    fi
+
+    opkg_status_file="/usr/lib/opkg/status"
+    if [ -s "$opkg_status_file" ]; then
+        opkg_status_size="$(wc -c < "$opkg_status_file" 2>/dev/null | tr -d ' ' || printf '0')"
+        [ -n "$opkg_status_size" ] || opkg_status_size='0'
+        log "opkg库: $opkg_status_file = ${opkg_status_size} bytes"
+        if command -v tail >/dev/null 2>&1 && command -v od >/dev/null 2>&1; then
+            status_last_byte="$(tail -c 1 "$opkg_status_file" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' || true)"
+            if [ "$status_last_byte" = '0a' ]; then
+                log "opkg库: status 末尾换行 = 正常"
+            else
+                unified_opkg_hakimi_warn "opkg库: status 末尾换行 = 异常 (Missing new line character)"
+            fi
+        else
+            log "opkg库: status 末尾换行 = 缺少 tail/od，跳过"
+        fi
+    else
+        unified_opkg_hakimi_warn "opkg库: $opkg_status_file = 缺失或为空"
+    fi
+
+    if opkg status >/dev/null 2>&1; then
+        log "opkg库: status 读取 = 正常"
+    else
+        unified_opkg_hakimi_warn "opkg库: status 读取 = 异常"
+    fi
+
+    for package_name in dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-inet-diag kmod-nft-tproxy kmod-tun unzip; do
+        unified_opkg_hakimi_package_check "$package_name"
+    done
+
+    if [ -f /etc/config/openclash ]; then
+        log "$OPENCLASH_DISPLAY_NAME: 配置文件 = 存在"
+    else
+        log "$OPENCLASH_DISPLAY_NAME: 配置文件 = 未安装"
+    fi
+    if [ -f /usr/lib/lua/luci/controller/openclash.lua ]; then
+        log "$OPENCLASH_DISPLAY_NAME: LuCI 控制器 = 存在"
+    else
+        log "$OPENCLASH_DISPLAY_NAME: LuCI 控制器 = 未安装"
+    fi
+    if [ -x /etc/init.d/openclash ]; then
+        log "$OPENCLASH_DISPLAY_NAME: 服务脚本 = 存在"
+    else
+        log "$OPENCLASH_DISPLAY_NAME: 服务脚本 = 未安装"
+    fi
+    if openclash_asn_mmdb_valid; then
+        log "$OPENCLASH_DISPLAY_NAME: ASN.mmdb = 正常"
+    else
+        unified_opkg_hakimi_warn "$OPENCLASH_DISPLAY_NAME: ASN.mmdb = 缺失或异常"
+    fi
+
+    if [ "$UNIFIED_OPKG_HAKIMI_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_OPKG_HAKIMI_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_feed_index_warn() {
+    log "$1"
+    UNIFIED_FEED_INDEX_WARNINGS=$((UNIFIED_FEED_INDEX_WARNINGS + 1))
+}
+
+unified_feed_index_candidate_state() {
+    feed_name="$1"
+    feed_url="$2"
+    found_candidate='0'
+
+    for feed_idx in "/var/opkg-lists/$feed_name" "/tmp/opkg-lists/$feed_name"; do
+        [ -s "$feed_idx" ] || continue
+        found_candidate='1'
+        if feed_index_is_plain_packages "$feed_idx"; then
+            pkg_count="$(awk '/^Package: / { c++ } END { print c + 0 }' "$feed_idx" 2>/dev/null || printf '0')"
+            log "feed:    $feed_name = 明文索引 OK packages=${pkg_count:-0} path=$feed_idx"
+            return 0
+        fi
+        if [ -n "$feed_url" ]; then
+            remote_feed_idx="$(download_feed_index_file "$feed_name" "$feed_url" 2>/dev/null || true)"
+            if [ -n "$remote_feed_idx" ] && [ -s "$remote_feed_idx" ]; then
+                pkg_count="$(awk '/^Package: / { c++ } END { print c + 0 }' "$remote_feed_idx" 2>/dev/null || printf '0')"
+                log "feed:    $feed_name = 本地索引不可直读，远端明文 OK packages=${pkg_count:-0}"
+                return 0
+            fi
+        fi
+        unified_feed_index_warn "feed:    $feed_name = 本地索引不可直读，远端明文也不可用 path=$feed_idx"
+        return 0
+    done
+
+    if [ "$found_candidate" != '1' ]; then
+        if [ -n "$feed_url" ]; then
+            remote_feed_idx="$(download_feed_index_file "$feed_name" "$feed_url" 2>/dev/null || true)"
+            if [ -n "$remote_feed_idx" ] && [ -s "$remote_feed_idx" ]; then
+                pkg_count="$(awk '/^Package: / { c++ } END { print c + 0 }' "$remote_feed_idx" 2>/dev/null || printf '0')"
+                log "feed:    $feed_name = 本地索引缺失，远端明文 OK packages=${pkg_count:-0}"
+                return 0
+            fi
+        fi
+        unified_feed_index_warn "feed:    $feed_name = 本地索引缺失，远端明文不可用"
+    fi
+}
+
+run_unified_feed_index_health_check() {
+    UNIFIED_FEED_INDEX_WARNINGS=0
+    selfcheck_print_header "opkg feed 明文索引体检"
+
+    if [ ! -f "$FEEDS" ]; then
+        unified_feed_index_warn "feed:    $FEEDS = 缺失"
+        set_last_selfcheck_status WARN 0 "$UNIFIED_FEED_INDEX_WARNINGS"
+        return 0
+    fi
+
+    feed_lines="$(awk '$1=="src/gz" { print $2 "|" $3 }' "$FEEDS" 2>/dev/null || true)"
+    if [ -z "$feed_lines" ]; then
+        unified_feed_index_warn "feed:    $FEEDS = 没有启用 src/gz 源"
+        set_last_selfcheck_status WARN 0 "$UNIFIED_FEED_INDEX_WARNINGS"
+        return 0
+    fi
+
+    old_ifs="$IFS"
+    IFS='
+'
+    for feed_line in $feed_lines; do
+        IFS="$old_ifs"
+        feed_name="${feed_line%%|*}"
+        feed_url="${feed_line#*|}"
+        [ -n "$feed_name" ] || continue
+        if [ -n "$feed_url" ]; then
+            log "feed:    $feed_name url=$(extract_url_host "$feed_url" 2>/dev/null || printf '%s' "$feed_url")"
+        else
+            unified_feed_index_warn "feed:    $feed_name = URL 为空"
+        fi
+        unified_feed_index_candidate_state "$feed_name" "$feed_url"
+        IFS='
+'
+    done
+    IFS="$old_ifs"
+
+    if [ "$UNIFIED_FEED_INDEX_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_FEED_INDEX_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+unified_runtime_warn() {
+    log "$1"
+    UNIFIED_RUNTIME_WARNINGS=$((UNIFIED_RUNTIME_WARNINGS + 1))
+}
+
+unified_path_inode_usage() {
+    path_label="$1"
+    target_path="$2"
+
+    [ -e "$target_path" ] || {
+        unified_runtime_warn "inode:  $path_label = 不存在 ($target_path)"
+        return 0
+    }
+
+    inode_line="$(df -iP "$target_path" 2>/dev/null | awk 'NR == 2 { print $2 "|" $3 "|" $4 "|" $5 "|" $6; exit }' || true)"
+    if [ -z "$inode_line" ]; then
+        log "inode:  $path_label = 系统不支持 inode 统计"
+        return 0
+    fi
+
+    inode_total="${inode_line%%|*}"
+    inode_rest="${inode_line#*|}"
+    inode_used="${inode_rest%%|*}"
+    inode_rest="${inode_rest#*|}"
+    inode_free="${inode_rest%%|*}"
+    inode_rest="${inode_rest#*|}"
+    inode_pct="${inode_rest%%|*}"
+    inode_mount="${inode_rest#*|}"
+    log "inode:  $path_label = 可用 ${inode_free:-?} / 总 ${inode_total:-?} (${inode_pct:-?} 已用, mount=${inode_mount:-?})"
+    inode_pct_num="$(printf '%s\n' "${inode_pct:-0}" | tr -d '%' 2>/dev/null || printf '0')"
+    case "$inode_pct_num" in
+        ''|*[!0-9]*)
+            ;;
+        *)
+            [ "$inode_pct_num" -ge 90 ] 2>/dev/null && unified_runtime_warn "inode:  $path_label = inode 使用率过高 (${inode_pct})"
+            ;;
+    esac
+}
+
+run_unified_runtime_pressure_check() {
+    UNIFIED_RUNTIME_WARNINGS=0
+    selfcheck_print_header "运行负载与锁"
+
+    load_line="$(cat /proc/loadavg 2>/dev/null | sed -n '1p' || true)"
+    cpu_count="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || printf '1')"
+    case "$cpu_count" in
+        ''|*[!0-9]*|0) cpu_count='1' ;;
+    esac
+    if [ -n "$load_line" ]; then
+        load1="${load_line%% *}"
+        log "负载:   loadavg=$load_line cpu=$cpu_count"
+        load_warn="$(awk -v load="$load1" -v cpu="$cpu_count" 'BEGIN { if ((load + 0) > (cpu * 2.5)) print 1; else print 0 }' 2>/dev/null || printf '0')"
+        [ "$load_warn" = '1' ] && unified_runtime_warn "负载:   1分钟负载偏高，当前 ${load1} / CPU ${cpu_count}"
+    else
+        unified_runtime_warn "负载:   无法读取 /proc/loadavg"
+    fi
+
+    if [ -d "$LOCK_DIR" ]; then
+        lock_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+        if [ -n "$lock_pid" ] && [ "$lock_pid" != "$$" ] && kill -0 "$lock_pid" 2>/dev/null; then
+            unified_runtime_warn "脚本锁: 被其它进程占用 pid=$lock_pid dir=$LOCK_DIR"
+        else
+            log "脚本锁: 当前脚本持有或残留无活动进程 dir=$LOCK_DIR pid=${lock_pid:-未知}"
+        fi
+    else
+        log "脚本锁: 未发现 $LOCK_DIR"
+    fi
+
+    if [ -e "$OPKG_LOCK_FILE" ]; then
+        unified_runtime_warn "opkg锁: 存在 $OPKG_LOCK_FILE"
+    else
+        log "opkg锁: 未占用"
+    fi
+
+    process_count="$(ps 2>/dev/null | wc -l | tr -d ' ' || printf '0')"
+    log "进程:   当前进程数=${process_count:-0}"
+
+    unified_path_inode_usage "/tmp" "/tmp"
+    unified_path_inode_usage "/overlay" "/overlay"
+
+    if [ "$UNIFIED_RUNTIME_WARNINGS" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$UNIFIED_RUNTIME_WARNINGS"
+    else
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+run_unified_kernel_storage_log_check() {
+    kernel_log_warnings=0
+    kernel_log_hits="$WORKDIR/kernel-storage-errors.log"
+    kernel_log_pattern='out of memory|killed process|I/O error|Buffer I/O error|read-only file system|read-only filesystem|EXT4-fs error|F2FS-fs.*error|mmc.*error|blk_update_request|segfault|kernel panic|Call Trace|watchdog.*BUG|UBI error'
+    : > "$kernel_log_hits"
+
+    selfcheck_print_header "内核与存储错误摘要"
+    if command -v dmesg >/dev/null 2>&1; then
+        dmesg 2>/dev/null | grep -Ei "$kernel_log_pattern" | tail -n 8 >> "$kernel_log_hits" 2>/dev/null || true
+    else
+        log "日志:   dmesg 不可用"
+    fi
+    if command -v logread >/dev/null 2>&1; then
+        logread 2>/dev/null | grep -Ei "$kernel_log_pattern" | tail -n 8 >> "$kernel_log_hits" 2>/dev/null || true
+    else
+        log "日志:   logread 不可用"
+    fi
+
+    if [ -s "$kernel_log_hits" ]; then
+        log "日志:   发现 OOM/I/O/F2FS/mmc/只读文件系统等关键标记"
+        sed -n '1,12p' "$kernel_log_hits" 2>/dev/null | sed 's/^/日志:   /'
+        kernel_log_warnings=1
+    else
+        log "日志:   未发现 OOM/I/O/F2FS/mmc/只读文件系统等关键标记"
+    fi
+
+    if [ "$kernel_log_warnings" -gt 0 ]; then
+        set_last_selfcheck_status WARN 0 "$kernel_log_warnings"
     else
         set_last_selfcheck_status PASS 0 0
     fi
@@ -10921,7 +14380,6 @@ unified_matrix_print_plugin() {
 run_unified_plugin_health_matrix() {
     UNIFIED_MATRIX_WARNINGS=0
     selfcheck_print_header "插件健康矩阵"
-    log "说明:   只读列出安装状态、服务状态、LuCI 路由和应用商店入口；未安装的插件不计为异常"
 
     unified_matrix_print_plugin "$OPENCLASH_DISPLAY_NAME" "/usr/lib/lua/luci/controller/openclash.lua /etc/config/openclash" "/etc/init.d/openclash" "admin/services/openclash" "luci-app-openclash" "admin/services/openclash"
     unified_matrix_print_plugin "AdGuardHome" "/usr/lib/lua/luci/controller/AdGuardHome.lua /usr/bin/AdGuardHome/AdGuardHome" "/etc/init.d/AdGuardHome" "admin/services/AdGuardHome" "luci-app-adguardhome" "admin/services/AdGuardHome"
@@ -10966,6 +14424,7 @@ run_unified_appcenter_consistency_scan() {
     package_count="$(awk -F= '$2 == "package" { count++ } END { print count + 0 }' "$appcenter_dump" 2>/dev/null || printf '0')"
     list_count=0
     route_count=0
+    controller_fallback_count=0
 
     for app_sec in $package_sections; do
         list_count=$((list_count + 1))
@@ -10981,7 +14440,14 @@ run_unified_appcenter_consistency_scan() {
             route_count=$((route_count + 1))
             printf '%s|%s\n' "$app_route" "$app_sec" >> "$appcenter_routes"
         fi
-        [ -n "$app_controller" ] && [ -z "$app_route" ] && unified_appcenter_warn "应用商店: $app_sec controller 存在但 route 为空 ($app_name)"
+        if [ -n "$app_controller" ] && [ -z "$app_route" ]; then
+            if selfcheck_appcenter_controller_fallback_matches "$app_name" "$app_controller"; then
+                controller_fallback_count=$((controller_fallback_count + 1))
+                log "应用商店: $app_sec controller fallback 正常 ($app_name)"
+            else
+                unified_appcenter_warn "应用商店: $app_sec controller 存在但 route 为空 ($app_name)"
+            fi
+        fi
         [ -n "$app_route" ] && [ -z "$app_controller" ] && unified_appcenter_warn "应用商店: $app_sec route 存在但 controller 为空 ($app_name -> $app_route)"
         if [ -n "$app_parent" ] && [ -z "$(find_uci_section package "$app_parent" 2>/dev/null || true)" ]; then
             unified_appcenter_warn "应用商店: $app_sec parent=$app_parent 但缺少对应 package 主条目"
@@ -11007,7 +14473,7 @@ run_unified_appcenter_consistency_scan() {
         unified_appcenter_warn "应用商店: name 重复 ($dup_name) sections=${dup_secs:-未知}"
     done < "$appcenter_dup_names"
 
-    log "应用商店: package=${package_count:-0} package_list=$list_count route=$route_count warnings=$UNIFIED_APPCENTER_WARNINGS"
+    log "应用商店: package=${package_count:-0} package_list=$list_count route=$route_count fallback=$controller_fallback_count warnings=$UNIFIED_APPCENTER_WARNINGS"
     if [ "$UNIFIED_APPCENTER_WARNINGS" -gt 0 ]; then
         set_last_selfcheck_status WARN 0 "$UNIFIED_APPCENTER_WARNINGS"
     else
@@ -11096,7 +14562,6 @@ run_unified_port_conflict_check() {
     [ -n "$mosdns_port" ] || mosdns_port="$MOSDNS_PORT"
 
     selfcheck_print_header "端口与服务冲突检查"
-    log "说明:   只读检查常见端口占用；已安装插件若被非预期进程占用会提示可能冲突"
     unified_check_port_owner "AdGuardHome" "$adg_port" "AdGuardHome" "/usr/bin/AdGuardHome/AdGuardHome /usr/lib/lua/luci/controller/AdGuardHome.lua" 0
     unified_check_port_owner "OpenList" "$openlist_port" "openlist" "$OPENLIST_BIN_PATH /usr/lib/lua/luci/controller/nradio_adv/openlist.lua" 0
     unified_check_port_owner "Web SSH / ttyd" "$ttyd_port" "ttyd" "/usr/bin/ttyd /usr/lib/lua/luci/controller/nradio_adv/webssh.lua" 1
@@ -11611,7 +15076,10 @@ run_unified_sanitized_diagnostic_summary() {
     swap_free_kib="$(unified_num_or_zero "$(unified_health_mem_kib SwapFree)")"
     tmp_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /tmp 2>/dev/null || true)")"
     overlay_free_kib="$(unified_num_or_zero "$(unified_health_path_free_kib /overlay 2>/dev/null || true)")"
-    storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    storage_mount=''
+    if [ "${detected_model:-}" = 'NRadio_C2000MAX' ]; then
+        storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+    fi
     openclash_config_path="$(unified_get_openclash_config_path 2>/dev/null || true)"
 
     selfcheck_print_header "脱敏诊断摘要"
@@ -11619,9 +15087,12 @@ run_unified_sanitized_diagnostic_summary() {
     log "script=${SCRIPT_VERSION} date=${SCRIPT_RELEASE_DATE}"
     log "model=${detected_model:-未知} nros=${nros_revision:-未知} arch=${arch_name}"
     log "mem_available=$(unified_health_kib_display "$mem_available_kib") swap_free=$(unified_health_kib_display "$swap_free_kib")"
-    log "tmp_free=$(unified_health_kib_display "$tmp_free_kib") overlay_free=$(unified_health_kib_display "$overlay_free_kib") storage=${storage_mount:-未检测到}"
+    if [ "${detected_model:-}" = 'NRadio_C2000MAX' ]; then
+        log "tmp_free=$(unified_health_kib_display "$tmp_free_kib") overlay_free=$(unified_health_kib_display "$overlay_free_kib") storage=${storage_mount:-未检测到}"
+    else
+        log "tmp_free=$(unified_health_kib_display "$tmp_free_kib") overlay_free=$(unified_health_kib_display "$overlay_free_kib")"
+    fi
     log "hakimi_config=${openclash_config_path:-未检测到}"
-    log "privacy=已避免输出 password/token/cookie/key/secret/jwt 等敏感字段"
     log "===== NRadio 脱敏诊断摘要结束 ====="
     set_last_selfcheck_status PASS 0 0
 }
@@ -11631,21 +15102,58 @@ run_unified_test_mode() {
     NRADIO_UNIFIED_FAILS=0
     NRADIO_UNIFIED_WARNS=0
     NRADIO_UNIFIED_PASSES=0
+    NRADIO_UNIFIED_SKIPS=0
+    NRADIO_UNIFIED_SECTION_START="$(unified_now_s)"
     mkdir -p "$WORKDIR"
     log "统一体检增强版"
     log "------"
-    log "备注:     本模式只做只读诊断：系统资源、安装风险、插件状态、规则状态、CDN、路由与运行态"
-    log "备注:     不安装插件、不改配置；metadata/feed index probes may still run"
-    log ""
 
+    run_unified_install_failure_stage_summary
+    record_unified_selfcheck_summary "安装阶段"
+    log ""
     run_unified_system_health_summary
     record_unified_selfcheck_summary "系统体检"
+    log ""
+    run_unified_clock_tls_health_check
+    record_unified_selfcheck_summary "时间与证书"
+    log ""
+    run_unified_nros_outlet_health_check
+    record_unified_selfcheck_summary "NROS 出口"
+    log ""
+    run_unified_storage_expand_health_check
+    record_unified_selfcheck_summary "eMMC 存储扩展"
+    log ""
+    run_unified_storage_migration_integrity_check
+    record_unified_selfcheck_summary "eMMC 迁移链"
+    log ""
+    if [ "$(unified_detect_model_name 2>/dev/null || true)" = 'NRadio_C2000MAX' ]; then
+        run_unified_c2000max_storage_card_health_check
+        record_unified_selfcheck_summary "C2000MAX 存储卡"
+        log ""
+    fi
+    run_unified_network_path_check
+    record_unified_selfcheck_summary "网络出口"
     log ""
     run_unified_big_package_risk_check
     record_unified_selfcheck_summary "大包风险"
     log ""
     run_unified_install_preflight_check
     record_unified_selfcheck_summary "安装前预检"
+    log ""
+    run_unified_install_log_summary
+    record_unified_selfcheck_summary "安装日志"
+    log ""
+    run_unified_opkg_openclash_readiness_check
+    record_unified_selfcheck_summary "$OPENCLASH_DISPLAY_NAME 安装就绪"
+    log ""
+    run_unified_feed_index_health_check
+    record_unified_selfcheck_summary "feed 索引"
+    log ""
+    run_unified_runtime_pressure_check
+    record_unified_selfcheck_summary "运行负载"
+    log ""
+    run_unified_kernel_storage_log_check
+    record_unified_selfcheck_summary "内核存储日志"
     log ""
     run_unified_plugin_health_matrix
     record_unified_selfcheck_summary "插件矩阵"
@@ -11705,11 +15213,11 @@ run_unified_test_mode() {
     record_unified_selfcheck_summary "OpenVPN"
     log ""
     if [ "$NRADIO_UNIFIED_FAILS" -gt 0 ]; then
-        log "overall:  FAIL (pass=$NRADIO_UNIFIED_PASSES warn=$NRADIO_UNIFIED_WARNS fail=$NRADIO_UNIFIED_FAILS)"
+        log "overall:  FAIL (pass=$NRADIO_UNIFIED_PASSES warn=$NRADIO_UNIFIED_WARNS fail=$NRADIO_UNIFIED_FAILS skip=$NRADIO_UNIFIED_SKIPS)"
     elif [ "$NRADIO_UNIFIED_WARNS" -gt 0 ]; then
-        log "overall:  WARN (pass=$NRADIO_UNIFIED_PASSES warn=$NRADIO_UNIFIED_WARNS fail=0)"
+        log "overall:  WARN (pass=$NRADIO_UNIFIED_PASSES warn=$NRADIO_UNIFIED_WARNS fail=0 skip=$NRADIO_UNIFIED_SKIPS)"
     else
-        log "overall:  PASS (pass=$NRADIO_UNIFIED_PASSES)"
+        log "overall:  PASS (pass=$NRADIO_UNIFIED_PASSES skip=$NRADIO_UNIFIED_SKIPS)"
     fi
 }
 
@@ -11806,6 +15314,28 @@ run_openvpn_selfcheck() {
     [ -n "$remote_line" ] && log "remote:   $remote_line"
     [ -n "$proto_line" ] && log "proto:    $proto_line"
     log "auth:     $auth_mode"
+    case "$proto_line" in
+        udp6|tcp6|tcp6-client)
+            ovpn_v6_addr="$(ip -6 addr show 2>/dev/null | awk '/inet6 / && $0 !~ / scope link / && $0 !~ / ::1/ { print $2; exit }' || true)"
+            ovpn_v6_default="$(ip -6 route show default 2>/dev/null | sed -n '1p' || true)"
+            log "transport: proto=$proto_line requires IPv6 outlet"
+            if [ -n "$ovpn_v6_addr" ]; then
+                log "IPv6:     global address = $ovpn_v6_addr"
+            else
+                log "IPv6:     global address = missing"
+                ovpn_selfcheck_warnings=$((ovpn_selfcheck_warnings + 1))
+            fi
+            if [ -n "$ovpn_v6_default" ]; then
+                log "IPv6:     default route = $ovpn_v6_default"
+            else
+                log "IPv6:     default route = missing; rerun OpenVPN wizard and choose ipv4, or fix IPv6 outlet first"
+                ovpn_selfcheck_warnings=$((ovpn_selfcheck_warnings + 1))
+            fi
+            ;;
+        udp|tcp|tcp-client)
+            log "transport: proto=$proto_line uses IPv4-capable outlet"
+            ;;
+    esac
 
     tun_line="$(ip -4 addr show "$tun_if" 2>/dev/null | grep -m1 'inet ' || true)"
     if [ -n "$tun_line" ]; then
@@ -12770,6 +16300,10 @@ install_openclash() {
     if ! opkg install "$fixed_ipk" --force-reinstall >/tmp/openclash-install.log 2>&1; then
         if ! opkg install "$fixed_ipk" --force-reinstall --force-depends --force-maintainer >/tmp/openclash-install.log 2>&1; then
             sed -n '1,200p' /tmp/openclash-install.log >&2
+            log "提示: 使用脚本 5 > 1 查看日志"
+            log "日志: /tmp/openclash-install.log"
+            log "日志: /tmp/nradio-plugin-opkg.update.log"
+            log "日志: /tmp/nradio-plugin-opkg.install.log"
             die "$OPENCLASH_DISPLAY_NAME 安装失败"
         fi
     fi
@@ -13721,8 +17255,11 @@ function adgPolishParentShell() {
 		adgLocalizeOuterTabs(doc);
 		css = [
 			".modal.app_frame .modal-body,.modal.app_frame .bootstrap-dialog-message,.modal.app_frame .app_frame_box{background:#2e2e38!important;}",
+			"html:has(.modal.app_frame),body:has(.modal.app_frame){overflow:hidden!important;}",
+			".modal.app_frame .modal-body,.modal.app_frame .bootstrap-dialog-message{scrollbar-color:rgba(111,202,255,.55) rgba(255,255,255,.08)!important;scrollbar-width:thin!important;}",
 			".modal.app_frame .app_frame_nav{border-bottom-color:rgba(255,255,255,.12)!important;}",
-			".modal.app_frame iframe,.modal.app_frame #sub_frame,.modal.app_frame iframe[name='subpage']{display:block!important;border:0!important;background:#2e2e38!important;}"
+			".modal.app_frame iframe,.modal.app_frame #sub_frame,.modal.app_frame iframe[name='subpage']{display:block!important;border:0!important;background:#2e2e38!important;}",
+			".modal-backdrop,.bootstrap-dialog-backdrop{background:rgba(3,6,12,.82)!important;}"
 		].join(" ");
 		style = doc.getElementById("adg-parent-shell-polish");
 		if (!style) {
@@ -13930,7 +17467,7 @@ function adgApplyRuntime(runtime, status) {
 		listenNode.textContent = listenText;
 	}
 	if (portNode) {
-		portNode.textContent = ":" + httpPort + " / " + dnsPort;
+		portNode.textContent = "Web " + httpPort + " / DNS " + dnsPort;
 	}
 	if (coreNode) {
 		coreNode.textContent = coreText;
@@ -13942,7 +17479,7 @@ function adgApplyRuntime(runtime, status) {
 		glanceAuthNode.textContent = (status && status.dashboard_auth_ready) ? "已填写" : "待填写";
 	}
 	if (glanceListenNode) {
-		glanceListenNode.textContent = ":" + dnsPort;
+		glanceListenNode.textContent = "DNS " + dnsPort;
 	}
 }
 
@@ -14690,6 +18227,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
         text-shadow: 0 14px 30px rgba(0,0,0,0.34);
 		font-variant-numeric: tabular-nums;
 		font-feature-settings: "tnum" 1;
+		overflow-wrap: anywhere;
     }
 
 	.adg-card-queries .adg-dashboard-number {
@@ -16866,6 +20404,13 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		white-space: nowrap !important;
 	}
 
+	.adg-dashboard-number,
+	.adg-glance-value,
+	.adg-runtime-value {
+		max-width: 100% !important;
+		overflow-wrap: anywhere !important;
+	}
+
 	.adg-action-panel .cbi-button[disabled],
 	.cbi-map.adg-themed-map .cbi-button[disabled] {
 		cursor: not-allowed !important;
@@ -16910,6 +20455,1033 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		.adg-action-panel .cbi-button {
 			width: 100% !important;
 			min-width: 0 !important;
+		}
+	}
+	/* 2026-05-18 AdGuardHome precision polish pass.
+	   Scope: local status page only. No top tab, left rail, toolbar, card size, or grid changes. */
+	#adg-dashboard-shell {
+		--adg-polish-ink: oklch(94% 0.018 248);
+		--adg-polish-muted: oklch(78% 0.042 250);
+		--adg-polish-soft: oklch(67% 0.055 248);
+		--adg-polish-faint: oklch(58% 0.045 248);
+		--adg-polish-panel: oklch(20% 0.018 252);
+		--adg-polish-panel-2: oklch(23% 0.021 252);
+		--adg-polish-panel-3: oklch(26% 0.022 252);
+		--adg-polish-line: oklch(48% 0.035 252 / 0.44);
+		--adg-polish-line-soft: oklch(52% 0.03 252 / 0.26);
+		--adg-polish-blue: oklch(72% 0.14 244);
+		--adg-polish-blue-rgb: 94, 183, 255;
+		--adg-polish-cyan: oklch(77% 0.13 205);
+		--adg-polish-cyan-rgb: 83, 222, 244;
+		--adg-polish-green: oklch(75% 0.13 158);
+		--adg-polish-green-rgb: 72, 222, 155;
+		--adg-polish-rose: oklch(73% 0.15 24);
+		--adg-polish-rose-rgb: 255, 126, 138;
+		--adg-polish-violet: oklch(70% 0.12 292);
+		--adg-polish-violet-rgb: 184, 142, 255;
+		--adg-polish-amber: oklch(78% 0.13 78);
+		--adg-polish-amber-rgb: 244, 197, 82;
+		--adg-polish-shadow-1: 0 18px 44px rgba(0, 0, 0, 0.22);
+		--adg-polish-shadow-2: 0 10px 26px rgba(0, 0, 0, 0.18);
+		--adg-polish-shadow-3: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+		--adg-polish-focus: 0 0 0 3px rgba(var(--adg-polish-cyan-rgb), 0.18);
+		--adg-polish-button-glow: 0 12px 28px rgba(var(--adg-polish-blue-rgb), 0.2);
+		--adg-polish-ok-glow: 0 12px 30px rgba(var(--adg-polish-green-rgb), 0.18);
+		--adg-polish-bad-glow: 0 12px 30px rgba(var(--adg-polish-rose-rgb), 0.17);
+		--adg-polish-radius-soft: 14px;
+		--adg-polish-radius-tight: 10px;
+		--adg-polish-ease: cubic-bezier(0.22, 1, 0.36, 1);
+		color: var(--adg-polish-ink);
+		color-scheme: dark;
+		isolation: isolate;
+		text-rendering: optimizeLegibility;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	#adg-dashboard-shell,
+	#adg-dashboard-shell button,
+	#adg-dashboard-shell input,
+	#adg-dashboard-shell select,
+	#adg-dashboard-shell textarea,
+	.adg-settings-bridge,
+	.adg-settings-bridge button,
+	.adg-settings-bridge input,
+	.adg-settings-bridge select,
+	.adg-settings-bridge textarea {
+		font-kerning: normal;
+		font-variant-ligatures: contextual;
+		letter-spacing: 0;
+	}
+
+	#adg-dashboard-shell ::selection,
+	.adg-settings-bridge ::selection,
+	.cbi-map.adg-themed-map ::selection {
+		color: oklch(96% 0.018 248);
+		background: rgba(var(--adg-polish-cyan-rgb), 0.32);
+	}
+
+	#adg-dashboard-shell :focus-visible,
+	.adg-settings-bridge :focus-visible,
+	.cbi-map.adg-themed-map :focus-visible {
+		outline: 0;
+		box-shadow: var(--adg-polish-focus), 0 0 0 1px rgba(var(--adg-polish-cyan-rgb), 0.35) inset;
+	}
+
+	body {
+		scrollbar-color: rgba(var(--adg-polish-blue-rgb), 0.48) rgba(255, 255, 255, 0.08);
+		scrollbar-width: thin;
+	}
+
+	body::-webkit-scrollbar,
+	#adg-dashboard-shell::-webkit-scrollbar,
+	.cbi-map.adg-themed-map::-webkit-scrollbar {
+		inline-size: 10px;
+		block-size: 10px;
+	}
+
+	body::-webkit-scrollbar-track,
+	#adg-dashboard-shell::-webkit-scrollbar-track,
+	.cbi-map.adg-themed-map::-webkit-scrollbar-track {
+		background: rgba(255, 255, 255, 0.06);
+		border-radius: 999px;
+	}
+
+	body::-webkit-scrollbar-thumb,
+	#adg-dashboard-shell::-webkit-scrollbar-thumb,
+	.cbi-map.adg-themed-map::-webkit-scrollbar-thumb {
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.72), rgba(var(--adg-polish-cyan-rgb), 0.55));
+		border: 2px solid rgba(28, 31, 42, 0.92);
+		border-radius: 999px;
+	}
+
+	body::-webkit-scrollbar-thumb:hover,
+	#adg-dashboard-shell::-webkit-scrollbar-thumb:hover,
+	.cbi-map.adg-themed-map::-webkit-scrollbar-thumb:hover {
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-cyan-rgb), 0.88), rgba(var(--adg-polish-blue-rgb), 0.72));
+	}
+
+	.adg-runtime-panel,
+	.adg-action-panel,
+	.adg-glance-card,
+	.adg-dashboard-card,
+	.adg-settings-bridge,
+	.cbi-map.adg-themed-map .adg-themed-section {
+		border-color: var(--adg-polish-line);
+		box-shadow:
+			var(--adg-polish-shadow-3),
+			var(--adg-polish-shadow-2);
+	}
+
+	.adg-runtime-panel,
+	.adg-action-panel {
+		background:
+			radial-gradient(circle at 16% 0%, rgba(var(--adg-polish-cyan-rgb), 0.08), transparent 34%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.016)),
+			linear-gradient(135deg, rgba(18, 24, 34, 0.82), rgba(20, 22, 31, 0.76));
+	}
+
+	.adg-runtime-panel::before,
+	.adg-action-panel::before {
+		background:
+			linear-gradient(120deg, rgba(255, 255, 255, 0.07), transparent 35%),
+			radial-gradient(circle at 100% 0%, rgba(var(--adg-polish-blue-rgb), 0.08), transparent 32%);
+		opacity: 0.72;
+	}
+
+	.adg-runtime-panel::after,
+	.adg-action-panel::after,
+	.adg-glance-card::after,
+	.adg-dashboard-card::after {
+		border-color: rgba(255, 255, 255, 0.08);
+		opacity: 0.74;
+	}
+
+	.adg-runtime-panel:hover,
+	.adg-action-panel:hover,
+	.adg-glance-card:hover,
+	.adg-dashboard-card:hover {
+		border-color: rgba(var(--adg-polish-cyan-rgb), 0.36);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.07) inset,
+			0 16px 34px rgba(0, 0, 0, 0.22),
+			0 0 0 1px rgba(var(--adg-polish-cyan-rgb), 0.05);
+	}
+
+	.adg-runtime-panel:focus-within,
+	.adg-action-panel:focus-within,
+	.adg-glance-card:focus-within,
+	.adg-dashboard-card:focus-within {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.5);
+		box-shadow:
+			var(--adg-polish-focus),
+			0 1px 0 rgba(255, 255, 255, 0.07) inset,
+			var(--adg-polish-shadow-2);
+	}
+
+	.adg-panel-kicker,
+	.adg-dashboard-label,
+	.adg-glance-label,
+	.adg-settings-kicker {
+		color: color-mix(in oklch, var(--adg-polish-blue) 78%, var(--adg-polish-ink));
+		font-weight: 760;
+		text-shadow: 0 0 16px rgba(var(--adg-polish-blue-rgb), 0.18);
+	}
+
+	.adg-panel-kicker::before,
+	.adg-dashboard-label::before,
+	.adg-glance-label::after,
+	.adg-settings-kicker::before {
+		background:
+			radial-gradient(circle, rgba(var(--adg-polish-cyan-rgb), 0.92), rgba(var(--adg-polish-cyan-rgb), 0.24));
+		box-shadow:
+			0 0 0 4px rgba(var(--adg-polish-cyan-rgb), 0.09),
+			0 0 18px rgba(var(--adg-polish-cyan-rgb), 0.28);
+	}
+
+	.adg-panel-title,
+	.adg-settings-title {
+		color: oklch(96% 0.015 248);
+		text-shadow:
+			0 1px 0 rgba(0, 0, 0, 0.22),
+			0 14px 28px rgba(0, 0, 0, 0.22);
+	}
+
+	.adg-panel-sub,
+	.adg-dashboard-sub,
+	.adg-glance-sub,
+	.adg-settings-sub,
+	.adg-dashboard-meta,
+	.cbi-map.adg-themed-map .cbi-value-description,
+	.cbi-map.adg-themed-map .cbi-section-descr {
+		color: var(--adg-polish-muted);
+	}
+
+	.adg-runtime-wrap {
+		align-items: stretch;
+	}
+
+	.adg-runtime-pill {
+		background:
+			radial-gradient(circle at 16% 30%, rgba(var(--adg-polish-green-rgb), 0.34), transparent 52%),
+			linear-gradient(180deg, rgba(var(--adg-polish-green-rgb), 0.22), rgba(var(--adg-polish-green-rgb), 0.08));
+		border-color: rgba(var(--adg-polish-green-rgb), 0.34);
+		color: oklch(94% 0.05 158);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.08) inset,
+			var(--adg-polish-ok-glow);
+	}
+
+	.adg-tone-bad .adg-runtime-pill {
+		background:
+			radial-gradient(circle at 16% 30%, rgba(var(--adg-polish-rose-rgb), 0.32), transparent 52%),
+			linear-gradient(180deg, rgba(var(--adg-polish-rose-rgb), 0.2), rgba(var(--adg-polish-rose-rgb), 0.08));
+		border-color: rgba(var(--adg-polish-rose-rgb), 0.35);
+		color: oklch(94% 0.055 24);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.08) inset,
+			var(--adg-polish-bad-glow);
+	}
+
+	.adg-runtime-dot {
+		background: currentColor;
+		box-shadow:
+			0 0 0 4px rgba(var(--adg-polish-green-rgb), 0.12),
+			0 0 22px rgba(var(--adg-polish-green-rgb), 0.55);
+	}
+
+	.adg-tone-bad .adg-runtime-dot {
+		box-shadow:
+			0 0 0 4px rgba(var(--adg-polish-rose-rgb), 0.12),
+			0 0 22px rgba(var(--adg-polish-rose-rgb), 0.55);
+	}
+
+	.adg-runtime-item {
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.018)),
+			rgba(9, 12, 18, 0.26);
+		border-color: rgba(153, 180, 220, 0.18);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.045) inset,
+			0 10px 20px rgba(0, 0, 0, 0.11);
+	}
+
+	.adg-runtime-item:hover {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.34);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.065), rgba(255, 255, 255, 0.018)),
+			rgba(10, 14, 20, 0.3);
+	}
+
+	.adg-runtime-key {
+		color: color-mix(in oklch, var(--adg-polish-muted) 86%, var(--adg-polish-blue));
+		font-weight: 620;
+	}
+
+	.adg-runtime-value {
+		color: oklch(96% 0.017 248);
+		font-weight: 790;
+		font-variant-numeric: tabular-nums;
+		text-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+		overflow-wrap: anywhere;
+	}
+
+	.adg-action-panel {
+		background:
+			radial-gradient(circle at 88% 12%, rgba(var(--adg-polish-blue-rgb), 0.16), transparent 42%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+			rgba(12, 17, 27, 0.5);
+	}
+
+	.adg-action-group {
+		align-items: stretch;
+	}
+
+	.adg-action-panel .cbi-button,
+	.cbi-map.adg-themed-map .cbi-button {
+		position: relative;
+		overflow: hidden;
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.52);
+		color: oklch(96% 0.018 248);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.96), rgba(27, 132, 231, 0.92));
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.18) inset,
+			var(--adg-polish-button-glow);
+		text-shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+		transition:
+			border-color 0.18s var(--adg-polish-ease),
+			background 0.18s var(--adg-polish-ease),
+			box-shadow 0.18s var(--adg-polish-ease),
+			color 0.18s var(--adg-polish-ease),
+			filter 0.18s var(--adg-polish-ease),
+			transform 0.18s var(--adg-polish-ease);
+	}
+
+	.adg-action-panel .cbi-button::before,
+	.cbi-map.adg-themed-map .cbi-button::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background:
+			linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+		opacity: 0;
+		pointer-events: none;
+		transform: translateX(-42%);
+		transition:
+			opacity 0.18s var(--adg-polish-ease),
+			transform 0.42s var(--adg-polish-ease);
+	}
+
+	.adg-action-panel .cbi-button:hover,
+	.cbi-map.adg-themed-map .cbi-button:hover {
+		border-color: rgba(var(--adg-polish-cyan-rgb), 0.72);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-cyan-rgb), 0.92), rgba(var(--adg-polish-blue-rgb), 0.88));
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.2) inset,
+			0 14px 30px rgba(var(--adg-polish-blue-rgb), 0.24),
+			0 0 0 1px rgba(var(--adg-polish-cyan-rgb), 0.12);
+		filter: saturate(1.06);
+	}
+
+	.adg-action-panel .cbi-button:hover::before,
+	.cbi-map.adg-themed-map .cbi-button:hover::before {
+		opacity: 1;
+		transform: translateX(42%);
+	}
+
+	.adg-action-panel .cbi-button:active,
+	.cbi-map.adg-themed-map .cbi-button:active {
+		filter: saturate(0.96) brightness(0.97);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.12) inset,
+			0 8px 20px rgba(var(--adg-polish-blue-rgb), 0.18);
+	}
+
+	.adg-action-panel .cbi-button[disabled],
+	.cbi-map.adg-themed-map .cbi-button[disabled],
+	.cbi-map.adg-themed-map .cbi-button[disabled]:hover {
+		color: rgba(220, 232, 250, 0.54) !important;
+		background:
+			linear-gradient(180deg, rgba(122, 139, 167, 0.24), rgba(78, 91, 116, 0.18)) !important;
+		border-color: rgba(148, 164, 194, 0.2) !important;
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.05) inset,
+			0 6px 16px rgba(0, 0, 0, 0.12) !important;
+		text-shadow: none;
+	}
+
+	.adg-inline-note {
+		border-color: rgba(var(--adg-polish-green-rgb), 0.22);
+		color: oklch(89% 0.045 158);
+		background:
+			radial-gradient(circle at 3% 50%, rgba(var(--adg-polish-green-rgb), 0.18), transparent 26%),
+			linear-gradient(180deg, rgba(var(--adg-polish-green-rgb), 0.105), rgba(var(--adg-polish-green-rgb), 0.055));
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.055) inset,
+			0 12px 24px rgba(0, 0, 0, 0.14);
+	}
+
+	.adg-inline-note::before {
+		background: oklch(82% 0.12 158);
+		box-shadow:
+			0 0 0 4px rgba(var(--adg-polish-green-rgb), 0.1),
+			0 0 18px rgba(var(--adg-polish-green-rgb), 0.42);
+	}
+
+	.adg-inline-note-warn {
+		border-color: rgba(255, 195, 95, 0.28);
+		color: oklch(88% 0.075 82);
+		background:
+			radial-gradient(circle at 3% 50%, rgba(255, 195, 95, 0.18), transparent 26%),
+			linear-gradient(180deg, rgba(255, 195, 95, 0.1), rgba(255, 195, 95, 0.045));
+	}
+
+	.adg-inline-note-warn::before {
+		background: oklch(82% 0.13 82);
+		box-shadow:
+			0 0 0 4px rgba(255, 195, 95, 0.1),
+			0 0 18px rgba(255, 195, 95, 0.38);
+	}
+
+	.adg-inline-note-soft {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.2);
+		color: color-mix(in oklch, var(--adg-polish-muted) 82%, var(--adg-polish-blue));
+		background:
+			radial-gradient(circle at 3% 50%, rgba(var(--adg-polish-blue-rgb), 0.14), transparent 26%),
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.075), rgba(var(--adg-polish-blue-rgb), 0.035));
+	}
+
+	.adg-inline-note-soft::before {
+		background: var(--adg-polish-blue);
+		box-shadow:
+			0 0 0 4px rgba(var(--adg-polish-blue-rgb), 0.1),
+			0 0 18px rgba(var(--adg-polish-blue-rgb), 0.34);
+	}
+
+	.adg-glance-card {
+		background:
+			radial-gradient(circle at 92% 14%, rgba(var(--adg-polish-blue-rgb), 0.1), transparent 40%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.014)),
+			rgba(14, 18, 28, 0.5);
+	}
+
+	.adg-glance-card:nth-child(1) {
+		background:
+			radial-gradient(circle at 92% 14%, rgba(var(--adg-polish-blue-rgb), 0.12), transparent 40%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.014)),
+			rgba(14, 18, 30, 0.52);
+	}
+
+	.adg-glance-card:nth-child(2) {
+		background:
+			radial-gradient(circle at 92% 14%, rgba(var(--adg-polish-cyan-rgb), 0.11), transparent 40%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.014)),
+			rgba(13, 20, 29, 0.52);
+	}
+
+	.adg-glance-card:nth-child(3) {
+		background:
+			radial-gradient(circle at 92% 14%, rgba(var(--adg-polish-violet-rgb), 0.12), transparent 40%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.014)),
+			rgba(17, 17, 31, 0.52);
+	}
+
+	.adg-glance-card:nth-child(4) {
+		background:
+			radial-gradient(circle at 92% 14%, rgba(var(--adg-polish-rose-rgb), 0.1), transparent 40%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.014)),
+			rgba(24, 16, 24, 0.5);
+	}
+
+	.adg-glance-card::before,
+	.adg-dashboard-card::before {
+		background:
+			linear-gradient(120deg, rgba(255, 255, 255, 0.065), transparent 34%),
+			radial-gradient(circle at 100% 0%, rgba(var(--adg-polish-cyan-rgb), 0.08), transparent 34%);
+		opacity: 0.72;
+	}
+
+	.adg-glance-label,
+	.adg-dashboard-label {
+		text-transform: none;
+	}
+
+	.adg-glance-value,
+	.adg-dashboard-number {
+		color: oklch(96% 0.018 248);
+		font-variant-numeric: tabular-nums;
+		text-shadow:
+			0 1px 0 rgba(0, 0, 0, 0.22),
+			0 10px 24px rgba(0, 0, 0, 0.24);
+		overflow-wrap: anywhere;
+	}
+
+	.adg-glance-card:nth-child(1) .adg-glance-value {
+		color: color-mix(in oklch, var(--adg-polish-blue) 60%, var(--adg-polish-ink));
+	}
+
+	.adg-glance-card:nth-child(2) .adg-glance-value {
+		color: color-mix(in oklch, var(--adg-polish-cyan) 58%, var(--adg-polish-ink));
+	}
+
+	.adg-glance-card:nth-child(3) .adg-glance-value {
+		color: color-mix(in oklch, var(--adg-polish-violet) 52%, var(--adg-polish-ink));
+	}
+
+	.adg-glance-card:nth-child(4) .adg-glance-value {
+		color: color-mix(in oklch, var(--adg-polish-rose) 52%, var(--adg-polish-ink));
+	}
+
+	.adg-dashboard-meta {
+		display: inline-flex;
+		align-items: center;
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.24);
+		color: color-mix(in oklch, var(--adg-polish-blue) 62%, var(--adg-polish-muted));
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.1), rgba(var(--adg-polish-blue-rgb), 0.035));
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.05) inset,
+			0 8px 18px rgba(0, 0, 0, 0.12);
+	}
+
+	.adg-dashboard-meta::before {
+		background: var(--adg-polish-blue);
+		box-shadow:
+			0 0 0 4px rgba(var(--adg-polish-blue-rgb), 0.1),
+			0 0 20px rgba(var(--adg-polish-blue-rgb), 0.36);
+	}
+
+	.adg-dashboard-card {
+		background:
+			radial-gradient(circle at 92% 6%, rgba(var(--adg-polish-blue-rgb), 0.11), transparent 38%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.012)),
+			rgba(14, 18, 28, 0.52);
+	}
+
+	.adg-card-queries {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.25);
+		background:
+			radial-gradient(circle at 90% 8%, rgba(var(--adg-polish-blue-rgb), 0.15), transparent 42%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.047), rgba(255, 255, 255, 0.014)),
+			rgba(13, 18, 30, 0.54);
+	}
+
+	.adg-card-blocked {
+		border-color: rgba(var(--adg-polish-rose-rgb), 0.24);
+		background:
+			radial-gradient(circle at 90% 8%, rgba(var(--adg-polish-rose-rgb), 0.13), transparent 42%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.047), rgba(255, 255, 255, 0.014)),
+			rgba(26, 16, 25, 0.54);
+	}
+
+	.adg-card-queries .adg-dashboard-number {
+		color: color-mix(in oklch, var(--adg-polish-blue) 46%, var(--adg-polish-ink));
+		text-shadow:
+			0 1px 0 rgba(0, 0, 0, 0.24),
+			0 0 26px rgba(var(--adg-polish-blue-rgb), 0.14);
+	}
+
+	.adg-card-blocked .adg-dashboard-number {
+		color: color-mix(in oklch, var(--adg-polish-rose) 50%, var(--adg-polish-ink));
+		text-shadow:
+			0 1px 0 rgba(0, 0, 0, 0.24),
+			0 0 26px rgba(var(--adg-polish-rose-rgb), 0.14);
+	}
+
+	.adg-dashboard-ratio,
+	.adg-dashboard-sub-ratio,
+	.adg-percentage {
+		font-variant-numeric: tabular-nums;
+		text-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+	}
+
+	.adg-card-queries .adg-dashboard-sub-ratio,
+	.adg-card-queries .adg-percentage {
+		color: color-mix(in oklch, var(--adg-polish-blue) 65%, var(--adg-polish-ink));
+	}
+
+	.adg-card-blocked .adg-dashboard-sub-ratio,
+	.adg-card-blocked .adg-percentage {
+		color: color-mix(in oklch, var(--adg-polish-rose) 66%, var(--adg-polish-ink));
+	}
+
+	.adg-chart-shell {
+		border-color: rgba(138, 164, 202, 0.15);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.01)),
+			rgba(6, 9, 16, 0.24);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.035) inset,
+			0 10px 20px rgba(0, 0, 0, 0.12);
+	}
+
+	.adg-chart-shell::before {
+		background:
+			radial-gradient(circle at 12% 20%, rgba(var(--adg-polish-blue-rgb), 0.12), transparent 34%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent);
+		opacity: 0.82;
+	}
+
+	.adg-card-blocked .adg-chart-shell::before {
+		background:
+			radial-gradient(circle at 12% 20%, rgba(var(--adg-polish-rose-rgb), 0.11), transparent 34%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent);
+	}
+
+	.adg-chart-grid {
+		opacity: 0.92;
+		filter: saturate(0.92);
+	}
+
+	.adg-chart path {
+		vector-effect: non-scaling-stroke;
+	}
+
+	#adg-chart-total-area {
+		fill: rgba(var(--adg-polish-blue-rgb), 0.14);
+	}
+
+	#adg-chart-total-line {
+		stroke: rgba(var(--adg-polish-blue-rgb), 0.92);
+		filter: drop-shadow(0 0 7px rgba(var(--adg-polish-blue-rgb), 0.24));
+	}
+
+	#adg-chart-blocked-area {
+		fill: rgba(var(--adg-polish-rose-rgb), 0.13);
+	}
+
+	#adg-chart-blocked-line {
+		stroke: rgba(var(--adg-polish-rose-rgb), 0.9);
+		filter: drop-shadow(0 0 7px rgba(var(--adg-polish-rose-rgb), 0.22));
+	}
+
+	.adg-chart-empty::after {
+		color: color-mix(in oklch, var(--adg-polish-muted) 72%, var(--adg-polish-blue));
+		background:
+			linear-gradient(180deg, rgba(12, 16, 24, 0.82), rgba(12, 16, 24, 0.68));
+		border: 1px solid rgba(var(--adg-polish-blue-rgb), 0.16);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.04) inset,
+			0 8px 20px rgba(0, 0, 0, 0.16);
+	}
+
+	.adg-settings-bridge {
+		background:
+			radial-gradient(circle at 8% 0%, rgba(var(--adg-polish-cyan-rgb), 0.09), transparent 30%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.014)),
+			rgba(13, 17, 27, 0.48);
+	}
+
+	.adg-settings-bridge::before {
+		background:
+			linear-gradient(90deg, transparent, rgba(var(--adg-polish-cyan-rgb), 0.4), transparent);
+		opacity: 0.72;
+	}
+
+	.adg-settings-bridge::after {
+		background:
+			radial-gradient(circle at 100% 0%, rgba(var(--adg-polish-blue-rgb), 0.08), transparent 36%);
+		opacity: 0.8;
+	}
+
+	.adg-settings-copy {
+		color: var(--adg-polish-ink);
+	}
+
+	.cbi-map.adg-themed-map {
+		color: var(--adg-polish-ink);
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section {
+		background:
+			radial-gradient(circle at 100% 0%, rgba(var(--adg-polish-cyan-rgb), 0.055), transparent 38%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.012)),
+			rgba(13, 17, 27, 0.5);
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-section:hover {
+		border-color: rgba(var(--adg-polish-cyan-rgb), 0.3);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.055) inset,
+			0 14px 30px rgba(0, 0, 0, 0.18);
+	}
+
+	.cbi-map.adg-themed-map .cbi-section h3,
+	.cbi-map.adg-themed-map .adg-themed-section h3 {
+		color: oklch(94% 0.018 248);
+		text-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+	}
+
+	.cbi-map.adg-themed-map .cbi-section h3::after,
+	.cbi-map.adg-themed-map .adg-themed-section h3::after {
+		background:
+			linear-gradient(90deg, rgba(var(--adg-polish-cyan-rgb), 0.45), rgba(var(--adg-polish-blue-rgb), 0.08), transparent);
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-value {
+		border-color: rgba(137, 163, 203, 0.14);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.008)),
+			rgba(8, 11, 18, 0.22);
+	}
+
+	.cbi-map.adg-themed-map .adg-themed-value:hover {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.25);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.04), rgba(255, 255, 255, 0.01)),
+			rgba(8, 12, 19, 0.25);
+	}
+
+	.cbi-map.adg-themed-map .cbi-value-title,
+	.cbi-map.adg-themed-map .cbi-input-label,
+	.cbi-map.adg-themed-map label {
+		color: color-mix(in oklch, var(--adg-polish-ink) 88%, var(--adg-polish-blue));
+		text-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+	}
+
+	.cbi-map.adg-themed-map input[type="text"],
+	.cbi-map.adg-themed-map input[type="password"],
+	.cbi-map.adg-themed-map input[type="number"],
+	.cbi-map.adg-themed-map input[type="url"],
+	.cbi-map.adg-themed-map select,
+	.cbi-map.adg-themed-map textarea {
+		color: oklch(95% 0.017 248);
+		caret-color: var(--adg-polish-cyan);
+		border-color: rgba(140, 170, 210, 0.22);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.015)),
+			rgba(8, 11, 18, 0.48);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.045) inset,
+			0 8px 18px rgba(0, 0, 0, 0.13);
+	}
+
+	.cbi-map.adg-themed-map input[type="text"]::placeholder,
+	.cbi-map.adg-themed-map input[type="password"]::placeholder,
+	.cbi-map.adg-themed-map input[type="number"]::placeholder,
+	.cbi-map.adg-themed-map input[type="url"]::placeholder,
+	.cbi-map.adg-themed-map textarea::placeholder {
+		color: rgba(190, 207, 232, 0.48);
+	}
+
+	.cbi-map.adg-themed-map input[type="text"]:hover,
+	.cbi-map.adg-themed-map input[type="password"]:hover,
+	.cbi-map.adg-themed-map input[type="number"]:hover,
+	.cbi-map.adg-themed-map input[type="url"]:hover,
+	.cbi-map.adg-themed-map select:hover,
+	.cbi-map.adg-themed-map textarea:hover {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.38);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-blue-rgb), 0.055), rgba(255, 255, 255, 0.014)),
+			rgba(8, 12, 20, 0.52);
+	}
+
+	.cbi-map.adg-themed-map input[type="text"]:focus,
+	.cbi-map.adg-themed-map input[type="password"]:focus,
+	.cbi-map.adg-themed-map input[type="number"]:focus,
+	.cbi-map.adg-themed-map input[type="url"]:focus,
+	.cbi-map.adg-themed-map select:focus,
+	.cbi-map.adg-themed-map textarea:focus {
+		border-color: rgba(var(--adg-polish-cyan-rgb), 0.58);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-cyan-rgb), 0.065), rgba(255, 255, 255, 0.016)),
+			rgba(8, 12, 20, 0.56);
+		box-shadow:
+			var(--adg-polish-focus),
+			0 1px 0 rgba(255, 255, 255, 0.055) inset,
+			0 10px 22px rgba(0, 0, 0, 0.15);
+	}
+
+	.cbi-map.adg-themed-map select {
+		color: oklch(94% 0.017 248);
+	}
+
+	.cbi-map.adg-themed-map select option {
+		color: oklch(92% 0.017 248);
+		background: oklch(20% 0.018 252);
+	}
+
+	.cbi-map.adg-themed-map input[type="checkbox"] {
+		accent-color: var(--adg-polish-cyan);
+		filter: drop-shadow(0 0 8px rgba(var(--adg-polish-cyan-rgb), 0.2));
+	}
+
+	.cbi-map.adg-themed-map .adg-value-boolean {
+		border-color: rgba(var(--adg-polish-cyan-rgb), 0.17);
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-cyan-rgb), 0.04), rgba(255, 255, 255, 0.008)),
+			rgba(8, 12, 20, 0.22);
+	}
+
+	.cbi-map.adg-themed-map .adg-value-actions {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.18);
+		background:
+			radial-gradient(circle at 100% 50%, rgba(var(--adg-polish-blue-rgb), 0.06), transparent 30%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.008)),
+			rgba(8, 12, 20, 0.22);
+	}
+
+	.cbi-map.adg-themed-map .adg-value-combo {
+		border-color: rgba(var(--adg-polish-violet-rgb), 0.15);
+	}
+
+	.cbi-map.adg-themed-map .adg-value-password {
+		border-color: rgba(var(--adg-polish-amber-rgb), 0.18);
+	}
+
+	.cbi-map.adg-themed-map .adg-value-textarea textarea,
+	.cbi-map.adg-themed-map textarea.adg-update-log {
+		font-family: Consolas, "Cascadia Mono", "SFMono-Regular", Menlo, monospace;
+		font-variant-ligatures: none;
+		tab-size: 4;
+	}
+
+	.cbi-map.adg-themed-map textarea.adg-update-log {
+		color: color-mix(in oklch, var(--adg-polish-ink) 86%, var(--adg-polish-green));
+		border-color: rgba(var(--adg-polish-green-rgb), 0.18);
+		background:
+			radial-gradient(circle at 0% 0%, rgba(var(--adg-polish-green-rgb), 0.055), transparent 34%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.008)),
+			rgba(5, 10, 13, 0.46);
+	}
+
+	.cbi-map.adg-themed-map .cbi-page-actions,
+	.cbi-map.adg-themed-map .adg-page-actions,
+	.cbi-map.adg-themed-map .cbi-optionals,
+	.cbi-map.adg-themed-map .adg-optionals-bar {
+		border-color: rgba(var(--adg-polish-blue-rgb), 0.18);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.01)),
+			rgba(9, 13, 21, 0.36);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.04) inset,
+			0 10px 22px rgba(0, 0, 0, 0.13);
+	}
+
+	.cbi-map.adg-themed-map .adg-button-muted,
+	.cbi-map.adg-themed-map .cbi-button-reset,
+	.cbi-map.adg-themed-map .cbi-button-remove {
+		border-color: rgba(154, 171, 201, 0.2) !important;
+		color: color-mix(in oklch, var(--adg-polish-muted) 82%, var(--adg-polish-ink)) !important;
+		background:
+			linear-gradient(180deg, rgba(132, 148, 178, 0.2), rgba(82, 94, 120, 0.16)) !important;
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.055) inset,
+			0 8px 18px rgba(0, 0, 0, 0.12) !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-button-muted:hover,
+	.cbi-map.adg-themed-map .cbi-button-reset:hover,
+	.cbi-map.adg-themed-map .cbi-button-remove:hover {
+		border-color: rgba(var(--adg-polish-cyan-rgb), 0.32) !important;
+		color: oklch(94% 0.017 248) !important;
+		background:
+			linear-gradient(180deg, rgba(132, 148, 178, 0.26), rgba(82, 94, 120, 0.18)) !important;
+	}
+
+	.cbi-map.adg-themed-map .adg-origin-button {
+		border-color: rgba(var(--adg-polish-green-rgb), 0.35) !important;
+		background:
+			linear-gradient(180deg, rgba(var(--adg-polish-green-rgb), 0.35), rgba(var(--adg-polish-green-rgb), 0.16)) !important;
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.08) inset,
+			0 10px 22px rgba(var(--adg-polish-green-rgb), 0.13) !important;
+	}
+
+	.cbi-map.adg-themed-map .cbi-value-error,
+	.cbi-map.adg-themed-map .cbi-input-invalid,
+	.cbi-map.adg-themed-map input.cbi-input-invalid,
+	.cbi-map.adg-themed-map select.cbi-input-invalid,
+	.cbi-map.adg-themed-map textarea.cbi-input-invalid {
+		border-color: rgba(var(--adg-polish-rose-rgb), 0.5) !important;
+		box-shadow:
+			0 0 0 3px rgba(var(--adg-polish-rose-rgb), 0.12),
+			0 1px 0 rgba(255, 255, 255, 0.045) inset !important;
+	}
+
+	.cbi-map.adg-themed-map .cbi-value-error .cbi-value-title,
+	.cbi-map.adg-themed-map .cbi-input-invalid + label,
+	.cbi-map.adg-themed-map .error {
+		color: color-mix(in oklch, var(--adg-polish-rose) 70%, var(--adg-polish-ink));
+	}
+
+	.cbi-map.adg-themed-map code,
+	.cbi-map.adg-themed-map pre,
+	#adg-dashboard-shell code,
+	#adg-dashboard-shell pre {
+		color: color-mix(in oklch, var(--adg-polish-cyan) 72%, var(--adg-polish-ink));
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.012)),
+			rgba(6, 10, 16, 0.45);
+		border: 1px solid rgba(var(--adg-polish-cyan-rgb), 0.16);
+		border-radius: 8px;
+	}
+
+	.cbi-map.adg-themed-map table,
+	.cbi-map.adg-themed-map .table {
+		border-color: rgba(140, 164, 202, 0.16);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.008)),
+			rgba(8, 12, 20, 0.24);
+	}
+
+	.cbi-map.adg-themed-map th {
+		color: color-mix(in oklch, var(--adg-polish-blue) 52%, var(--adg-polish-ink));
+		background: rgba(var(--adg-polish-blue-rgb), 0.06);
+	}
+
+	.cbi-map.adg-themed-map td {
+		border-color: rgba(140, 164, 202, 0.12);
+		color: var(--adg-polish-muted);
+	}
+
+	.cbi-map.adg-themed-map tr:hover td {
+		background: rgba(var(--adg-polish-blue-rgb), 0.035);
+		color: color-mix(in oklch, var(--adg-polish-muted) 70%, var(--adg-polish-ink));
+	}
+
+	.cbi-map.adg-themed-map a,
+	#adg-dashboard-shell a {
+		color: color-mix(in oklch, var(--adg-polish-cyan) 72%, var(--adg-polish-ink));
+		text-decoration-color: rgba(var(--adg-polish-cyan-rgb), 0.38);
+		text-underline-offset: 3px;
+	}
+
+	.cbi-map.adg-themed-map a:hover,
+	#adg-dashboard-shell a:hover {
+		color: oklch(91% 0.09 205);
+		text-decoration-color: rgba(var(--adg-polish-cyan-rgb), 0.72);
+	}
+
+	.adg-dashboard-shell.adg-tone-ok .adg-runtime-panel,
+	.adg-dashboard-shell.adg-tone-ok .adg-inline-note {
+		border-color: rgba(var(--adg-polish-green-rgb), 0.28);
+	}
+
+	.adg-dashboard-shell.adg-tone-ok .adg-panel-kicker::before,
+	.adg-dashboard-shell.adg-tone-ok .adg-runtime-dot {
+		background: var(--adg-polish-green);
+	}
+
+	.adg-dashboard-shell.adg-tone-bad .adg-runtime-panel,
+	.adg-dashboard-shell.adg-tone-bad .adg-inline-note {
+		border-color: rgba(var(--adg-polish-rose-rgb), 0.3);
+	}
+
+	.adg-dashboard-shell.adg-tone-bad .adg-panel-kicker::before,
+	.adg-dashboard-shell.adg-tone-bad .adg-runtime-dot {
+		background: var(--adg-polish-rose);
+	}
+
+	.adg-dashboard-shell.adg-tone-bad .adg-panel-kicker,
+	.adg-dashboard-shell.adg-tone-bad .adg-runtime-value {
+		color: color-mix(in oklch, var(--adg-polish-rose) 60%, var(--adg-polish-ink));
+	}
+
+	.adg-button-loading {
+		color: rgba(236, 245, 255, 0.84) !important;
+		background:
+			linear-gradient(90deg, rgba(var(--adg-polish-blue-rgb), 0.72), rgba(var(--adg-polish-cyan-rgb), 0.86), rgba(var(--adg-polish-blue-rgb), 0.72)) !important;
+		background-size: 240% 100% !important;
+		animation: adgPolishButtonFlow 1.2s linear infinite;
+	}
+
+	.adg-button-loading::after {
+		border-color: rgba(255, 255, 255, 0.32);
+		border-top-color: rgba(255, 255, 255, 0.9);
+		filter: drop-shadow(0 0 8px rgba(var(--adg-polish-cyan-rgb), 0.34));
+	}
+
+	@keyframes adgPolishButtonFlow {
+		0% {
+			background-position: 0% 50%;
+		}
+		100% {
+			background-position: 240% 50%;
+		}
+	}
+
+	@keyframes adgPolishSoftPulse {
+		0% {
+			opacity: 0.66;
+			filter: saturate(0.95);
+		}
+		50% {
+			opacity: 1;
+			filter: saturate(1.08);
+		}
+		100% {
+			opacity: 0.66;
+			filter: saturate(0.95);
+		}
+	}
+
+	.adg-runtime-dot,
+	.adg-inline-note::before,
+	.adg-dashboard-meta::before {
+		animation: adgPolishSoftPulse 2.8s var(--adg-polish-ease) infinite;
+	}
+
+	@supports (backdrop-filter: blur(10px)) {
+		.adg-runtime-panel,
+		.adg-action-panel,
+		.adg-glance-card,
+		.adg-dashboard-card,
+		.adg-settings-bridge,
+		.cbi-map.adg-themed-map .adg-themed-section,
+		.cbi-map.adg-themed-map .adg-themed-value {
+			backdrop-filter: saturate(1.08) blur(0.5px);
+		}
+	}
+
+	@supports not (color: oklch(50% 0.1 200)) {
+		#adg-dashboard-shell {
+			--adg-polish-ink: #edf5ff;
+			--adg-polish-muted: #b8c9e3;
+			--adg-polish-blue: #63b7ff;
+			--adg-polish-cyan: #53def4;
+			--adg-polish-green: #48de9b;
+			--adg-polish-rose: #ff7e8a;
+			--adg-polish-violet: #b88eff;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		#adg-dashboard-shell *,
+		.adg-settings-bridge *,
+		.cbi-map.adg-themed-map * {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			scroll-behavior: auto !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
+
+	@media (forced-colors: active) {
+		#adg-dashboard-shell,
+		.adg-settings-bridge,
+		.cbi-map.adg-themed-map {
+			forced-color-adjust: auto;
+		}
+
+		.adg-runtime-panel,
+		.adg-action-panel,
+		.adg-glance-card,
+		.adg-dashboard-card,
+		.adg-settings-bridge,
+		.cbi-map.adg-themed-map .adg-themed-section,
+		.cbi-map.adg-themed-map .adg-themed-value {
+			border: 1px solid CanvasText;
+			box-shadow: none;
+		}
+
+		.adg-action-panel .cbi-button,
+		.cbi-map.adg-themed-map .cbi-button {
+			border: 1px solid ButtonText;
 		}
 	}
 </style>
@@ -17786,21 +22358,6 @@ storage_expand_current_model() {
     printf '%s\n' "$model"
 }
 
-require_c8_c5800_storage_model() {
-    local model
-
-    model="$(storage_expand_current_model)"
-    case "$model" in
-        NRadio_C8-688|NRadio_C5800-688)
-            CURRENT_DETECTED_MODEL="$model"
-            return 0
-            ;;
-        *)
-            die "存储扩展仅支持 NRadio_C8-688 / NRadio_C5800-688，当前机型：${model:-unknown}"
-            ;;
-    esac
-}
-
 storage_expand_canonical_path() {
     local target_path="$1"
 
@@ -17840,6 +22397,15 @@ storage_expand_find_rootfs_2nd_device() {
     fi
 
     return 1
+}
+
+require_rootfs_2nd_storage_capable() {
+    local model device
+
+    model="$(storage_expand_current_model)"
+    [ -n "$model" ] && CURRENT_DETECTED_MODEL="$model"
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，当前机型不支持 eMMC 存储扩展：${model:-unknown}"
 }
 
 storage_expand_is_booted_from_rootfs_2nd() {
@@ -17888,7 +22454,7 @@ storage_expand_print_mount_usage() {
 storage_expand_status() {
     local model device mount_source mount_point boot_state marker_state info
 
-    require_c8_c5800_storage_model
+    require_rootfs_2nd_storage_capable
     model="$(storage_expand_current_model)"
     device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
     [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
@@ -17934,7 +22500,7 @@ storage_expand_status() {
 storage_expand_require_active() {
     local device mount_source
 
-    require_c8_c5800_storage_model
+    require_rootfs_2nd_storage_capable
     [ -f "$ROOTFS_2ND_STORAGE_MARKER" ] || die "存储扩展未启用：缺少 $ROOTFS_2ND_STORAGE_MARKER"
     device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
     [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
@@ -17957,6 +22523,7 @@ storage_expand_app_spec() {
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenVPN" "openvpn" "/etc/openvpn" "OpenVPN" "luci-app-openvpn" "nradioadv/system/openvpnfull"
             ;;
         openlist)
+            resolve_openlist_storage_paths 2>/dev/null || true
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenList" "openlist" "$OPENLIST_ROOT_DIR" "OpenList" "OpenList" "nradioadv/system/openlist/basic"
             ;;
         zerotier)
@@ -18922,7 +23489,7 @@ storage_expand_confirm_format() {
 enable_rootfs_2nd_storage_expand() {
     local device mount_source
 
-    require_c8_c5800_storage_model
+    require_rootfs_2nd_storage_capable
     storage_expand_is_booted_from_rootfs_2nd && die "当前疑似从第二系统 rootfs_2nd 启动，禁止把当前系统分区改作扩展盘"
     device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
     [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
@@ -18974,7 +23541,7 @@ enable_rootfs_2nd_storage_expand() {
 disable_rootfs_2nd_storage_expand() {
     local device mount_source
 
-    require_c8_c5800_storage_model
+    require_rootfs_2nd_storage_capable
     device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
     [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
     if [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] && awk 'NF { found = 1 } END { exit(found ? 0 : 1) }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null; then
@@ -19660,7 +24227,7 @@ storage_expand_select_app_action() {
 
 manage_rootfs_2nd_storage_expand() {
     while :; do
-        printf '\nC8/C5800 eMMC 存储扩展:\n'
+        printf '\neMMC 存储扩展:\n'
         printf '1. 查看当前扩展状态\n'
         printf '2. 启用 rootfs_2nd 存储扩展\n'
         printf '3. 关闭存储扩展并恢复第二系统烧录入口\n'
@@ -19840,16 +24407,17 @@ write_openlist_runtime_files() {
     backup_file "$openlist_helper"
     backup_file "$openlist_init"
 
-    cat > "$openlist_helper" <<'EOF_OPENLIST_SYNC'
-#!/bin/sh
-set -e
-. /lib/functions.sh
-
-DEFAULT_DATA_DIR="/mnt/app_data/openlist/data"
-DEFAULT_TEMP_DIR="/mnt/app_data/openlist/tmp"
-DEFAULT_LOG_PATH="/mnt/app_data/openlist/openlist.log"
-SKIP_FIREWALL_SYNC="${OPENLIST_SKIP_FIREWALL_SYNC:-0}"
-
+    {
+        printf '%s\n' '#!/bin/sh'
+        printf '%s\n' 'set -e'
+        printf '%s\n' '. /lib/functions.sh'
+        printf '\n'
+        printf 'DEFAULT_DATA_DIR=%s\n' "$(shell_quote "$OPENLIST_DATA_DIR")"
+        printf 'DEFAULT_TEMP_DIR=%s\n' "$(shell_quote "$OPENLIST_TEMP_DIR")"
+        printf 'DEFAULT_LOG_PATH=%s\n' "$(shell_quote "$OPENLIST_LOG_PATH")"
+        printf '%s\n' 'SKIP_FIREWALL_SYNC="${OPENLIST_SKIP_FIREWALL_SYNC:-0}"'
+        printf '\n'
+        cat <<'EOF_OPENLIST_SYNC'
 json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -20098,19 +24666,21 @@ if [ "$SKIP_FIREWALL_SYNC" != "1" ]; then
 fi
 exit 0
 EOF_OPENLIST_SYNC
+    } > "$openlist_helper"
     chmod 755 "$openlist_helper"
 
-    cat > "$openlist_init" <<'EOF_OPENLIST_INIT'
-#!/bin/sh /etc/rc.common
-
-USE_PROCD=1
-START=99
-STOP=15
-
-OPENLIST_BIN="/mnt/app_data/openlist/bin/openlist"
-OPENLIST_HELPER="/usr/libexec/openlist-sync-config"
-OPENLIST_DATA_DIR="/mnt/app_data/openlist/data"
-
+    {
+        printf '%s\n' '#!/bin/sh /etc/rc.common'
+        printf '\n'
+        printf '%s\n' 'USE_PROCD=1'
+        printf '%s\n' 'START=99'
+        printf '%s\n' 'STOP=15'
+        printf '\n'
+        printf 'OPENLIST_BIN=%s\n' "$(shell_quote "$OPENLIST_BIN_PATH")"
+        printf '%s\n' 'OPENLIST_HELPER="/usr/libexec/openlist-sync-config"'
+        printf 'OPENLIST_DATA_DIR=%s\n' "$(shell_quote "$OPENLIST_DATA_DIR")"
+        printf '\n'
+        cat <<'EOF_OPENLIST_INIT'
 start_service() {
     [ -x "$OPENLIST_BIN" ] || return 1
     [ -x "$OPENLIST_HELPER" ] || return 1
@@ -20139,6 +24709,7 @@ service_triggers() {
     procd_add_reload_trigger "openlist"
 }
 EOF_OPENLIST_INIT
+    } > "$openlist_init"
     chmod 755 "$openlist_init"
 }
 
@@ -20243,11 +24814,11 @@ allow_wan = s:option(Flag, "allow_wan", translate("放行 WAN 访问"))
 allow_wan.rmempty = false
 
 data_dir = s:option(Value, "data_dir", translate("数据目录"))
-data_dir.placeholder = "/mnt/app_data/openlist/data"
+data_dir.placeholder = m.uci:get("openlist", "main", "data_dir") or ""
 data_dir.rmempty = false
 
 temp_dir = s:option(Value, "temp_dir", translate("临时目录"))
-temp_dir.placeholder = "/mnt/app_data/openlist/tmp"
+temp_dir.placeholder = m.uci:get("openlist", "main", "temp_dir") or ""
 temp_dir.rmempty = false
 
 site_url = s:option(Value, "site_url", translate("站点地址"))
@@ -20260,7 +24831,7 @@ log_enabled.rmempty = false
 
 log_path = s:option(Value, "log_path", translate("日志文件"))
 log_path:depends("log", "1")
-log_path.placeholder = "/mnt/app_data/openlist/openlist.log"
+log_path.placeholder = m.uci:get("openlist", "main", "log_path") or ""
 log_path.rmempty = true
 
 note = s:option(DummyValue, "_note", translate("说明"))
@@ -20317,34 +24888,40 @@ EOF_OPENLIST_LOGS
 }
 
 ensure_openlist_config_defaults() {
-    mkdir -p "$OPENLIST_ROOT_DIR" "$OPENLIST_BIN_DIR" "$OPENLIST_DATA_DIR" "$OPENLIST_TEMP_DIR"
+    prepare_openlist_install_dirs
     [ -f "$OPENLIST_LOG_PATH" ] || touch "$OPENLIST_LOG_PATH"
 
     if [ ! -f /etc/config/openlist ]; then
-        cat > /etc/config/openlist <<'EOF_OPENLIST_UCI'
+        {
+            cat <<'EOF_OPENLIST_UCI_HEAD'
 config openlist 'main'
     option enabled '1'
     option port '5244'
     option allow_wan '0'
-    option data_dir '/mnt/app_data/openlist/data'
-    option temp_dir '/mnt/app_data/openlist/tmp'
+EOF_OPENLIST_UCI_HEAD
+            printf "    option data_dir '%s'\n" "$OPENLIST_DATA_DIR"
+            printf "    option temp_dir '%s'\n" "$OPENLIST_TEMP_DIR"
+            cat <<'EOF_OPENLIST_UCI_TAIL'
     option site_url ''
     option log '1'
-    option log_path '/mnt/app_data/openlist/openlist.log'
+EOF_OPENLIST_UCI_TAIL
+            printf "    option log_path '%s'\n" "$OPENLIST_LOG_PATH"
+            cat <<'EOF_OPENLIST_UCI_END'
     option token_expires_in '48'
     option jwt_secret ''
-EOF_OPENLIST_UCI
+EOF_OPENLIST_UCI_END
+        } > /etc/config/openlist
     fi
 
     uci -q get openlist.main >/dev/null 2>&1 || uci -q set openlist.main=openlist
     [ -n "$(uci -q get openlist.main.enabled 2>/dev/null || true)" ] || uci -q set openlist.main.enabled='1'
     [ -n "$(uci -q get openlist.main.port 2>/dev/null || true)" ] || uci -q set openlist.main.port='5244'
     [ -n "$(uci -q get openlist.main.allow_wan 2>/dev/null || true)" ] || uci -q set openlist.main.allow_wan='0'
-    [ -n "$(uci -q get openlist.main.data_dir 2>/dev/null || true)" ] || uci -q set openlist.main.data_dir='/mnt/app_data/openlist/data'
-    [ -n "$(uci -q get openlist.main.temp_dir 2>/dev/null || true)" ] || uci -q set openlist.main.temp_dir='/mnt/app_data/openlist/tmp'
+    [ -n "$(uci -q get openlist.main.data_dir 2>/dev/null || true)" ] || uci -q set "openlist.main.data_dir=$OPENLIST_DATA_DIR"
+    [ -n "$(uci -q get openlist.main.temp_dir 2>/dev/null || true)" ] || uci -q set "openlist.main.temp_dir=$OPENLIST_TEMP_DIR"
     [ -n "$(uci -q get openlist.main.site_url 2>/dev/null || true)" ] || uci -q set openlist.main.site_url=''
     [ -n "$(uci -q get openlist.main.log 2>/dev/null || true)" ] || uci -q set openlist.main.log='1'
-    [ -n "$(uci -q get openlist.main.log_path 2>/dev/null || true)" ] || uci -q set openlist.main.log_path='/mnt/app_data/openlist/openlist.log'
+    [ -n "$(uci -q get openlist.main.log_path 2>/dev/null || true)" ] || uci -q set "openlist.main.log_path=$OPENLIST_LOG_PATH"
     [ -n "$(uci -q get openlist.main.token_expires_in 2>/dev/null || true)" ] || uci -q set openlist.main.token_expires_in='48'
     [ -n "$(uci -q get openlist.main.jwt_secret 2>/dev/null || true)" ] || uci -q set openlist.main.jwt_secret=''
     uci -q commit openlist >/dev/null 2>&1 || true
@@ -20768,7 +25345,24 @@ download_mosdns_core() {
     [ "$actual" = "$MOSDNS_SHA256" ] || die "MosDNS SHA256 不匹配"
 
     mkdir -p "$WORKDIR/mosdns/unpack"
-    unzip -o "$zip_path" -d "$WORKDIR/mosdns/unpack" >/dev/null 2>&1 || die "MosDNS 解压失败"
+    ensure_default_feeds
+    ensure_opkg_update
+    ensure_packages unzip
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -tq "$zip_path" >/tmp/mosdns-archive-validate.log 2>&1 || {
+            sed -n '1,120p' /tmp/mosdns-archive-validate.log >&2
+            die "MosDNS ZIP 校验失败"
+        }
+        unzip -oq "$zip_path" -d "$WORKDIR/mosdns/unpack" >/tmp/mosdns-unpack.log 2>&1 || {
+            sed -n '1,120p' /tmp/mosdns-unpack.log >&2
+            die "MosDNS 解压失败"
+        }
+    elif busybox unzip -oq "$zip_path" -d "$WORKDIR/mosdns/unpack" >/tmp/mosdns-unpack.log 2>&1; then
+        :
+    else
+        sed -n '1,120p' /tmp/mosdns-unpack.log >&2
+        die "系统缺少 unzip，无法解压 MosDNS 官方发布包"
+    fi
     bin=""
     for c in "$WORKDIR/mosdns/unpack/mosdns" "$WORKDIR/mosdns/unpack"/*/mosdns; do
         [ -f "$c" ] && { bin="$c"; break; }
@@ -21023,7 +25617,7 @@ install_ddnsgo() {
     ddnsgo_actual_sha="$(sha256sum "$ddnsgo_archive" 2>/dev/null | awk '{print $1}')"
     [ -n "$ddnsgo_actual_sha" ] || die "DDNS-GO SHA256 读取失败"
     [ "$ddnsgo_actual_sha" = "$DDNSGO_ARCHIVE_SHA256" ] || die "DDNS-GO SHA256 不匹配"
-    validate_tar_gzip_archive "$ddnsgo_archive" "DDNS-GO OpenWrt 安装包" "/tmp/ddnsgo-archive-validate.log"
+    validate_tar_archive "$ddnsgo_archive" "DDNS-GO OpenWrt 安装包" "/tmp/ddnsgo-archive-validate.log"
     ddnsgo_download_host="$(extract_url_host "$ddnsgo_download_url" 2>/dev/null || true)"
     ddnsgo_archive_size="$(ddnsgo_size_value "$ddnsgo_archive" "0")"
 
@@ -21247,18 +25841,19 @@ install_openlist() {
     openlist_download_size="$(wc -c < "$openlist_archive" | tr -d ' ')"
 
     log_stage 3 5 "解压安装 OpenList 并写入运行文件"
-    validate_tar_gzip_archive "$openlist_archive" "OpenList 官方安装包" "/tmp/openlist-archive-validate.log"
+    validate_tar_archive "$openlist_archive" "OpenList 官方安装包" "/tmp/openlist-archive-validate.log"
     openlist_extract_need="$(estimate_archive_extract_bytes "$openlist_archive" 2>/dev/null || true)"
     rm -rf "$openlist_unpack"
     mkdir -p "$openlist_unpack"
     ensure_dir_writable "$openlist_unpack" "OpenList 临时解压目录"
-    [ -d /mnt/app_data ] || die "未检测到 /mnt/app_data，无法安装 OpenList 官方二进制"
-    ensure_dir_writable /mnt/app_data "/mnt/app_data"
+    resolve_openlist_storage_paths prepare
+    log "提示: OpenList 安装根目录: $OPENLIST_ROOT_DIR"
+    prepare_openlist_install_dirs
     case "$openlist_extract_need" in
         ''|*[!0-9]*) ;;
         *)
             ensure_free_space_bytes "$openlist_unpack" "$openlist_extract_need" "OpenList 临时解压目录"
-            ensure_free_space_bytes /mnt/app_data "$openlist_extract_need" "/mnt/app_data"
+            ensure_free_space_bytes "$OPENLIST_ROOT_DIR" "$openlist_extract_need" "$OPENLIST_ROOT_DIR"
             ;;
     esac
     tar -xzf "$openlist_archive" -C "$openlist_unpack" >/dev/null 2>&1 || die "解压 OpenList 官方安装包失败"
@@ -21270,11 +25865,7 @@ install_openlist() {
     done
     [ -n "$openlist_bin_src" ] || die "解压后未找到 OpenList 可执行文件"
 
-    mkdir -p "$OPENLIST_ROOT_DIR" "$OPENLIST_BIN_DIR" "$OPENLIST_DATA_DIR" "$OPENLIST_TEMP_DIR"
-    ensure_dir_writable "$OPENLIST_ROOT_DIR" "$OPENLIST_ROOT_DIR"
-    ensure_dir_writable "$OPENLIST_BIN_DIR" "$OPENLIST_BIN_DIR"
-    ensure_dir_writable "$OPENLIST_DATA_DIR" "$OPENLIST_DATA_DIR"
-    ensure_dir_writable "$OPENLIST_TEMP_DIR" "$OPENLIST_TEMP_DIR"
+    prepare_openlist_install_dirs
     rm -f "$OPENLIST_LINK_PATH" "$OPENLIST_BIN_PATH" 2>/dev/null || true
     cp "$openlist_bin_src" "$OPENLIST_BIN_PATH"
     chmod 755 "$OPENLIST_BIN_PATH" 2>/dev/null || true
@@ -32540,6 +37131,1358 @@ EOF_OPENVPN_MK5_ROUND_FINISH_POLISH
 </style>
 EOF_OPENVPN_MK5_PASS7_TO_PASS9_POLISH
 
+    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_PASS10_POLISH'
+<style type="text/css">
+    /* OpenVPN Mk5 pass 10 precision shell polish: modal-safe visual layer */
+    .vpn-shell-mk5 {
+        --vpn-pass10-ink-strong: #f4f9ff;
+        --vpn-pass10-ink-main: #d9e8fb;
+        --vpn-pass10-ink-soft: #b8c8dd;
+        --vpn-pass10-ink-muted: #8ea1bb;
+        --vpn-pass10-ink-dim: #6f8198;
+        --vpn-pass10-panel-0: rgba(9, 14, 24, 0.78);
+        --vpn-pass10-panel-1: rgba(14, 21, 34, 0.80);
+        --vpn-pass10-panel-2: rgba(21, 31, 48, 0.78);
+        --vpn-pass10-panel-3: rgba(28, 39, 58, 0.72);
+        --vpn-pass10-line-cold: rgba(111, 149, 198, 0.28);
+        --vpn-pass10-line-soft: rgba(137, 165, 207, 0.18);
+        --vpn-pass10-line-hot: rgba(47, 211, 238, 0.34);
+        --vpn-pass10-line-good: rgba(67, 219, 148, 0.34);
+        --vpn-pass10-line-warn: rgba(255, 205, 112, 0.34);
+        --vpn-pass10-line-bad: rgba(255, 111, 126, 0.34);
+        --vpn-pass10-glow-cyan: rgba(47, 211, 238, 0.20);
+        --vpn-pass10-glow-blue: rgba(66, 145, 255, 0.20);
+        --vpn-pass10-glow-green: rgba(67, 219, 148, 0.20);
+        --vpn-pass10-glow-warn: rgba(255, 205, 112, 0.20);
+        --vpn-pass10-shadow-deep: 0 22px 48px rgba(0, 0, 0, 0.28);
+        --vpn-pass10-shadow-soft: 0 14px 32px rgba(0, 0, 0, 0.20);
+        --vpn-pass10-shadow-flat: 0 8px 18px rgba(0, 0, 0, 0.16);
+        --vpn-pass10-radius-sm: 6px;
+        --vpn-pass10-radius-md: 8px;
+        --vpn-pass10-focus: 0 0 0 2px rgba(47, 211, 238, 0.24), 0 0 0 5px rgba(47, 211, 238, 0.08);
+        --vpn-pass10-gradient-panel: linear-gradient(145deg, rgba(23, 36, 55, 0.84), rgba(12, 18, 30, 0.86));
+        --vpn-pass10-gradient-panel-alt: linear-gradient(145deg, rgba(20, 34, 51, 0.76), rgba(13, 19, 31, 0.82));
+        --vpn-pass10-gradient-control: linear-gradient(180deg, rgba(57, 79, 116, 0.74), rgba(38, 52, 78, 0.78));
+        --vpn-pass10-gradient-good: linear-gradient(180deg, rgba(37, 145, 99, 0.90), rgba(23, 117, 79, 0.90));
+        --vpn-pass10-gradient-blue: linear-gradient(180deg, rgba(44, 148, 230, 0.92), rgba(28, 125, 213, 0.92));
+        --vpn-pass10-gradient-quiet: linear-gradient(180deg, rgba(55, 68, 98, 0.86), rgba(41, 51, 75, 0.90));
+        color: var(--vpn-pass10-ink-main);
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+        font-kerning: normal;
+        letter-spacing: 0;
+        border-color: rgba(66, 145, 255, 0.24);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.06),
+            inset 0 0 0 1px rgba(47, 211, 238, 0.08),
+            var(--vpn-pass10-shadow-deep);
+    }
+    .vpn-shell-mk5::selection,
+    .vpn-shell-mk5 *::selection {
+        color: #07111c;
+        background: rgba(124, 232, 255, 0.78);
+        text-shadow: none;
+    }
+    .vpn-shell-mk5::-webkit-scrollbar,
+    .vpn-shell-mk5 *::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    .vpn-shell-mk5::-webkit-scrollbar-track,
+    .vpn-shell-mk5 *::-webkit-scrollbar-track {
+        background: rgba(9, 13, 22, 0.70);
+        border: 1px solid rgba(112, 145, 190, 0.12);
+    }
+    .vpn-shell-mk5::-webkit-scrollbar-thumb,
+    .vpn-shell-mk5 *::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(71, 104, 151, 0.86), rgba(45, 64, 94, 0.88));
+        border: 2px solid rgba(9, 13, 22, 0.70);
+        border-radius: 999px;
+    }
+    .vpn-shell-mk5::-webkit-scrollbar-thumb:hover,
+    .vpn-shell-mk5 *::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, rgba(62, 184, 220, 0.84), rgba(53, 117, 181, 0.88));
+    }
+    .vpn-shell-mk5 a,
+    .vpn-shell-mk5 button,
+    .vpn-shell-mk5 input,
+    .vpn-shell-mk5 select,
+    .vpn-shell-mk5 textarea {
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 a {
+        color: #8fdcff;
+        text-decoration-color: rgba(143, 220, 255, 0.34);
+        text-underline-offset: 3px;
+    }
+    .vpn-shell-mk5 a:hover {
+        color: #c7f3ff;
+        text-decoration-color: rgba(199, 243, 255, 0.64);
+    }
+    .vpn-shell-mk5 a:focus-visible,
+    .vpn-shell-mk5 button:focus-visible,
+    .vpn-shell-mk5 input:focus-visible,
+    .vpn-shell-mk5 select:focus-visible,
+    .vpn-shell-mk5 textarea:focus-visible,
+    .vpn-shell-mk5 [tabindex]:focus-visible {
+        outline: 0;
+        box-shadow: var(--vpn-pass10-focus);
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5,
+    .vpn-shell-secondary .vpn-hero-secondary,
+    .vpn-shell-secondary + .cbi-map {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+            var(--vpn-pass10-gradient-panel);
+        border-color: rgba(112, 145, 190, 0.22);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.065),
+            inset 0 0 0 1px rgba(47, 211, 238, 0.035),
+            0 18px 42px rgba(0, 0, 0, 0.26);
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5::before,
+    .vpn-shell-secondary .vpn-hero-secondary::before {
+        opacity: 0.62;
+        background:
+            radial-gradient(circle at 20% 18%, rgba(47, 211, 238, 0.14), transparent 34%),
+            radial-gradient(circle at 88% 14%, rgba(67, 219, 148, 0.10), transparent 32%),
+            linear-gradient(120deg, rgba(255, 255, 255, 0.055), transparent 38%, rgba(255, 255, 255, 0.028));
+        pointer-events: none;
+    }
+    .vpn-shell-mk5 .vpn-hero-mk5::after,
+    .vpn-shell-secondary .vpn-hero-secondary::after {
+        opacity: 0.42;
+        background:
+            linear-gradient(90deg, rgba(47, 211, 238, 0.0), rgba(47, 211, 238, 0.12), rgba(47, 211, 238, 0.0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+        pointer-events: none;
+    }
+    .vpn-shell-mk5 .vpn-brand-block,
+    .vpn-shell-mk5 .vpn-command-card,
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-card,
+    .vpn-shell-mk5 .vpn-quick-rail,
+    .vpn-shell-mk5 .vpn-panel-shell,
+    .vpn-shell-mk5 .vpn-subcard,
+    .vpn-shell-mk5 .vpn-action-tile,
+    .vpn-shell-secondary .vpn-mini-card,
+    .vpn-shell-secondary .vpn-category-rail,
+    .vpn-shell-secondary + .cbi-map .cbi-section {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012)),
+            var(--vpn-pass10-gradient-panel-alt);
+        border-color: rgba(119, 151, 196, 0.24);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+            var(--vpn-pass10-shadow-soft);
+    }
+    .vpn-shell-mk5 .vpn-brand-block:hover,
+    .vpn-shell-mk5 .vpn-command-card:hover,
+    .vpn-shell-mk5 .vpn-mini-card:hover,
+    .vpn-shell-mk5 .vpn-stat-card:hover,
+    .vpn-shell-mk5 .vpn-card:hover,
+    .vpn-shell-mk5 .vpn-quick-rail:hover,
+    .vpn-shell-mk5 .vpn-panel-shell:hover,
+    .vpn-shell-mk5 .vpn-subcard:hover,
+    .vpn-shell-mk5 .vpn-action-tile:hover,
+    .vpn-shell-secondary .vpn-mini-card:hover,
+    .vpn-shell-secondary .vpn-category-rail:hover {
+        border-color: rgba(47, 211, 238, 0.32);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.080),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.16),
+            0 18px 38px rgba(0, 0, 0, 0.24),
+            0 0 0 1px rgba(47, 211, 238, 0.035);
+    }
+    .vpn-shell-mk5 .vpn-brand-block::before,
+    .vpn-shell-mk5 .vpn-command-card::before,
+    .vpn-shell-mk5 .vpn-mini-card::before,
+    .vpn-shell-mk5 .vpn-stat-card::before,
+    .vpn-shell-mk5 .vpn-card::before,
+    .vpn-shell-mk5 .vpn-quick-rail::before,
+    .vpn-shell-mk5 .vpn-panel-shell::before,
+    .vpn-shell-mk5 .vpn-subcard::before {
+        opacity: 0.48;
+        background:
+            linear-gradient(90deg, rgba(47, 211, 238, 0.0), rgba(47, 211, 238, 0.12), rgba(47, 211, 238, 0.0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0));
+    }
+    .vpn-shell-mk5 .vpn-brand-block::after,
+    .vpn-shell-mk5 .vpn-command-card::after,
+    .vpn-shell-mk5 .vpn-mini-card::after,
+    .vpn-shell-mk5 .vpn-stat-card::after,
+    .vpn-shell-mk5 .vpn-card::after,
+    .vpn-shell-mk5 .vpn-quick-rail::after,
+    .vpn-shell-mk5 .vpn-panel-shell::after,
+    .vpn-shell-mk5 .vpn-subcard::after {
+        opacity: 0.30;
+        background:
+            linear-gradient(120deg, rgba(255, 255, 255, 0.050), transparent 34%),
+            radial-gradient(circle at 94% 14%, rgba(67, 219, 148, 0.08), transparent 30%);
+    }
+    .vpn-shell-mk5 .vpn-brand-block h2,
+    .vpn-shell-secondary .vpn-page-title {
+        color: var(--vpn-pass10-ink-strong);
+        text-shadow: 0 1px 18px rgba(47, 211, 238, 0.18);
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 .vpn-brand-block h2::after,
+    .vpn-shell-secondary .vpn-page-title::after {
+        background: linear-gradient(90deg, rgba(47, 211, 238, 0.94), rgba(96, 225, 194, 0.74), rgba(47, 211, 238, 0.16));
+        box-shadow: 0 0 18px rgba(47, 211, 238, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-sub,
+    .vpn-shell-secondary .vpn-sub,
+    .vpn-shell-mk5 .vpn-mini-note,
+    .vpn-shell-mk5 .vpn-card-sub,
+    .vpn-shell-mk5 .vpn-panel-sub,
+    .vpn-shell-mk5 .vpn-action-desc,
+    .vpn-shell-mk5 .vpn-entry-lead,
+    .vpn-shell-mk5 .vpn-help-text {
+        color: var(--vpn-pass10-ink-soft);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.16);
+    }
+    .vpn-shell-mk5 .vpn-pill,
+    .vpn-shell-mk5 .vpn-health-chip,
+    .vpn-shell-mk5 .vpn-status-chip,
+    .vpn-shell-mk5 .vpn-inline-note,
+    .vpn-shell-mk5 .vpn-card-badge,
+    .vpn-shell-mk5 .vpn-inline-badge,
+    .vpn-shell-mk5 .vpn-panel-live-badge,
+    .vpn-shell-mk5 .vpn-focus-pill,
+    .vpn-shell-mk5 .vpn-micro-badge,
+    .vpn-shell-secondary .vpn-secondary-summary span {
+        color: #cdeeff;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0.016)),
+            rgba(16, 24, 38, 0.66);
+        border-color: rgba(111, 149, 198, 0.30);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.065),
+            0 8px 18px rgba(0, 0, 0, 0.16);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-health-chip.good,
+    .vpn-shell-mk5 .vpn-status-chip.good,
+    .vpn-shell-mk5 .vpn-inline-badge.good,
+    .vpn-shell-mk5 .vpn-panel-live-badge.good,
+    .vpn-shell-mk5 .vpn-focus-pill.good,
+    .vpn-shell-mk5 .vpn-micro-badge.good {
+        color: #d7ffe9;
+        background:
+            linear-gradient(180deg, rgba(67, 219, 148, 0.24), rgba(23, 117, 79, 0.20)),
+            rgba(8, 31, 23, 0.72);
+        border-color: rgba(67, 219, 148, 0.42);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.070),
+            0 0 0 1px rgba(67, 219, 148, 0.040),
+            0 10px 22px rgba(0, 0, 0, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-health-chip.warn,
+    .vpn-shell-mk5 .vpn-status-chip.warn,
+    .vpn-shell-mk5 .vpn-inline-badge.warn,
+    .vpn-shell-mk5 .vpn-panel-live-badge.warn,
+    .vpn-shell-mk5 .vpn-focus-pill.warn,
+    .vpn-shell-mk5 .vpn-micro-badge.warn {
+        color: #fff3c9;
+        background:
+            linear-gradient(180deg, rgba(255, 205, 112, 0.24), rgba(139, 92, 34, 0.20)),
+            rgba(36, 25, 13, 0.72);
+        border-color: rgba(255, 205, 112, 0.42);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.070),
+            0 0 0 1px rgba(255, 205, 112, 0.040),
+            0 10px 22px rgba(0, 0, 0, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-health-chip.bad,
+    .vpn-shell-mk5 .vpn-status-chip.bad,
+    .vpn-shell-mk5 .vpn-inline-badge.bad,
+    .vpn-shell-mk5 .vpn-panel-live-badge.bad,
+    .vpn-shell-mk5 .vpn-focus-pill.bad,
+    .vpn-shell-mk5 .vpn-micro-badge.bad {
+        color: #ffe0e5;
+        background:
+            linear-gradient(180deg, rgba(255, 111, 126, 0.24), rgba(132, 43, 58, 0.20)),
+            rgba(39, 17, 24, 0.72);
+        border-color: rgba(255, 111, 126, 0.42);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.070),
+            0 0 0 1px rgba(255, 111, 126, 0.040),
+            0 10px 22px rgba(0, 0, 0, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-hero-summary,
+    .vpn-shell-secondary .vpn-secondary-summary,
+    .vpn-shell-mk5 .vpn-entry-grid,
+    .vpn-shell-mk5 .vpn-stat-grid,
+    .vpn-shell-mk5 .vpn-card-grid,
+    .vpn-shell-mk5 .vpn-quick-grid,
+    .vpn-shell-mk5 .vpn-action-list {
+        background:
+            linear-gradient(180deg, rgba(4, 9, 16, 0.35), rgba(4, 9, 16, 0.18)),
+            rgba(6, 10, 18, 0.18);
+        border-color: rgba(119, 151, 196, 0.14);
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item,
+    .vpn-shell-secondary .vpn-secondary-summary span {
+        color: var(--vpn-pass10-ink-soft);
+        border-color: rgba(111, 149, 198, 0.28);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
+            rgba(12, 19, 31, 0.66);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.050),
+            0 8px 16px rgba(0, 0, 0, 0.14);
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item strong,
+    .vpn-shell-secondary .vpn-secondary-summary strong,
+    .vpn-shell-mk5 .vpn-mini-card strong,
+    .vpn-shell-mk5 .vpn-stat-value,
+    .vpn-shell-mk5 .vpn-kv strong,
+    .vpn-shell-mk5 .vpn-card strong,
+    .vpn-shell-mk5 .vpn-action-title,
+    .vpn-shell-mk5 .vpn-entry-title {
+        color: var(--vpn-pass10-ink-strong);
+        text-shadow: 0 1px 12px rgba(47, 211, 238, 0.10);
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 .vpn-hero-summary-item span,
+    .vpn-shell-mk5 .vpn-mini-label,
+    .vpn-shell-mk5 .vpn-stat-label,
+    .vpn-shell-mk5 .vpn-kv span,
+    .vpn-shell-mk5 .vpn-card-label,
+    .vpn-shell-mk5 .vpn-action-kicker,
+    .vpn-shell-mk5 .vpn-entry-meta {
+        color: var(--vpn-pass10-ink-muted);
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 .vpn-summary-path strong,
+    .vpn-shell-mk5 .vpn-summary-line,
+    .vpn-shell-mk5 code,
+    .vpn-shell-mk5 pre,
+    .vpn-shell-mk5 kbd {
+        color: #dcecff;
+        text-shadow: none;
+    }
+    .vpn-shell-mk5 .vpn-command-card-live {
+        border-color: rgba(70, 229, 170, 0.22);
+        background:
+            radial-gradient(circle at 16% 24%, rgba(67, 219, 148, 0.10), transparent 32%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012)),
+            rgba(13, 20, 33, 0.82);
+    }
+    .vpn-shell-mk5 .vpn-command-kicker {
+        color: #c9f7ec;
+        background:
+            linear-gradient(180deg, rgba(67, 219, 148, 0.20), rgba(28, 111, 82, 0.16)),
+            rgba(9, 27, 23, 0.68);
+        border-color: rgba(67, 219, 148, 0.36);
+    }
+    .vpn-shell-mk5 .vpn-orb-wrap {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.030), rgba(255, 255, 255, 0.010)),
+            rgba(9, 15, 25, 0.70);
+        border-color: rgba(92, 216, 189, 0.22);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.050),
+            0 14px 30px rgba(0, 0, 0, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring {
+        color: #e8fff6;
+        text-shadow: 0 1px 12px rgba(67, 219, 148, 0.22);
+        box-shadow:
+            inset 0 0 0 10px rgba(6, 15, 23, 0.70),
+            inset 0 0 24px rgba(67, 219, 148, 0.10),
+            0 0 0 1px rgba(67, 219, 148, 0.22),
+            0 18px 36px rgba(0, 0, 0, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring.good {
+        background:
+            radial-gradient(circle, rgba(67, 219, 148, 0.12), rgba(6, 22, 18, 0.82) 58%),
+            conic-gradient(from 0turn, rgba(67, 219, 148, 0.94), rgba(56, 188, 223, 0.70), rgba(67, 219, 148, 0.94));
+        border-color: rgba(67, 219, 148, 0.44);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring.warn {
+        background:
+            radial-gradient(circle, rgba(255, 205, 112, 0.12), rgba(32, 25, 12, 0.82) 58%),
+            conic-gradient(from 0turn, rgba(255, 205, 112, 0.94), rgba(255, 145, 92, 0.72), rgba(255, 205, 112, 0.94));
+        border-color: rgba(255, 205, 112, 0.44);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring.bad {
+        background:
+            radial-gradient(circle, rgba(255, 111, 126, 0.12), rgba(32, 14, 20, 0.82) 58%),
+            conic-gradient(from 0turn, rgba(255, 111, 126, 0.94), rgba(255, 162, 110, 0.70), rgba(255, 111, 126, 0.94));
+        border-color: rgba(255, 111, 126, 0.44);
+    }
+    .vpn-shell-mk5 .vpn-orb-ring span {
+        color: inherit;
+        text-shadow: inherit;
+    }
+    .vpn-shell-mk5 .vpn-orb-copy strong {
+        color: var(--vpn-pass10-ink-strong);
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 .vpn-orb-copy span {
+        color: var(--vpn-pass10-ink-soft);
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
+    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
+    .vpn-shell-mk5 input.cbi-button,
+    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
+    .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
+        color: #f2f8ff;
+        background: var(--vpn-pass10-gradient-control);
+        border-color: rgba(129, 159, 205, 0.34);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.12),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+            0 10px 20px rgba(0, 0, 0, 0.20);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
+        letter-spacing: 0;
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button:hover,
+    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button:hover,
+    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button:hover,
+    .vpn-shell-mk5 input.cbi-button:hover,
+    .vpn-shell-secondary .vpn-hero-actions .cbi-button:hover,
+    .vpn-shell-secondary .vpn-hero-actions a.cbi-button:hover {
+        border-color: rgba(47, 211, 238, 0.46);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.15),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+            0 12px 24px rgba(0, 0, 0, 0.22),
+            0 0 0 1px rgba(47, 211, 238, 0.060);
+        filter: saturate(1.04);
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button-apply,
+    .vpn-shell-mk5 .vpn-hero-actions input.cbi-button-apply,
+    .vpn-shell-secondary .vpn-hero-actions .cbi-button-apply {
+        color: #eefcff;
+        background: var(--vpn-pass10-gradient-blue);
+        border-color: rgba(87, 190, 255, 0.46);
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-primary,
+    .vpn-shell-mk5 .vpn-hero-actions .vpn-primary,
+    .vpn-shell-mk5 .vpn-hero-actions #vpn-primary-button:not([disabled]) {
+        color: #eafff4;
+        background: var(--vpn-pass10-gradient-good);
+        border-color: rgba(67, 219, 148, 0.48);
+    }
+    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-muted,
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button[disabled],
+    .vpn-shell-mk5 .vpn-hero-actions .cbi-button.is-disabled {
+        color: #c7d3e3;
+        background: var(--vpn-pass10-gradient-quiet);
+        border-color: rgba(129, 159, 205, 0.26);
+        opacity: 0.92;
+    }
+    .vpn-shell-mk5 .vpn-copy-feedback {
+        color: #bcebdc;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-hero-note {
+        color: #dcecff;
+        background:
+            linear-gradient(180deg, rgba(67, 219, 148, 0.10), rgba(47, 211, 238, 0.055)),
+            rgba(9, 17, 27, 0.70);
+        border-color: rgba(67, 219, 148, 0.28);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.05),
+            0 10px 22px rgba(0, 0, 0, 0.15);
+    }
+    .vpn-shell-mk5 .vpn-mini-card-accent,
+    .vpn-shell-mk5 .vpn-stat-card-emphasis {
+        border-color: rgba(67, 219, 148, 0.26);
+        background:
+            radial-gradient(circle at 88% 18%, rgba(67, 219, 148, 0.10), transparent 32%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012)),
+            rgba(13, 22, 34, 0.80);
+    }
+    .vpn-shell-mk5 .vpn-mini-card-service {
+        border-color: rgba(67, 219, 148, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-mini-card-auth {
+        border-color: rgba(97, 187, 255, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-mini-card-route {
+        border-color: rgba(255, 205, 112, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-mini-card-wide {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.012)),
+            rgba(14, 23, 36, 0.82);
+    }
+    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(1) {
+        border-color: rgba(47, 211, 238, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(2) {
+        border-color: rgba(67, 219, 148, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(3) {
+        border-color: rgba(255, 205, 112, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(4) {
+        border-color: rgba(156, 178, 255, 0.22);
+    }
+    .vpn-shell-mk5 .vpn-kv {
+        border-color: rgba(111, 149, 198, 0.20);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.006)),
+            rgba(8, 13, 22, 0.52);
+    }
+    .vpn-shell-mk5 .vpn-kv:hover {
+        border-color: rgba(47, 211, 238, 0.28);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
+            rgba(10, 17, 28, 0.62);
+    }
+    .vpn-shell-mk5 .vpn-card-head,
+    .vpn-shell-mk5 .vpn-quick-rail-head,
+    .vpn-shell-mk5 .vpn-panel-shell-head,
+    .vpn-shell-mk5 .vpn-panel-head,
+    .vpn-shell-mk5 .vpn-subcard-head {
+        color: var(--vpn-pass10-ink-strong);
+        border-color: rgba(111, 149, 198, 0.16);
+    }
+    .vpn-shell-mk5 .vpn-panel-shell-head {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
+            rgba(6, 11, 20, 0.34);
+    }
+    .vpn-shell-mk5 .vpn-tabbar {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
+            rgba(8, 14, 24, 0.62);
+        border-color: rgba(111, 149, 198, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn {
+        color: #bcd0e9;
+        background: rgba(12, 19, 31, 0.58);
+        border-color: rgba(111, 149, 198, 0.18);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn:hover {
+        color: #edf8ff;
+        background: rgba(22, 33, 50, 0.72);
+        border-color: rgba(47, 211, 238, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-tab-btn.is-active {
+        color: #eaffff;
+        background:
+            linear-gradient(180deg, rgba(47, 211, 238, 0.22), rgba(46, 110, 161, 0.18)),
+            rgba(11, 21, 33, 0.78);
+        border-color: rgba(47, 211, 238, 0.44);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 8px 18px rgba(0, 0, 0, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-panel {
+        background: rgba(7, 12, 20, 0.34);
+        border-color: rgba(111, 149, 198, 0.14);
+    }
+    .vpn-shell-mk5 .vpn-panel.is-active {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.028),
+            0 8px 18px rgba(0, 0, 0, 0.12);
+    }
+    .vpn-shell-mk5 .vpn-panel pre,
+    .vpn-shell-mk5 .vpn-subcard pre,
+    .vpn-shell-mk5 #vpn-config-pre,
+    .vpn-shell-mk5 #vpn-log-pre,
+    .vpn-shell-mk5 #vpn-route-pre,
+    .vpn-shell-mk5 #vpn-diag-pre {
+        color: #d8e8fb;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.004)),
+            rgba(3, 8, 14, 0.74);
+        border-color: rgba(105, 139, 187, 0.22);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.030),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.26);
+    }
+    .vpn-shell-mk5 .vpn-panel pre:empty::before,
+    .vpn-shell-mk5 .vpn-subcard pre:empty::before {
+        color: var(--vpn-pass10-ink-dim);
+    }
+    .vpn-shell-mk5 .vpn-check-row,
+    .vpn-shell-mk5 .vpn-check-empty,
+    .vpn-shell-mk5 .vpn-log-row,
+    .vpn-shell-mk5 .vpn-route-row {
+        color: var(--vpn-pass10-ink-main);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.006)),
+            rgba(7, 13, 22, 0.58);
+        border-color: rgba(111, 149, 198, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-check-row:hover,
+    .vpn-shell-mk5 .vpn-log-row:hover,
+    .vpn-shell-mk5 .vpn-route-row:hover {
+        border-color: rgba(47, 211, 238, 0.30);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(255, 255, 255, 0.008)),
+            rgba(10, 17, 28, 0.68);
+    }
+    .vpn-shell-mk5 .vpn-check-row.good {
+        border-color: rgba(67, 219, 148, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-check-row.warn {
+        border-color: rgba(255, 205, 112, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-check-row.bad {
+        border-color: rgba(255, 111, 126, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-check-icon,
+    .vpn-shell-mk5 .vpn-log-icon,
+    .vpn-shell-mk5 .vpn-route-icon {
+        color: #9adfff;
+        background: rgba(47, 211, 238, 0.10);
+        border-color: rgba(47, 211, 238, 0.24);
+    }
+    .vpn-shell-mk5 .good .vpn-check-icon,
+    .vpn-shell-mk5 .good .vpn-log-icon,
+    .vpn-shell-mk5 .good .vpn-route-icon {
+        color: #c9ffe4;
+        background: rgba(67, 219, 148, 0.12);
+        border-color: rgba(67, 219, 148, 0.26);
+    }
+    .vpn-shell-mk5 .warn .vpn-check-icon,
+    .vpn-shell-mk5 .warn .vpn-log-icon,
+    .vpn-shell-mk5 .warn .vpn-route-icon {
+        color: #fff1bf;
+        background: rgba(255, 205, 112, 0.12);
+        border-color: rgba(255, 205, 112, 0.26);
+    }
+    .vpn-shell-mk5 .bad .vpn-check-icon,
+    .vpn-shell-mk5 .bad .vpn-log-icon,
+    .vpn-shell-mk5 .bad .vpn-route-icon {
+        color: #ffd8df;
+        background: rgba(255, 111, 126, 0.12);
+        border-color: rgba(255, 111, 126, 0.26);
+    }
+    .vpn-shell-mk5 .vpn-action-tile {
+        color: var(--vpn-pass10-ink-main);
+        text-decoration: none;
+    }
+    .vpn-shell-mk5 .vpn-action-tile:hover {
+        color: var(--vpn-pass10-ink-strong);
+        text-decoration: none;
+    }
+    .vpn-shell-mk5 .vpn-action-tile .vpn-action-icon {
+        color: #a9e7ff;
+        background:
+            linear-gradient(180deg, rgba(47, 211, 238, 0.18), rgba(47, 211, 238, 0.06)),
+            rgba(7, 15, 24, 0.70);
+        border-color: rgba(47, 211, 238, 0.28);
+    }
+    .vpn-shell-mk5 .vpn-action-tile:hover .vpn-action-icon {
+        color: #eaffff;
+        border-color: rgba(47, 211, 238, 0.40);
+        box-shadow: 0 0 0 1px rgba(47, 211, 238, 0.060);
+    }
+    .vpn-shell-mk5 .vpn-entry-card,
+    .vpn-shell-mk5 .vpn-entry-card.cbi-button,
+    .vpn-entry-grid-import .vpn-entry-card {
+        color: var(--vpn-pass10-ink-main);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
+            rgba(12, 19, 31, 0.76);
+        border-color: rgba(111, 149, 198, 0.24);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.054),
+            0 12px 26px rgba(0, 0, 0, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-entry-card:hover,
+    .vpn-shell-mk5 .vpn-entry-card.cbi-button:hover,
+    .vpn-entry-grid-import .vpn-entry-card:hover {
+        color: var(--vpn-pass10-ink-strong);
+        border-color: rgba(47, 211, 238, 0.32);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.014)),
+            rgba(15, 24, 38, 0.80);
+    }
+    .vpn-shell-mk5 .vpn-entry-card .vpn-entry-icon,
+    .vpn-entry-grid-import .vpn-entry-icon {
+        color: #a8e7ff;
+        background:
+            linear-gradient(180deg, rgba(47, 211, 238, 0.16), rgba(47, 211, 238, 0.055)),
+            rgba(7, 15, 24, 0.72);
+        border-color: rgba(47, 211, 238, 0.24);
+    }
+    .vpn-shell-mk5 .vpn-entry-card:hover .vpn-entry-icon,
+    .vpn-entry-grid-import .vpn-entry-card:hover .vpn-entry-icon {
+        color: #eaffff;
+        border-color: rgba(47, 211, 238, 0.38);
+    }
+    .vpn-shell-secondary .vpn-hero-actions {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
+            rgba(7, 13, 22, 0.40);
+        border-color: rgba(111, 149, 198, 0.16);
+    }
+    .vpn-shell-secondary .vpn-category-rail {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
+            rgba(12, 19, 31, 0.74);
+    }
+    .vpn-shell-secondary .vpn-category-rail a,
+    .vpn-shell-secondary .vpn-category-rail .cbi-button {
+        color: #dff4ff;
+        background:
+            linear-gradient(180deg, rgba(48, 72, 105, 0.78), rgba(33, 47, 72, 0.82));
+        border-color: rgba(111, 149, 198, 0.28);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
+    }
+    .vpn-shell-secondary .vpn-category-rail a:hover,
+    .vpn-shell-secondary .vpn-category-rail .cbi-button:hover {
+        color: #f4fbff;
+        border-color: rgba(47, 211, 238, 0.40);
+        background:
+            linear-gradient(180deg, rgba(52, 92, 128, 0.82), rgba(34, 61, 92, 0.86));
+    }
+    .vpn-shell-secondary + .cbi-map {
+        color: var(--vpn-pass10-ink-main);
+    }
+    .vpn-shell-secondary + .cbi-map .cbi-section,
+    .vpn-cbi-section-mk5 {
+        color: var(--vpn-pass10-ink-main);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
+            rgba(12, 19, 31, 0.76);
+        border-color: rgba(111, 149, 198, 0.22);
+    }
+    .vpn-shell-secondary + .cbi-map .cbi-section legend,
+    .vpn-cbi-section-mk5 .vpn-section-title,
+    .vpn-cbi-section-mk5 legend {
+        color: var(--vpn-pass10-ink-strong);
+        text-shadow: 0 1px 12px rgba(47, 211, 238, 0.10);
+    }
+    .vpn-shell-secondary + .cbi-map .cbi-value,
+    .vpn-cbi-section-mk5 .cbi-value {
+        border-color: rgba(111, 149, 198, 0.12);
+    }
+    .vpn-shell-secondary + .cbi-map .cbi-value-title,
+    .vpn-cbi-section-mk5 .cbi-value-title {
+        color: #dbeaff;
+        letter-spacing: 0;
+    }
+    .vpn-shell-secondary + .cbi-map .cbi-value-description,
+    .vpn-cbi-section-mk5 .cbi-value-description,
+    .vpn-shell-secondary + .cbi-map .cbi-value-field .description,
+    .vpn-cbi-section-mk5 .cbi-value-field .description {
+        color: var(--vpn-pass10-ink-soft);
+    }
+    .vpn-shell-secondary + .cbi-map input[type="text"],
+    .vpn-shell-secondary + .cbi-map input[type="password"],
+    .vpn-shell-secondary + .cbi-map input[type="number"],
+    .vpn-shell-secondary + .cbi-map textarea,
+    .vpn-shell-secondary + .cbi-map select,
+    .vpn-cbi-section-mk5 input[type="text"],
+    .vpn-cbi-section-mk5 input[type="password"],
+    .vpn-cbi-section-mk5 input[type="number"],
+    .vpn-cbi-section-mk5 textarea,
+    .vpn-cbi-section-mk5 select,
+    .vpn-shell-mk5 input[type="text"],
+    .vpn-shell-mk5 input[type="password"],
+    .vpn-shell-mk5 input[type="number"],
+    .vpn-shell-mk5 textarea,
+    .vpn-shell-mk5 select {
+        color: #e8f4ff;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.006)),
+            rgba(5, 10, 18, 0.76);
+        border-color: rgba(111, 149, 198, 0.26);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.040),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+    }
+    .vpn-shell-secondary + .cbi-map input[type="text"]:focus,
+    .vpn-shell-secondary + .cbi-map input[type="password"]:focus,
+    .vpn-shell-secondary + .cbi-map input[type="number"]:focus,
+    .vpn-shell-secondary + .cbi-map textarea:focus,
+    .vpn-shell-secondary + .cbi-map select:focus,
+    .vpn-cbi-section-mk5 input[type="text"]:focus,
+    .vpn-cbi-section-mk5 input[type="password"]:focus,
+    .vpn-cbi-section-mk5 input[type="number"]:focus,
+    .vpn-cbi-section-mk5 textarea:focus,
+    .vpn-cbi-section-mk5 select:focus,
+    .vpn-shell-mk5 input[type="text"]:focus,
+    .vpn-shell-mk5 input[type="password"]:focus,
+    .vpn-shell-mk5 input[type="number"]:focus,
+    .vpn-shell-mk5 textarea:focus,
+    .vpn-shell-mk5 select:focus {
+        border-color: rgba(47, 211, 238, 0.46);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.050),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+            var(--vpn-pass10-focus);
+    }
+    .vpn-shell-secondary + .cbi-map input::placeholder,
+    .vpn-cbi-section-mk5 input::placeholder,
+    .vpn-shell-mk5 input::placeholder,
+    .vpn-shell-secondary + .cbi-map textarea::placeholder,
+    .vpn-cbi-section-mk5 textarea::placeholder,
+    .vpn-shell-mk5 textarea::placeholder {
+        color: rgba(184, 200, 221, 0.62);
+    }
+    .vpn-shell-secondary + .cbi-map option,
+    .vpn-cbi-section-mk5 option,
+    .vpn-shell-mk5 option {
+        color: #e8f4ff;
+        background: #111a2a;
+    }
+    /* OpenVPN Mk5 pass 10 detail layer: states, forms, tables, and resilient viewing */
+    .vpn-shell-mk5 .cbi-input-checkbox,
+    .vpn-shell-secondary + .cbi-map .cbi-input-checkbox,
+    .vpn-cbi-section-mk5 .cbi-input-checkbox {
+        accent-color: #2fd3ee;
+    }
+    .vpn-shell-mk5 .cbi-input-radio,
+    .vpn-shell-secondary + .cbi-map .cbi-input-radio,
+    .vpn-cbi-section-mk5 .cbi-input-radio {
+        accent-color: #43db94;
+    }
+    .vpn-shell-mk5 label,
+    .vpn-shell-secondary + .cbi-map label,
+    .vpn-cbi-section-mk5 label {
+        color: #d9e8fb;
+    }
+    .vpn-shell-mk5 .cbi-value-field label,
+    .vpn-shell-secondary + .cbi-map .cbi-value-field label,
+    .vpn-cbi-section-mk5 .cbi-value-field label {
+        color: #c3d2e7;
+    }
+    .vpn-shell-mk5 .cbi-value-field label:hover,
+    .vpn-shell-secondary + .cbi-map .cbi-value-field label:hover,
+    .vpn-cbi-section-mk5 .cbi-value-field label:hover {
+        color: #edf8ff;
+    }
+    .vpn-shell-mk5 table,
+    .vpn-shell-secondary + .cbi-map table,
+    .vpn-cbi-section-mk5 table {
+        color: #d9e8fb;
+        border-color: rgba(111, 149, 198, 0.18);
+        background: rgba(5, 10, 18, 0.28);
+    }
+    .vpn-shell-mk5 table th,
+    .vpn-shell-secondary + .cbi-map table th,
+    .vpn-cbi-section-mk5 table th {
+        color: #f0f7ff;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.010)),
+            rgba(16, 24, 38, 0.78);
+        border-color: rgba(111, 149, 198, 0.18);
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
+    }
+    .vpn-shell-mk5 table td,
+    .vpn-shell-secondary + .cbi-map table td,
+    .vpn-cbi-section-mk5 table td {
+        color: #d6e5f8;
+        border-color: rgba(111, 149, 198, 0.12);
+    }
+    .vpn-shell-mk5 table tr:nth-child(even) td,
+    .vpn-shell-secondary + .cbi-map table tr:nth-child(even) td,
+    .vpn-cbi-section-mk5 table tr:nth-child(even) td {
+        background: rgba(255, 255, 255, 0.018);
+    }
+    .vpn-shell-mk5 table tr:hover td,
+    .vpn-shell-secondary + .cbi-map table tr:hover td,
+    .vpn-cbi-section-mk5 table tr:hover td {
+        background: rgba(47, 211, 238, 0.045);
+        color: #eff9ff;
+    }
+    .vpn-shell-mk5 .cbi-section-node,
+    .vpn-shell-secondary + .cbi-map .cbi-section-node,
+    .vpn-cbi-section-mk5 .cbi-section-node {
+        border-color: rgba(111, 149, 198, 0.15);
+        background: rgba(4, 9, 16, 0.20);
+    }
+    .vpn-shell-mk5 .cbi-section-remove,
+    .vpn-shell-secondary + .cbi-map .cbi-section-remove,
+    .vpn-cbi-section-mk5 .cbi-section-remove {
+        color: #ffd8df;
+        background: rgba(255, 111, 126, 0.08);
+        border-color: rgba(255, 111, 126, 0.22);
+    }
+    .vpn-shell-mk5 .cbi-section-create,
+    .vpn-shell-secondary + .cbi-map .cbi-section-create,
+    .vpn-cbi-section-mk5 .cbi-section-create {
+        color: #d7ffe9;
+        background: rgba(67, 219, 148, 0.08);
+        border-color: rgba(67, 219, 148, 0.22);
+    }
+    .vpn-shell-mk5 .cbi-button-add,
+    .vpn-shell-secondary + .cbi-map .cbi-button-add,
+    .vpn-cbi-section-mk5 .cbi-button-add {
+        color: #eafff4;
+        background:
+            linear-gradient(180deg, rgba(67, 219, 148, 0.80), rgba(24, 119, 79, 0.86));
+        border-color: rgba(67, 219, 148, 0.42);
+    }
+    .vpn-shell-mk5 .cbi-button-remove,
+    .vpn-shell-secondary + .cbi-map .cbi-button-remove,
+    .vpn-cbi-section-mk5 .cbi-button-remove {
+        color: #fff1f3;
+        background:
+            linear-gradient(180deg, rgba(210, 79, 94, 0.82), rgba(142, 49, 63, 0.88));
+        border-color: rgba(255, 111, 126, 0.42);
+    }
+    .vpn-shell-mk5 .cbi-button-reset,
+    .vpn-shell-secondary + .cbi-map .cbi-button-reset,
+    .vpn-cbi-section-mk5 .cbi-button-reset {
+        color: #e5edfa;
+        background:
+            linear-gradient(180deg, rgba(75, 91, 124, 0.84), rgba(48, 59, 85, 0.88));
+        border-color: rgba(129, 159, 205, 0.30);
+    }
+    .vpn-shell-mk5 .cbi-button-save,
+    .vpn-shell-mk5 .cbi-button-apply,
+    .vpn-shell-secondary + .cbi-map .cbi-button-save,
+    .vpn-shell-secondary + .cbi-map .cbi-button-apply,
+    .vpn-cbi-section-mk5 .cbi-button-save,
+    .vpn-cbi-section-mk5 .cbi-button-apply {
+        color: #eefcff;
+        background:
+            linear-gradient(180deg, rgba(44, 148, 230, 0.92), rgba(28, 125, 213, 0.92));
+        border-color: rgba(87, 190, 255, 0.44);
+    }
+    .vpn-shell-mk5 .cbi-button-positive,
+    .vpn-shell-secondary + .cbi-map .cbi-button-positive,
+    .vpn-cbi-section-mk5 .cbi-button-positive {
+        color: #eafff4;
+        background:
+            linear-gradient(180deg, rgba(51, 171, 118, 0.90), rgba(29, 127, 88, 0.92));
+        border-color: rgba(67, 219, 148, 0.44);
+    }
+    .vpn-shell-mk5 .cbi-button-negative,
+    .vpn-shell-secondary + .cbi-map .cbi-button-negative,
+    .vpn-cbi-section-mk5 .cbi-button-negative {
+        color: #fff1f3;
+        background:
+            linear-gradient(180deg, rgba(214, 76, 91, 0.88), rgba(145, 47, 61, 0.92));
+        border-color: rgba(255, 111, 126, 0.44);
+    }
+    .vpn-shell-mk5 .cbi-input-invalid,
+    .vpn-shell-secondary + .cbi-map .cbi-input-invalid,
+    .vpn-cbi-section-mk5 .cbi-input-invalid {
+        border-color: rgba(255, 111, 126, 0.52) !important;
+        background:
+            linear-gradient(180deg, rgba(255, 111, 126, 0.08), rgba(255, 111, 126, 0.025)),
+            rgba(9, 14, 22, 0.78) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.040),
+            0 0 0 1px rgba(255, 111, 126, 0.080) !important;
+    }
+    .vpn-shell-mk5 .cbi-input-invalid + .cbi-tooltip,
+    .vpn-shell-secondary + .cbi-map .cbi-input-invalid + .cbi-tooltip,
+    .vpn-cbi-section-mk5 .cbi-input-invalid + .cbi-tooltip {
+        color: #ffd8df;
+        background: rgba(45, 15, 23, 0.92);
+        border-color: rgba(255, 111, 126, 0.28);
+    }
+    .vpn-shell-mk5 .alert-message,
+    .vpn-shell-mk5 .alert,
+    .vpn-shell-secondary + .cbi-map .alert-message,
+    .vpn-shell-secondary + .cbi-map .alert,
+    .vpn-cbi-section-mk5 .alert-message,
+    .vpn-cbi-section-mk5 .alert {
+        color: #dbeaff;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.010)),
+            rgba(12, 19, 31, 0.78);
+        border-color: rgba(111, 149, 198, 0.22);
+    }
+    .vpn-shell-mk5 .alert-message.warning,
+    .vpn-shell-mk5 .alert-warning,
+    .vpn-shell-secondary + .cbi-map .alert-message.warning,
+    .vpn-shell-secondary + .cbi-map .alert-warning,
+    .vpn-cbi-section-mk5 .alert-message.warning,
+    .vpn-cbi-section-mk5 .alert-warning {
+        color: #fff3c9;
+        background:
+            linear-gradient(180deg, rgba(255, 205, 112, 0.12), rgba(255, 205, 112, 0.035)),
+            rgba(36, 25, 13, 0.72);
+        border-color: rgba(255, 205, 112, 0.30);
+    }
+    .vpn-shell-mk5 .alert-message.error,
+    .vpn-shell-mk5 .alert-error,
+    .vpn-shell-secondary + .cbi-map .alert-message.error,
+    .vpn-shell-secondary + .cbi-map .alert-error,
+    .vpn-cbi-section-mk5 .alert-message.error,
+    .vpn-cbi-section-mk5 .alert-error {
+        color: #ffe0e5;
+        background:
+            linear-gradient(180deg, rgba(255, 111, 126, 0.12), rgba(255, 111, 126, 0.035)),
+            rgba(39, 17, 24, 0.72);
+        border-color: rgba(255, 111, 126, 0.30);
+    }
+    .vpn-shell-mk5 .alert-message.success,
+    .vpn-shell-mk5 .alert-success,
+    .vpn-shell-secondary + .cbi-map .alert-message.success,
+    .vpn-shell-secondary + .cbi-map .alert-success,
+    .vpn-cbi-section-mk5 .alert-message.success,
+    .vpn-cbi-section-mk5 .alert-success {
+        color: #d7ffe9;
+        background:
+            linear-gradient(180deg, rgba(67, 219, 148, 0.12), rgba(67, 219, 148, 0.035)),
+            rgba(8, 31, 23, 0.72);
+        border-color: rgba(67, 219, 148, 0.30);
+    }
+    .vpn-shell-mk5.is-loading .vpn-brand-block,
+    .vpn-shell-mk5.is-loading .vpn-command-card,
+    .vpn-shell-mk5.is-loading .vpn-mini-card,
+    .vpn-shell-mk5.is-loading .vpn-stat-card,
+    .vpn-shell-mk5.is-loading .vpn-panel-shell {
+        border-color: rgba(111, 149, 198, 0.18);
+    }
+    .vpn-shell-mk5.is-loading .vpn-mini-card strong,
+    .vpn-shell-mk5.is-loading .vpn-stat-value,
+    .vpn-shell-mk5.is-loading .vpn-card strong,
+    .vpn-shell-mk5.is-loading .vpn-kv strong {
+        color: #aebed5;
+    }
+    .vpn-shell-mk5.is-ok .vpn-hero-mk5,
+    .vpn-shell-mk5.is-profile-ready .vpn-hero-mk5 {
+        border-color: rgba(67, 219, 148, 0.28);
+    }
+    .vpn-shell-mk5.is-warn .vpn-hero-mk5,
+    .vpn-shell-mk5.is-ready .vpn-hero-mk5 {
+        border-color: rgba(255, 205, 112, 0.26);
+    }
+    .vpn-shell-mk5.is-bad .vpn-hero-mk5,
+    .vpn-shell-mk5.is-empty .vpn-hero-mk5 {
+        border-color: rgba(255, 111, 126, 0.26);
+    }
+    .vpn-shell-mk5.is-ok .vpn-brand-block,
+    .vpn-shell-mk5.is-profile-ready .vpn-brand-block {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            inset 0 0 0 1px rgba(67, 219, 148, 0.045),
+            var(--vpn-pass10-shadow-soft);
+    }
+    .vpn-shell-mk5.is-warn .vpn-brand-block,
+    .vpn-shell-mk5.is-ready .vpn-brand-block {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            inset 0 0 0 1px rgba(255, 205, 112, 0.045),
+            var(--vpn-pass10-shadow-soft);
+    }
+    .vpn-shell-mk5.is-bad .vpn-brand-block,
+    .vpn-shell-mk5.is-empty .vpn-brand-block {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            inset 0 0 0 1px rgba(255, 111, 126, 0.045),
+            var(--vpn-pass10-shadow-soft);
+    }
+    .vpn-shell-mk5 .vpn-status-good,
+    .vpn-shell-mk5 .vpn-text-good,
+    .vpn-shell-mk5 .text-success {
+        color: #aaf8cf;
+    }
+    .vpn-shell-mk5 .vpn-status-warn,
+    .vpn-shell-mk5 .vpn-text-warn,
+    .vpn-shell-mk5 .text-warning {
+        color: #ffe0a1;
+    }
+    .vpn-shell-mk5 .vpn-status-bad,
+    .vpn-shell-mk5 .vpn-text-bad,
+    .vpn-shell-mk5 .text-error {
+        color: #ffb8c2;
+    }
+    .vpn-shell-mk5 .vpn-status-muted,
+    .vpn-shell-mk5 .vpn-text-muted,
+    .vpn-shell-mk5 .muted {
+        color: #90a2bb;
+    }
+    .vpn-shell-mk5 .vpn-divider,
+    .vpn-shell-secondary + .cbi-map .vpn-divider,
+    .vpn-cbi-section-mk5 .vpn-divider {
+        border-color: rgba(111, 149, 198, 0.16);
+        background: linear-gradient(90deg, transparent, rgba(111, 149, 198, 0.18), transparent);
+    }
+    .vpn-shell-mk5 hr,
+    .vpn-shell-secondary + .cbi-map hr,
+    .vpn-cbi-section-mk5 hr {
+        border-color: rgba(111, 149, 198, 0.16);
+    }
+    .vpn-shell-mk5 .vpn-panel-focus,
+    .vpn-shell-mk5 .vpn-card-focus,
+    .vpn-shell-mk5 .vpn-subcard-focus {
+        border-color: rgba(47, 211, 238, 0.28);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            0 0 0 1px rgba(47, 211, 238, 0.040),
+            var(--vpn-pass10-shadow-soft);
+    }
+    .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log {
+        color: #eff9ff;
+        background:
+            linear-gradient(180deg, rgba(47, 211, 238, 0.045), rgba(47, 211, 238, 0.012)),
+            rgba(3, 8, 14, 0.76);
+    }
+    .vpn-shell-mk5 .vpn-inline-code,
+    .vpn-shell-mk5 .vpn-path,
+    .vpn-shell-mk5 .vpn-mono,
+    .vpn-shell-secondary + .cbi-map code,
+    .vpn-cbi-section-mk5 code {
+        color: #dcecff;
+        background: rgba(3, 8, 14, 0.58);
+        border-color: rgba(111, 149, 198, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-inline-code:hover,
+    .vpn-shell-mk5 .vpn-path:hover,
+    .vpn-shell-mk5 .vpn-mono:hover {
+        color: #f0f9ff;
+        border-color: rgba(47, 211, 238, 0.26);
+    }
+    .vpn-shell-mk5 .vpn-copy-target {
+        background: rgba(3, 8, 14, 0.52);
+        border-color: rgba(111, 149, 198, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-copy-target:hover {
+        border-color: rgba(47, 211, 238, 0.28);
+    }
+    .vpn-shell-mk5 .vpn-progress,
+    .vpn-shell-mk5 progress {
+        background: rgba(3, 8, 14, 0.66);
+        border-color: rgba(111, 149, 198, 0.18);
+        color: #2fd3ee;
+    }
+    .vpn-shell-mk5 .vpn-progress-bar {
+        background:
+            linear-gradient(90deg, rgba(47, 211, 238, 0.88), rgba(67, 219, 148, 0.82));
+        box-shadow: 0 0 18px rgba(47, 211, 238, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-progress.warn .vpn-progress-bar {
+        background:
+            linear-gradient(90deg, rgba(255, 205, 112, 0.90), rgba(255, 145, 92, 0.82));
+        box-shadow: 0 0 18px rgba(255, 205, 112, 0.16);
+    }
+    .vpn-shell-mk5 .vpn-progress.bad .vpn-progress-bar {
+        background:
+            linear-gradient(90deg, rgba(255, 111, 126, 0.90), rgba(255, 162, 110, 0.80));
+        box-shadow: 0 0 18px rgba(255, 111, 126, 0.16);
+    }
+    .vpn-shell-mk5 details,
+    .vpn-shell-secondary + .cbi-map details,
+    .vpn-cbi-section-mk5 details {
+        color: #d9e8fb;
+        background: rgba(7, 13, 22, 0.50);
+        border-color: rgba(111, 149, 198, 0.18);
+    }
+    .vpn-shell-mk5 summary,
+    .vpn-shell-secondary + .cbi-map summary,
+    .vpn-cbi-section-mk5 summary {
+        color: #edf8ff;
+    }
+    .vpn-shell-mk5 details[open],
+    .vpn-shell-secondary + .cbi-map details[open],
+    .vpn-cbi-section-mk5 details[open] {
+        border-color: rgba(47, 211, 238, 0.24);
+        background: rgba(10, 17, 28, 0.58);
+    }
+    .vpn-shell-mk5 .vpn-toast,
+    .vpn-shell-mk5 .vpn-floating-note,
+    .vpn-shell-mk5 .vpn-popover {
+        color: #dcecff;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
+            rgba(11, 17, 28, 0.94);
+        border-color: rgba(111, 149, 198, 0.24);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            0 20px 42px rgba(0, 0, 0, 0.28);
+    }
+    .vpn-shell-mk5 .vpn-toast.good,
+    .vpn-shell-mk5 .vpn-floating-note.good,
+    .vpn-shell-mk5 .vpn-popover.good {
+        color: #d7ffe9;
+        border-color: rgba(67, 219, 148, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-toast.warn,
+    .vpn-shell-mk5 .vpn-floating-note.warn,
+    .vpn-shell-mk5 .vpn-popover.warn {
+        color: #fff3c9;
+        border-color: rgba(255, 205, 112, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-toast.bad,
+    .vpn-shell-mk5 .vpn-floating-note.bad,
+    .vpn-shell-mk5 .vpn-popover.bad {
+        color: #ffe0e5;
+        border-color: rgba(255, 111, 126, 0.30);
+    }
+    .vpn-shell-mk5 .vpn-empty-state,
+    .vpn-shell-mk5 .vpn-loading-state,
+    .vpn-shell-mk5 .vpn-error-state {
+        color: #d6e5f8;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
+            rgba(7, 13, 22, 0.56);
+        border-color: rgba(111, 149, 198, 0.18);
+    }
+    .vpn-shell-mk5 .vpn-empty-state strong,
+    .vpn-shell-mk5 .vpn-loading-state strong,
+    .vpn-shell-mk5 .vpn-error-state strong {
+        color: #f0f8ff;
+    }
+    .vpn-shell-mk5 .vpn-empty-state span,
+    .vpn-shell-mk5 .vpn-loading-state span,
+    .vpn-shell-mk5 .vpn-error-state span {
+        color: #adc0d8;
+    }
+    .vpn-shell-mk5 .vpn-error-state {
+        border-color: rgba(255, 111, 126, 0.28);
+    }
+    .vpn-shell-mk5 .vpn-loading-state {
+        border-color: rgba(47, 211, 238, 0.24);
+    }
+    .vpn-shell-mk5 .vpn-empty-state {
+        border-color: rgba(111, 149, 198, 0.20);
+    }
+    .vpn-shell-mk5 [aria-busy="true"],
+    .vpn-shell-mk5 .is-pending,
+    .vpn-shell-mk5 .is-refreshing {
+        cursor: progress;
+    }
+    .vpn-shell-mk5 [aria-disabled="true"],
+    .vpn-shell-mk5 .is-disabled,
+    .vpn-shell-mk5 :disabled {
+        cursor: not-allowed;
+        filter: saturate(0.84);
+    }
+    .vpn-shell-mk5 .is-hidden {
+        pointer-events: none;
+    }
+    .vpn-shell-mk5 .is-active {
+        border-color: rgba(47, 211, 238, 0.30);
+    }
+    .vpn-shell-mk5 .is-selected {
+        color: #f4fbff;
+        background:
+            linear-gradient(180deg, rgba(47, 211, 238, 0.14), rgba(47, 211, 238, 0.040)),
+            rgba(7, 13, 22, 0.62);
+        border-color: rgba(47, 211, 238, 0.34);
+    }
+    .vpn-shell-mk5 .is-stale {
+        color: #ffe0a1;
+        border-color: rgba(255, 205, 112, 0.24);
+    }
+    .vpn-shell-mk5 .is-fresh {
+        color: #b9f8d8;
+        border-color: rgba(67, 219, 148, 0.24);
+    }
+    .vpn-shell-mk5 .is-offline {
+        color: #ffb8c2;
+        border-color: rgba(255, 111, 126, 0.24);
+    }
+    .vpn-shell-mk5 .is-online {
+        color: #b9f8d8;
+        border-color: rgba(67, 219, 148, 0.24);
+    }
+    .vpn-shell-mk5 .is-neutral {
+        color: #c5d4e8;
+        border-color: rgba(111, 149, 198, 0.20);
+    }
+    .vpn-shell-mk5 .vpn-surface-cyan {
+        background:
+            linear-gradient(180deg, rgba(47, 211, 238, 0.10), rgba(47, 211, 238, 0.026)),
+            rgba(7, 13, 22, 0.64);
+        border-color: rgba(47, 211, 238, 0.24);
+    }
+    .vpn-shell-mk5 .vpn-surface-green {
+        background:
+            linear-gradient(180deg, rgba(67, 219, 148, 0.10), rgba(67, 219, 148, 0.026)),
+            rgba(7, 13, 22, 0.64);
+        border-color: rgba(67, 219, 148, 0.24);
+    }
+    .vpn-shell-mk5 .vpn-surface-amber {
+        background:
+            linear-gradient(180deg, rgba(255, 205, 112, 0.10), rgba(255, 205, 112, 0.026)),
+            rgba(7, 13, 22, 0.64);
+        border-color: rgba(255, 205, 112, 0.24);
+    }
+    .vpn-shell-mk5 .vpn-surface-red {
+        background:
+            linear-gradient(180deg, rgba(255, 111, 126, 0.10), rgba(255, 111, 126, 0.026)),
+            rgba(7, 13, 22, 0.64);
+        border-color: rgba(255, 111, 126, 0.24);
+    }
+    @media (hover: none) {
+        .vpn-shell-mk5 .vpn-brand-block:hover,
+        .vpn-shell-mk5 .vpn-command-card:hover,
+        .vpn-shell-mk5 .vpn-mini-card:hover,
+        .vpn-shell-mk5 .vpn-stat-card:hover,
+        .vpn-shell-mk5 .vpn-card:hover,
+        .vpn-shell-mk5 .vpn-quick-rail:hover,
+        .vpn-shell-mk5 .vpn-panel-shell:hover,
+        .vpn-shell-mk5 .vpn-subcard:hover,
+        .vpn-shell-mk5 .vpn-action-tile:hover {
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.060),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+                var(--vpn-pass10-shadow-soft);
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .vpn-shell-mk5,
+        .vpn-shell-mk5 *,
+        .vpn-shell-mk5 *::before,
+        .vpn-shell-mk5 *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.001ms !important;
+        }
+    }
+    @media (forced-colors: active) {
+        .vpn-shell-mk5,
+        .vpn-shell-mk5 .vpn-hero-mk5,
+        .vpn-shell-mk5 .vpn-brand-block,
+        .vpn-shell-mk5 .vpn-command-card,
+        .vpn-shell-mk5 .vpn-mini-card,
+        .vpn-shell-mk5 .vpn-stat-card,
+        .vpn-shell-mk5 .vpn-card,
+        .vpn-shell-mk5 .vpn-quick-rail,
+        .vpn-shell-mk5 .vpn-panel-shell,
+        .vpn-shell-mk5 .vpn-subcard,
+        .vpn-shell-secondary + .cbi-map,
+        .vpn-shell-secondary + .cbi-map .cbi-section {
+            background: Canvas;
+            border-color: CanvasText;
+            color: CanvasText;
+            box-shadow: none;
+        }
+        .vpn-shell-mk5 a,
+        .vpn-shell-mk5 button,
+        .vpn-shell-mk5 input,
+        .vpn-shell-mk5 select,
+        .vpn-shell-mk5 textarea {
+            forced-color-adjust: auto;
+        }
+    }
+    @media print {
+        .vpn-shell-mk5,
+        .vpn-shell-secondary + .cbi-map {
+            color: #182233;
+            background: #f4f7fb;
+            box-shadow: none;
+        }
+        .vpn-shell-mk5 .vpn-hero-actions,
+        .vpn-shell-mk5 .vpn-tabbar,
+        .vpn-shell-mk5 .vpn-copy-feedback {
+            display: none;
+        }
+        .vpn-shell-mk5 pre,
+        .vpn-shell-mk5 code {
+            color: #182233;
+            background: #eef3f8;
+            border-color: #c8d4e2;
+        }
+    }
+</style>
+EOF_OPENVPN_MK5_PASS10_POLISH
+
     cat > /usr/lib/lua/luci/model/cbi/openvpn.lua <<'EOF_OPENVPN_STANDARD_MODEL'
 -- Copyright 2008 Steven Barth <steven@midlink.org>
 -- Licensed to the public under the Apache License 2.0.
@@ -34403,6 +40346,7 @@ install_openvpn() {
     grep -Fq 'OpenVPN Mk5 pass 7 precision finish: local six-file polish.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 7 CSS"
     grep -Fq 'OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 8 CSS"
     grep -Fq 'OpenVPN Mk5 pass 9: 250-line webpage precision layer.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 9 CSS"
+    grep -Fq 'OpenVPN Mk5 pass 10 precision shell polish: modal-safe visual layer' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 10 CSS"
     grep -Fq 'vpn-hero-console' /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm || die "OpenVPN verify failed: missing Mk5 console classes"
     grep -Fq 'vpn-shell-config' /usr/lib/lua/luci/view/openvpn/pageswitch.htm || die "OpenVPN verify failed: missing Mk5 config classes"
     grep -Fq 'vpn-entry-grid-import' /usr/lib/lua/luci/view/openvpn/cbi-select-input-add.htm || die "OpenVPN verify failed: missing Mk5 import classes"
@@ -36894,18 +42838,12 @@ patch_appcenter_shortcut() {
         awk '
             {
                 if ($0 ~ /frame\.src\.indexOf\('\''\/admin\/services\/openclash'\''\)/ && $0 ~ /\/nradioadv\/system\/zerotier'\''\) === -1/) {
-                    print "            if (frame.src.indexOf('\''/admin/services/openclash'\'') === -1 && frame.src.indexOf('\''/admin/services/AdGuardHome'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openvpnfull'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openlist'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/zerotier'\'') === -1 && frame.src.indexOf('\''/admin/vpn/easytier'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/webssh'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/ddnsgo'\'') === -1)"
+                    print "            if (frame.src.indexOf('\''/admin/services/openclash'\'') === -1 && frame.src.indexOf('\''/admin/services/AdGuardHome'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openvpnfull'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/openlist'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/zerotier'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/fanctrl'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/mosdns'\'') === -1 && frame.src.indexOf('\''/admin/vpn/easytier'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/webssh'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/ddnsgo'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/qiyou'\'') === -1 && frame.src.indexOf('\''/nradioadv/system/leigod'\'') === -1)"
                     next
                 }
                 print
             }
         ' "$template_file" > "$tmp_file" && mv "$tmp_file" "$template_file"
-    fi
-
-    if ! grep -q "tabindex='0' allow='clipboard-read; clipboard-write'" "$template_file"; then
-        backup_file "$template_file"
-        tmp_file="$WORKDIR/appcenter-iframe-attrs.htm"
-        sed "s|return \"<iframe id='sub_frame' src='\" + get_app_route_url(route) + \"' name='subpage'></iframe>\";|return \"<iframe id='sub_frame' src='\" + get_app_route_url(route) + \"' name='subpage' tabindex='0' allow='clipboard-read; clipboard-write'></iframe>\";|" "$template_file" | sed "s|return \"<iframe id='sub_frame' name='subpage'></iframe>\";|return \"<iframe id='sub_frame' name='subpage' tabindex='0' allow='clipboard-read; clipboard-write'></iframe>\";|" > "$tmp_file" && mv "$tmp_file" "$template_file"
     fi
 
     if ! grep -q 'function is_webssh_route(route)' "$template_file"; then
@@ -37126,8 +43064,13 @@ __TTYD_HELPER__
     verify_luci_route nradioadv/system/webssh "Web SSH"
     verify_template_marker 'app_list.result.applist.unshift({name:"Web SSH"' 'Web SSH 快捷入口'
     verify_template_marker 'nradioadv/system/webssh' 'Web SSH 路由'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/fanctrl') === -1" 'FanControl iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/mosdns') === -1" 'MosDNS iframe 白名单'
     verify_template_marker "frame.src.indexOf('/admin/vpn/easytier') === -1" 'EasyTier iframe 白名单'
     verify_template_marker "frame.src.indexOf('/nradioadv/system/webssh') === -1" 'Web SSH iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/ddnsgo') === -1" 'DDNS-GO iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/qiyou') === -1" '奇游 iframe 白名单'
+    verify_template_marker "frame.src.indexOf('/nradioadv/system/leigod') === -1" '雷神 iframe 白名单'
     verify_template_marker 'function normalize_app_route(app_name, route)' 'Web SSH embed 路由标准化'
     verify_template_marker "app_name == 'Web SSH' && action == 'open' && route" 'Web SSH 直接打开逻辑'
     verify_template_marker "action == 'uninstall' && nradio_plugin_uninstall_action(app_name)" '脚本插件异步卸载入口'
@@ -37264,6 +43207,15 @@ run_menu_feature() {
                 storage_expand_rc="$?"
                 [ "$storage_expand_rc" = '2' ] && return 2
                 return "$storage_expand_rc"
+            fi
+            ;;
+        21)
+            if run_5g_aggregation_repair_check; then
+                :
+            else
+                aggregation_rc="$?"
+                [ "$aggregation_rc" = '2' ] && return 2
+                return "$aggregation_rc"
             fi
             ;;
         15)
@@ -37546,7 +43498,7 @@ qiyou_write_view() {
     cat > /usr/lib/lua/luci/view/nradiobridge_qiyou/qiyou.htm <<'EOF_QIYOU_VIEW'
 <%+header%>
 <style>
-.qy-wrap{min-height:520px;padding:26px;color:#eef8ff;background:linear-gradient(135deg,#0b1724,#10283a 58%,#0b1724);box-sizing:border-box}.qy-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.qy-title{font-size:28px;font-weight:900}.qy-sub{margin-top:6px;color:#b8d7ea;font-size:13px}.qy-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(125,211,252,.32);border-radius:999px;padding:8px 12px;background:rgba(14,165,233,.12);font-weight:800}.qy-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.qy-dot.boosting{background:#22c55e;color:#22c55e}.qy-dot.running{background:#38bdf8;color:#38bdf8}.qy-dot.off{background:#f97316;color:#f97316}.qy-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}.qy-card{border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:16px;background:linear-gradient(145deg,rgba(255,255,255,.08),rgba(255,255,255,.03));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 30px rgba(0,0,0,.18)}.qy-label{color:#9ec6da;font-size:12px;font-weight:800}.qy-value{margin-top:8px;font-size:22px;font-weight:900;color:#fff;word-break:break-all}.qy-row{display:grid;grid-template-columns:190px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#cfe7f5}.qy-k{color:#9ec6da;font-weight:800}.qy-v{font-weight:800;word-break:break-all}.qy-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.qy-btn{border:1px solid rgba(125,211,252,.34);border-radius:10px;background:rgba(14,165,233,.16);color:#eef8ff;font-weight:900;padding:10px 16px;cursor:pointer}.qy-btn.danger{border-color:rgba(248,113,113,.48);background:rgba(239,68,68,.18)}.qy-note{margin-top:16px;color:#b8d7ea;line-height:1.7;font-size:13px}@media(max-width:900px){.qy-grid{grid-template-columns:1fr}.qy-row{grid-template-columns:1fr}.qy-head{align-items:flex-start;flex-direction:column}}
+html,body{width:100%!important;max-width:none!important;margin:0!important;background:#0b121d!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.qy-wrap{width:100%;max-width:none;min-height:100vh;padding:34px 40px 42px;color:#eef8ff;background:radial-gradient(circle at 14% 8%,rgba(56,189,248,.18),transparent 30%),linear-gradient(135deg,#081522,#102b40 58%,#0a1420);box-sizing:border-box}.qy-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.qy-title{font-size:32px;font-weight:900}.qy-sub{margin-top:8px;color:#b8d7ea;font-size:14px}.qy-pill{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(125,211,252,.36);border-radius:999px;padding:10px 15px;background:rgba(14,165,233,.14);font-weight:900}.qy-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.qy-dot.boosting{background:#22c55e;color:#22c55e}.qy-dot.running{background:#38bdf8;color:#38bdf8}.qy-dot.off{background:#f97316;color:#f97316}.qy-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:22px 0 26px}.qy-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px 22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 36px rgba(0,0,0,.20)}.qy-label{color:#9ec6da;font-size:13px;font-weight:900}.qy-value{margin-top:10px;font-size:26px;font-weight:900;color:#fff;word-break:break-all}.qy-row{display:grid;grid-template-columns:240px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#cfe7f5}.qy-k{color:#9ec6da;font-weight:900}.qy-v{font-weight:900;word-break:break-all}.qy-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.qy-btn{border:1px solid rgba(125,211,252,.36);border-radius:10px;background:rgba(14,165,233,.17);color:#eef8ff;font-weight:900;padding:11px 18px;cursor:pointer}.qy-btn.danger{border-color:rgba(248,113,113,.48);background:rgba(239,68,68,.18)}.qy-note{margin-top:18px;color:#b8d7ea;line-height:1.7;font-size:13px}@media(max-width:900px){.qy-wrap{padding:24px 18px 30px}.qy-grid{grid-template-columns:1fr}.qy-row{grid-template-columns:1fr}.qy-head{align-items:flex-start;flex-direction:column}}
 </style>
 <div class="qy-wrap"><div class="qy-head"><div><div class="qy-title">奇游联机宝</div><div class="qy-sub">只读监听奇游后台状态，绑定和选择游戏仍在奇游联机宝 App 内完成。</div></div><div class="qy-pill"><span id="qy-dot" class="qy-dot"></span><span id="qy-status">读取中</span></div></div><div class="qy-grid"><div class="qy-card"><div class="qy-label">插件状态</div><div id="qy-main" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">实际代理连接</div><div id="qy-proxy-conn" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">云端连接</div><div id="qy-cloud-conn" class="qy-value">-</div></div></div><div class="qy-card"><div class="qy-row"><div class="qy-k">安装返回</div><div id="qy-ret" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_acc</div><div id="qy-acc" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_mosq</div><div id="qy-mosq" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_proxy</div><div id="qy-proxy" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">包信息</div><div id="qy-pkg" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">代理监听</div><div id="qy-listen" class="qy-v">-</div></div></div><div class="qy-actions"><button class="qy-btn" onclick="qyRefresh()">刷新状态</button><button class="qy-btn danger" onclick="qyUninstall()">卸载奇游联机宝</button></div><div class="qy-note"><strong>状态解释：</strong>BOOSTING 表示正在加速；RUNNING 表示插件在线但未开启加速；实际代理连接不是连接路由器的设备数。</div></div>
 <script>
@@ -37771,7 +43723,7 @@ leigod_write_view() {
     cat > /usr/lib/lua/luci/view/nradiobridge_leigod/leigod.htm <<'EOF_LEIGOD_VIEW'
 <%+header%>
 <style>
-.lg-wrap{min-height:560px;padding:26px;color:#f8fbff;background:linear-gradient(135deg,#121827,#1f273c 58%,#111827);box-sizing:border-box}.lg-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.lg-title{font-size:28px;font-weight:900}.lg-sub{margin-top:6px;color:#c6d3e1;font-size:13px}.lg-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(248,181,74,.38);border-radius:999px;padding:8px 12px;background:rgba(245,158,11,.13);font-weight:900}.lg-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.lg-dot.ok{background:#22c55e;color:#22c55e}.lg-dot.warn{background:#f59e0b;color:#f59e0b}.lg-dot.bad{background:#ef4444;color:#ef4444}.lg-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}.lg-card{border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:16px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.032));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 30px rgba(0,0,0,.18)}.lg-label{color:#fcd38a;font-size:12px;font-weight:900}.lg-value{margin-top:8px;font-size:22px;font-weight:900;color:#fff;word-break:break-all}.lg-row{display:grid;grid-template-columns:180px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#d8e2f0}.lg-k{color:#fcd38a;font-weight:900}.lg-v{font-weight:800;word-break:break-all}.lg-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.lg-btn{border:1px solid rgba(248,181,74,.42);border-radius:10px;background:rgba(245,158,11,.15);color:#fff7ed;font-weight:900;padding:10px 16px;cursor:pointer}.lg-btn.danger{border-color:rgba(248,113,113,.50);background:rgba(239,68,68,.18)}.lg-log{white-space:pre-wrap;line-height:1.55;font-family:monospace;font-size:12px;max-height:180px;overflow:auto;color:#dbeafe}.lg-note{margin-top:16px;color:#c6d3e1;line-height:1.7;font-size:13px}@media(max-width:900px){.lg-grid{grid-template-columns:1fr}.lg-row{grid-template-columns:1fr}.lg-head{align-items:flex-start;flex-direction:column}}
+html,body{width:100%!important;max-width:none!important;margin:0!important;background:#101523!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.lg-wrap{width:100%;max-width:none;min-height:100vh;padding:34px 40px 42px;color:#f8fbff;background:radial-gradient(circle at 14% 8%,rgba(245,158,11,.18),transparent 30%),linear-gradient(135deg,#111827,#202a42 58%,#101827);box-sizing:border-box}.lg-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.lg-title{font-size:32px;font-weight:900}.lg-sub{margin-top:8px;color:#c6d3e1;font-size:14px}.lg-pill{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(248,181,74,.42);border-radius:999px;padding:10px 15px;background:rgba(245,158,11,.15);font-weight:900}.lg-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.lg-dot.ok{background:#22c55e;color:#22c55e}.lg-dot.warn{background:#f59e0b;color:#f59e0b}.lg-dot.bad{background:#ef4444;color:#ef4444}.lg-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:22px 0 26px}.lg-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px 22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 36px rgba(0,0,0,.20)}.lg-label{color:#fcd38a;font-size:13px;font-weight:900}.lg-value{margin-top:10px;font-size:26px;font-weight:900;color:#fff;word-break:break-all}.lg-row{display:grid;grid-template-columns:240px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#d8e2f0}.lg-k{color:#fcd38a;font-weight:900}.lg-v{font-weight:900;word-break:break-all}.lg-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.lg-btn{border:1px solid rgba(248,181,74,.44);border-radius:10px;background:rgba(245,158,11,.17);color:#fff7ed;font-weight:900;padding:11px 18px;cursor:pointer}.lg-btn.danger{border-color:rgba(248,113,113,.50);background:rgba(239,68,68,.18)}.lg-log{white-space:pre-wrap;line-height:1.55;font-family:monospace;font-size:12px;max-height:220px;overflow:auto;color:#dbeafe}.lg-note{margin-top:18px;color:#c6d3e1;line-height:1.7;font-size:13px}@media(max-width:900px){.lg-wrap{padding:24px 18px 30px}.lg-grid{grid-template-columns:1fr}.lg-row{grid-template-columns:1fr}.lg-head{align-items:flex-start;flex-direction:column}}
 </style>
 <div class="lg-wrap"><div class="lg-head"><div><div class="lg-title">雷神加速器</div><div class="lg-sub">只读监听雷神后台状态；绑定设备和选择游戏仍在雷神 App 内完成。</div></div><div class="lg-pill"><span id="lg-dot" class="lg-dot"></span><span id="lg-status">读取中</span></div></div><div class="lg-grid"><div class="lg-card"><div class="lg-label">服务状态</div><div id="lg-main" class="lg-value">-</div></div><div class="lg-card"><div class="lg-label">代理连接</div><div id="lg-conn" class="lg-value">-</div></div><div class="lg-card"><div class="lg-label">运行模式</div><div id="lg-mode" class="lg-value">-</div></div></div><div class="lg-card"><div class="lg-row"><div class="lg-k">安装目录</div><div id="lg-installed" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">acc-gw</div><div id="lg-acc" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">升级监控</div><div id="lg-upgrade" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">5588 Web</div><div id="lg-web" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">10001 服务端口</div><div id="lg-port" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">6066 UDP</div><div id="lg-udp" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">启动脚本</div><div id="lg-init" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">最近日志</div><div id="lg-log" class="lg-v lg-log">-</div></div></div><div class="lg-actions"><button class="lg-btn" onclick="lgRefresh()">刷新状态</button><button class="lg-btn danger" onclick="lgUninstall()">卸载雷神加速器</button></div><div class="lg-note"><strong>状态解释：</strong>检测到 <code>-r acc</code> 进程显示加速中；仅后台 web/daemon 在线显示插件在线。</div></div>
 <script>
@@ -37936,9 +43888,16 @@ maintenance_test_menu() {
         printf '1. 统一体检增强版\n'
         printf '2. NRadio_C8-688 / C2000MAX 风扇控制\n'
         printf '3. 哈基米傻瓜分流助手\n'
-        printf '4. C8/C5800 eMMC 存储扩展\n'
+        printf '4. eMMC 存储扩展\n'
+        if nradio_5g_aggregation_model_supported; then
+            printf '5. 5G聚合修复检查\n'
+        fi
         printf '0. 返回功能分类\n'
-        printf '请选择 0、1、2、3 或 4: '
+        if nradio_5g_aggregation_model_supported; then
+            printf '请选择 0、1、2、3、4 或 5: '
+        else
+            printf '请选择 0、1、2、3 或 4: '
+        fi
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
@@ -37946,6 +43905,13 @@ maintenance_test_menu() {
             2) submenu_feature='14' ;;
             3) submenu_feature='19' ;;
             4) submenu_feature='20' ;;
+            5)
+                if nradio_5g_aggregation_model_supported; then
+                    submenu_feature='21'
+                else
+                    die_menu_input_issue "$UI_READ_RESULT"
+                fi
+                ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then

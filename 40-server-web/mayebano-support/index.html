@@ -392,7 +392,7 @@
     }
 
     .hero-copy::after {
-        content: "V2.0.60";
+        content: "V2.0.70";
       position: absolute;
       right: 28px;
       bottom: 2px;
@@ -2865,7 +2865,7 @@
     }
 
     .hero-copy::after {
-      content: "V2.0.60";
+      content: "V2.0.70";
       color: rgba(226, 58, 126, 0.08);
     }
 
@@ -6905,7 +6905,7 @@
     }
 
     .hero-latest::before {
-      content: "V2.0.60";
+      content: "V2.0.70";
       top: auto;
       right: clamp(18px, 4vw, 38px);
       bottom: clamp(8px, 2vw, 18px);
@@ -7913,6 +7913,201 @@
       }
     }
 
+    /* V2.0.70 page polish pass */
+    .site::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.70), rgba(255, 233, 244, 0.38) 34%, transparent 68%),
+        linear-gradient(180deg, rgba(255, 248, 252, 0.92), rgba(255, 239, 247, 0.68));
+    }
+
+    .aurora-layer {
+      opacity: 0.74;
+      filter: saturate(1.06);
+    }
+
+    .hero-copy,
+    .support-side .download-card,
+    .hero-copy .feature-shell {
+      border-color: rgba(225, 88, 150, 0.19);
+      box-shadow:
+        0 32px 84px rgba(154, 25, 84, 0.17),
+        0 10px 30px rgba(154, 25, 84, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.88);
+    }
+
+    .hero-copy::before {
+      opacity: 0.95;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 169, 206, 0.26), transparent 66%);
+    }
+
+    .surface-grid {
+      opacity: 0.23;
+      mask-image:
+        linear-gradient(90deg, transparent, #000 16%, #000 74%, transparent),
+        linear-gradient(180deg, #000, transparent 92%);
+    }
+
+    .lead,
+    .hero-latest p,
+    .download-card span,
+    .download-list,
+    .download-note span {
+      text-wrap: pretty;
+    }
+
+    .hero-tags span,
+    .hero-status span,
+    .download-facts span,
+    .feature-brief span,
+    .feature-tags span,
+    .model-chip-list span {
+      border-color: rgba(225, 88, 150, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+    }
+
+    .hero-action-primary,
+    .download-card a.download-primary {
+      background:
+        linear-gradient(135deg, rgba(242, 74, 154, 0.98), rgba(197, 18, 112, 0.98)),
+        #d71978;
+      border-color: rgba(255, 255, 255, 0.44);
+      box-shadow:
+        0 18px 34px rgba(196, 18, 112, 0.24),
+        inset 0 1px 0 rgba(255, 255, 255, 0.42);
+    }
+
+    .hero-latest {
+      border-color: rgba(225, 88, 150, 0.20);
+      background:
+        linear-gradient(115deg, rgba(225, 88, 150, 0.12), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 243, 249, 0.91)),
+        rgba(255, 249, 252, 0.94);
+      box-shadow:
+        0 24px 62px rgba(184, 37, 95, 0.13),
+        0 6px 18px rgba(184, 37, 95, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.94);
+    }
+
+    .hero-latest::after {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        linear-gradient(120deg, rgba(255, 255, 255, 0.60), transparent 32%),
+        linear-gradient(300deg, rgba(255, 183, 216, 0.22), transparent 38%);
+      opacity: 0.58;
+    }
+
+    .hero-latest > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-latest-label,
+    .hero-latest-version,
+    .release-cards > .release-card b {
+      letter-spacing: 0;
+    }
+
+    .release-cards > .release-card,
+    .feature-tile,
+    .download-section,
+    .download-note {
+      border-color: rgba(225, 88, 150, 0.17);
+      box-shadow:
+        0 14px 34px rgba(184, 37, 95, 0.075),
+        inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    }
+
+    .release-cards > .release-card::before,
+    .feature-tile::before {
+      opacity: 0.82;
+    }
+
+    .release-cards > .release-card strong,
+    .feature-tile strong,
+    .download-card strong,
+    .download-section b,
+    .download-note b {
+      color: #36051f;
+    }
+
+    .download-code {
+      border-color: rgba(225, 88, 150, 0.20);
+      color: rgba(255, 238, 247, 0.96);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+      background:
+        linear-gradient(180deg, rgba(44, 6, 28, 0.96), rgba(64, 10, 40, 0.94)),
+        #30071f;
+      box-shadow:
+        0 16px 36px rgba(74, 6, 43, 0.17),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .download-code,
+    .download-code * {
+      color: rgba(255, 238, 247, 0.96) !important;
+    }
+
+    .support-panel {
+      border-color: rgba(225, 88, 150, 0.18);
+      box-shadow:
+        0 22px 54px rgba(154, 25, 84, 0.11),
+        inset 0 1px 0 rgba(255, 255, 255, 0.80);
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .hero-action-primary:hover,
+      .download-card a.download-primary:hover {
+        transform: translateY(-2px);
+        box-shadow:
+          0 22px 42px rgba(196, 18, 112, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.46);
+      }
+
+      .release-cards > .release-card:hover,
+      .feature-tile:hover,
+      .download-section:hover {
+        transform: translateY(-2px);
+        border-color: rgba(225, 88, 150, 0.23);
+        box-shadow:
+          0 20px 46px rgba(184, 37, 95, 0.11),
+          inset 0 1px 0 rgba(255, 255, 255, 0.84);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-action-primary,
+      .download-card a.download-primary,
+      .release-cards > .release-card,
+      .feature-tile,
+      .download-section {
+        transition: none !important;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .hero-copy,
+      .support-side .download-card,
+      .hero-copy .feature-shell,
+      .hero-latest,
+      .release-cards > .release-card,
+      .feature-tile,
+      .download-section {
+        box-shadow:
+          0 16px 36px rgba(154, 25, 84, 0.11),
+          inset 0 1px 0 rgba(255, 255, 255, 0.78);
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -7924,7 +8119,7 @@
       <a href="#history">更新记录</a>
       <a href="#install">安装教程</a>
       <a href="#wechat">微信支持</a>
-      <span>V2.0.60 已发布</span>
+      <span>V2.0.70 已发布</span>
     </nav>
 
     <section class="hero">
@@ -7935,11 +8130,11 @@
           <h1>NRadio<br>插件工具</h1>
           <p class="lead">
             NRadio NROS2.0 设备 SSH 插件安装脚本。
-            当前已发布版本 <strong>V2.0.60</strong>，通过 SSH 在路由器执行。
+            当前已发布版本 <strong>V2.0.70</strong>，通过 SSH 在路由器执行。
           </p>
 
           <div class="hero-tags">
-            <span>V2.0.60</span>
+            <span>V2.0.70</span>
             <span>SSH 执行</span>
             <span>单一脚本入口</span>
             <span>NROS2.0 设备</span>
@@ -7950,7 +8145,7 @@
           </div>
 
           <div class="hero-status" aria-label="当前维护状态">
-            <span><b>版本</b>V2.0.60</span>
+            <span><b>版本</b>V2.0.70</span>
             <span><b>文件</b>ssh-nradio-plugin-installer.sh</span>
             <span><b>方式</b>SSH 终端执行</span>
             <span><b>入口</b>单一下载入口</span>
@@ -7974,20 +8169,20 @@
           <section class="hero-latest" aria-label="当前里程碑说明">
             <div class="hero-latest-top">
               <div class="hero-latest-label">已发布</div>
-              <div class="hero-latest-version">V2.0.60</div>
+              <div class="hero-latest-version">V2.0.70</div>
             </div>
-            <strong>C8/C5800 eMMC 存储扩展与应用还原修复</strong>
+            <strong>5G 负载均衡与页面显示修复收口</strong>
             <p>
-              新增 C8-688 / C5800-688 专用 eMMC 存储扩展，可将 rootfs_2nd 接入为扩展盘；
-              应用商店双空间显示、动态应用迁移/还原、第二系统烧录保护、hybrid 大项保留和 DDNS-GO 迁移权限修复同步收口。
+              负载均衡新增副 5G / 蜂窝权重设置并自动重启 mwan3 生效；
+              OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复和 C2000MAX 1 号卡白条修复同步回写。
             </p>
           </section>
 
           <div class="release-cards" id="history" aria-label="最新更新摘要">
             <article class="release-card">
               <b>V2.0.60</b>
-              <strong>存储扩展还原与 DDNS-GO 迁移权限修复</strong>
-              <p>OpenClash / AdGuardHome 还原支持 hybrid 保留策略，overlay 空间不足时保留扩展盘大项子链接；DDNS-GO 迁移后会修正 nradio-apps 路径权限，避免非 root 服务启动失败。</p>
+              <strong>存储扩展还原与 OpenList 断链修复</strong>
+              <p>OpenClash / AdGuardHome 还原支持 hybrid 保留策略；OpenList 安装会识别 /mnt/app_data/openlist 扩展盘符号链接并修复目标目录；DDNS-GO 迁移后会修正 nradio-apps 路径权限。</p>
             </article>
             <article class="release-card">
               <b>V2.0.55</b>
@@ -8383,7 +8578,7 @@ sh ssh-nradio-plugin-installer.sh</code>
               </div>
               <div>
                 <strong>持续更新</strong>
-                <span>当前已发布版本整理到 V2.0.60，补入 C8/C5800 eMMC 存储扩展、动态应用迁移/还原、hybrid 大项保留、DDNS-GO 迁移权限修复和第二系统烧录保护。</span>
+                <span>当前已发布版本整理到 V2.0.70，补入 5G 负载均衡权重设置、mwan3 运行态生效修复、OpenVPN pass10、AdGuardHome 状态页精修、应用商店显示修复和 C2000MAX 1 号卡白条修复。</span>
               </div>
             </div>
           </section>
@@ -8734,11 +8929,18 @@ sh ssh-nradio-plugin-installer.sh</code>
                     <p>设备维护与检测补入系统资源、安装前预检、插件健康矩阵、应用商店一致性、端口冲突、哈基米规则检查和脱敏摘要；哈基米助手可按数字菜单写入域名、IP 或网段规则，并修复已有规则未启用自定义规则开关的问题。应用商店系统状态卡改为 2 秒采样，AdGuardHome 包装页和状态页也已回写进总脚本。</p>
                   </div>
                 </article>
-                <article class="timeline-entry is-current">
+                <article class="timeline-entry">
                   <div class="version">V2.0.60</div>
                   <div class="entry-copy">
-                    <strong>C8/C5800 eMMC 存储扩展与应用还原修复</strong>
-                    <p>新增 C8-688 / C5800-688 专用 rootfs_2nd 扩展盘接入；应用商店双空间显示、动态应用迁移/还原、hybrid 大项保留、DDNS-GO 迁移权限修复、第二系统烧录保护和深色玻璃界面精修同步收口。</p>
+                    <strong>C8/C5800 eMMC 存储扩展与 OpenList 安装修复</strong>
+                    <p>新增 C8-688 / C5800-688 专用 rootfs_2nd 扩展盘接入；应用商店双空间显示、动态应用迁移/还原、OpenList 扩展盘断链目标修复、hybrid 大项保留、DDNS-GO 迁移权限修复、第二系统烧录保护和深色玻璃界面精修同步收口。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry is-current">
+                  <div class="version">V2.0.70</div>
+                  <div class="entry-copy">
+                    <strong>5G 负载均衡与页面显示修复收口</strong>
+                    <p>负载均衡支持副 5G / 蜂窝权重设置，保存后自动提交并重启 mwan3；OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店系统卡片内存短显示、OpenVPN 版本短显示和 C2000MAX 1 号卡白条修复同步回写。</p>
                   </div>
                 </article>
               </div>

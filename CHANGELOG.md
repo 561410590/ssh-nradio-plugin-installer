@@ -1,15 +1,21 @@
 # Changelog
 
-## V2.0.60 - 2026-05-15
+## V2.0.70 - 2026-05-19
 
-- `SCRIPT_VERSION` 保持 `V2.0.60`。
-- `SCRIPT_RELEASE_DATE` 更新为 `2026-05-15`。
+- `SCRIPT_VERSION` 更新为 `V2.0.70`。
+- `SCRIPT_RELEASE_DATE` 更新为 `2026-05-19`。
+- 5G 负载均衡支持副 5G / 蜂窝权重设置，保存后自动提交并重启 `mwan3`，避免 UCI 已变但运行态仍停留在旧比例。
 - 新增 C8/C5800 eMMC 存储扩展，支持 `rootfs_2nd` 扩展盘接入、应用迁移、应用还原和第二系统烧录保护。
 - 补强应用还原：OpenClash / AdGuardHome 在 overlay 空间不足时可进入 hybrid 状态，保留扩展盘大项子链接并继续记录迁移状态，避免误删扩展盘真实内容。
+- 修复 OpenList 在 C8/C5800 存储扩展后 `/mnt/app_data/openlist` 断链目标缺失导致安装失败的问题；安装链会识别符号链接并先创建扩展盘目标目录及 `bin/data/tmp`。
 - 修复 DDNS-GO 迁移到扩展盘后以 `ddns-go` 用户启动失败的问题：存储扩展入口、迁移和还原流程会修正 `nradio-apps` 及目标父目录的可穿透权限。
 - OpenClash 扩展盘迁移、还原和哈基米分流助手重载前新增 `ASN.mmdb` 有效性校验，避免缺失数据库时继续迁移或重载。
-- OpenVPN 页面升级到 Mk5 深色玻璃界面，pass 7 / pass 8 / pass 9 精修已回写总脚本，并修复摘要卡、标题压缩、表单、日志、诊断区和小屏溢出细节。
-- AdGuardHome 深度美化、应用商店 pass 3 至 pass 6 精修和 C5800 热更新结果已回写总脚本。
+- OpenVPN 页面升级到 Mk5 深色玻璃界面，pass 7 / pass 8 / pass 9 / pass 10 精修已回写总脚本，并修复摘要卡、标题压缩、表单、日志、诊断区、弹窗层级和小屏溢出细节。
+- AdGuardHome 状态页精修、应用商店 pass 3 至 pass 6 精修和 C5800 热更新结果已回写总脚本。
+- 应用商店系统卡片内存显示改为短文本，OpenVPN 应用卡版本号显示短版本并保留完整 title。
+- 修复 C2000MAX 应用商店 1 号应用卡 `::after` 背景选择器缺口，补齐 `3n+1 / 3n+2 / 3n+3` 同级覆盖。
+- 公网页同步 V2.0.70 版本口径，并保留粉色主题视觉精修。
+- 本地全量 bug 扫描收口：安装链移除 `base64` / `gzip` 依赖路径，OpenList / DDNS-GO 归档校验改为 tar 自检，MosDNS 解压前补齐 `unzip` 依赖兜底，应用商店 iframe 关闭与外层布局清洗链同步修复。
 - 常用插件菜单中的扩容 swap 虚拟内存入口改为仅支持 `NRadio_C2000MAX`，菜单文案同步为“扩容 swap 虚拟内存（仅支持NRadio_C2000MAX）”。
 
 ## V2.0.55 - 2026-05-11

@@ -2,7 +2,7 @@
 
 NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.0.60`
+- 当前版本：`V2.0.70`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
@@ -48,16 +48,20 @@ sh ssh-nradio-plugin-installer.sh
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、通用卸载链、风扇控制 |
 
-## V2.0.60 更新
+## V2.0.70 更新
 
+- 5G 负载均衡支持副 5G / 蜂窝权重设置，保存后自动提交并重启 `mwan3`，避免 UCI 已变但运行态仍停留在旧比例。
 - 新增 **C8/C5800 eMMC 存储扩展**，支持将 `rootfs_2nd` 接入为扩展盘，并提供应用迁移、还原和第二系统烧录保护。
 - OpenClash / AdGuardHome 还原支持 hybrid 保留策略，overlay 空间不足时保留大项子链接，避免误删扩展盘真实内容。
 - OpenClash 扩展盘迁移和哈基米分流助手重载前新增 `ASN.mmdb` 有效性校验，缺失或异常时先停止并提示补齐。
+- 修复 OpenList 在 C8/C5800 存储扩展后 `/mnt/app_data/openlist` 断链目标缺失导致安装失败的问题；安装链会识别符号链接并先修复扩展盘目标目录。
 - 修复 DDNS-GO 迁移到扩展盘后以 `ddns-go` 用户启动失败的问题，迁移/还原菜单会修正 `nradio-apps` 路径可穿透权限。
-- OpenVPN 页面升级到 Mk5 深色玻璃界面，pass 7 / pass 8 / pass 9 精修已回写总脚本，补强标题、摘要卡、按钮、日志、诊断区和小屏防溢出细节。
-- AdGuardHome 与应用商店页面美化继续回写总脚本，应用商店 pass 3 至 pass 6 精修已进入安装输出，保留状态卡采样、深色卡片和还原入口收口。
+- OpenVPN 页面升级到 Mk5 深色玻璃界面，pass 7 至 pass 10 精修已回写总脚本，补强标题、摘要卡、按钮、日志、诊断区、弹窗和小屏防溢出细节。
+- AdGuardHome 与应用商店页面美化继续回写总脚本，AdGuardHome 状态页精修、应用商店 pass 3 至 pass 6、系统卡片内存显示、OpenVPN 版本号短显示和 C2000MAX 1 号卡白条修复已进入安装输出。
+- 公网页同步 V2.0.70 版本口径，并保留粉色主题视觉精修。
+- 本地全量 bug 扫描收口：安装链移除 `base64` / `gzip` 依赖路径，OpenList / DDNS-GO 归档校验改为 tar 自检，MosDNS 解压前补齐 `unzip` 依赖兜底，应用商店 iframe 关闭与外层布局清洗链同步修复。
 - 常用插件菜单中的 **扩容 swap 虚拟内存** 仅支持 `NRadio_C2000MAX`，菜单文案同步标明限制。
-- 当前脚本 SHA256：`ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132`（大小 1483057 字节）。
+- 当前脚本 SHA256：`b4aad4ddabde87ce3f4eff2890a4193eb474cf757e9788307fab75ee441b155f`（大小 1702232 字节）。
 
 ## V2.0.50 更新
 
@@ -71,7 +75,8 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
-- `V2.0.60`：C8/C5800 eMMC 存储扩展、hybrid 应用还原、DDNS-GO 迁移权限修复、OpenVPN Mk5 页面收口、OpenClash ASN.mmdb 防丢失校验、C2000MAX swap 菜单限制。
+- `V2.0.70`：5G 负载均衡权重设置、mwan3 运行态生效修复、OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复、C2000MAX 1 号卡白条修复和公网页粉色视觉精修。
+- `V2.0.60`：C8/C5800 eMMC 存储扩展、OpenList 存储扩展断链修复、hybrid 应用还原、DDNS-GO 迁移权限修复、OpenClash ASN.mmdb 防丢失校验、C2000MAX swap 菜单限制。
 - `V2.0.55`：统一体检增强、哈基米傻瓜分流助手、OpenList C2000MAX 风险提示和哈基米规则生效修复。
 - `V2.0.50`：DDNS-GO 集成，OpenList C2000MAX 安装链降内存，应用商店和 AdGuardHome 页面重新美化，卸载链和校验链补强。
 - `V2.0.40`：EasyTier / MosDNS 修复，AdGuardHome 内页重新美化并补齐监听和统计链路。
@@ -92,7 +97,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.60 当前主线脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.70 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -105,8 +110,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  ba4ec04a5a30a6436e0b510a8c1d9c3cb523db2eb027dbf24dc90d45ebc72132
-Bytes   1483057
+SHA256  b4aad4ddabde87ce3f4eff2890a4193eb474cf757e9788307fab75ee441b155f
+Bytes   1702232
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
