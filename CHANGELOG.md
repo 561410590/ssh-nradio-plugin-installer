@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.1.0 - 2026-05-28
+
+- `SCRIPT_VERSION` 更新为 `V2.1.0`。
+- `SCRIPT_RELEASE_DATE` 更新为 `2026-05-28`。
+- Docker 加入常用插件安装菜单第 8 项，仅支持 `NRadio_C5800-688` / `NRadio_C8-688`。
+- Docker 安装前要求已启用 `rootfs_2nd` eMMC 扩展盘，下载缓存、feed index、工作目录、IPK 缓存、手动解包目录、备份和 `data-root` 均固定在 `/mnt/rootfs_2nd_data/nradio-apps/docker`。
+- Docker LuCI 页面写入 `nradioadv/system/docker`，应用商店入口、图标、状态接口和异步卸载链同步接入。
+- Docker 安装链修复 overlay 打满和系统路径污染风险：大体积 Docker 二进制保留扩展盘软链，小依赖库复制到系统路径。
+- 公网页同步 V2.1.0 版本口径，当前里程碑改为 Docker 扩展盘安装链接入，更新卡不重复展示 V2.1.0。
+
 ## V2.0.70 - 2026-05-19
 
 - `SCRIPT_VERSION` 更新为 `V2.0.70`。

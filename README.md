@@ -2,7 +2,7 @@
 
 NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.0.70`
+- 当前版本：`V2.1.0`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
@@ -42,11 +42,20 @@ sh ssh-nradio-plugin-installer.sh
 
 | 功能分类 | 内容 |
 | --- | --- |
-| 常用插件安装 | swap（仅 C2000MAX）、哈基米、Web SSH、AdGuardHome、OpenList、MosDNS、DDNS-GO |
+| 常用插件安装 | swap（仅 C2000MAX）、哈基米、Web SSH、AdGuardHome、OpenList、MosDNS、DDNS-GO、Docker（仅 C8/C5800 扩展盘） |
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、通用卸载链、风扇控制 |
+
+## V2.1.0 更新
+
+- Docker 加入常用插件安装菜单第 8 项，仅支持 `NRadio_C5800-688` / `NRadio_C8-688`。
+- Docker 安装前要求已启用 `rootfs_2nd` eMMC 扩展盘，下载缓存、feed index、工作目录、IPK 缓存、手动解包目录、备份和 `data-root` 均固定在 `/mnt/rootfs_2nd_data/nradio-apps/docker`。
+- Docker LuCI 页面写入 `nradioadv/system/docker`，应用商店入口、图标、状态接口和异步卸载链同步接入。
+- Docker 安装链修复 overlay 打满和系统路径污染风险：大体积 Docker 二进制保留扩展盘软链，小依赖库复制到系统路径。
+- 公网页同步 V2.1.0 版本口径，当前里程碑改为 Docker 扩展盘安装链接入，历史更新卡只保留 V2.0.70。
+- 当前脚本 SHA256：`ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd`（大小 1872225 字节）。
 
 ## V2.0.70 更新
 
@@ -75,6 +84,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.1.0`：Docker 扩展盘安装链接入、C8/C5800 rootfs_2nd 落盘、Docker LuCI 页面、应用商店入口和卸载链接入。
 - `V2.0.70`：5G 负载均衡权重设置、mwan3 运行态生效修复、OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复、C2000MAX 1 号卡白条修复和公网页粉色视觉精修。
 - `V2.0.60`：C8/C5800 eMMC 存储扩展、OpenList 存储扩展断链修复、hybrid 应用还原、DDNS-GO 迁移权限修复、OpenClash ASN.mmdb 防丢失校验、C2000MAX swap 菜单限制。
 - `V2.0.55`：统一体检增强、哈基米傻瓜分流助手、OpenList C2000MAX 风险提示和哈基米规则生效修复。
@@ -97,7 +107,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.0.70 当前主线脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.1.0 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -110,8 +120,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  b4aad4ddabde87ce3f4eff2890a4193eb474cf757e9788307fab75ee441b155f
-Bytes   1702232
+SHA256  ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd
+Bytes   1872225
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

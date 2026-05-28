@@ -37,10 +37,10 @@ jobs:
           printf '%s  %s\n' '754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua' | sha256sum -c -
           printf '%s  %s\n' 'c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm' | sha256sum -c -
 
-      - name: Verify V2.0.70 script state
+      - name: Verify V2.1.0 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.0.70"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-05-19"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.1.0"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-05-28"' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q '测试中' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -Eiq 'base64|gzip|GZ_B64|Packages\.gz|validate_tar_gzip' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '3. 游戏加速器" 00-current/ssh-nradio-plugin-installer.sh
@@ -48,6 +48,7 @@ jobs:
           grep -q "printf '2. 雷神加速器" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '6. MosDNS" 00-current/ssh-nradio-plugin-installer.sh
           grep -q "printf '7. DDNS-GO" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "printf '8. Docker" 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'install_mosdns' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'cleanup_mosdns' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'MOSDNS_VERSION' 00-current/ssh-nradio-plugin-installer.sh
@@ -59,6 +60,18 @@ jobs:
           grep -q 'configure_ddnsgo_web_login' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'seed_ddnsgo_config_yaml' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'ddnsgo_yaml_has_password' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'install_docker_plugin' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'docker_require_supported_model' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'docker_prepare_storage' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'DOCKER_ROOT="/mnt/rootfs_2nd_data/nradio-apps/docker"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'nradioadv/system/docker' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'Docker 仅支持 NRadio_C5800-688 / NRadio_C8-688' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'write_docker_luci_controller' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'write_docker_luci_view' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'game_accel_set_appcenter_entry "$DOCKER_APP_NAME"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '"data-root": "$DOCKER_DATA_ROOT"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'docker_payload_symlink_allowed' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'docker_restore_polluted_system_paths' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'download_openlist_from_urls' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'prepare_openlist_install_dirs' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'OpenList 检测到存储扩展链接' 00-current/ssh-nradio-plugin-installer.sh
@@ -167,12 +180,19 @@ jobs:
 
       - name: Verify support page state
         run: |
-          grep -q 'V2.0.70' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.70 已发布' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.1.0' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.1.0 已发布' 40-server-web/mayebano-support/index.html
+          grep -q 'Docker 扩展盘安装链接入' 40-server-web/mayebano-support/index.html
+          grep -q 'Docker 加入常用插件安装菜单 1 &gt; 8' 40-server-web/mayebano-support/index.html
+          grep -q 'rootfs_2nd 扩展盘' 40-server-web/mayebano-support/index.html
+          grep -q 'Docker LuCI 页面' 40-server-web/mayebano-support/index.html
+          grep -q '<div class="version">V2.1.0</div>' 40-server-web/mayebano-support/index.html
+          ! grep -q '<b>V2.1.0</b>' 40-server-web/mayebano-support/index.html
+          grep -q '<b>V2.0.70</b>' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.70 page polish pass' 40-server-web/mayebano-support/index.html
-          grep -q '5G 负载均衡权重设置' 40-server-web/mayebano-support/index.html
-          grep -q 'mwan3 运行态生效修复' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenVPN pass10' 40-server-web/mayebano-support/index.html
+          grep -q '5G 负载均衡与页面显示修复' 40-server-web/mayebano-support/index.html
+          grep -q 'mwan3' 40-server-web/mayebano-support/index.html
+          grep -q 'OpenVPN Mk5 pass10' 40-server-web/mayebano-support/index.html
           grep -q 'C2000MAX 1 号卡白条修复' 40-server-web/mayebano-support/index.html
           grep -q 'V2.0.60' 40-server-web/mayebano-support/index.html
           grep -q 'C8/C5800 eMMC 存储扩展' 40-server-web/mayebano-support/index.html
@@ -218,7 +238,7 @@ jobs:
           grep -q 'OpenWrt 21.02.7 清华源' 40-server-web/mayebano-support/index.html
           grep -q 'OpenVPN 快速状态读取' 40-server-web/mayebano-support/index.html
           grep -q '安装教程' 40-server-web/mayebano-support/index.html
-          grep -q '主要功能' 40-server-web/mayebano-support/index.html
+          grep -q '脚本功能' 40-server-web/mayebano-support/index.html
           grep -q 'feature-brief' 40-server-web/mayebano-support/index.html
           grep -q 'GitHub 开源' 40-server-web/mayebano-support/index.html
           grep -q 'MobaXterm' 40-server-web/mayebano-support/index.html
@@ -243,14 +263,14 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'b4aad4ddabde87ce3f4eff2890a4193eb474cf757e9788307fab75ee441b155f' CHECKSUMS.txt
-          grep -q '1702232  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q '100f0243d172d2999fafc5222242a27f3fc9ddc446e66d1c7b0469b789de8b2a' CHECKSUMS.txt
-          grep -q '250240  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q 'ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd' CHECKSUMS.txt
+          grep -q '1872225  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q 'daa0440a041c938df7c3554d26419e283669ebb847bf1e3f7b97f3af1309fee9' CHECKSUMS.txt
+          grep -q '254263  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
           grep -q '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' CHECKSUMS.txt
           grep -q '564  vercel.json' CHECKSUMS.txt
-          printf '%s  %s\n' 'b4aad4ddabde87ce3f4eff2890a4193eb474cf757e9788307fab75ee441b155f' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' '100f0243d172d2999fafc5222242a27f3fc9ddc446e66d1c7b0469b789de8b2a' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          printf '%s  %s\n' 'ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' 'daa0440a041c938df7c3554d26419e283669ebb847bf1e3f7b97f3af1309fee9' '40-server-web/mayebano-support/index.html' | sha256sum -c -
           printf '%s  %s\n' '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' 'vercel.json' | sha256sum -c -
 
       - name: Verify license
@@ -261,6 +281,8 @@ jobs:
 
       - name: Verify repository docs
         run: |
+          grep -q 'V2.1.0' README.md
+          grep -q 'V2.1.0' CHANGELOG.md
           grep -q 'V2.0.70' README.md
           grep -q 'V2.0.70' CHANGELOG.md
           grep -q 'V2.0.60' README.md
@@ -288,10 +310,16 @@ jobs:
           grep -q 'OpenList lite 包' CHANGELOG.md
           grep -q 'AdGuardHome' README.md
           grep -q 'AdGuardHome' CHANGELOG.md
+          grep -q 'Docker 扩展盘安装链接入' README.md
+          grep -q 'Docker 扩展盘安装链接入' CHANGELOG.md
+          grep -q 'rootfs_2nd_data/nradio-apps/docker' README.md
+          grep -q 'rootfs_2nd_data/nradio-apps/docker' CHANGELOG.md
+          grep -q 'NRadio_C5800-688' README.md
+          grep -q 'NRadio_C8-688' CHANGELOG.md
           grep -q '5G 负载均衡权重设置' README.md
           grep -q 'mwan3' CHANGELOG.md
-          grep -q 'b4aad4ddabde87ce3f4eff2890a4193eb474cf757e9788307fab75ee441b155f' README.md
-          grep -q '1702232' README.md
+          grep -q 'ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd' README.md
+          grep -q '1872225' README.md
           grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
           grep -q 'Only the current public script is maintained' SECURITY.md
           grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml

@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.0.70"
+SCRIPT_VERSION="V2.1.0"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-19"
+SCRIPT_RELEASE_DATE="2026-05-28"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -77,6 +77,9 @@ OPENCLASH_GEOASN_MIRRORS="${OPENCLASH_GEOASN_MIRRORS:-https://testingcf.jsdelivr
 ADGUARDHOME_VERSION="${ADGUARDHOME_VERSION:-1.8-9}"
 ADGUARDHOME_IPK_URLS="${ADGUARDHOME_IPK_URLS:-https://ghproxy.net/https://github.com/rufengsuixing/luci-app-adguardhome/releases/download/${ADGUARDHOME_VERSION}/luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk https://mirror.ghproxy.com/https://github.com/rufengsuixing/luci-app-adguardhome/releases/download/${ADGUARDHOME_VERSION}/luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk https://gh-proxy.com/https://github.com/rufengsuixing/luci-app-adguardhome/releases/download/${ADGUARDHOME_VERSION}/luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk}"
 ADGUARDHOME_CORE_MIRRORS="${ADGUARDHOME_CORE_MIRRORS:-https://static.adtidy.org/adguardhome/release}"
+ADGUARDHOME_DNS_PORT="${ADGUARDHOME_DNS_PORT:-554}"
+ADGUARDHOME_LEGACY_DNS_PORT="${ADGUARDHOME_LEGACY_DNS_PORT:-553}"
+OPENCLASH_DNS_UPSTREAM_PORT="${OPENCLASH_DNS_UPSTREAM_PORT:-7874}"
 OPENVPN_VERSION="${OPENVPN_VERSION:-}"
 OPENLIST_VERSION="${OPENLIST_VERSION:-latest}"
 OPENLIST_ASSET_NAME="${OPENLIST_ASSET_NAME:-openlist-linux-musl-arm64.tar.gz}"
@@ -202,6 +205,20 @@ DDNSGO_PACKAGE_STALL_SPEED="${DDNSGO_PACKAGE_STALL_SPEED:-2048}"
 DDNSGO_PACKAGE_RETRY_STALL_TIME="${DDNSGO_PACKAGE_RETRY_STALL_TIME:-60}"
 DDNSGO_PACKAGE_RETRY_STALL_SPEED="${DDNSGO_PACKAGE_RETRY_STALL_SPEED:-1024}"
 DDNSGO_PACKAGE_MAX_TIME="${DDNSGO_PACKAGE_MAX_TIME:-900}"
+DOCKER_APP_NAME="${DOCKER_APP_NAME:-Docker}"
+DOCKER_PACKAGE_NAME="${DOCKER_PACKAGE_NAME:-nradio-docker}"
+DOCKER_ROUTE="${DOCKER_ROUTE:-nradioadv/system/docker}"
+DOCKER_CONTROLLER="${DOCKER_CONTROLLER:-/usr/lib/lua/luci/controller/nradio_adv/docker.lua}"
+DOCKER_VIEW="${DOCKER_VIEW:-/usr/lib/lua/luci/view/nradio_adv/docker.htm}"
+DOCKER_ICON_NAME="${DOCKER_ICON_NAME:-docker.svg}"
+DOCKER_MIN_FREE_MIB="${DOCKER_MIN_FREE_MIB:-1024}"
+DOCKER_ROOT=""
+DOCKER_DATA_ROOT=""
+DOCKER_PACKAGE_DIR=""
+DOCKER_OPKG_CACHE=""
+DOCKER_TMP_DIR=""
+DOCKER_LOG_DIR=""
+DOCKER_OPT_DIR=""
 WEBSSH_ICON_NAME="${WEBSSH_ICON_NAME:-webssh.svg}"
 WEBSSH_ICON_URLS="${WEBSSH_ICON_URLS:-https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/svgs/solid/terminal.svg https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/svgs/solid/terminal.svg https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/svgs/solid/terminal.svg}"
 OPENVPN_ICON_NAME="${OPENVPN_ICON_NAME:-openvpn.svg}"
@@ -2238,6 +2255,13 @@ DDNSGO_LEGACY_ROUTE="admin/services/ddns-go"
 DDNSGO_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/ddnsgo.lua"
 DDNSGO_VIEW="/usr/lib/lua/luci/view/nradio_adv/ddnsgo.htm"
 DDNSGO_ICON_NAME="ddns-go-nradio.svg"
+DOCKER_APP_NAME="Docker"
+DOCKER_PACKAGE_NAME="nradio-docker"
+DOCKER_ROUTE="nradioadv/system/docker"
+DOCKER_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/docker.lua"
+DOCKER_VIEW="/usr/lib/lua/luci/view/nradio_adv/docker.htm"
+DOCKER_ICON_NAME="docker.svg"
+DOCKER_ROOT="/mnt/rootfs_2nd_data/nradio-apps/docker"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
 EASYTIER_ROUTE_APPLY_SCRIPT="/etc/easytier/route-apply.sh"
 
@@ -2734,6 +2758,10 @@ cleanup_webssh() {
 }
 
 cleanup_adguardhome() {
+    restore_dnsmasq_system_dns_when_adguard_unready || true
+    if [ "${adg_dns_fallback_changed:-0}" = '1' ]; then
+        log "DNS:    已在卸载 AdGuardHome 前恢复 dnsmasq 使用系统上游"
+    fi
     stop_disable /etc/init.d/AdGuardHome
     kill_name AdGuardHome
     remove_pkg_if_present luci-app-adguardhome
@@ -3034,6 +3062,74 @@ cleanup_ddnsgo() {
     cleanup_appcenter_entry "ddns-go" "$DDNSGO_PACKAGE_NAME" "$DDNSGO_ROUTE"
 }
 
+cleanup_docker_link_if_ours() {
+    docker_path="$1"
+    [ -L "$docker_path" ] || return 0
+    case "$(readlink "$docker_path" 2>/dev/null || true)" in
+        "$DOCKER_ROOT"/*)
+            rm -f "$docker_path" 2>/dev/null || true
+            ;;
+    esac
+}
+
+cleanup_docker() {
+    stop_disable /etc/init.d/dockerd
+    stop_disable /etc/init.d/cgroupfs-mount
+    kill_name dockerd
+    kill_name containerd
+    kill_name containerd-shim
+    kill_name containerd-shim-runc-v2
+    kill_name runc
+
+    for docker_path in \
+        /usr/bin/docker \
+        /usr/bin/dockerd \
+        /usr/sbin/dockerd \
+        /usr/bin/containerd \
+        /usr/bin/containerd-shim \
+        /usr/bin/containerd-shim-runc-v2 \
+        /usr/bin/ctr \
+        /usr/bin/runc \
+        /usr/sbin/runc \
+        /usr/bin/docker-init \
+        /usr/bin/docker-proxy \
+        /usr/bin/tini \
+        /usr/libexec/docker/docker-init \
+        /usr/libexec/docker/docker-proxy \
+        /usr/libexec/docker/cli-plugins/docker-buildx \
+        /usr/libexec/docker/cli-plugins/docker-compose; do
+        cleanup_docker_link_if_ours "$docker_path"
+    done
+
+    rm -f \
+        /etc/init.d/dockerd \
+        /etc/init.d/cgroupfs-mount \
+        /etc/config/dockerd \
+        /etc/config/docker \
+        /etc/config/cgroupfs-mount \
+        /etc/docker/daemon.json \
+        "$DOCKER_CONTROLLER" \
+        "$DOCKER_VIEW" \
+        /tmp/appcenter/luci/nradioadv.system.docker \
+        /usr/lib/opkg/info/docker.* \
+        /usr/lib/opkg/info/dockerd.* \
+        /usr/lib/opkg/info/containerd.* \
+        /usr/lib/opkg/info/runc.* \
+        /usr/lib/opkg/info/cgroupfs-mount.* \
+        /usr/lib/opkg/info/tini.* \
+        /usr/lib/opkg/info/docker-init.* \
+        /usr/lib/opkg/info/docker-proxy.* \
+        2>/dev/null || true
+    rm -rf /etc/docker /usr/libexec/docker "$DOCKER_ROOT" /tmp/nradio-docker-* 2>/dev/null || true
+    remove_app_icon_file "$DOCKER_ICON_NAME"
+    cleanup_appcenter_entry "$DOCKER_APP_NAME" "$DOCKER_PACKAGE_NAME" "$DOCKER_ROUTE"
+    cleanup_appcenter_entry "$DOCKER_APP_NAME" "docker" "$DOCKER_ROUTE"
+    cleanup_appcenter_entry "$DOCKER_APP_NAME" "dockerd" "$DOCKER_ROUTE"
+    cleanup_appcenter_entry "$DOCKER_PACKAGE_NAME" "$DOCKER_PACKAGE_NAME" "$DOCKER_ROUTE"
+    cleanup_appcenter_entry "docker" "docker" "$DOCKER_ROUTE"
+    cleanup_appcenter_entry "dockerd" "dockerd" "$DOCKER_ROUTE"
+}
+
 case "$plugin" in
     openclash)
         cleanup_openclash
@@ -3070,6 +3166,9 @@ case "$plugin" in
         ;;
     ddnsgo)
         cleanup_ddnsgo
+        ;;
+    docker)
+        cleanup_docker
         ;;
     *)
         exit 1
@@ -3108,6 +3207,7 @@ function index()
     entry({"nradioadv", "system", "plugin_uninstall", "leigod"}, call("uninstall_leigod"), nil, 106).leaf = true
     entry({"nradioadv", "system", "plugin_uninstall", "mosdns"}, call("uninstall_mosdns"), nil, 107).leaf = true
     entry({"nradioadv", "system", "plugin_uninstall", "ddnsgo"}, call("uninstall_ddnsgo"), nil, 108).leaf = true
+    entry({"nradioadv", "system", "plugin_uninstall", "docker"}, call("uninstall_docker"), nil, 109).leaf = true
 end
 
 local function json_response(code, msg, detail)
@@ -3175,6 +3275,8 @@ local function plugin_from_name(name)
         return "mosdns"
     elseif name == "DDNS-GO" or name == "DDNS-Go" or name == "ddns-go" or name == "luci-app-ddns-go" or name == "luci-i18n-ddns-go-zh-cn" then
         return "ddnsgo"
+    elseif name == "Docker" or name == "docker" or name == "dockerd" or name == "nradio-docker" then
+        return "docker"
     end
 
     return nil
@@ -3276,6 +3378,7 @@ function check_uninstall()
     status = trim(read_file(status_file, 64))
 
     if status == "ok" then
+        os.execute("/bin/rm -f " .. shell_quote(status_file) .. " " .. shell_quote(rc_file) .. " " .. shell_quote(log_file) .. " >/dev/null 2>&1")
         json_response(CODE_OK, "卸载完成")
     elseif status == "fail" then
         rc = trim(read_file(rc_file, 64))
@@ -3335,6 +3438,10 @@ end
 
 function uninstall_ddnsgo()
     start_plugin("ddnsgo")
+end
+
+function uninstall_docker()
+    start_plugin("docker")
 end
 EOF_PLUGIN_UNINSTALL_CONTROLLER
 }
@@ -4873,6 +4980,40 @@ EOF_EASYTIER_CONTROLLER
     chmod 644 "$EASYTIER_CONTROLLER" 2>/dev/null || true
 }
 
+write_easytier_polish_files() {
+    easytier_cbi="/usr/lib/lua/luci/model/cbi/easytier.lua"
+    easytier_polish="/usr/lib/lua/luci/view/easytier/nradio_polish.htm"
+    easytier_tmp="$WORKDIR/easytier-polish.cbi"
+
+    mkdir -p /usr/lib/lua/luci/view/easytier
+    backup_file "$easytier_cbi"
+    backup_file "$easytier_polish"
+
+    cat > "$easytier_polish" <<'EOF_EASYTIER_POLISH'
+<style>
+/* NRadio EasyTier premium visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}
+.cbi-map,.cbi-map-descr+fieldset,.cbi-section{color:#e5edf7!important}
+.cbi-map{position:relative;overflow:hidden;border:1px solid rgba(167,139,250,.24)!important;border-radius:18px!important;background:radial-gradient(circle at 12% 0%,rgba(167,139,250,.16),transparent 34%),radial-gradient(circle at 92% 10%,rgba(56,189,248,.10),transparent 30%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 24px 54px rgba(2,8,23,.30)!important}
+.cbi-map:before{content:"";position:absolute;left:22px;right:22px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(167,139,250,.66),rgba(56,189,248,.34),transparent);pointer-events:none}.cbi-map h2{color:#f8fbff!important;font-weight:900!important;letter-spacing:.01em;text-shadow:0 1px 0 rgba(0,0,0,.28)}.cbi-map-descr{color:#a9bbcf!important}.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important}.cbi-value{border-bottom-color:rgba(148,163,184,.12)!important}.cbi-value-title{color:#dacfff!important;font-weight:800!important}.cbi-value-field,.cbi-value-description{color:#dbe7f4!important}.cbi-input-text,.cbi-input-password,textarea,select{border-color:rgba(167,139,250,.24)!important;background:rgba(2,8,23,.72)!important;color:#f8fbff!important;border-radius:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important}.cbi-input-text:focus,.cbi-input-password:focus,textarea:focus,select:focus{border-color:rgba(167,139,250,.58)!important;box-shadow:0 0 0 3px rgba(167,139,250,.13),inset 0 1px 0 rgba(255,255,255,.05)!important;outline:0!important}.cbi-button{border-radius:10px!important;border-color:rgba(167,139,250,.30)!important;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.010)),rgba(5,12,22,.70)!important;color:#f3efff!important;font-weight:800!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.052),0 8px 18px rgba(0,0,0,.14)!important}.cbi-button:hover{border-color:rgba(167,139,250,.54)!important;background:linear-gradient(180deg,rgba(167,139,250,.18),rgba(167,139,250,.045)),rgba(5,12,22,.76)!important;color:#fff!important}.cbi-button-apply{border-color:rgba(167,139,250,.48)!important;background:linear-gradient(135deg,rgba(124,58,237,.32),rgba(14,165,233,.20)),rgba(5,12,22,.76)!important}.table,.cbi-section-table{border-color:rgba(148,163,184,.16)!important;background:rgba(2,8,23,.32)!important}.cbi-section-table-row{border-bottom-color:rgba(148,163,184,.10)!important}pre,code{border-radius:12px;background:#050b16!important;color:#dbeafe!important}.cbi-value-field,.cbi-value-description,.cbi-section-table-cell{min-width:0!important;overflow-wrap:anywhere!important}.cbi-map,.cbi-section,.cbi-button{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.cbi-map{border-radius:15px!important}.cbi-section{border-radius:14px!important}.cbi-value-title,.cbi-value-field{display:block!important;width:auto!important}}
+</style>
+EOF_EASYTIER_POLISH
+
+    if [ -f "$easytier_cbi" ]; then
+        awk '
+            /Template\("easytier\/nradio_polish"\)/ { next }
+            /^[[:space:]]*return[[:space:]]+m[[:space:]]*$/ && !inserted {
+                print "m:append(Template(\"easytier/nradio_polish\"))"
+                inserted = 1
+            }
+            { print }
+        ' "$easytier_cbi" > "$easytier_tmp" && cp "$easytier_tmp" "$easytier_cbi"
+    fi
+
+    chmod 644 "$easytier_polish" 2>/dev/null || true
+    [ ! -f "$easytier_cbi" ] || chmod 644 "$easytier_cbi" 2>/dev/null || true
+}
+
 install_openlist_embedded_icon() {
     ensure_app_icon_dir
     backup_file "$APP_ICON_DIR/$OPENLIST_ICON_NAME"
@@ -5378,6 +5519,8 @@ EOF
             return "mosdns";
         if(app_name == "DDNS-GO" || app_name == "DDNS-Go" || app_name == "ddns-go" || app_name == "luci-app-ddns-go" || app_name == "luci-i18n-ddns-go-zh-cn")
             return "ddnsgo";
+        if(app_name == "Docker" || app_name == "docker" || app_name == "dockerd" || app_name == "nradio-docker")
+            return "docker";
         if(app_name == "奇游联机宝" || app_name == "QiYou" || app_name == "qiyou" || app_name == "nradio-qiyou")
             return "qiyou";
         if(app_name == "雷神加速器" || app_name == "Leigod" || app_name == "LeigodAcc" || app_name == "leigod" || app_name == "nradio-leigod")
@@ -10278,6 +10421,115 @@ EOF_APPCENTER_CARD_POLISH_PRESERVED_ALIGN
         cp "$preserved_css_file" "$css_file"
     fi
 
+    cat >> "$css_file" <<'EOF_APPCENTER_PREMIUM_VISUAL_FINISH'
+    /* NRadio appcenter premium visual finish */
+    .container_right .app_box{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .255);
+        background:
+            radial-gradient(circle at 18% -6%, rgba(var(--nr-card-accent, 78,150,166), .026), transparent 42%),
+            radial-gradient(circle at 84% 4%, rgba(var(--nr-card-accent-2, 58,130,112), .016), transparent 34%),
+            linear-gradient(180deg, rgba(255,255,255,.032), rgba(255,255,255,.007)),
+            linear-gradient(145deg, rgba(10,20,32,.982), rgba(4,8,15,.944));
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.040),
+            inset 0 0 0 .0625rem rgba(146,169,190,.062),
+            inset 0 -.08em 0 rgba(0,0,0,.60),
+            0 1.08em 2.18em rgba(0,0,0,.365),
+            0 0 .70em rgba(var(--nr-card-accent, 78,150,166), .025);
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        border-color: rgba(var(--nr-card-accent, 78,150,166), .335);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.048),
+            inset 0 0 0 .0625rem rgba(166,188,206,.092),
+            inset 0 -.08em 0 rgba(0,0,0,.56),
+            0 1.10em 2.22em rgba(0,0,0,.382),
+            0 0 .78em rgba(var(--nr-card-accent, 78,150,166), .034);
+    }
+    .container_right .app_icon::before{
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.050),
+            inset 0 0 0 .0625rem rgba(var(--nr-card-accent, 78,150,166), .095),
+            0 .62em 1em rgba(0,0,0,.22);
+    }
+    .container_right .app_icon_img{
+        filter: saturate(.98) contrast(1.045);
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        filter: saturate(1.05) contrast(1.055);
+    }
+    .container_right .app_name{
+        color: rgba(248,252,255,.965);
+        text-shadow: 0 1px 0 rgba(0,0,0,.34);
+    }
+    .container_right .app_des,
+    .container_right .app_version{
+        color: rgba(210,221,232,.805);
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        background: linear-gradient(180deg, rgba(255,255,255,.030), rgba(255,255,255,.006)), rgba(5,12,22,.54);
+        box-shadow: inset 0 .08em 0 rgba(255,255,255,.038);
+    }
+    .container_right .app_state_badge::before,
+    .container_right .app_open_badge::before{
+        box-shadow: 0 0 .42em currentColor;
+    }
+    .container_right .action_list_li{
+        text-shadow: 0 1px 0 rgba(0,0,0,.22);
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        color: #ffffff;
+        filter: saturate(1.02) contrast(1.012);
+    }
+    .app_status_panel{
+        border-color: rgba(125,211,252,.28);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.052),
+            inset 0 0 0 .0625rem rgba(103,232,249,.052),
+            0 1.04em 1.98em rgba(0,0,0,.245);
+    }
+    .app_status_tile,
+    .app_status_metric{
+        border-color: rgba(125,211,252,.18);
+        box-shadow:
+            inset 0 .08em 0 rgba(255,255,255,.044),
+            0 .40em .76em rgba(0,0,0,.11);
+    }
+    .app_status_metric_row strong,
+    .app_status_tile strong{
+        font-variant-numeric: tabular-nums;
+    }
+    /* NRadio appcenter final optical alignment layer */
+    .container_right .app_box,
+    .container_right .app_box *{
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
+    }
+    .container_right .app_name,
+    .container_right .app_des,
+    .container_right .app_version,
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        overflow-wrap: anywhere;
+    }
+    .container_right .action_list_li:focus-visible,
+    .app_status_panel a:focus-visible,
+    .app_status_panel button:focus-visible{
+        outline: none;
+        box-shadow: 0 0 0 .18em rgba(103,232,249,.18), inset 0 .08em 0 rgba(255,255,255,.05);
+    }
+    .app_status_panel,
+    .app_status_tile,
+    .app_status_metric{
+        backdrop-filter: saturate(1.04) blur(.18em);
+        -webkit-backdrop-filter: saturate(1.04) blur(.18em);
+    }
+EOF_APPCENTER_PREMIUM_VISUAL_FINISH
+
     awk -v css_file="$css_file" '
         /NRadio appcenter card polish: visual-only layer/ || /NRadio appcenter card polish V1\.60\.5 full repair layer/ {
             skip_polish_css = 1
@@ -11003,6 +11255,7 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'NRadio appcenter premium final depth consumers' '应用商店 final depth consumer 层'
     verify_template_marker 'NRadio appcenter premium final seal bank' '应用商店 final seal 层'
     verify_template_marker 'NRadio appcenter premium final seal consumers' '应用商店 final seal consumer 层'
+    verify_template_marker 'NRadio appcenter premium visual finish' '应用商店元素级高端视觉层'
     verify_template_marker 'NRadio appcenter card content logic finish' '应用商店卡片内容逻辑层'
     verify_template_marker '<div class="app_meta_row"' '应用商店卡片状态徽标'
     verify_template_marker 'status_label: db.status_label' '应用商店卡片状态标签数据'
@@ -13304,6 +13557,536 @@ nradio_5g_aggregation_traffic_monitor() {
     fi
 }
 
+nradio_5g_aggregation_ipv6_ping_public_quiet() {
+    agg_dev="${1:-}"
+
+    if ! command -v ping >/dev/null 2>&1; then
+        return 1
+    fi
+
+    if [ -n "$agg_dev" ]; then
+        ping -6 -I "$agg_dev" -c 1 -W 2 2408:8000::8 >/dev/null 2>&1 && return 0
+        ping -6 -I "$agg_dev" -c 1 -W 2 240c::6666 >/dev/null 2>&1 && return 0
+    else
+        ping -6 -c 1 -W 2 2408:8000::8 >/dev/null 2>&1 && return 0
+        ping -6 -c 1 -W 2 240c::6666 >/dev/null 2>&1 && return 0
+    fi
+
+    return 1
+}
+
+nradio_5g_aggregation_ipv6_ping_probe() {
+    agg_dev="${1:-}"
+
+    if ! command -v ping >/dev/null 2>&1; then
+        log "IPv6探测: 缺少 ping 命令"
+        return 1
+    fi
+
+    if [ -n "$agg_dev" ]; then
+        if ping -6 -I "$agg_dev" -c 2 -W 2 2408:8000::8 >/dev/null 2>&1; then
+            log "IPv6探测: $agg_dev -> 2408:8000::8 = 通"
+            return 0
+        fi
+        if ping -6 -I "$agg_dev" -c 2 -W 2 240c::6666 >/dev/null 2>&1; then
+            log "IPv6探测: $agg_dev -> 240c::6666 = 通"
+            return 0
+        fi
+    else
+        if ping -6 -c 2 -W 2 2408:8000::8 >/dev/null 2>&1; then
+            log "IPv6探测: 2408:8000::8 = 通"
+            return 0
+        fi
+        if ping -6 -c 2 -W 2 240c::6666 >/dev/null 2>&1; then
+            log "IPv6探测: 240c::6666 = 通"
+            return 0
+        fi
+    fi
+
+    log "IPv6探测: 公网 IPv6 暂不通"
+    return 1
+}
+
+nradio_5g_aggregation_ipv6_default_gateway() {
+    agg_dev="${1:-}"
+    [ -n "$agg_dev" ] || return 1
+
+    ip -6 route show default 2>/dev/null | awk -v dev="$agg_dev" '
+        {
+            matched = 0
+            gw = ""
+            for (i = 1; i <= NF; i++) {
+                if ($i == "dev" && (i + 1) <= NF && $(i + 1) == dev) matched = 1
+                if ($i == "via" && (i + 1) <= NF) gw = $(i + 1)
+            }
+            if (matched && gw != "") {
+                print gw
+                exit
+            }
+        }
+    '
+}
+
+nradio_5g_aggregation_ipv6_gateway_reachable() {
+    agg_dev="${1:-}"
+    agg_gw="$(nradio_5g_aggregation_ipv6_default_gateway "$agg_dev" 2>/dev/null || true)"
+    [ -n "$agg_dev" ] || return 1
+    [ -n "$agg_gw" ] || return 1
+
+    if command -v ping >/dev/null 2>&1 && ping -6 -I "$agg_dev" -c 1 -W 2 "$agg_gw" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ip -6 neigh show dev "$agg_dev" 2>/dev/null | awk -v gw="$agg_gw" '
+        $1 == gw && $0 !~ /FAILED/ && $0 !~ /INCOMPLETE/ { ok = 1 }
+        END { exit ok ? 0 : 1 }
+    '; then
+        return 0
+    fi
+
+    return 1
+}
+
+nradio_5g_aggregation_ipv6_iface_has_default_route() {
+    agg_dev="${1:-}"
+    [ -n "$agg_dev" ] || return 1
+    ip -6 route show default 2>/dev/null | grep -F " dev $agg_dev " >/dev/null 2>&1
+}
+
+nradio_5g_aggregation_ipv6_dev_has_link_local() {
+    agg_dev="${1:-}"
+    [ -n "$agg_dev" ] || return 1
+    command -v ip >/dev/null 2>&1 || return 1
+
+    ip -6 addr show dev "$agg_dev" 2>/dev/null | grep -F ' scope link ' | grep -F 'inet6 fe80:' >/dev/null 2>&1
+}
+
+nradio_5g_aggregation_ipv6_dev_eui64_link_local() {
+    agg_dev="${1:-}"
+    [ -n "$agg_dev" ] || return 1
+
+    if [ -r "/sys/class/net/$agg_dev/address" ]; then
+        agg_mac="$(cat "/sys/class/net/$agg_dev/address" 2>/dev/null | tr 'A-F' 'a-f' || true)"
+    else
+        agg_mac="$(ip link show dev "$agg_dev" 2>/dev/null | awk '/link\/ether/ { print $2; exit }' | tr 'A-F' 'a-f' || true)"
+    fi
+
+    case "$agg_mac" in
+        [0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]) ;;
+        *) return 1 ;;
+    esac
+
+    agg_b1="$(printf '%s\n' "$agg_mac" | cut -d: -f1)"
+    agg_b2="$(printf '%s\n' "$agg_mac" | cut -d: -f2)"
+    agg_b3="$(printf '%s\n' "$agg_mac" | cut -d: -f3)"
+    agg_b4="$(printf '%s\n' "$agg_mac" | cut -d: -f4)"
+    agg_b5="$(printf '%s\n' "$agg_mac" | cut -d: -f5)"
+    agg_b6="$(printf '%s\n' "$agg_mac" | cut -d: -f6)"
+
+    printf 'fe80::%02x%02x:%02xff:fe%02x:%02x%02x\n' \
+        "$((0x$agg_b1 ^ 2))" "$((0x$agg_b2))" "$((0x$agg_b3))" \
+        "$((0x$agg_b4))" "$((0x$agg_b5))" "$((0x$agg_b6))"
+}
+
+nradio_5g_aggregation_ipv6_ensure_dev_link_local() {
+    agg_dev="${1:-}"
+    [ -n "$agg_dev" ] || return 1
+    command -v ip >/dev/null 2>&1 || return 1
+
+    nradio_5g_aggregation_ipv6_dev_has_link_local "$agg_dev" && return 0
+
+    agg_ll="$(nradio_5g_aggregation_ipv6_dev_eui64_link_local "$agg_dev" 2>/dev/null || true)"
+    [ -n "$agg_ll" ] || return 1
+
+    log "IPv6卡死恢复: $agg_dev 缺少 link-local，补 $agg_ll/64"
+    ip -6 addr add "$agg_ll/64" dev "$agg_dev" 2>/dev/null || true
+    nradio_5g_aggregation_ipv6_dev_has_link_local "$agg_dev"
+}
+
+nradio_5g_aggregation_ipv6_iface_ready_check() {
+    agg_iface="${1:-}"
+    agg_prefix="${2:-}"
+    [ -n "$agg_prefix" ] || agg_prefix="IPv6检查"
+
+    agg_ifstatus_text="$(ifstatus "$agg_iface" 2>/dev/null || true)"
+    [ -n "$agg_ifstatus_text" ] || {
+        log "$agg_prefix: $agg_iface = 不存在"
+        return 1
+    }
+
+    agg_up="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" up)"
+    agg_pending="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" pending)"
+    agg_proto="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" proto)"
+    agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" l3_device)"
+    [ -n "$agg_dev" ] || agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" device)"
+    if printf '%s\n' "$agg_ifstatus_text" | grep -F '"address": "' >/dev/null 2>&1; then
+        agg_has_addr='1'
+    else
+        agg_has_addr='0'
+    fi
+    if nradio_5g_aggregation_ipv6_iface_has_default_route "$agg_dev"; then
+        agg_has_route='1'
+    else
+        agg_has_route='0'
+    fi
+    agg_gw="$(nradio_5g_aggregation_ipv6_default_gateway "$agg_dev" 2>/dev/null || true)"
+    if nradio_5g_aggregation_ipv6_gateway_reachable "$agg_dev"; then
+        agg_gw_ok='1'
+    else
+        agg_gw_ok='0'
+    fi
+    if nradio_5g_aggregation_ipv6_ping_public_quiet "$agg_dev"; then
+        agg_public_ok='1'
+    else
+        agg_public_ok='0'
+    fi
+
+    log "$agg_prefix: $agg_iface up=${agg_up:-?} pending=${agg_pending:-?} proto=${agg_proto:-?} dev=${agg_dev:-?} addr=$agg_has_addr default=$agg_has_route gw=${agg_gw:-无} gw_ok=$agg_gw_ok public=$agg_public_ok"
+    [ "$agg_up" = 'true' ] && [ "$agg_pending" != 'true' ] && [ "$agg_has_addr" = '1' ] && [ "$agg_has_route" = '1' ] && [ "$agg_gw_ok" = '1' ] && [ "$agg_public_ok" = '1' ]
+}
+
+nradio_5g_aggregation_ipv6_wait_iface_ready() {
+    agg_iface="${1:-}"
+    agg_wait_total="${2:-120}"
+    agg_wait_step="${3:-10}"
+    agg_wait_elapsed='0'
+
+    case "$agg_wait_total" in *[!0-9]*|'') agg_wait_total='120' ;; esac
+    case "$agg_wait_step" in *[!0-9]*|''|0) agg_wait_step='10' ;; esac
+
+    while :; do
+        if nradio_5g_aggregation_ipv6_iface_ready_check "$agg_iface" "IPv6等待(${agg_wait_elapsed}s)"; then
+            log "IPv6恢复: $agg_iface 已确认公网 IPv6 可用"
+            return 0
+        fi
+        [ "$agg_wait_elapsed" -ge "$agg_wait_total" ] 2>/dev/null && break
+        sleep "$agg_wait_step"
+        agg_wait_elapsed=$((agg_wait_elapsed + agg_wait_step))
+    done
+
+    log "IPv6恢复: $agg_iface 等待 ${agg_wait_total}s 后仍未确认公网 IPv6 可用"
+    return 1
+}
+
+nradio_5g_aggregation_ipv6_collect_recent_logs() {
+    if command -v logread >/dev/null 2>&1; then
+        logread 2>/dev/null | tail -n 260 || true
+    elif [ -r /var/log/messages ]; then
+        tail -n 260 /var/log/messages 2>/dev/null || true
+    fi
+}
+
+nradio_5g_aggregation_ipv6_recent_log_summary() {
+    agg_recent_logs=''
+    agg_recent_hits=''
+
+    agg_recent_logs="$(nradio_5g_aggregation_ipv6_collect_recent_logs)"
+
+    [ -n "$agg_recent_logs" ] || {
+        log "IPv6日志: 未找到 logread 或 /var/log/messages"
+        return 0
+    }
+
+    agg_recent_hits="$(printf '%s\n' "$agg_recent_logs" | grep -Ei 'odhcp6c|cpe1_6|cpe_6|wan6|mwan3track|wanchk: cpe|Address not available|SOLICIT|RS|Interface .* now (up|down)' | tail -n 18 || true)"
+    if [ -n "$agg_recent_hits" ]; then
+        printf '%s\n' "$agg_recent_hits" | sed 's/^/IPv6日志: /'
+    else
+        log "IPv6日志: 最近日志未命中 IPv6 关键行"
+    fi
+}
+
+nradio_5g_aggregation_ipv6_recent_stuck_logs() {
+    agg_iface="${1:-}"
+    agg_recent_logs="$(nradio_5g_aggregation_ipv6_collect_recent_logs)"
+    [ -n "$agg_recent_logs" ] || return 1
+
+    printf '%s\n' "$agg_recent_logs" | grep -Ei 'Address not available|Failed to send RS|Failed to send SOLICIT' >/dev/null 2>&1 || return 1
+    printf '%s\n' "$agg_recent_logs" | grep -F "$agg_iface" >/dev/null 2>&1 && return 0
+
+    case "$agg_iface" in
+        cpe1_6)
+            printf '%s\n' "$agg_recent_logs" | grep -F 'wanchk: cpe1: v6 dhcp renew' >/dev/null 2>&1 && return 0
+            ;;
+        cpe_6)
+            printf '%s\n' "$agg_recent_logs" | grep -F 'wanchk: cpe: v6 dhcp renew' >/dev/null 2>&1 && return 0
+            ;;
+        wan6)
+            printf '%s\n' "$agg_recent_logs" | grep -F "Interface 'wan6' is setting up now" >/dev/null 2>&1 && return 0
+            ;;
+    esac
+
+    return 1
+}
+
+nradio_5g_aggregation_ipv6_gateway_failed() {
+    agg_dev="${1:-}"
+    agg_gw="$(nradio_5g_aggregation_ipv6_default_gateway "$agg_dev" 2>/dev/null || true)"
+    [ -n "$agg_dev" ] || return 1
+    [ -n "$agg_gw" ] || return 1
+
+    ip -6 neigh show dev "$agg_dev" 2>/dev/null | awk -v gw="$agg_gw" '
+        $1 == gw && ($0 ~ /FAILED/ || $0 ~ /INCOMPLETE/) { bad = 1 }
+        END { exit bad ? 0 : 1 }
+    '
+}
+
+nradio_5g_aggregation_ipv6_iface_pending_stuck() {
+    agg_iface="${1:-}"
+    agg_ifstatus_text="$(ifstatus "$agg_iface" 2>/dev/null || true)"
+    [ -n "$agg_ifstatus_text" ] || return 1
+
+    agg_up="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" up)"
+    agg_pending="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" pending)"
+    agg_proto="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" proto)"
+    agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" l3_device)"
+    [ -n "$agg_dev" ] || agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" device)"
+    [ "$agg_pending" = 'true' ] || return 1
+
+    agg_has_addr='0'
+    printf '%s\n' "$agg_ifstatus_text" | grep -F '"address": "' >/dev/null 2>&1 && agg_has_addr='1'
+    if nradio_5g_aggregation_ipv6_gateway_failed "$agg_dev"; then
+        agg_gw_failed='1'
+    else
+        agg_gw_failed='0'
+    fi
+    if nradio_5g_aggregation_ipv6_recent_stuck_logs "$agg_iface"; then
+        agg_log_stuck='1'
+    else
+        agg_log_stuck='0'
+    fi
+
+    log "IPv6卡死检查: $agg_iface up=${agg_up:-?} pending=${agg_pending:-?} proto=${agg_proto:-?} dev=${agg_dev:-?} addr=$agg_has_addr gw_failed=$agg_gw_failed log_stuck=$agg_log_stuck"
+    [ "$agg_log_stuck" = '1' ] && { [ "$agg_up" != 'true' ] || [ "$agg_has_addr" != '1' ] || [ "$agg_gw_failed" = '1' ]; }
+}
+
+nradio_5g_aggregation_ipv6_cleanup_iface_helpers() {
+    agg_iface="${1:-}"
+    agg_cleaned='0'
+    agg_helper_pids=''
+
+    agg_helper_pids="$(ps w 2>/dev/null | awk -v iface="$agg_iface" '
+        /dhcpv6\.sh/ && $0 ~ iface { print $1 }
+    ' || true)"
+    for agg_pid in $agg_helper_pids; do
+        case "$agg_pid" in
+            ''|*[!0-9]*)
+                continue
+                ;;
+        esac
+        [ "$agg_pid" = "$$" ] && continue
+        log "IPv6卡死恢复: 结束残留 dhcpv6.sh pid=$agg_pid iface=$agg_iface"
+        kill "$agg_pid" >/dev/null 2>&1 || true
+        agg_cleaned='1'
+    done
+
+    for agg_pidfile in "/var/run/odhcp6c-$agg_iface.pid" "/var/run/odhcp6c.$agg_iface.pid" "/tmp/odhcp6c-$agg_iface.pid" "/tmp/odhcp6c.$agg_iface.pid"; do
+        [ -r "$agg_pidfile" ] || continue
+        agg_pid="$(sed -n '1p' "$agg_pidfile" 2>/dev/null || true)"
+        case "$agg_pid" in
+            ''|*[!0-9]*)
+                continue
+                ;;
+        esac
+        log "IPv6卡死恢复: 结束 odhcp6c pid=$agg_pid iface=$agg_iface"
+        kill "$agg_pid" >/dev/null 2>&1 || true
+        agg_cleaned='1'
+    done
+
+    [ "$agg_cleaned" = '1' ] && sleep 1
+    return 0
+}
+
+nradio_5g_aggregation_ipv6_flush_dev_neigh() {
+    agg_dev="${1:-}"
+    [ -n "$agg_dev" ] || return 1
+    command -v ip >/dev/null 2>&1 || return 1
+
+    log "IPv6卡死恢复: 清理 $agg_dev IPv6 邻居缓存"
+    ip -6 neigh flush dev "$agg_dev" >/dev/null 2>&1 || true
+}
+
+nradio_5g_aggregation_ipv6_recover_pending_stuck_iface() {
+    agg_iface="${1:-}"
+    agg_ifstatus_text="$(ifstatus "$agg_iface" 2>/dev/null || true)"
+    [ -n "$agg_ifstatus_text" ] || return 1
+
+    agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" l3_device)"
+    [ -n "$agg_dev" ] || agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" device)"
+    nradio_5g_aggregation_ipv6_iface_pending_stuck "$agg_iface" || return 1
+
+    command -v ifdown >/dev/null 2>&1 || return 1
+    command -v ifup >/dev/null 2>&1 || return 1
+    log "IPv6卡死恢复: $agg_iface 命中 pending/odhcp6c/NDP 异常，执行二段恢复"
+    nradio_5g_aggregation_ipv6_cleanup_iface_helpers "$agg_iface"
+    nradio_5g_aggregation_ipv6_ensure_dev_link_local "$agg_dev" || true
+    nradio_5g_aggregation_ipv6_flush_dev_neigh "$agg_dev" || true
+    ifdown "$agg_iface" >/dev/null 2>&1 || true
+    sleep 2
+    nradio_5g_aggregation_ipv6_ensure_dev_link_local "$agg_dev" || true
+    nradio_5g_aggregation_ipv6_flush_dev_neigh "$agg_dev" || true
+    ifup "$agg_iface" >/dev/null 2>&1 || true
+    return 0
+}
+
+nradio_5g_aggregation_ipv6_recover_iface() {
+    agg_iface="${1:-}"
+    agg_ifstatus_text="$(ifstatus "$agg_iface" 2>/dev/null || true)"
+    [ -n "$agg_ifstatus_text" ] || {
+        log "IPv6接口: $agg_iface = 不存在，跳过"
+        return 1
+    }
+
+    agg_up="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" up)"
+    agg_pending="$(nradio_5g_aggregation_ifstatus_bool "$agg_ifstatus_text" pending)"
+    agg_proto="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" proto)"
+    agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" l3_device)"
+    [ -n "$agg_dev" ] || agg_dev="$(nradio_5g_aggregation_ifstatus_field "$agg_ifstatus_text" device)"
+    if printf '%s\n' "$agg_ifstatus_text" | grep -F '"address": "' >/dev/null 2>&1; then
+        agg_has_addr='1'
+    else
+        agg_has_addr='0'
+    fi
+    if nradio_5g_aggregation_ipv6_iface_has_default_route "$agg_dev"; then
+        agg_has_route='1'
+    else
+        agg_has_route='0'
+    fi
+    agg_gw="$(nradio_5g_aggregation_ipv6_default_gateway "$agg_dev" 2>/dev/null || true)"
+    if nradio_5g_aggregation_ipv6_gateway_reachable "$agg_dev"; then
+        agg_gw_ok='1'
+    else
+        agg_gw_ok='0'
+    fi
+    if nradio_5g_aggregation_ipv6_ping_public_quiet "$agg_dev"; then
+        agg_public_ok='1'
+    else
+        agg_public_ok='0'
+    fi
+
+    log "IPv6接口: $agg_iface up=${agg_up:-?} pending=${agg_pending:-?} proto=${agg_proto:-?} dev=${agg_dev:-?} addr=$agg_has_addr default=$agg_has_route gw=${agg_gw:-无} gw_ok=$agg_gw_ok public=$agg_public_ok"
+    if [ "$agg_up" = 'true' ] && [ "$agg_pending" != 'true' ] && [ "$agg_has_addr" = '1' ] && [ "$agg_has_route" = '1' ] && [ "$agg_gw_ok" = '1' ] && [ "$agg_public_ok" = '1' ]; then
+        return 1
+    fi
+
+    command -v ifdown >/dev/null 2>&1 || return 1
+    command -v ifup >/dev/null 2>&1 || return 1
+    log "IPv6恢复: 重拉 $agg_iface"
+    nradio_5g_aggregation_ipv6_ensure_dev_link_local "$agg_dev" || true
+    ifdown "$agg_iface" >/dev/null 2>&1 || true
+    sleep 2
+    nradio_5g_aggregation_ipv6_ensure_dev_link_local "$agg_dev" || true
+    ifup "$agg_iface" >/dev/null 2>&1 || true
+    return 0
+}
+
+nradio_5g_aggregation_ipv6_light_recovery() {
+    agg_changed='0'
+    agg_seen='0'
+
+    selfcheck_print_header "IPv6 轻量恢复"
+    if ! nradio_5g_aggregation_model_supported; then
+        log "结果:   当前机型无 5G IPv6 轻量恢复动作"
+        return 0
+    fi
+    command -v ifstatus >/dev/null 2>&1 || {
+        log "IPv6恢复: 缺少 ifstatus，无法自动检测"
+        return 1
+    }
+
+    log "说明:   自动检测 cpe_6 / cpe1_6 / wan6，只重拉异常 IPv6 接口"
+    ip -6 route show default 2>/dev/null | sed -n '1,3p' | sed 's/^/IPv6默认: /' || true
+    for agg_iface in cpe_6 cpe1_6 wan6; do
+        if ifstatus "$agg_iface" >/dev/null 2>&1; then
+            agg_seen='1'
+            if nradio_5g_aggregation_ipv6_recover_iface "$agg_iface"; then
+                agg_changed='1'
+            fi
+        else
+            log "IPv6接口: $agg_iface = 不存在，跳过"
+        fi
+    done
+
+    [ "$agg_seen" = '1' ] || {
+        log "IPv6恢复: 未发现 cpe_6 / cpe1_6 / wan6"
+        return 1
+    }
+
+    if [ "$agg_changed" = '1' ]; then
+        sleep 8
+        if [ -x /etc/init.d/odhcpd ]; then
+            log "IPv6恢复: 重启 odhcpd，刷新 LAN 前缀下发"
+            /etc/init.d/odhcpd restart >/dev/null 2>&1 || true
+        fi
+        if command -v mwan3 >/dev/null 2>&1; then
+            for agg_iface in cpe_6 cpe1_6 wan6; do
+                if ifstatus "$agg_iface" >/dev/null 2>&1; then
+                    mwan3 ifup "$agg_iface" >/dev/null 2>&1 || true
+                fi
+            done
+            nradio_5g_aggregation_restart_mwan || true
+        fi
+    else
+        log "IPv6恢复: 未发现需要重拉的异常 IPv6 接口"
+    fi
+
+    agg_ready='0'
+    for agg_iface in cpe_6 cpe1_6 wan6; do
+        if ifstatus "$agg_iface" >/dev/null 2>&1; then
+            if nradio_5g_aggregation_ipv6_wait_iface_ready "$agg_iface" 120 10; then
+                agg_ready='1'
+                break
+            fi
+        fi
+    done
+
+    if [ "$agg_ready" != '1' ]; then
+        agg_stuck_changed='0'
+        for agg_iface in cpe_6 cpe1_6 wan6; do
+            if ifstatus "$agg_iface" >/dev/null 2>&1; then
+                if nradio_5g_aggregation_ipv6_recover_pending_stuck_iface "$agg_iface"; then
+                    agg_stuck_changed='1'
+                fi
+            fi
+        done
+
+        if [ "$agg_stuck_changed" = '1' ]; then
+            sleep 8
+            if [ -x /etc/init.d/odhcpd ]; then
+                log "IPv6卡死恢复: 重启 odhcpd，刷新 LAN 前缀下发"
+                /etc/init.d/odhcpd restart >/dev/null 2>&1 || true
+            fi
+            if command -v mwan3 >/dev/null 2>&1; then
+                for agg_iface in cpe_6 cpe1_6 wan6; do
+                    if ifstatus "$agg_iface" >/dev/null 2>&1; then
+                        mwan3 ifup "$agg_iface" >/dev/null 2>&1 || true
+                    fi
+                done
+                nradio_5g_aggregation_restart_mwan || true
+            fi
+
+            for agg_iface in cpe_6 cpe1_6 wan6; do
+                if ifstatus "$agg_iface" >/dev/null 2>&1; then
+                    if nradio_5g_aggregation_ipv6_wait_iface_ready "$agg_iface" 120 10; then
+                        agg_ready='1'
+                        break
+                    fi
+                fi
+            done
+        else
+            log "IPv6卡死恢复: 未命中 pending/odhcp6c/NDP 二段恢复条件"
+        fi
+    fi
+
+    nradio_5g_aggregation_print_diagnostics
+    if [ "$agg_ready" = '1' ]; then
+        nradio_5g_aggregation_ipv6_ping_probe || true
+    else
+        log "IPv6恢复: 地址、默认路由、下一跳或公网探测未全部恢复"
+        nradio_5g_aggregation_ipv6_recent_log_summary
+        nradio_5g_aggregation_ipv6_ping_probe || true
+    fi
+}
+
 run_5g_aggregation_repair_check() {
     nradio_5g_aggregation_print_diagnostics
 
@@ -13317,10 +14100,11 @@ run_5g_aggregation_repair_check() {
     printf '3. 30秒测速流量监控\n'
     printf '4. 开启硬件 offload 并验证\n'
     printf '5. 还原为软件 offload 并验证\n'
+    printf '6. IPv6 轻量恢复（自动检测双接口）\n'
     printf '0. 结束\n'
-    printf '请选择 0、1、2、3、4 或 5: '
+    printf '请选择 0、1、2、3、4、5 或 6: '
     if ! ui_read_line; then
-        log "提示:   已完成诊断；需要修复或监控时请交互式选择 1/2/3/4/5"
+        log "提示:   已完成诊断；需要修复或监控时请交互式选择 1/2/3/4/5/6"
         return 0
     fi
 
@@ -13347,6 +14131,9 @@ run_5g_aggregation_repair_check() {
         5)
             confirm_or_exit "确认直接还原为软件 offload 吗？"
             nradio_5g_aggregation_restore_hw_offload
+            ;;
+        6)
+            nradio_5g_aggregation_ipv6_light_recovery
             ;;
         *)
             die_menu_input_issue "$UI_READ_RESULT"
@@ -14552,6 +15339,8 @@ run_unified_port_conflict_check() {
     UNIFIED_PORT_WARNINGS=0
     adg_port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
     [ -n "$adg_port" ] || adg_port='3000'
+    adg_dns_port="$(uci -q get AdGuardHome.AdGuardHome.dns_port 2>/dev/null || true)"
+    [ -n "$adg_dns_port" ] || adg_dns_port="$ADGUARDHOME_DNS_PORT"
     openlist_port="$(uci -q get openlist.main.port 2>/dev/null || true)"
     [ -n "$openlist_port" ] || openlist_port='5244'
     ttyd_port="$(get_ttyd_bind_value port 2>/dev/null || true)"
@@ -14563,6 +15352,7 @@ run_unified_port_conflict_check() {
 
     selfcheck_print_header "端口与服务冲突检查"
     unified_check_port_owner "AdGuardHome" "$adg_port" "AdGuardHome" "/usr/bin/AdGuardHome/AdGuardHome /usr/lib/lua/luci/controller/AdGuardHome.lua" 0
+    unified_check_port_owner "AdGuardHome DNS" "$adg_dns_port" "AdGuardHome" "/usr/bin/AdGuardHome/AdGuardHome /etc/init.d/AdGuardHome" 0
     unified_check_port_owner "OpenList" "$openlist_port" "openlist" "$OPENLIST_BIN_PATH /usr/lib/lua/luci/controller/nradio_adv/openlist.lua" 0
     unified_check_port_owner "Web SSH / ttyd" "$ttyd_port" "ttyd" "/usr/bin/ttyd /usr/lib/lua/luci/controller/nradio_adv/webssh.lua" 1
     unified_check_port_owner "$DDNSGO_APP_NAME" "$ddnsgo_port" "ddns-go" "$DDNSGO_BIN_PATH $DDNSGO_CONTROLLER" 1
@@ -16922,6 +17712,92 @@ local frame_url = base_url .. "/" .. tab
             transition: none;
         }
     }
+    /* NRadio AdGuardHome wrapper polish 2026-05-23: denser tabs, steadier iframe frame, mobile safe spacing. */
+    .adg-shell {
+        border-radius: 18px;
+        padding: 16px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(47, 211, 238, 0.13), transparent 30%),
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.13), transparent 32%),
+            linear-gradient(180deg, rgba(31, 37, 52, 0.985), rgba(18, 23, 34, 0.985));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 26px 68px rgba(0,0,0,0.30);
+        isolation: isolate;
+    }
+    .adg-shell::after {
+        content: "";
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        top: 0;
+        height: 3px;
+        border-radius: 0 0 999px 999px;
+        background: linear-gradient(90deg, rgba(47,211,238,.0), rgba(47,211,238,.86), rgba(108,162,255,.86), rgba(47,211,238,.0));
+        pointer-events: none;
+    }
+    .adg-head {
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .adg-title {
+        letter-spacing: -0.02em;
+    }
+    .adg-sub {
+        max-width: 62ch;
+        color: #b4c5dd;
+    }
+    .adg-tabs {
+        gap: 5px;
+        padding: 5px;
+        background: rgba(6, 10, 18, 0.34);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .adg-tab {
+        min-height: 38px;
+        padding: 0 14px;
+        font-weight: 800;
+    }
+    .adg-frame-wrap {
+        min-height: 660px;
+        border-radius: 16px;
+        border-color: rgba(84, 104, 142, 0.68);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 22px 52px rgba(0,0,0,0.22);
+    }
+    .adg-frame {
+        min-height: 760px;
+        background: #151923;
+    }
+    @media (min-width: 1280px) {
+        .adg-shell {
+            padding: 18px;
+        }
+        .adg-frame {
+            min-height: 800px;
+        }
+    }
+    @media (max-width: 720px) {
+        .adg-head {
+            align-items: stretch;
+            gap: 12px;
+        }
+        .adg-tabs {
+            border-radius: 16px;
+        }
+        .adg-tab {
+            min-height: 40px;
+        }
+    }
+    @media (max-width: 480px) {
+        .adg-shell {
+            margin: 0 -2px 16px;
+            padding: 10px;
+        }
+        .adg-frame-wrap {
+            border-radius: 13px;
+        }
+        .adg-frame {
+            min-height: 640px;
+        }
+    }
 </style>
 <div class="cbi-map adg-shell">
     <div class="adg-head">
@@ -17119,12 +17995,20 @@ function adgSetRefreshState(loading) {
 
 window.adgDashboardHttpPort = "";
 
+function adgHostForPort() {
+	var host = window.location.hostname || "127.0.0.1";
+	if (host.indexOf(":") >= 0 && host.charAt(0) !== "[") {
+		host = "[" + host + "]";
+	}
+	return host;
+}
+
 function adgOpenOriginalDashboard() {
 	var port = window.adgDashboardHttpPort || "";
 	if (!port) {
 		return;
 	}
-	window.open("http://" + window.location.hostname + ":" + port + "/", "_blank");
+	window.open("http://" + adgHostForPort() + ":" + port + "/", "_blank");
 }
 
 function adgBuildLinePath(values, width, height, padding) {
@@ -21484,6 +22368,149 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 			border: 1px solid ButtonText;
 		}
 	}
+
+		/* NRadio AdGuardHome status polish 2026-05-23: compact dashboard, stronger hierarchy, safer overflow. */
+		#adg-dashboard-shell {
+			padding: 14px 16px 18px;
+		}
+
+		#adg-dashboard-shell .adg-hero-grid {
+			grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.78fr);
+			gap: 14px;
+			margin-bottom: 14px;
+		}
+
+		#adg-dashboard-shell .adg-runtime-panel,
+		#adg-dashboard-shell .adg-action-panel,
+		#adg-dashboard-shell .adg-glance-card,
+		#adg-dashboard-shell .adg-dashboard-card {
+			border-radius: 18px;
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 38px rgba(0,0,0,0.18);
+		}
+
+		#adg-dashboard-shell .adg-runtime-panel::after,
+		#adg-dashboard-shell .adg-action-panel::after,
+		#adg-dashboard-shell .adg-glance-card::after,
+		#adg-dashboard-shell .adg-dashboard-card::after {
+			content: "";
+			position: absolute;
+			left: 16px;
+			right: 16px;
+			top: 0;
+			height: 2px;
+			border-radius: 0 0 999px 999px;
+			background: linear-gradient(90deg, transparent, rgba(var(--adg-polish-cyan-rgb), .72), rgba(var(--adg-polish-blue-rgb), .70), transparent);
+			pointer-events: none;
+		}
+
+		#adg-dashboard-shell .adg-panel-title {
+			font-size: 21px;
+			letter-spacing: -0.02em;
+		}
+
+		#adg-dashboard-shell .adg-panel-sub {
+			max-width: 42ch;
+		}
+
+		#adg-dashboard-shell .adg-runtime-wrap {
+			gap: 8px;
+			margin-top: 14px;
+		}
+
+		#adg-dashboard-shell .adg-runtime-pill,
+		#adg-dashboard-shell .adg-runtime-item {
+			min-height: 38px;
+			padding: 8px 12px;
+		}
+
+		#adg-dashboard-shell .adg-glance-grid {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			gap: 10px;
+			margin-top: 12px;
+		}
+
+		#adg-dashboard-shell .adg-glance-card {
+			min-height: 112px;
+			padding: 13px 14px 12px;
+		}
+
+		#adg-dashboard-shell .adg-glance-value {
+			font-size: clamp(20px, 2.3vw, 27px);
+			letter-spacing: -0.03em;
+		}
+
+		#adg-dashboard-shell .adg-dashboard-grid {
+			gap: 12px;
+		}
+
+		#adg-dashboard-shell .adg-dashboard-card {
+			min-width: 0;
+		}
+
+		#adg-dashboard-shell .adg-chart-wrap {
+			min-height: 148px;
+		}
+
+		#adg-dashboard-shell svg,
+		#adg-dashboard-shell canvas,
+		#adg-dashboard-shell pre,
+		#adg-dashboard-shell code {
+			max-width: 100%;
+		}
+
+		#adg-dashboard-shell .adg-dashboard-head {
+			margin: 14px 0 10px;
+		}
+
+		#adg-dashboard-shell .adg-action-panel .cbi-button {
+			height: 46px;
+			min-height: 46px;
+			line-height: 44px;
+		}
+
+		@media (min-width: 1320px) {
+			#adg-dashboard-shell {
+				padding: 16px 18px 20px;
+			}
+
+			#adg-dashboard-shell .adg-dashboard-grid {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+		}
+
+		@media (max-width: 960px) {
+			#adg-dashboard-shell .adg-hero-grid,
+			#adg-dashboard-shell .adg-dashboard-grid {
+				grid-template-columns: 1fr;
+			}
+
+			#adg-dashboard-shell .adg-glance-grid {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+		}
+
+		@media (max-width: 520px) {
+			#adg-dashboard-shell {
+				padding: 10px 8px 14px;
+			}
+
+			#adg-dashboard-shell .adg-runtime-panel,
+			#adg-dashboard-shell .adg-action-panel,
+			#adg-dashboard-shell .adg-glance-card,
+			#adg-dashboard-shell .adg-dashboard-card {
+				border-radius: 14px;
+			}
+
+			#adg-dashboard-shell .adg-glance-grid {
+				grid-template-columns: 1fr;
+			}
+
+			#adg-dashboard-shell .adg-runtime-pill,
+			#adg-dashboard-shell .adg-runtime-item {
+				width: 100%;
+				justify-content: space-between;
+			}
+		}
 </style>
 <fieldset id="AdGuardHome_status_fieldset" class="cbi-section">
 	<div id="adg-dashboard-shell" class="adg-dashboard-shell" aria-live="polite">
@@ -21624,7 +22651,7 @@ o.placeholder=3000
 o.default=3000
 o.datatype="port"
 o.optional = false
-o.description = translate("<input type=\"button\" class=\"cbi-button adg-origin-button\" value=\"打开原版页面（"..httpport.."）\" onclick=\"window.open('http://'+window.location.hostname+':"..httpport.."/')\"/>")
+o.description = translate("<input type=\"button\" class=\"cbi-button adg-origin-button\" value=\"打开原版页面（"..httpport.."）\" onclick=\"(function(p){var h=window.location.hostname||'127.0.0.1';if(h.indexOf(':')>=0&&h.charAt(0)!='['){h='['+h+']';}window.open('http://'+h+':'+p+'/');})('"..httpport.."')\"/>")
 ---- dashboard user
 o = s:option(Value, "dashboard_user", translate("仪表盘 API 用户"), translate("状态页用于读取原版仪表盘运行态和 24 小时统计"))
 o.default = "admin"
@@ -21659,7 +22686,10 @@ else
 		uci:save("AdGuardHome")
 		uci:commit("AdGuardHome")
 	else
-		version=uci:get("AdGuardHome","AdGuardHome","version")
+		version=uci:get("AdGuardHome","AdGuardHome","version") or ""
+	end
+	if version == "" then
+		version = translate("已安装，版本待识别")
 	end
 	e=version..e
 end
@@ -21949,6 +22979,393 @@ cleanup_adguard_placeholder_config() {
     log "备注:     已移除占位 AdGuardHome 配置，保留首次启动向导"
 }
 
+is_local_port_listening() {
+    listen_port="$1"
+    case "$listen_port" in
+        ''|*[!0-9]*|0)
+            return 1
+            ;;
+    esac
+
+    if command -v netstat >/dev/null 2>&1; then
+        if netstat -ln 2>/dev/null | awk -v p="$listen_port" '
+            $1 ~ /^(tcp|udp)/ {
+                local_addr = $4
+                if (local_addr ~ (":" p "$") || local_addr ~ ("\\." p "$"))
+                    found = 1
+            }
+            END { exit found ? 0 : 1 }
+        '; then
+            return 0
+        fi
+    fi
+
+    listen_hex="$(printf '%04X' "$listen_port" 2>/dev/null || true)"
+    [ -n "$listen_hex" ] || return 1
+    for proc_net_table in /proc/net/udp /proc/net/udp6 /proc/net/tcp /proc/net/tcp6; do
+        [ -r "$proc_net_table" ] || continue
+        case "$proc_net_table" in
+            */tcp|*/tcp6) listen_state='0A' ;;
+            *) listen_state='' ;;
+        esac
+        if awk -v p="$listen_hex" -v want_state="$listen_state" '
+            NR > 1 {
+                split($2, addr, ":")
+                if (addr[2] == p && (want_state == "" || $4 == want_state)) {
+                    found = 1
+                }
+            }
+            END { exit found ? 0 : 1 }
+        ' "$proc_net_table" 2>/dev/null; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+is_openclash_runtime_present() {
+    if pgrep -f '/etc/openclash/|openclash_watchdog|/etc/openclash/core/clash' >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ -x /etc/init.d/openclash ] && /etc/init.d/openclash status 2>/dev/null | grep -qi 'running'; then
+        return 0
+    fi
+    return 1
+}
+
+ensure_openclash_dns_upstream_ready() {
+    oc_dns_port="${OPENCLASH_DNS_UPSTREAM_PORT:-7874}"
+    oc_dns_config_changed='0'
+
+    command -v uci >/dev/null 2>&1 || return 1
+    [ -f /etc/config/openclash ] || return 1
+
+    if [ "$(uci -q get openclash.config.enable_redirect_dns 2>/dev/null || true)" != '0' ]; then
+        oc_dns_config_changed='1'
+    fi
+    if [ "$(uci -q get openclash.config.redirect_dns 2>/dev/null || true)" != '0' ]; then
+        oc_dns_config_changed='1'
+    fi
+    if [ "$(uci -q get openclash.config.dns_port 2>/dev/null || true)" != "$oc_dns_port" ]; then
+        oc_dns_config_changed='1'
+    fi
+
+    if [ "$oc_dns_config_changed" = '1' ]; then
+        backup_file /etc/config/openclash
+        uci set openclash.config.enable_redirect_dns='0' >/dev/null 2>&1 || true
+        uci set openclash.config.redirect_dns='0' >/dev/null 2>&1 || true
+        uci set "openclash.config.dns_port=$oc_dns_port" >/dev/null 2>&1 || true
+        uci commit openclash >/dev/null 2>&1 || true
+        [ -x /etc/init.d/openclash ] && /etc/init.d/openclash restart >/dev/null 2>&1 || true
+        sleep 2
+        adg_dns_chain_changed='1'
+    fi
+
+    is_openclash_runtime_present || return 1
+    is_local_port_listening "$oc_dns_port" || return 1
+    return 0
+}
+
+ensure_adguard_dns_yaml_file() {
+    yaml_file="$1"
+    lan_ip="$2"
+    dns_port="${3:-${ADGUARDHOME_DNS_PORT:-554}}"
+    upstream_dns="${4:-127.0.0.1:${OPENCLASH_DNS_UPSTREAM_PORT:-7874}}"
+    [ -f "$yaml_file" ] || return 0
+
+    adg_dns_yaml_tmp="${yaml_file}.nradiodns.$$"
+    awk -v lan_ip="$lan_ip" -v dns_port="$dns_port" -v upstream_dns="$upstream_dns" '
+        function print_dns_defaults() {
+            print "  bind_hosts:"
+            print "    - 127.0.0.1"
+            print "    - " lan_ip
+            print "  port: " dns_port
+            print "  upstream_dns:"
+            print "    - " upstream_dns
+        }
+        /^dns:[[:space:]]*$/ {
+            print "dns:"
+            print_dns_defaults()
+            in_dns = 1
+            seen_dns = 1
+            skip_list = 0
+            next
+        }
+        in_dns && /^[^[:space:]]/ {
+            in_dns = 0
+            skip_list = 0
+        }
+        in_dns {
+            if (skip_list) {
+                if ($0 ~ /^    / || $0 ~ /^  -[[:space:]]/ || $0 ~ /^[[:space:]]*$/ || $0 ~ /^  #[[:space:]]*/) {
+                    next
+                }
+                skip_list = 0
+            }
+            if ($0 ~ /^  bind_hosts:[[:space:]]*/ || $0 ~ /^  upstream_dns:[[:space:]]*/) {
+                skip_list = 1
+                next
+            }
+            if ($0 ~ /^  port:[[:space:]]*/) {
+                next
+            }
+        }
+        { print }
+        END {
+            if (!seen_dns) {
+                print ""
+                print "dns:"
+                print_dns_defaults()
+            }
+        }
+    ' "$yaml_file" > "$adg_dns_yaml_tmp" || {
+        rm -f "$adg_dns_yaml_tmp" 2>/dev/null || true
+        return 1
+    }
+
+    if cmp -s "$adg_dns_yaml_tmp" "$yaml_file" 2>/dev/null; then
+        rm -f "$adg_dns_yaml_tmp" 2>/dev/null || true
+        return 0
+    fi
+
+    backup_file "$yaml_file"
+    mv "$adg_dns_yaml_tmp" "$yaml_file" || {
+        rm -f "$adg_dns_yaml_tmp" 2>/dev/null || true
+        return 1
+    }
+    adg_dns_chain_changed='1'
+}
+
+ensure_adguard_config_from_template_if_ready() {
+    template_yaml="$1"
+    configpath="$2"
+    lan_ip="$3"
+    binpath="$4"
+    dns_port="${5:-${ADGUARDHOME_DNS_PORT:-554}}"
+    upstream_dns="${6:-127.0.0.1:${OPENCLASH_DNS_UPSTREAM_PORT:-7874}}"
+
+    [ -s "$configpath" ] && return 0
+    [ -x "$binpath" ] || return 0
+    [ -s "$template_yaml" ] || return 0
+
+    config_dir="${configpath%/*}"
+    [ "$config_dir" != "$configpath" ] && mkdir -p "$config_dir" >/dev/null 2>&1 || true
+
+    fallback_dns="$(awk -v lan_ip="$lan_ip" '
+        /^[^#]*nameserver[[:space:]]+/ {
+            server = $2
+            if (server != "" && server !~ /^127\./ && server != "0.0.0.0" && server != "::1" && server != lan_ip) {
+                print "  - " server
+            }
+        }
+    ' /tmp/resolv.conf.auto 2>/dev/null)"
+    if [ -z "$fallback_dns" ]; then
+        fallback_dns='  - 223.5.5.5
+  - 119.29.29.29'
+    fi
+
+    adg_config_tmp="${configpath}.nradiocfg.$$"
+    awk -v fallback_dns="$fallback_dns" '
+        $0 == "#bootstrap_dns" {
+            print fallback_dns
+            next
+        }
+        $0 == "#upstream_dns" {
+            print fallback_dns
+            next
+        }
+        { print }
+    ' "$template_yaml" > "$adg_config_tmp" || {
+        rm -f "$adg_config_tmp" 2>/dev/null || true
+        return 0
+    }
+
+    if [ -e "$configpath" ]; then
+        backup_file "$configpath"
+    fi
+    mv "$adg_config_tmp" "$configpath" || {
+        rm -f "$adg_config_tmp" 2>/dev/null || true
+        return 0
+    }
+    chmod 600 "$configpath" 2>/dev/null || true
+
+    ensure_adguard_dns_yaml_file "$configpath" "$lan_ip" "$dns_port" "$upstream_dns"
+
+    if "$binpath" -c "$configpath" --check-config >/tmp/AdGuardHometest.log 2>&1; then
+        adg_dns_chain_changed='1'
+        log "DNS:    已生成 AdGuardHome 配置，准备接入 dnsmasq 上游"
+        return 0
+    fi
+
+    backup_file "$configpath"
+    rm -f "$configpath" 2>/dev/null || true
+    log "DNS:    AdGuardHome 配置生成后校验失败，暂不切换 dnsmasq 上游，避免断网"
+    return 0
+}
+
+restore_dnsmasq_system_dns_when_adguard_unready() {
+    adg_dns_fallback_changed='0'
+    adg_dns_server_rule="127.0.0.1#${ADGUARDHOME_DNS_PORT:-554}"
+    adg_legacy_dns_server_rule="127.0.0.1#${ADGUARDHOME_LEGACY_DNS_PORT:-553}"
+    adg_remove_legacy_dns_server_rule='1'
+    adg_restore_needed='0'
+    command -v uci >/dev/null 2>&1 || return 0
+    [ -f /etc/config/dhcp ] || return 0
+
+    if [ -f /etc/config/mosdns ]; then
+        mosdns_listen_port="$(uci -q get mosdns.main.listen_port 2>/dev/null || true)"
+        [ -n "$mosdns_listen_port" ] || mosdns_listen_port="${MOSDNS_PORT:-553}"
+        if [ "$mosdns_listen_port" = "${ADGUARDHOME_LEGACY_DNS_PORT:-553}" ]; then
+            adg_remove_legacy_dns_server_rule='0'
+        fi
+    fi
+
+    dhcp_show="$(uci -q show dhcp 2>/dev/null || true)"
+    if printf '%s\n' "$dhcp_show" | grep -F "dhcp.@dnsmasq[0].server='$adg_dns_server_rule'" >/dev/null 2>&1; then
+        adg_restore_needed='1'
+    fi
+    if [ "$adg_remove_legacy_dns_server_rule" = '1' ] && printf '%s\n' "$dhcp_show" | grep -F "dhcp.@dnsmasq[0].server='$adg_legacy_dns_server_rule'" >/dev/null 2>&1; then
+        adg_restore_needed='1'
+    fi
+    [ "$adg_restore_needed" = '1' ] || return 0
+
+    backup_file /etc/config/dhcp
+    uci -q del_list "dhcp.@dnsmasq[0].server=$adg_dns_server_rule" >/dev/null 2>&1 || true
+    if [ "$adg_remove_legacy_dns_server_rule" = '1' ]; then
+        uci -q del_list "dhcp.@dnsmasq[0].server=$adg_legacy_dns_server_rule" >/dev/null 2>&1 || true
+    fi
+    uci set "dhcp.@dnsmasq[0].port=53" >/dev/null 2>&1 || return 1
+    uci set "dhcp.@dnsmasq[0].noresolv=0" >/dev/null 2>&1 || return 1
+    uci commit dhcp >/dev/null 2>&1 || return 1
+    [ -x /etc/init.d/dnsmasq ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+    adg_dns_fallback_changed='1'
+}
+
+ensure_adguard_openclash_dns_chain() {
+    command -v uci >/dev/null 2>&1 || return 0
+
+    lan_ip="$(uci -q get network.lan.ipaddr 2>/dev/null || true)"
+    case "$lan_ip" in
+        ''|*[!0-9.]*)
+            lan_ip='192.168.66.1'
+            ;;
+    esac
+
+    adg_dns_chain_changed='0'
+    adg_dns_port="${ADGUARDHOME_DNS_PORT:-554}"
+    adg_legacy_dns_port="${ADGUARDHOME_LEGACY_DNS_PORT:-553}"
+    oc_dns_port="${OPENCLASH_DNS_UPSTREAM_PORT:-7874}"
+    adg_dns_server_rule="127.0.0.1#$adg_dns_port"
+    adg_legacy_dns_server_rule="127.0.0.1#$adg_legacy_dns_port"
+    adg_upstream_dns="127.0.0.1:$oc_dns_port"
+    template_yaml="/usr/share/AdGuardHome/AdGuardHome_template.yaml"
+    configpath="$(get_adguard_configpath)"
+    adg_binpath="$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)"
+    [ -n "$adg_binpath" ] || adg_binpath="/usr/bin/AdGuardHome/AdGuardHome"
+
+    if [ ! -x "$adg_binpath" ]; then
+        restore_dnsmasq_system_dns_when_adguard_unready
+        if [ "$adg_dns_fallback_changed" = '1' ]; then
+            log "DNS:    AdGuardHome 核心未就绪，已恢复 dnsmasq 使用系统上游，避免断网"
+        else
+            log "DNS:    AdGuardHome 核心未就绪，暂不切换 dnsmasq 上游，避免断网"
+        fi
+        return 0
+    fi
+
+    if ! ensure_openclash_dns_upstream_ready; then
+        restore_dnsmasq_system_dns_when_adguard_unready
+        if [ "$adg_dns_fallback_changed" = '1' ]; then
+            log "DNS:    未检测到 $OPENCLASH_DISPLAY_NAME:$oc_dns_port 可用监听，已恢复 dnsmasq 使用系统上游，避免断网"
+        else
+            log "DNS:    未检测到 $OPENCLASH_DISPLAY_NAME:$oc_dns_port 可用监听，暂不切换 dnsmasq 上游，避免断网"
+        fi
+        return 0
+    fi
+
+    ensure_adguard_dns_yaml_file "$template_yaml" "$lan_ip" "$adg_dns_port" "$adg_upstream_dns"
+    ensure_adguard_config_from_template_if_ready "$template_yaml" "$configpath" "$lan_ip" "$adg_binpath" "$adg_dns_port" "$adg_upstream_dns"
+    ensure_adguard_dns_yaml_file "$configpath" "$lan_ip" "$adg_dns_port" "$adg_upstream_dns"
+
+    if [ ! -s "$configpath" ]; then
+        restore_dnsmasq_system_dns_when_adguard_unready
+        if [ "$adg_dns_fallback_changed" = '1' ]; then
+            log "DNS:    AdGuardHome 配置未就绪，已恢复 dnsmasq 使用系统上游，避免断网"
+        else
+            log "DNS:    AdGuardHome 配置未就绪，暂不切换 dnsmasq 上游，避免断网"
+        fi
+        return 0
+    fi
+
+    if [ -f /etc/config/dhcp ]; then
+        if [ "$(uci -q get AdGuardHome.AdGuardHome.enabled 2>/dev/null || true)" != '1' ]; then
+            adg_dns_chain_changed='1'
+        fi
+        if [ "$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)" != "$adg_binpath" ]; then
+            adg_dns_chain_changed='1'
+        fi
+        if [ "$(uci -q get AdGuardHome.AdGuardHome.configpath 2>/dev/null || true)" != "$configpath" ]; then
+            adg_dns_chain_changed='1'
+        fi
+        if [ "$(uci -q get "dhcp.@dnsmasq[0].port" 2>/dev/null || true)" != '53' ]; then
+            adg_dns_chain_changed='1'
+        fi
+        if [ "$(uci -q get "dhcp.@dnsmasq[0].noresolv" 2>/dev/null || true)" != '1' ]; then
+            adg_dns_chain_changed='1'
+        fi
+        if ! uci -q show dhcp 2>/dev/null | grep -F "dhcp.@dnsmasq[0].server='$adg_dns_server_rule'" >/dev/null 2>&1; then
+            adg_dns_chain_changed='1'
+        fi
+        if uci -q show dhcp 2>/dev/null | awk -F"'" -v keep="$adg_dns_server_rule" -v legacy="$adg_legacy_dns_server_rule" '
+            /^dhcp\.@dnsmasq\[0\]\.server=/ {
+                value = $2
+                if (value != "" && value != keep && value != legacy && index(value, "/") != 1) {
+                    print value
+                    exit
+                }
+            }
+        ' | grep -q .; then
+            adg_dns_chain_changed='1'
+        fi
+        if uci -q show dhcp 2>/dev/null | grep -F "dhcp.@dnsmasq[0].server='$adg_legacy_dns_server_rule'" >/dev/null 2>&1; then
+            adg_dns_chain_changed='1'
+        fi
+
+        uci -q get AdGuardHome.AdGuardHome >/dev/null 2>&1 || uci -q set AdGuardHome.AdGuardHome=AdGuardHome >/dev/null 2>&1 || true
+        uci set AdGuardHome.AdGuardHome.enabled='1' >/dev/null 2>&1 || true
+        uci set "AdGuardHome.AdGuardHome.binpath=$adg_binpath" >/dev/null 2>&1 || true
+        uci set "AdGuardHome.AdGuardHome.configpath=$configpath" >/dev/null 2>&1 || true
+        uci commit AdGuardHome >/dev/null 2>&1 || true
+        backup_file /etc/config/dhcp
+        uci set "dhcp.@dnsmasq[0].port=53" >/dev/null 2>&1 || return 1
+        uci set "dhcp.@dnsmasq[0].noresolv=1" >/dev/null 2>&1 || return 1
+        uci -q show dhcp 2>/dev/null | awk -F"'" -v keep="$adg_dns_server_rule" -v legacy="$adg_legacy_dns_server_rule" '
+            /^dhcp\.@dnsmasq\[0\]\.server=/ {
+                value = $2
+                if (value != "" && value != keep && value != legacy && index(value, "/") != 1) {
+                    print value
+                }
+            }
+        ' | while IFS= read -r dns_server_rule; do
+            [ -n "$dns_server_rule" ] || continue
+            uci -q del_list "dhcp.@dnsmasq[0].server=$dns_server_rule" >/dev/null 2>&1 || true
+        done
+        uci -q del_list "dhcp.@dnsmasq[0].server=$adg_dns_server_rule" >/dev/null 2>&1 || true
+        uci -q del_list "dhcp.@dnsmasq[0].server=$adg_legacy_dns_server_rule" >/dev/null 2>&1 || true
+        uci add_list "dhcp.@dnsmasq[0].server=$adg_dns_server_rule" >/dev/null 2>&1 || return 1
+        uci commit dhcp >/dev/null 2>&1 || return 1
+    fi
+
+    if [ "$adg_dns_chain_changed" = '1' ]; then
+        [ -x /etc/init.d/dnsmasq ] && /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+        [ -x /etc/init.d/AdGuardHome ] && /etc/init.d/AdGuardHome restart >/dev/null 2>&1 || true
+        log "DNS:    已写入 dnsmasq:53 -> AdGuardHome:$adg_dns_port -> $OPENCLASH_DISPLAY_NAME:$oc_dns_port"
+    else
+        log "DNS:    已确认 dnsmasq:53 -> AdGuardHome:$adg_dns_port -> $OPENCLASH_DISPLAY_NAME:$oc_dns_port"
+    fi
+}
+
 read_adguard_primary_user_from_config() {
     configpath="$(get_adguard_configpath)"
     [ -s "$configpath" ] || return 1
@@ -22026,8 +23443,8 @@ fix_adguard_runtime_if_possible() {
         yaml_file="$1"
         [ -f "$yaml_file" ] || return 0
 
-        if grep -q '^  session_ttl: ' "$yaml_file" 2>/dev/null; then
-            sed -i 's/^  session_ttl: .*/  session_ttl: 720h/' "$yaml_file"
+        if grep -q '^[[:space:]]*session_ttl:[[:space:]]*' "$yaml_file" 2>/dev/null; then
+            sed -i 's/^[[:space:]]*session_ttl:[[:space:]].*/session_ttl: 720h/' "$yaml_file"
         elif grep -q '^bind_port:' "$yaml_file" 2>/dev/null; then
             awk '
                 {
@@ -22514,7 +23931,7 @@ storage_expand_require_active() {
 storage_expand_app_spec() {
     case "$1" in
         openclash)
-            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenClash" "openclash" "/etc/openclash" "luci-app-openclash" "luci-app-openclash" "admin/services/openclash"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$OPENCLASH_DISPLAY_NAME" "openclash" "/etc/openclash" "luci-app-openclash" "luci-app-openclash" "admin/services/openclash"
             ;;
         adguardhome)
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' "AdGuardHome" "AdGuardHome" "/usr/bin/AdGuardHome" "luci-app-adguardhome" "luci-app-adguardhome" "admin/services/AdGuardHome"
@@ -23103,6 +24520,30 @@ storage_expand_print_expand_dependencies() {
     [ "$printed" = '1' ]
 }
 
+storage_expand_remove_rootfs_2nd_orphan_links() {
+    local app_key spec label src target item
+
+    for app_key in $(storage_expand_app_spec_keys); do
+        spec="$(storage_expand_app_spec "$app_key")" || continue
+        label="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $1 }')"
+        src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
+        target="$(storage_expand_target_for_path "$src")"
+        if [ -L "$src" ]; then
+            storage_expand_link_points_under "$src" "$target" || continue
+            rm -f "$src" || die "$label 恢复出厂残留软链接清理失败：$src"
+            log "清理: $label 恢复出厂残留软链接 $src"
+            continue
+        fi
+        [ -d "$src" ] || continue
+        for item in "$src"/* "$src"/.[!.]* "$src"/..?*; do
+            [ -L "$item" ] || continue
+            storage_expand_link_points_under "$item" "$target" || continue
+            rm -f "$item" || die "$label 恢复出厂残留子项软链接清理失败：$item"
+            log "清理: $label 恢复出厂残留子项软链接 $item"
+        done
+    done
+}
+
 storage_expand_stop_service() {
     local service_name="$1"
 
@@ -23486,6 +24927,18 @@ storage_expand_confirm_format() {
     }
 }
 
+storage_expand_confirm_reinitialize_format() {
+    log "警告: 即将清空并重新初始化 rootfs_2nd 扩展盘。"
+    log "用途: 设备恢复出厂后，overlay 已重新安装应用，但 rootfs_2nd 仍残留旧应用数据时使用。"
+    log "影响: 只格式化 PARTLABEL=rootfs_2nd；当前 overlay 已安装应用会保留。"
+    log "清理: $ROOTFS_2ND_STORAGE_APPS_DIR 和 $ROOTFS_2ND_STORAGE_MIGRATE_LIST 会重新生成。"
+    prompt_with_default "确认格式化 rootfs_2nd 请输入 FORMAT_ROOTFS_2ND" ""
+    [ "$PROMPT_RESULT" = 'FORMAT_ROOTFS_2ND' ] || {
+        log "已取消"
+        return 1
+    }
+}
+
 enable_rootfs_2nd_storage_expand() {
     local device mount_source
 
@@ -23571,6 +25024,43 @@ disable_rootfs_2nd_storage_expand() {
 
     log "已关闭 rootfs_2nd 存储扩展。"
     log "说明: 这只恢复第二系统烧录入口的使用条件，不会自动恢复第二系统内容；需要重新烧录第二系统固件。"
+}
+
+reinitialize_rootfs_2nd_storage_expand() {
+    local device mount_source mounted_elsewhere
+
+    require_rootfs_2nd_storage_capable
+    storage_expand_is_booted_from_rootfs_2nd && die "当前疑似从第二系统 rootfs_2nd 启动，禁止格式化当前启动分区"
+    command -v mkfs.f2fs >/dev/null 2>&1 || die "系统缺少 mkfs.f2fs，无法格式化 rootfs_2nd"
+
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，已停止"
+
+    log "当前 rootfs_2nd 扩展状态:"
+    storage_expand_status || true
+    storage_expand_confirm_reinitialize_format || return 0
+
+    mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    if [ -n "$mount_source" ]; then
+        storage_expand_mount_source_matches_device "$mount_source" "$device" || die "$ROOTFS_2ND_STORAGE_MOUNT_POINT 已被其它设备挂载：$mount_source"
+        umount "$ROOTFS_2ND_STORAGE_MOUNT_POINT" >/dev/null 2>&1 || die "卸载 $ROOTFS_2ND_STORAGE_MOUNT_POINT 失败，请先停止正在使用扩展盘的程序"
+    else
+        mounted_elsewhere="$(storage_expand_device_mountpoint "$device" 2>/dev/null || true)"
+        [ -z "$mounted_elsewhere" ] || die "rootfs_2nd 已挂载在 $mounted_elsewhere，已停止"
+    fi
+
+    mkfs.f2fs -f -l rootfs_2nd_data "$device" >/dev/null 2>&1 || die "格式化 rootfs_2nd 为 f2fs 失败"
+    rm -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null || true
+    storage_expand_remove_rootfs_2nd_orphan_links
+    enable_rootfs_2nd_storage_autostart
+    mount_rootfs_2nd_storage_now "$device" || die "格式化后挂载 rootfs_2nd 失败"
+    printf '%s\n' "enabled $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)" > "$ROOTFS_2ND_STORAGE_MARKER"
+    storage_expand_prepare_apps_tree || die "初始化扩展盘应用目录失败"
+    patch_reset_page_storage_expand_guard
+    patch_appcenter_storage_expand_display
+    log "已清空并重新初始化 rootfs_2nd 扩展盘。"
+    log "下一步: 重新执行 5. 迁移应用到扩展盘。"
+    storage_expand_status
 }
 
 patch_reset_page_storage_expand_guard() {
@@ -24234,8 +25724,9 @@ manage_rootfs_2nd_storage_expand() {
         printf '4. 修复应用商店存储空间显示\n'
         printf '5. 迁移应用到扩展盘\n'
         printf '6. 还原应用到 overlay\n'
+        printf '7. 清空并重新初始化 rootfs_2nd 扩展盘（用于设备恢复出厂后使用）\n'
         printf '0. 返回功能分类\n'
-        printf '请选择 0、1、2、3、4、5 或 6: '
+        printf '请选择 0、1、2、3、4、5、6 或 7: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
@@ -24245,6 +25736,7 @@ manage_rootfs_2nd_storage_expand() {
             4) patch_appcenter_storage_expand_display; return 0 ;;
             5) storage_expand_select_app_action "迁移应用到扩展盘"; return 0 ;;
             6) storage_expand_select_app_action "还原应用到 overlay"; return 0 ;;
+            7) reinitialize_rootfs_2nd_storage_expand; return 0 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
     done
@@ -24342,6 +25834,7 @@ install_adguardhome() {
     fix_adguard_start_order
     cleanup_adguard_placeholder_config
     ensure_adguard_dashboard_auth_defaults
+    ensure_adguard_openclash_dns_chain
 
     adg_ver="$(opkg status luci-app-adguardhome 2>/dev/null | awk -F': ' '/Version: /{print $2; exit}')"
     [ -n "$adg_ver" ] || adg_ver="$ADGUARDHOME_VERSION"
@@ -24362,6 +25855,7 @@ install_adguardhome() {
     refresh_luci_appcenter
     ensure_plugin_autostart_order
     fix_adguard_runtime_if_possible
+    ensure_adguard_openclash_dns_chain
     ensure_existing_swap_access "AdGuardHome"
     verify_appcenter_route "luci-app-adguardhome" "admin/services/AdGuardHome"
     verify_file_exists /usr/lib/lua/luci/controller/AdGuardHome.lua "AdGuardHome"
@@ -24377,6 +25871,7 @@ install_adguardhome() {
         adg_core_downloaded='1'
         verify_file_exists /usr/bin/AdGuardHome/AdGuardHome "AdGuardHome core"
         fix_adguard_runtime_if_possible
+        ensure_adguard_openclash_dns_chain
     else
         log "备注:     已跳过 AdGuardHome 核心下载"
     fi
@@ -24717,11 +26212,13 @@ write_openlist_oem_files() {
     openlist_controller="/usr/lib/lua/luci/controller/nradio_adv/openlist.lua"
     openlist_cbi="/usr/lib/lua/luci/model/cbi/nradio_adv/openlist_basic.lua"
     openlist_logs="/usr/lib/lua/luci/view/nradio_adv/openlist_logs.htm"
+    openlist_polish="/usr/lib/lua/luci/view/nradio_adv/openlist_polish.htm"
 
     mkdir -p /usr/lib/lua/luci/controller/nradio_adv /usr/lib/lua/luci/model/cbi/nradio_adv /usr/lib/lua/luci/view/nradio_adv
     backup_file "$openlist_controller"
     backup_file "$openlist_cbi"
     backup_file "$openlist_logs"
+    backup_file "$openlist_polish"
 
     cat > "$openlist_controller" <<'EOF_OPENLIST_CONTROLLER'
 module("luci.controller.nradio_adv.openlist", package.seeall)
@@ -24750,11 +26247,24 @@ local function build_access_url(section)
         return site
     end
 
-    local host = (http.getenv("HTTP_HOST") or ""):gsub(":%d+$", "")
-    local port_value = m.uci:get("openlist", section, "port") or "5244"
-    if host == "" then
-        host = "192.168.66.1"
+    local function host_for_url(raw, fallback)
+        local host = tostring(raw or "")
+        if host:match("^%[.-%]") then
+            host = host:match("^%[(.-)%]") or host
+        else
+            host = host:gsub(":%d+$", "")
+        end
+        if host == "" or host == "0.0.0.0" or host == "::" or host == "localhost" then
+            host = fallback or "192.168.66.1"
+        end
+        if host:find(":", 1, true) and not host:match("^%[") then
+            host = "[" .. host .. "]"
+        end
+        return host
     end
+
+    local host = host_for_url(http.getenv("HTTP_HOST") or "", "192.168.66.1")
+    local port_value = m.uci:get("openlist", section, "port") or "5244"
     return string.format("http://%s:%s/", host, port_value)
 end
 
@@ -24840,11 +26350,43 @@ function note.cfgvalue()
     return "<span>安装脚本不会自动启动 OpenList，保存配置后如需运行，请点“启动/重启服务”。</span>"
 end
 
+m:append(Template("nradio_adv/openlist_polish"))
+
 return m
 EOF_OPENLIST_CBI
 
+    cat > "$openlist_polish" <<'EOF_OPENLIST_POLISH'
+<style>
+/* NRadio OpenList premium visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}
+.cbi-map{
+    position:relative;overflow:hidden;border:1px solid rgba(125,211,252,.22)!important;border-radius:18px!important;
+    background:radial-gradient(circle at 12% 0%,rgba(56,189,248,.16),transparent 34%),radial-gradient(circle at 92% 10%,rgba(20,184,166,.10),transparent 30%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 24px 54px rgba(2,8,23,.30)!important;color:#e5edf7!important
+}
+.cbi-map:before{content:"";position:absolute;left:22px;right:22px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(125,211,252,.62),rgba(45,212,191,.34),transparent);pointer-events:none}
+.cbi-map h2{color:#f8fbff!important;font-weight:900!important;letter-spacing:.01em;text-shadow:0 1px 0 rgba(0,0,0,.28)}
+.cbi-map-descr{color:#a9bbcf!important}
+.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important}
+.cbi-section-node{background:transparent!important}
+.cbi-value{border-bottom-color:rgba(148,163,184,.12)!important}
+.cbi-value-title{color:#bfd2e6!important;font-weight:800!important}
+.cbi-value-field,.cbi-value-description{color:#dbe7f4!important}
+.cbi-input-text,.cbi-input-password,select{border-color:rgba(125,211,252,.24)!important;background:rgba(2,8,23,.72)!important;color:#f8fbff!important;border-radius:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important}
+.cbi-input-text:focus,.cbi-input-password:focus,select:focus{border-color:rgba(56,189,248,.55)!important;box-shadow:0 0 0 3px rgba(56,189,248,.12),inset 0 1px 0 rgba(255,255,255,.05)!important;outline:0!important}
+.cbi-button{border-radius:10px!important;border-color:rgba(125,211,252,.28)!important;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.010)),rgba(5,12,22,.70)!important;color:#eef7ff!important;font-weight:800!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.052),0 8px 18px rgba(0,0,0,.14)!important}
+.cbi-button:hover{border-color:rgba(56,189,248,.50)!important;background:linear-gradient(180deg,rgba(56,189,248,.18),rgba(56,189,248,.045)),rgba(5,12,22,.76)!important;color:#fff!important}
+.cbi-button-apply{border-color:rgba(45,212,191,.45)!important;background:linear-gradient(135deg,rgba(14,165,233,.34),rgba(20,184,166,.26)),rgba(5,12,22,.76)!important}
+.cbi-value-field,.cbi-value-description,.cbi-section-node{min-width:0!important;overflow-wrap:anywhere!important}.cbi-map,.cbi-section,.cbi-button{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.cbi-map{border-radius:15px!important}.cbi-section{border-radius:14px!important}.cbi-value-title,.cbi-value-field{display:block!important;width:auto!important}}
+</style>
+EOF_OPENLIST_POLISH
+
     cat > "$openlist_logs" <<'EOF_OPENLIST_LOGS'
 <%+header%>
+<style>
+/* NRadio OpenList log visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}.cbi-map{overflow:hidden;border-radius:18px!important;border:1px solid rgba(125,211,252,.22)!important;background:radial-gradient(circle at 12% 0%,rgba(56,189,248,.15),transparent 34%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;box-shadow:0 24px 54px rgba(2,8,23,.30)!important}.cbi-map h2{color:#f8fbff!important;font-weight:900!important}.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important}.cbi-value-title{color:#bfd2e6!important;font-weight:800!important}.cbi-value-field{color:#dbe7f4!important;min-width:0!important;overflow-wrap:anywhere!important}.cbi-button{border-radius:10px!important;border-color:rgba(45,212,191,.45)!important;background:linear-gradient(135deg,rgba(14,165,233,.34),rgba(20,184,166,.26)),rgba(5,12,22,.76)!important;color:#eef7ff!important;font-weight:800!important}pre{white-space:pre-wrap;word-break:break-word!important;max-height:70vh;overflow:auto;border:1px solid rgba(125,211,252,.18)!important;border-radius:14px!important;background:#050b16!important;color:#dbeafe!important;padding:14px!important;line-height:1.58!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;min-width:0!important}.cbi-button:focus-visible{outline:0!important;box-shadow:0 0 0 3px rgba(56,189,248,.14),inset 0 1px 0 rgba(255,255,255,.052)!important}
+</style>
 <%
 local dispatcher = require "luci.dispatcher"
 local util = require "luci.util"
@@ -25262,6 +26804,9 @@ body{background:#10131d}
 .ddnsgo-btn:hover{color:#f8fbff;text-decoration:none;filter:brightness(1.06)}
 .ddnsgo-stage{height:calc(100vh - 158px);min-height:560px;border-radius:14px;overflow:hidden;border:1px solid rgba(125,211,252,.22);background:#eff6ff;box-shadow:0 20px 46px rgba(2,8,23,.34)}
 .ddnsgo-frame{width:100%;height:100%;display:block;border:0;background:#eff6ff}
+/* NRadio DDNS-GO premium visual finish */
+.ddnsgo-shell{position:relative;overflow:hidden}.ddnsgo-shell:before{content:"";position:absolute;left:28px;right:28px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(125,211,252,.62),rgba(45,212,191,.34),transparent);pointer-events:none}.ddnsgo-top{position:relative;z-index:1}.ddnsgo-mark{box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 18px 34px rgba(2,8,23,.34),0 0 0 1px rgba(125,211,252,.08)}.ddnsgo-title{text-shadow:0 1px 0 rgba(0,0,0,.28),0 0 20px rgba(34,211,238,.08)}.ddnsgo-sub{color:#b7c7dc}.ddnsgo-pill{box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 18px rgba(2,8,23,.16);backdrop-filter:blur(10px) saturate(1.05);-webkit-backdrop-filter:blur(10px) saturate(1.05)}.ddnsgo-pill.ok{box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 18px rgba(13,148,136,.12)}.ddnsgo-btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 28px rgba(37,99,235,.26)}.ddnsgo-btn:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(56,189,248,.18),inset 0 1px 0 rgba(255,255,255,.18),0 12px 28px rgba(37,99,235,.26)}.ddnsgo-stage{position:relative;z-index:1;border-color:rgba(125,211,252,.30);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 24px 58px rgba(2,8,23,.40),0 0 0 1px rgba(56,189,248,.06)}.ddnsgo-stage:before{content:"";position:absolute;left:18px;right:18px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);z-index:2;pointer-events:none}.ddnsgo-frame{border-radius:inherit}
+.ddnsgo-brand,.ddnsgo-meta,.ddnsgo-pill,.ddnsgo-btn{min-width:0}.ddnsgo-title,.ddnsgo-sub,.ddnsgo-pill{overflow-wrap:anywhere}.ddnsgo-shell,.ddnsgo-stage{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}
 @media(max-width:720px){.ddnsgo-shell{padding:12px}.ddnsgo-top{align-items:flex-start;flex-direction:column}.ddnsgo-meta{justify-content:flex-start}.ddnsgo-stage{height:calc(100vh - 190px);min-height:460px}}
 </style>
 <div class="ddnsgo-shell">
@@ -25294,8 +26839,13 @@ body{background:#10131d}
 <script>
 (function(){
     function text(id,value){var el=document.getElementById(id);if(el)el.textContent=value;}
+    function hostForPort(){
+        var host=window.location.hostname||"127.0.0.1";
+        if(host.indexOf(":")>=0&&host.charAt(0)!=="[")host="["+host+"]";
+        return host;
+    }
     function setUrl(port){
-        var url=window.location.protocol+"//"+window.location.hostname+":"+port+"/";
+        var url=window.location.protocol+"//"+hostForPort()+":"+port+"/";
         var frame=document.getElementById("ddnsgo-frame");
         var open=document.getElementById("ddnsgo-open");
         if(frame&&frame.src!==url)frame.src=url;
@@ -25374,6 +26924,9 @@ download_mosdns_core() {
 
 install_mosdns() {
     require_nradio_oem_appcenter
+    case "${MOSDNS_PORT:-553}" in
+        ''|*[!0-9]*|0) MOSDNS_PORT='553' ;;
+    esac
     log_stage 1 6 "MosDNS 安装"
     download_mosdns_core
     log_stage 2 6 "写入 MosDNS 配置文件"
@@ -25383,7 +26936,7 @@ install_mosdns() {
 #!/bin/sh
 CFG="/etc/mosdns/config.yaml"
 LISTEN_ADDR="$(uci -q get mosdns.main.listen_addr 2>/dev/null || echo 127.0.0.1)"
-LISTEN_PORT="$(uci -q get mosdns.main.listen_port 2>/dev/null || echo 553)"
+LISTEN_PORT="$(uci -q get mosdns.main.listen_port 2>/dev/null || echo __MOSDNS_DEFAULT_PORT__)"
 DOMESTIC_DNS="$(uci -q get mosdns.main.domestic_dns 2>/dev/null || echo 'https://223.5.5.5/dns-query https://120.53.53.53/dns-query')"
 FOREIGN_DNS="$(uci -q get mosdns.main.foreign_dns 2>/dev/null || echo 'https://1.1.1.1/dns-query https://8.8.8.8/dns-query')"
 FALLBACK_DNS="$(uci -q get mosdns.main.fallback_dns 2>/dev/null || echo 114.114.114.114:53)"
@@ -25443,13 +26996,14 @@ cat <<YAML
 YAML
 } > "$CFG"
 EOF_MOSDNS_SYNC
+    sed -i "s/__MOSDNS_DEFAULT_PORT__/$MOSDNS_PORT/g" "$MOSDNS_SYNC" 2>/dev/null || true
     chmod 755 "$MOSDNS_SYNC"
 
-    cat > "$MOSDNS_UCI_CONFIG" <<'EOF_MOSDNS_UCI'
+    cat > "$MOSDNS_UCI_CONFIG" <<EOF_MOSDNS_UCI
 config mosdns 'main'
     option enabled '1'
     option listen_addr '127.0.0.1'
-    option listen_port '553'
+    option listen_port '$MOSDNS_PORT'
     option domestic_dns 'https://223.5.5.5/dns-query https://120.53.53.53/dns-query'
     option foreign_dns 'https://1.1.1.1/dns-query https://8.8.8.8/dns-query'
     option fallback_dns '114.114.114.114:53'
@@ -25484,6 +27038,7 @@ EOF_MOSDNS_INIT
     chmod 755 "$MOSDNS_INIT"
 
     log_stage 4 6 "写入 MosDNS OEM 页面、图标并注册应用商店"
+    mosdns_polish="/usr/lib/lua/luci/view/nradio_adv/mosdns_polish.htm"
     mkdir -p "$(dirname "$MOSDNS_CONTROLLER")" "$(dirname "$MOSDNS_CBI")" "$(dirname "$MOSDNS_VIEW")"
 
     cat > "$MOSDNS_CONTROLLER" <<'EOF_MOSDNS_CTRL'
@@ -25502,7 +27057,7 @@ m=Map("mosdns", translate("MosDNS"),translate("DNS 分流: <a href='%s'>日志</
 s=m:section(NamedSection,"main","mosdns",translate("运行设置"))
 o=s:option(Flag,"enabled",translate("启用")); o.default=1; o.rmempty=false
 o=s:option(Value,"listen_addr",translate("监听地址")); o.default="127.0.0.1"; o.rmempty=false
-o=s:option(Value,"listen_port",translate("监听端口")); o.default="553"; o.datatype="port"; o.rmempty=false
+o=s:option(Value,"listen_port",translate("监听端口")); o.default="__MOSDNS_DEFAULT_PORT__"; o.datatype="port"; o.rmempty=false
 s=m:section(NamedSection,"main","mosdns",translate("上游 DNS"))
 o=s:option(Value,"domestic_dns",translate("国内 DNS")); o.default="https://223.5.5.5/dns-query https://120.53.53.53/dns-query"
 o=s:option(Value,"foreign_dns",translate("国外 DNS")); o.default="https://1.1.1.1/dns-query https://8.8.8.8/dns-query"
@@ -25518,11 +27073,28 @@ m.on_after_commit=function()
     require("luci.sys").call("/usr/libexec/mosdns-sync-config >/tmp/mosdns-sync.log 2>&1")
     require("luci.sys").call("/etc/init.d/mosdns restart >/dev/null 2>&1")
 end
+m:append(Template("nradio_adv/mosdns_polish"))
 return m
 EOF_MOSDNS_CBI
+    sed -i "s/__MOSDNS_DEFAULT_PORT__/$MOSDNS_PORT/g" "$MOSDNS_CBI" 2>/dev/null || true
+
+    cat > "$mosdns_polish" <<'EOF_MOSDNS_POLISH'
+<style>
+/* NRadio MosDNS premium visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}
+.cbi-map{position:relative;overflow:hidden;border:1px solid rgba(103,232,249,.22)!important;border-radius:18px!important;background:radial-gradient(circle at 12% 0%,rgba(34,211,238,.16),transparent 34%),radial-gradient(circle at 92% 10%,rgba(14,165,233,.10),transparent 30%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 24px 54px rgba(2,8,23,.30)!important;color:#e5edf7!important}
+.cbi-map:before{content:"";position:absolute;left:22px;right:22px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(103,232,249,.66),rgba(96,165,250,.32),transparent);pointer-events:none}.cbi-map h2{color:#f8fbff!important;font-weight:900!important;letter-spacing:.01em;text-shadow:0 1px 0 rgba(0,0,0,.28)}.cbi-map-descr{color:#a9bbcf!important}.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important}.cbi-value{border-bottom-color:rgba(148,163,184,.12)!important}.cbi-value-title{color:#bfd2e6!important;font-weight:800!important}.cbi-value-field,.cbi-value-description{color:#dbe7f4!important}.cbi-input-text,.cbi-input-password,select{border-color:rgba(103,232,249,.24)!important;background:rgba(2,8,23,.72)!important;color:#f8fbff!important;border-radius:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important}.cbi-input-text:focus,.cbi-input-password:focus,select:focus{border-color:rgba(34,211,238,.58)!important;box-shadow:0 0 0 3px rgba(34,211,238,.13),inset 0 1px 0 rgba(255,255,255,.05)!important;outline:0!important}.cbi-button{border-radius:10px!important;border-color:rgba(103,232,249,.30)!important;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.010)),rgba(5,12,22,.70)!important;color:#eef7ff!important;font-weight:800!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.052),0 8px 18px rgba(0,0,0,.14)!important}.cbi-button:hover{border-color:rgba(34,211,238,.54)!important;background:linear-gradient(180deg,rgba(34,211,238,.18),rgba(34,211,238,.045)),rgba(5,12,22,.76)!important;color:#fff!important}.cbi-button-apply{border-color:rgba(34,211,238,.48)!important;background:linear-gradient(135deg,rgba(8,145,178,.36),rgba(59,130,246,.20)),rgba(5,12,22,.76)!important}
+.cbi-value-field,.cbi-value-description,.cbi-section-node{min-width:0!important;overflow-wrap:anywhere!important}.cbi-map,.cbi-section,.cbi-button{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.cbi-map{border-radius:15px!important}.cbi-section{border-radius:14px!important}.cbi-value-title,.cbi-value-field{display:block!important;width:auto!important}}
+</style>
+EOF_MOSDNS_POLISH
 
     cat > "$MOSDNS_VIEW" <<'EOF_MOSDNS_VIEW'
 <%+header%>
+<style>
+/* NRadio MosDNS log visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}.cbi-map{overflow:hidden;border-radius:18px!important;border:1px solid rgba(103,232,249,.22)!important;background:radial-gradient(circle at 12% 0%,rgba(34,211,238,.15),transparent 34%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;box-shadow:0 24px 54px rgba(2,8,23,.30)!important}.cbi-map h2{color:#f8fbff!important;font-weight:900!important}.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important}.cbi-value-title{color:#bfd2e6!important;font-weight:800!important}.cbi-value-field{color:#dbe7f4!important}.cbi-button{border-radius:10px!important;border-color:rgba(34,211,238,.48)!important;background:linear-gradient(135deg,rgba(8,145,178,.36),rgba(59,130,246,.20)),rgba(5,12,22,.76)!important;color:#eef7ff!important;font-weight:800!important}pre{white-space:pre-wrap;word-break:break-word!important;max-height:70vh;overflow:auto;border:1px solid rgba(103,232,249,.18)!important;border-radius:14px!important;background:#050b16!important;color:#dbeafe!important;padding:14px!important;line-height:1.58!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important}
+.cbi-value-field{min-width:0!important;overflow-wrap:anywhere!important}.cbi-button:focus-visible{outline:0!important;box-shadow:0 0 0 3px rgba(34,211,238,.16),inset 0 1px 0 rgba(255,255,255,.06)!important}pre{min-width:0!important;overflow-wrap:anywhere!important}
+</style>
 <% local u=require"luci.util"; local c=require"luci.model.uci".cursor(); local d=require"luci.dispatcher"
    local pid=u.trim(u.exec("pgrep mosdns 2>/dev/null | head -1"):gsub("[^%d]","")); local running=pid~=""
    local lf="/tmp/mosdns.log"; c:foreach("mosdns","main",function(s)if s.log_file and s.log_file~="" then lf=s.log_file end end) %>
@@ -25536,6 +27108,9 @@ EOF_MOSDNS_CBI
 </div></div></div>
 <%+footer%>
 EOF_MOSDNS_VIEW
+
+    chmod 644 "$MOSDNS_CONTROLLER" "$MOSDNS_CBI" "$MOSDNS_VIEW" "$mosdns_polish" 2>/dev/null || true
+    verify_file_exists "$mosdns_polish" "MosDNS 页面美化"
 
     if ! install_mosdns_embedded_icon; then
         log "备注: MosDNS 图标写入失败"
@@ -25558,7 +27133,7 @@ EOF_MOSDNS_VIEW
     sleep 2
 
     log_stage 6 6 "MosDNS 安装完成"
-    log "提示: dnsmasq 上游需手动设置为 127.0.0.1#553"
+    log "提示: dnsmasq 上游需手动设置为 127.0.0.1#$MOSDNS_PORT"
 }
 
 install_ddnsgo() {
@@ -25911,6 +27486,7 @@ install_openlist() {
     verify_file_exists /usr/lib/lua/luci/controller/nradio_adv/openlist.lua "OpenList"
     verify_file_exists /usr/lib/lua/luci/model/cbi/nradio_adv/openlist_basic.lua "OpenList"
     verify_file_exists /usr/lib/lua/luci/view/nradio_adv/openlist_logs.htm "OpenList"
+    verify_file_exists /usr/lib/lua/luci/view/nradio_adv/openlist_polish.htm "OpenList 页面美化"
     verify_luci_route nradioadv/system/openlist "OpenList"
     verify_luci_route nradioadv/system/openlist/basic "OpenList"
     verify_luci_route nradioadv/system/openlist/logs "OpenList"
@@ -25933,9 +27509,11 @@ install_openlist() {
 }
 
 write_zerotier_oem_files() {
-    mkdir -p /usr/lib/lua/luci/controller/nradio_adv /usr/lib/lua/luci/model/cbi/nradio_adv
+    zerotier_polish="/usr/lib/lua/luci/view/nradio_adv/zerotier_polish.htm"
+    mkdir -p /usr/lib/lua/luci/controller/nradio_adv /usr/lib/lua/luci/model/cbi/nradio_adv /usr/lib/lua/luci/view/nradio_adv
     backup_file "$ZEROTIER_CONTROLLER"
     backup_file "$ZEROTIER_CBI"
+    backup_file "$zerotier_polish"
 
     cat > "$ZEROTIER_CONTROLLER" <<'EOF_ZEROTIER_CONTROLLER'
 module("luci.controller.nradio_adv.zerotier", package.seeall)
@@ -26046,10 +27624,25 @@ function note.cfgvalue()
     return "<span>保存后如需立即生效，可点击“启动/重启服务”。</span>"
 end
 
+m:append(Template("nradio_adv/zerotier_polish"))
+
 return m
 EOF_ZEROTIER_CBI
 
-    chmod 644 "$ZEROTIER_CONTROLLER" "$ZEROTIER_CBI"
+    cat > "$zerotier_polish" <<'EOF_ZEROTIER_POLISH'
+<style>
+/* NRadio ZeroTier premium visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}
+.cbi-map{position:relative;overflow:hidden;border:1px solid rgba(147,197,253,.24)!important;border-radius:18px!important;background:radial-gradient(circle at 12% 0%,rgba(96,165,250,.16),transparent 34%),radial-gradient(circle at 92% 10%,rgba(45,212,191,.09),transparent 30%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 24px 54px rgba(2,8,23,.30)!important;color:#e5edf7!important}
+.cbi-map:before{content:"";position:absolute;left:22px;right:22px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(147,197,253,.66),rgba(45,212,191,.32),transparent);pointer-events:none}
+.cbi-map h2{color:#f8fbff!important;font-weight:900!important;letter-spacing:.01em;text-shadow:0 1px 0 rgba(0,0,0,.28)}
+.cbi-map-descr{color:#a9bbcf!important}.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important}.cbi-value{border-bottom-color:rgba(148,163,184,.12)!important}.cbi-value-title{color:#bfd2e6!important;font-weight:800!important}.cbi-value-field,.cbi-value-description{color:#dbe7f4!important}.cbi-value-field pre{border:1px solid rgba(147,197,253,.18)!important;border-radius:12px!important;background:#050b16!important;color:#dbeafe!important;padding:12px!important;line-height:1.55!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important}
+.cbi-input-text,.cbi-input-password,select{border-color:rgba(147,197,253,.24)!important;background:rgba(2,8,23,.72)!important;color:#f8fbff!important;border-radius:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important}.cbi-input-text:focus,.cbi-input-password:focus,select:focus{border-color:rgba(96,165,250,.58)!important;box-shadow:0 0 0 3px rgba(96,165,250,.13),inset 0 1px 0 rgba(255,255,255,.05)!important;outline:0!important}.cbi-button{border-radius:10px!important;border-color:rgba(147,197,253,.30)!important;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.010)),rgba(5,12,22,.70)!important;color:#eef7ff!important;font-weight:800!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.052),0 8px 18px rgba(0,0,0,.14)!important}.cbi-button:hover{border-color:rgba(96,165,250,.54)!important;background:linear-gradient(180deg,rgba(96,165,250,.18),rgba(96,165,250,.045)),rgba(5,12,22,.76)!important;color:#fff!important}.cbi-button-apply{border-color:rgba(96,165,250,.48)!important;background:linear-gradient(135deg,rgba(59,130,246,.34),rgba(20,184,166,.18)),rgba(5,12,22,.76)!important}
+.cbi-value-field,.cbi-value-description,.cbi-section-node{min-width:0!important;overflow-wrap:anywhere!important}.cbi-map,.cbi-section,.cbi-button{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.cbi-map{border-radius:15px!important}.cbi-section{border-radius:14px!important}.cbi-value-title,.cbi-value-field{display:block!important;width:auto!important}}
+</style>
+EOF_ZEROTIER_POLISH
+
+    chmod 644 "$ZEROTIER_CONTROLLER" "$ZEROTIER_CBI" "$zerotier_polish"
 }
 
 ensure_zerotier_config_defaults() {
@@ -26158,6 +27751,7 @@ install_zerotier() {
     verify_file_exists /etc/config/zerotier "ZeroTier"
     verify_file_exists "$ZEROTIER_CONTROLLER" "ZeroTier"
     verify_file_exists "$ZEROTIER_CBI" "ZeroTier"
+    verify_file_exists /usr/lib/lua/luci/view/nradio_adv/zerotier_polish.htm "ZeroTier 页面美化"
     verify_luci_route nradioadv/system/zerotier "ZeroTier"
     verify_luci_route nradioadv/system/zerotier/basic "ZeroTier"
 
@@ -26288,6 +27882,7 @@ install_easytier() {
     fi
     ensure_easytier_config_defaults
     write_easytier_controller_file
+    write_easytier_polish_files
 
     log_stage 4 5 "写入图标、应用商店并接入 EasyTier 打开入口"
     backup_file "$CFG"
@@ -26322,6 +27917,7 @@ install_easytier() {
     verify_file_exists "$EASYTIER_CONTROLLER" "$EASYTIER_DISPLAY_NAME"
     verify_file_exists /usr/lib/lua/luci/model/cbi/easytier.lua "$EASYTIER_DISPLAY_NAME"
     verify_file_exists /usr/lib/lua/luci/view/easytier/easytier_status.htm "$EASYTIER_DISPLAY_NAME"
+    verify_file_exists /usr/lib/lua/luci/view/easytier/nradio_polish.htm "$EASYTIER_DISPLAY_NAME 页面美化"
     verify_luci_route "$EASYTIER_ROUTE" "$EASYTIER_DISPLAY_NAME"
 
     log "安装完成"
@@ -26339,6 +27935,7 @@ install_easytier() {
 
 write_fanctrl_plugin_files() {
     fanctrl_model="${1:-}"
+    fanctrl_polish_view="$FANCTRL_VIEW_DIR/polish.htm"
     fanctrl_tempsource='max'
     fanctrl_interval='12'
     fanctrl_smartmin='30'
@@ -26367,6 +27964,7 @@ write_fanctrl_plugin_files() {
     backup_file "$FANCTRL_CBI"
     backup_file "$FANCTRL_TEMP_AJAX_VIEW"
     backup_file "$FANCTRL_TEMP_VIEW"
+    backup_file "$fanctrl_polish_view"
     backup_file "$FANCTRL_BIN_PATH"
     backup_file "$FANCTRL_INIT_FILE"
     backup_file "$FANCTRL_CONFIG_FILE"
@@ -26662,8 +28260,21 @@ function m.on_after_commit(map)
     os.execute("/etc/init.d/fanctrl restart >/dev/null 2>&1")
 end
 
+m:append(Template("nradio_fanctrl/polish"))
+
 return m
 EOF_FANCTRL_CBI
+
+    cat > "$fanctrl_polish_view" <<'EOF_FANCTRL_POLISH'
+<style>
+/* NRadio FanControl premium visual finish */
+body{background:#0b1220!important;color:#e5edf7!important}
+.cbi-map{position:relative;overflow:hidden;border:1px solid rgba(248,113,113,.22)!important;border-radius:18px!important;background:radial-gradient(circle at 12% 0%,rgba(248,113,113,.15),transparent 34%),radial-gradient(circle at 92% 10%,rgba(251,146,60,.10),transparent 30%),linear-gradient(145deg,rgba(15,23,42,.96),rgba(3,7,18,.94))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 24px 54px rgba(2,8,23,.30)!important;color:#e5edf7!important}
+.cbi-map:before{content:"";position:absolute;left:22px;right:22px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(248,113,113,.54),rgba(251,146,60,.36),transparent);pointer-events:none}.cbi-map h2{color:#f8fbff!important;font-weight:900!important;letter-spacing:.01em;text-shadow:0 1px 0 rgba(0,0,0,.28)}.cbi-section{border:1px solid rgba(148,163,184,.18)!important;border-radius:16px!important;background:rgba(8,15,28,.56)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important}.cbi-value{border-bottom-color:rgba(148,163,184,.12)!important}.cbi-value-title{color:#ffd1d1!important;font-weight:800!important}.cbi-value-field,.cbi-value-description{color:#dbe7f4!important}.cbi-input-text,.cbi-input-password,select{border-color:rgba(248,113,113,.24)!important;background:rgba(2,8,23,.72)!important;color:#f8fbff!important;border-radius:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important}.cbi-input-text:focus,.cbi-input-password:focus,select:focus{border-color:rgba(251,146,60,.58)!important;box-shadow:0 0 0 3px rgba(251,146,60,.13),inset 0 1px 0 rgba(255,255,255,.05)!important;outline:0!important}.cbi-button{border-radius:10px!important;border-color:rgba(248,113,113,.30)!important;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.010)),rgba(5,12,22,.70)!important;color:#fff5f5!important;font-weight:800!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.052),0 8px 18px rgba(0,0,0,.14)!important}.cbi-button:hover{border-color:rgba(251,146,60,.54)!important;background:linear-gradient(180deg,rgba(251,146,60,.18),rgba(251,146,60,.045)),rgba(5,12,22,.76)!important;color:#fff!important}.cbi-button-apply{border-color:rgba(251,146,60,.48)!important;background:linear-gradient(135deg,rgba(248,113,113,.30),rgba(251,146,60,.18)),rgba(5,12,22,.76)!important}
+#tempdesdevice-temperature-status,#fandesdevice-temperature-status{display:inline-flex!important;align-items:center;border:1px solid rgba(251,146,60,.22);border-radius:999px;background:rgba(5,12,22,.58);color:#fff7ed!important;padding:.34em .74em;font-weight:900;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)}
+.cbi-value-field,.cbi-value-description,.cbi-section-node{min-width:0!important;overflow-wrap:anywhere!important}.cbi-map,.cbi-section,.cbi-button{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.cbi-map{border-radius:15px!important}.cbi-section{border-radius:14px!important}.cbi-value-title,.cbi-value-field{display:block!important;width:auto!important}}
+</style>
+EOF_FANCTRL_POLISH
 
     cat > "$FANCTRL_TEMP_AJAX_VIEW" <<'EOF_FANCTRL_TEMP_AJAX'
 <%+cbi/valueheader%>
@@ -27020,7 +28631,7 @@ config service 'fanctrl'
     option schedule_mode '1'
 EOF_FANCTRL_UCI
 
-    chmod 644 "$FANCTRL_CONTROLLER" "$FANCTRL_CBI" "$FANCTRL_TEMP_AJAX_VIEW" "$FANCTRL_TEMP_VIEW" "$FANCTRL_CONFIG_FILE"
+    chmod 644 "$FANCTRL_CONTROLLER" "$FANCTRL_CBI" "$FANCTRL_TEMP_AJAX_VIEW" "$FANCTRL_TEMP_VIEW" "$fanctrl_polish_view" "$FANCTRL_CONFIG_FILE"
     chmod 755 "$FANCTRL_BIN_PATH" "$FANCTRL_INIT_FILE"
 }
 
@@ -27082,6 +28693,7 @@ install_fanctrl() {
     log_stage 5 5 "校验原厂更多-风扇页面"
     verify_file_exists "$FANCTRL_CONTROLLER" "$FANCTRL_DISPLAY_NAME"
     verify_file_exists "$FANCTRL_CBI" "$FANCTRL_DISPLAY_NAME"
+    verify_file_exists "$FANCTRL_VIEW_DIR/polish.htm" "$FANCTRL_DISPLAY_NAME 页面美化"
     verify_file_exists "$FANCTRL_BIN_PATH" "$FANCTRL_DISPLAY_NAME"
     verify_file_exists "$FANCTRL_INIT_FILE" "$FANCTRL_DISPLAY_NAME"
     verify_file_exists "$FANCTRL_CONFIG_FILE" "$FANCTRL_DISPLAY_NAME"
@@ -30104,6 +31716,7 @@ EOF_OPENVPN_FULL_VIEW
         font-weight: 900;
         line-height: 1.3;
     }
+    .vpn-quick-rail {
         box-shadow: none;
         animation: vpnSurfaceIntro .42s ease-out .12s both;
         overflow: hidden;
@@ -38483,6 +40096,297 @@ EOF_OPENVPN_MK5_PASS7_TO_PASS9_POLISH
 </style>
 EOF_OPENVPN_MK5_PASS10_POLISH
 
+    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_PASS11_WEBPAGE_POLISH'
+<style type="text/css">
+    /* OpenVPN Mk5 pass 11 precision webpage polish: compact responsive forms, stronger focus states, and cleaner console blocks. */
+    .vpn-shell-mk5 {
+        --vpn-pass11-cyan: #39d9f5;
+        --vpn-pass11-blue: #6ca2ff;
+        --vpn-pass11-green: #43db94;
+        --vpn-pass11-amber: #ffcd70;
+        --vpn-pass11-red: #ff6f7e;
+        --vpn-pass11-panel: rgba(8, 14, 24, 0.70);
+        --vpn-pass11-line: rgba(118, 151, 197, 0.20);
+        --vpn-pass11-glow: 0 22px 54px rgba(0, 0, 0, 0.24);
+    }
+
+    .vpn-shell-mk5 .vpn-hero-mk5,
+    .vpn-shell-mk5 .vpn-brand-block,
+    .vpn-shell-mk5 .vpn-command-card,
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-card,
+    .vpn-shell-mk5 .vpn-quick-rail,
+    .vpn-shell-mk5 .vpn-panel-shell,
+    .vpn-shell-mk5 .vpn-subcard,
+    .vpn-shell-mk5 .vpn-action-tile,
+    .vpn-shell-secondary + .cbi-map,
+    .vpn-shell-secondary + .cbi-map .cbi-section {
+        border-radius: 18px;
+        border-color: var(--vpn-pass11-line);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.060),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+            var(--vpn-pass11-glow);
+    }
+
+    .vpn-shell-mk5 .vpn-hero-mk5 {
+        padding: clamp(18px, 2.5vw, 26px);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(57, 217, 245, 0.15), transparent 30%),
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.16), transparent 34%),
+            linear-gradient(180deg, rgba(15, 22, 34, 0.93), rgba(7, 12, 21, 0.94));
+    }
+
+    .vpn-shell-mk5 .vpn-hero-mk5::after,
+    .vpn-shell-mk5 .vpn-brand-block::after,
+    .vpn-shell-mk5 .vpn-command-card::after,
+    .vpn-shell-mk5 .vpn-panel-shell::after,
+    .vpn-shell-secondary + .cbi-map .cbi-section::after {
+        content: "";
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        top: 0;
+        height: 2px;
+        border-radius: 0 0 999px 999px;
+        background: linear-gradient(90deg, transparent, rgba(57, 217, 245, 0.70), rgba(108, 162, 255, 0.70), transparent);
+        opacity: 0.86;
+        pointer-events: none;
+    }
+
+    .vpn-shell-mk5 .vpn-hero-title,
+    .vpn-shell-mk5 .vpn-panel-title,
+    .vpn-shell-mk5 .vpn-card-title,
+    .vpn-shell-secondary + .cbi-map h2 {
+        letter-spacing: -0.035em;
+    }
+
+    .vpn-shell-mk5 .vpn-hero-copy,
+    .vpn-shell-mk5 .vpn-panel-desc,
+    .vpn-shell-mk5 .vpn-card-desc,
+    .vpn-shell-secondary + .cbi-map .cbi-map-descr {
+        max-width: 72ch;
+    }
+
+    .vpn-shell-mk5 .vpn-hero-actions,
+    .vpn-shell-mk5 .vpn-action-row,
+    .vpn-shell-mk5 .vpn-toolbar,
+    .vpn-shell-secondary + .cbi-map .cbi-page-actions {
+        gap: 8px;
+    }
+
+    .vpn-shell-mk5 .vpn-hero-actions a,
+    .vpn-shell-mk5 .vpn-hero-actions button,
+    .vpn-shell-mk5 .vpn-action-row a,
+    .vpn-shell-mk5 .vpn-action-row button,
+    .vpn-shell-mk5 .vpn-tabbar a,
+    .vpn-shell-mk5 .vpn-tabbar button,
+    .vpn-shell-secondary + .cbi-map .cbi-button {
+        min-height: 40px;
+        border-radius: 13px;
+        font-weight: 800;
+    }
+
+    .vpn-shell-mk5 .vpn-tabbar {
+        padding: 5px;
+        border-radius: 999px;
+        background: rgba(5, 10, 18, 0.42);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.040);
+    }
+
+    .vpn-shell-mk5 .vpn-tabbar a,
+    .vpn-shell-mk5 .vpn-tabbar button {
+        padding-inline: 14px;
+    }
+
+    .vpn-shell-mk5 .vpn-stat-grid,
+    .vpn-shell-mk5 .vpn-mini-grid,
+    .vpn-shell-mk5 .vpn-action-grid {
+        gap: 10px;
+    }
+
+    .vpn-shell-mk5 .vpn-mini-card,
+    .vpn-shell-mk5 .vpn-stat-card,
+    .vpn-shell-mk5 .vpn-action-tile {
+        min-width: 0;
+        padding: 14px;
+    }
+
+    .vpn-shell-mk5 .vpn-status-dot,
+    .vpn-shell-mk5 .vpn-live-dot,
+    .vpn-shell-mk5 .vpn-health-dot {
+        animation: vpnPass11SoftPulse 2.6s ease-in-out infinite;
+    }
+
+    .vpn-shell-mk5 pre,
+    .vpn-shell-mk5 code,
+    .vpn-shell-secondary + .cbi-map textarea,
+    .vpn-shell-secondary + .cbi-map input[type="text"],
+    .vpn-shell-secondary + .cbi-map input[type="password"],
+    .vpn-shell-secondary + .cbi-map select {
+        border-radius: 13px;
+    }
+
+    .vpn-shell-mk5 pre,
+    .vpn-shell-mk5 .vpn-console,
+    .vpn-shell-mk5 .vpn-log-box,
+    .vpn-shell-secondary + .cbi-map textarea {
+        background:
+            radial-gradient(circle at 100% 0%, rgba(57, 217, 245, 0.08), transparent 34%),
+            linear-gradient(180deg, rgba(7, 13, 22, 0.98), rgba(4, 9, 17, 0.98)) !important;
+        border-color: rgba(118, 151, 197, 0.22) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.040), 0 14px 32px rgba(0, 0, 0, 0.22);
+    }
+
+    .vpn-shell-secondary + .cbi-map {
+        max-width: 1180px;
+        margin: 16px auto 28px !important;
+        padding: 18px !important;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(57, 217, 245, 0.10), transparent 30%),
+            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.10), transparent 34%),
+            linear-gradient(180deg, rgba(15, 22, 34, 0.96), rgba(7, 12, 21, 0.96)) !important;
+        color: #eef7ff;
+    }
+
+    .vpn-shell-secondary + .cbi-map .cbi-section {
+        position: relative;
+        overflow: hidden;
+        padding: 16px 18px !important;
+        background: var(--vpn-pass11-panel) !important;
+    }
+
+    .vpn-shell-secondary + .cbi-map .cbi-value {
+        display: grid !important;
+        grid-template-columns: minmax(170px, 240px) minmax(0, 1fr) !important;
+        gap: 8px 16px !important;
+        align-items: start !important;
+        padding: 12px 0 !important;
+        border-bottom: 1px solid rgba(118, 151, 197, 0.14) !important;
+    }
+
+    .vpn-shell-secondary + .cbi-map .cbi-value:last-child {
+        border-bottom: 0 !important;
+    }
+
+    .vpn-shell-secondary + .cbi-map .cbi-value-title,
+    .vpn-shell-secondary + .cbi-map .cbi-value-field {
+        float: none !important;
+        width: auto !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .vpn-shell-secondary + .cbi-map .cbi-value-title {
+        color: #e7f3ff !important;
+        font-size: 13px !important;
+        font-weight: 850 !important;
+        line-height: 1.45 !important;
+    }
+
+    .vpn-shell-secondary + .cbi-map .cbi-value-description {
+        margin-top: 4px !important;
+        color: #a8bdd8 !important;
+        font-size: 12px !important;
+        line-height: 1.62 !important;
+    }
+
+    .vpn-shell-secondary + .cbi-map input[type="text"],
+    .vpn-shell-secondary + .cbi-map input[type="password"],
+    .vpn-shell-secondary + .cbi-map select,
+    .vpn-shell-secondary + .cbi-map textarea {
+        min-height: 41px !important;
+        border-color: rgba(118, 151, 197, 0.34) !important;
+        background: rgba(5, 10, 18, 0.72) !important;
+        color: #eef7ff !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.040) !important;
+    }
+
+    .vpn-shell-mk5 a:focus-visible,
+    .vpn-shell-mk5 button:focus-visible,
+    .vpn-shell-mk5 input:focus-visible,
+    .vpn-shell-mk5 select:focus-visible,
+    .vpn-shell-mk5 textarea:focus-visible,
+    .vpn-shell-secondary + .cbi-map a:focus-visible,
+    .vpn-shell-secondary + .cbi-map button:focus-visible,
+    .vpn-shell-secondary + .cbi-map input:focus-visible,
+    .vpn-shell-secondary + .cbi-map select:focus-visible,
+    .vpn-shell-secondary + .cbi-map textarea:focus-visible {
+        outline: 2px solid rgba(57, 217, 245, 0.82) !important;
+        outline-offset: 3px !important;
+        border-color: rgba(57, 217, 245, 0.56) !important;
+    }
+
+    @keyframes vpnPass11SoftPulse {
+        0%, 100% {
+            filter: saturate(0.96);
+            box-shadow: 0 0 0 5px rgba(57, 217, 245, 0.08);
+        }
+        50% {
+            filter: saturate(1.10);
+            box-shadow: 0 0 0 9px rgba(57, 217, 245, 0.035);
+        }
+    }
+
+    @media (min-width: 1320px) {
+        .vpn-shell-secondary + .cbi-map {
+            max-width: 1240px;
+        }
+    }
+
+    @media (max-width: 980px) {
+        .vpn-shell-mk5 .vpn-hero-mk5,
+        .vpn-shell-mk5 .vpn-brand-block,
+        .vpn-shell-mk5 .vpn-command-card,
+        .vpn-shell-mk5 .vpn-panel-shell,
+        .vpn-shell-secondary + .cbi-map {
+            border-radius: 16px;
+        }
+
+        .vpn-shell-secondary + .cbi-map .cbi-value {
+            grid-template-columns: 1fr !important;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .vpn-shell-mk5 .vpn-hero-mk5,
+        .vpn-shell-mk5 .vpn-panel-shell,
+        .vpn-shell-secondary + .cbi-map {
+            margin-inline: 6px !important;
+            padding: 12px !important;
+            border-radius: 14px;
+        }
+
+        .vpn-shell-mk5 .vpn-tabbar {
+            border-radius: 16px;
+        }
+
+        .vpn-shell-mk5 .vpn-tabbar a,
+        .vpn-shell-mk5 .vpn-tabbar button,
+        .vpn-shell-mk5 .vpn-hero-actions a,
+        .vpn-shell-mk5 .vpn-hero-actions button,
+        .vpn-shell-secondary + .cbi-map .cbi-button {
+            width: 100%;
+        }
+
+        .vpn-shell-secondary + .cbi-map .cbi-section {
+            padding: 12px !important;
+            border-radius: 14px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .vpn-shell-mk5 .vpn-status-dot,
+        .vpn-shell-mk5 .vpn-live-dot,
+        .vpn-shell-mk5 .vpn-health-dot {
+            animation: none !important;
+        }
+    }
+</style>
+EOF_OPENVPN_MK5_PASS11_WEBPAGE_POLISH
+
     cat > /usr/lib/lua/luci/model/cbi/openvpn.lua <<'EOF_OPENVPN_STANDARD_MODEL'
 -- Copyright 2008 Steven Barth <steven@midlink.org>
 -- Licensed to the public under the Apache License 2.0.
@@ -40347,6 +42251,7 @@ install_openvpn() {
     grep -Fq 'OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 8 CSS"
     grep -Fq 'OpenVPN Mk5 pass 9: 250-line webpage precision layer.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 9 CSS"
     grep -Fq 'OpenVPN Mk5 pass 10 precision shell polish: modal-safe visual layer' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 10 CSS"
+    grep -Fq 'OpenVPN Mk5 pass 11 precision webpage polish: compact responsive forms, stronger focus states, and cleaner console blocks.' /usr/lib/lua/luci/view/openvpn/ovpn_css.htm || die "OpenVPN verify failed: missing Mk5 pass 11 CSS"
     grep -Fq 'vpn-hero-console' /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm || die "OpenVPN verify failed: missing Mk5 console classes"
     grep -Fq 'vpn-shell-config' /usr/lib/lua/luci/view/openvpn/pageswitch.htm || die "OpenVPN verify failed: missing Mk5 config classes"
     grep -Fq 'vpn-entry-grid-import' /usr/lib/lua/luci/view/openvpn/cbi-select-input-add.htm || die "OpenVPN verify failed: missing Mk5 import classes"
@@ -41948,7 +43853,293 @@ index = s:option(Value, "index", "自定义 index.html", "自定义首页文件�
 index.rmempty = true
 index.optional = true
 
+m:append(Template("ttyd/nradio_polish"))
 return m
+EOF
+
+    mkdir -p /usr/lib/lua/luci/view/ttyd
+    cat > /usr/lib/lua/luci/view/ttyd/nradio_polish.htm <<'EOF'
+<style>
+    body {
+        background: #f4f7fb !important;
+    }
+
+    .cbi-map[id*="ttyd"],
+    .cbi-map:has(input[name*="ttyd"]),
+    .cbi-map:has(input[name*="port"]) {
+        position: relative;
+        overflow: hidden;
+        max-width: 1120px;
+        margin: 18px auto 28px !important;
+        padding: 20px 22px 22px !important;
+        border: 1px solid rgba(15, 23, 42, 0.09) !important;
+        border-radius: 22px !important;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.14), transparent 28%),
+            radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.10), transparent 30%),
+            linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+        box-shadow: 0 22px 56px rgba(15, 23, 42, 0.10) !important;
+        color: #0f172a !important;
+    }
+
+    .cbi-map[id*="ttyd"]::before,
+    .cbi-map:has(input[name*="ttyd"])::before,
+    .cbi-map:has(input[name*="port"])::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 4px;
+        background: linear-gradient(90deg, #0ea5e9, #2563eb, #38bdf8);
+        pointer-events: none;
+    }
+
+    .cbi-map[id*="ttyd"] > h2,
+    .cbi-map:has(input[name*="ttyd"]) > h2,
+    .cbi-map:has(input[name*="port"]) > h2 {
+        margin: 0 0 6px !important;
+        color: #0f172a !important;
+        font-size: 25px !important;
+        font-weight: 900 !important;
+        letter-spacing: -0.03em !important;
+    }
+
+    .cbi-map[id*="ttyd"] > .cbi-map-descr,
+    .cbi-map:has(input[name*="ttyd"]) > .cbi-map-descr,
+    .cbi-map:has(input[name*="port"]) > .cbi-map-descr {
+        max-width: 68ch;
+        color: #64748b !important;
+        font-size: 13px !important;
+        line-height: 1.7 !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-section,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-section,
+    .cbi-map:has(input[name*="port"]) .cbi-section {
+        margin-top: 16px !important;
+        padding: 14px 16px !important;
+        border: 1px solid rgba(203, 213, 225, 0.86) !important;
+        border-radius: 18px !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-value,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-value,
+    .cbi-map:has(input[name*="port"]) .cbi-value {
+        display: grid !important;
+        grid-template-columns: minmax(168px, 230px) minmax(0, 1fr) !important;
+        gap: 8px 16px !important;
+        align-items: start !important;
+        padding: 12px 0 !important;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.78) !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-value:last-child,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-value:last-child,
+    .cbi-map:has(input[name*="port"]) .cbi-value:last-child {
+        border-bottom: 0 !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-value-title,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-value-title,
+    .cbi-map:has(input[name*="port"]) .cbi-value-title {
+        float: none !important;
+        width: auto !important;
+        margin: 0 !important;
+        color: #0f172a !important;
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        line-height: 1.45 !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-value-field,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-value-field,
+    .cbi-map:has(input[name*="port"]) .cbi-value-field {
+        float: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .cbi-map[id*="ttyd"] input[type="text"],
+    .cbi-map[id*="ttyd"] input[type="password"],
+    .cbi-map[id*="ttyd"] select,
+    .cbi-map[id*="ttyd"] textarea,
+    .cbi-map:has(input[name*="ttyd"]) input[type="text"],
+    .cbi-map:has(input[name*="ttyd"]) input[type="password"],
+    .cbi-map:has(input[name*="ttyd"]) select,
+    .cbi-map:has(input[name*="ttyd"]) textarea,
+    .cbi-map:has(input[name*="port"]) input[type="text"],
+    .cbi-map:has(input[name*="port"]) input[type="password"],
+    .cbi-map:has(input[name*="port"]) select,
+    .cbi-map:has(input[name*="port"]) textarea {
+        min-height: 40px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.03) !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-value-description,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-value-description,
+    .cbi-map:has(input[name*="port"]) .cbi-value-description {
+        margin-top: 4px !important;
+        color: #64748b !important;
+        font-size: 12px !important;
+        line-height: 1.6 !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-page-actions,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-page-actions,
+    .cbi-map:has(input[name*="port"]) .cbi-page-actions {
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 8px !important;
+        padding-top: 16px !important;
+    }
+
+    .cbi-map[id*="ttyd"] .cbi-button,
+    .cbi-map:has(input[name*="ttyd"]) .cbi-button,
+    .cbi-map:has(input[name*="port"]) .cbi-button {
+        min-height: 38px !important;
+        padding: 0 15px !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+    }
+
+    @media (max-width: 720px) {
+        .cbi-map[id*="ttyd"],
+        .cbi-map:has(input[name*="ttyd"]),
+        .cbi-map:has(input[name*="port"]) {
+            margin: 10px 8px 20px !important;
+            padding: 17px 14px !important;
+            border-radius: 18px !important;
+        }
+
+        .cbi-map[id*="ttyd"] .cbi-value,
+        .cbi-map:has(input[name*="ttyd"]) .cbi-value,
+        .cbi-map:has(input[name*="port"]) .cbi-value {
+            grid-template-columns: 1fr !important;
+        }
+
+        .cbi-map[id*="ttyd"] .cbi-button,
+        .cbi-map:has(input[name*="ttyd"]) .cbi-button,
+        .cbi-map:has(input[name*="port"]) .cbi-button {
+            width: 100% !important;
+        }
+    }
+
+    /* Compatibility fallback for older LuCI browsers that do not parse :has(). */
+    .cbi-map {
+        position: relative;
+        overflow: hidden;
+        max-width: 1120px;
+        margin: 18px auto 28px !important;
+        padding: 20px 22px 22px !important;
+        border: 1px solid rgba(15, 23, 42, 0.09) !important;
+        border-radius: 22px !important;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.14), transparent 28%),
+            radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.10), transparent 30%),
+            linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+        box-shadow: 0 22px 56px rgba(15, 23, 42, 0.10) !important;
+        color: #0f172a !important;
+    }
+    .cbi-map::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 4px;
+        background: linear-gradient(90deg, #0ea5e9, #2563eb, #38bdf8);
+        pointer-events: none;
+    }
+    .cbi-map > h2 {
+        margin: 0 0 6px !important;
+        color: #0f172a !important;
+        font-size: 25px !important;
+        font-weight: 900 !important;
+        letter-spacing: -0.03em !important;
+    }
+    .cbi-map .cbi-section {
+        margin-top: 16px !important;
+        padding: 14px 16px !important;
+        border: 1px solid rgba(203, 213, 225, 0.86) !important;
+        border-radius: 18px !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
+    }
+    .cbi-map .cbi-value {
+        display: grid !important;
+        grid-template-columns: minmax(168px, 230px) minmax(0, 1fr) !important;
+        gap: 8px 16px !important;
+        align-items: start !important;
+        padding: 12px 0 !important;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.78) !important;
+    }
+    .cbi-map .cbi-value:last-child {
+        border-bottom: 0 !important;
+    }
+    .cbi-map .cbi-value-title,
+    .cbi-map .cbi-value-field {
+        float: none !important;
+        width: auto !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .cbi-map .cbi-value-title {
+        color: #0f172a !important;
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        line-height: 1.45 !important;
+    }
+    .cbi-map .cbi-value-field {
+        width: 100% !important;
+    }
+    .cbi-map input[type="text"],
+    .cbi-map input[type="password"],
+    .cbi-map select,
+    .cbi-map textarea {
+        min-height: 40px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.03) !important;
+    }
+    .cbi-map .cbi-value-description {
+        margin-top: 4px !important;
+        color: #64748b !important;
+        font-size: 12px !important;
+        line-height: 1.6 !important;
+    }
+    .cbi-map .cbi-page-actions {
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 8px !important;
+        padding-top: 16px !important;
+    }
+    .cbi-map .cbi-button {
+        min-height: 38px !important;
+        padding: 0 15px !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+    }
+    @media (max-width: 720px) {
+        .cbi-map {
+            margin: 10px 8px 20px !important;
+            padding: 17px 14px !important;
+            border-radius: 18px !important;
+        }
+        .cbi-map .cbi-value {
+            grid-template-columns: 1fr !important;
+        }
+        .cbi-map .cbi-button {
+            width: 100% !important;
+        }
+    }
+</style>
 EOF
 }
 
@@ -42071,8 +44262,23 @@ function collect_status()
         or trim(util.exec("ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2; exit}' | cut -d/ -f1"))
         or "192.168.1.1"
 
-    local host = http.getenv("HTTP_HOST") or http.getenv("SERVER_NAME") or lan_ip
-    host = host:gsub(":%d+$", "")
+    local function host_for_url(raw, fallback)
+        local value = tostring(raw or "")
+        if value:match("^%[.-%]") then
+            value = value:match("^%[(.-)%]") or value
+        else
+            value = value:gsub(":%d+$", "")
+        end
+        if value == "" or value == "0.0.0.0" or value == "::" or value == "localhost" then
+            value = fallback or lan_ip
+        end
+        if value:find(":", 1, true) and not value:match("^%[") then
+            value = "[" .. value .. "]"
+        end
+        return value
+    end
+
+    local host = host_for_url(http.getenv("HTTP_HOST") or http.getenv("SERVER_NAME") or lan_ip, lan_ip)
     if host == "" or host == "0.0.0.0" or host == "::" or host == "localhost" then
         host = lan_ip
     end
@@ -42292,6 +44498,36 @@ local stage_class = embed_mode and "webssh-stage is-embed" or "webssh-stage"
 .webssh-shell{animation:websshFade .22s ease both}
 @media (max-width:980px){.webssh-main{grid-template-columns:1fr}.webssh-aside{border-left:0;border-top:1px solid var(--ws-line)}.webssh-topbar,.webssh-terminal-head,.webssh-toolbar{align-items:flex-start;flex-direction:column}.webssh-summary,.webssh-actions{justify-content:flex-start}.webssh-linkrow{grid-template-columns:1fr}}
 @media (max-width:640px){.webssh-stage{padding:0 10px}.webssh-topbar{padding:14px}.webssh-terminal{padding:12px}.webssh-title{font-size:18px}.webssh-summary{gap:6px}.webssh-badge{font-size:11px}.webssh-terminal-frame{height:540px}.webssh-hint{align-items:flex-start;flex-direction:column}.webssh-btn{width:auto}}
+/* NRadio Web SSH polish 2026-05-23: tighter shell, clearer terminal focus, safer small-screen spacing. */
+.webssh-shell{isolation:isolate;border-radius:16px;border-color:rgba(148,163,184,.38);background:linear-gradient(180deg,#fff 0%,#f7fbff 100%);box-shadow:0 22px 60px rgba(15,23,42,.13)}
+.webssh-shell:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#38bdf8,#2563eb,#22c55e);z-index:2;pointer-events:none}
+.webssh-topbar{padding:17px 20px;background:radial-gradient(circle at 0 0,rgba(56,189,248,.26),transparent 32%),linear-gradient(95deg,#07111f 0%,#0f2745 58%,#123f57 100%)}
+.webssh-mark{border-radius:13px;background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.06));box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 12px 28px rgba(2,6,23,.18)}
+.webssh-badge{box-shadow:inset 0 1px 0 rgba(255,255,255,.42)}
+.webssh-main{grid-template-columns:minmax(0,1fr) minmax(280px,304px)}
+.webssh-terminal{padding:16px;background:linear-gradient(180deg,#f5f8fc 0%,#eef4fa 100%)}
+.webssh-terminal-head{margin-bottom:10px}
+.webssh-livebar,.webssh-toolbar{border-radius:12px;box-shadow:0 10px 24px rgba(15,23,42,.06)}
+.webssh-livebar{border-color:rgba(15,23,42,.9);background:radial-gradient(circle at 100% 0,rgba(14,165,233,.18),transparent 42%),#07111f}
+.webssh-live-dot{animation:websshLivePulse 2.2s ease-in-out infinite}
+.webssh-framebox{border-radius:14px;box-shadow:0 22px 52px rgba(7,17,31,.28)}
+.webssh-framebox:before{height:36px;background:linear-gradient(180deg,#111827,#0b1220)}
+.webssh-terminal-frame{height:700px;border-radius:0 0 14px 14px;background:#020617}
+.webssh-terminal-frame:focus{outline:0;box-shadow:inset 0 0 0 2px rgba(56,189,248,.9),0 0 0 7px rgba(56,189,248,.10)}
+.webssh-aside{padding:16px;background:linear-gradient(180deg,#fff 0%,#f8fbff 100%)}
+.webssh-section+.webssh-section{margin-top:16px;padding-top:16px}
+.webssh-details summary{border-radius:12px;padding:12px 2px}
+.webssh-details[open] summary{color:#0f172a}
+.webssh-code{border-radius:12px;background:linear-gradient(180deg,#0f172a,#111827)}
+.webssh-quick button,.webssh-btn{border-radius:12px}
+.webssh-quick button:hover{transform:translateY(-1px);border-color:#93c5fd;box-shadow:0 10px 20px rgba(15,23,42,.06)}
+.webssh-stage.is-embed .webssh-topbar{border-radius:0;padding:11px 14px}
+.webssh-stage.is-embed .webssh-terminal{padding:10px;background:#eef4fa}
+.webssh-stage.is-embed .webssh-terminal-frame{height:74vh;min-height:480px}
+@keyframes websshLivePulse{0%,100%{box-shadow:0 0 0 5px rgba(34,197,94,.12)}50%{box-shadow:0 0 0 9px rgba(34,197,94,.04)}}
+@media (min-width:1240px){.webssh-stage{max-width:1240px}.webssh-terminal-frame{height:720px}}
+@media (max-width:980px){.webssh-shell{border-radius:14px}.webssh-terminal{padding:14px}.webssh-main{grid-template-columns:1fr}.webssh-aside{padding:14px}}
+@media (max-width:640px){.webssh-stage{margin:10px auto 22px;padding:0 8px}.webssh-shell{border-radius:13px}.webssh-topbar{gap:12px}.webssh-mark{width:38px;height:38px}.webssh-livebar{align-items:flex-start;flex-direction:column}.webssh-toolbar{padding:9px}.webssh-segmented{width:100%;justify-content:space-between}.webssh-segmented button{flex:1}.webssh-terminal-frame{height:560px}.webssh-copyrow{grid-template-columns:1fr}.webssh-copyrow .webssh-btn{width:100%}}
 </style>
 <div id="webssh-stage" class="<%=stage_class%>">
   <div class="webssh-shell">
@@ -42577,6 +44813,33 @@ local stage_class = embed_mode and "webssh-stage is-embed" or "webssh-stage"
 @keyframes websshFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @media (max-width:980px){.webssh-workspace{grid-template-columns:1fr}.webssh-sidepanel{position:static}.webssh-actions{justify-content:flex-start;max-width:none}.webssh-stage.is-focus .webssh-masthead{display:none}}
 @media (max-width:640px){.webssh-stage{padding:0 14px}.webssh-stage.is-embed{padding:0}.webssh-title{font-size:28px}.webssh-terminal-frame{height:540px}.webssh-masthead{padding-bottom:16px}.webssh-inlinehint,.webssh-toolbar,.webssh-compactbar{align-items:flex-start}.webssh-compacttitle{font-size:20px}}
+/* NRadio Web SSH classic polish 2026-05-23: aligns fallback view with the compact workspace skin. */
+.webssh-stage{color:var(--ws-ink)}
+.webssh-masthead{padding:4px 0 18px}
+.webssh-brandmark{border-radius:20px;box-shadow:0 20px 42px rgba(15,23,42,.16),inset 0 1px 0 rgba(255,255,255,.15)}
+.webssh-eyebrow{box-shadow:inset 0 1px 0 rgba(255,255,255,.68)}
+.webssh-title{letter-spacing:-.04em}
+.webssh-desc{max-width:66ch;color:#526173}
+.webssh-actions .webssh-btn{box-shadow:0 10px 24px rgba(15,23,42,.06)}
+.webssh-workspace{gap:16px}
+.webssh-terminal-panel{border-radius:26px;border-color:rgba(15,23,42,.92);background:radial-gradient(circle at 0 0,rgba(56,189,248,.20),transparent 30%),radial-gradient(circle at 100% 0,rgba(37,99,235,.16),transparent 34%),linear-gradient(180deg,#0b1220 0%,#111827 100%);box-shadow:0 28px 68px rgba(15,23,42,.26)}
+.webssh-terminal-panel:before{content:"";position:absolute;left:18px;right:18px;top:0;height:3px;border-radius:0 0 999px 999px;background:linear-gradient(90deg,#38bdf8,#2563eb,#22c55e);opacity:.86}
+.webssh-panelhead{position:relative;z-index:1}
+.webssh-toolbar{position:relative;z-index:1;margin-top:16px;padding-top:14px}
+.webssh-inlinehint{position:relative;z-index:1;border-radius:18px}
+.webssh-framewrap{position:relative;z-index:1;margin-top:14px}
+.webssh-terminal-frame{height:700px;border-radius:20px;box-shadow:inset 0 0 0 1px rgba(148,163,184,.16),0 18px 42px rgba(2,6,23,.24)}
+.webssh-terminal-frame:focus{outline:0;box-shadow:inset 0 0 0 2px rgba(56,189,248,.88),0 0 0 8px rgba(56,189,248,.08),0 18px 42px rgba(2,6,23,.24)}
+.webssh-footline{position:relative;z-index:1;margin-top:12px}
+.webssh-sidepanel{border-radius:24px;background:radial-gradient(circle at 100% 0,rgba(14,165,233,.10),transparent 30%),linear-gradient(180deg,#fff 0%,#f8fbff 100%)}
+.webssh-link,.webssh-quickgrid button,.webssh-code{border-radius:15px}
+.webssh-kv{padding:9px 0}
+.webssh-stage.is-embed .webssh-terminal-panel{border-radius:0;padding:14px;border-left:0;border-right:0}
+.webssh-stage.is-embed .webssh-terminal-frame{height:74vh;min-height:480px}
+.webssh-stage.is-focus .webssh-terminal-frame{height:min(86vh,980px)}
+@media (min-width:1240px){.webssh-stage{max-width:1240px}.webssh-terminal-frame{height:720px}}
+@media (max-width:980px){.webssh-terminal-panel{border-radius:22px}.webssh-terminal-frame{height:620px}.webssh-sidepanel{border-radius:20px}}
+@media (max-width:640px){.webssh-stage{margin:10px auto 22px;padding:0 8px}.webssh-brand{gap:12px}.webssh-brandmark{width:50px;height:50px;border-radius:16px}.webssh-title{font-size:27px}.webssh-actions{gap:8px}.webssh-actions .webssh-btn{width:100%}.webssh-terminal-panel{padding:14px;border-radius:20px}.webssh-toolbar-right,.webssh-segmented{width:100%}.webssh-segmented button{flex:1}.webssh-terminal-frame{height:560px;border-radius:16px}.webssh-inlinehint{align-items:stretch}.webssh-inlinehint .webssh-btn{width:100%}}
 </style>
 <div id="webssh-stage" class="<%=stage_class%>">
   <% if not embed_mode then %>
@@ -43058,6 +45321,7 @@ __TTYD_HELPER__
     verify_file_exists /etc/config/ttyd "Web SSH / ttyd"
     verify_file_exists /usr/lib/lua/luci/controller/ttyd.lua "Web SSH / ttyd"
     verify_file_exists /usr/lib/lua/luci/view/ttyd/overview.htm "Web SSH / ttyd"
+    verify_file_exists /usr/lib/lua/luci/view/ttyd/nradio_polish.htm "Web SSH / ttyd 页面美化"
     verify_file_exists /usr/lib/lua/luci/controller/nradio_adv/webssh.lua "Web SSH"
     verify_file_exists /usr/lib/lua/luci/view/nradio_adv/webssh.htm "Web SSH"
     verify_luci_route admin/system/ttyd/overview "Web SSH / ttyd"
@@ -43233,6 +45497,10 @@ run_menu_feature() {
             install_ddnsgo
             show_support_page_hint='1'
             ;;
+        22)
+            install_docker_plugin
+            show_support_page_hint='1'
+            ;;
         *)
             die_menu_input_issue "$feature_choice"
             ;;
@@ -43260,8 +45528,9 @@ common_plugin_menu() {
         printf '5. OpenList\n'
         printf '6. MosDNS\n'
         printf '7. DDNS-GO\n'
+        printf '8. Docker（仅支持 NRadio_C5800-688 / NRadio_C8-688）\n'
         printf '0. 返回功能分类\n'
-        printf '请选择 0、1、2、3、4、5、6 或 7: '
+        printf '请选择 0、1、2、3、4、5、6、7 或 8: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
@@ -43272,6 +45541,7 @@ common_plugin_menu() {
             5) submenu_feature='5' ;;
             6) submenu_feature='17' ;;
             7) submenu_feature='18' ;;
+            8) submenu_feature='22' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then
@@ -43377,6 +45647,980 @@ game_accel_set_appcenter_entry() {
     uci -q commit appcenter >/dev/null 2>&1 || true
 }
 
+docker_require_supported_model() {
+    case "${CURRENT_DETECTED_MODEL:-}" in
+        NRadio_C5800-688|NRadio_C8-688)
+            return 0
+            ;;
+    esac
+    die "Docker 仅支持 NRadio_C5800-688 / NRadio_C8-688，当前机型：${CURRENT_DETECTED_MODEL:-unknown}"
+}
+
+docker_prepare_storage() {
+    storage_expand_require_active
+
+    docker_avail_kib="$(get_mount_available_kib "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true)"
+    case "$docker_avail_kib" in
+        ''|*[!0-9]*)
+            die "Docker 扩展盘空间读取失败：$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+            ;;
+    esac
+    docker_avail_mib=$((docker_avail_kib / 1024))
+    [ "$docker_avail_mib" -ge "$DOCKER_MIN_FREE_MIB" ] 2>/dev/null || die "Docker 扩展盘可用空间不足：需要 ${DOCKER_MIN_FREE_MIB}M，当前 ${docker_avail_mib}M"
+
+    DOCKER_ROOT="$ROOTFS_2ND_STORAGE_APPS_DIR/docker"
+    DOCKER_DATA_ROOT="$DOCKER_ROOT/data"
+    DOCKER_PACKAGE_DIR="$DOCKER_ROOT/packages"
+    DOCKER_OPKG_CACHE="$DOCKER_ROOT/opkg-cache"
+    DOCKER_TMP_DIR="$DOCKER_ROOT/tmp"
+    DOCKER_LOG_DIR="$DOCKER_ROOT/log"
+    DOCKER_OPT_DIR="$DOCKER_ROOT/opt"
+    WORKDIR="$DOCKER_ROOT/work.$$"
+    BACKUP_DIR="$DOCKER_ROOT/backup"
+
+    mkdir -p "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR" "$BACKUP_DIR" || die "创建 Docker 扩展盘目录失败"
+    ensure_dir_writable "$DOCKER_ROOT" "$DOCKER_ROOT"
+    ensure_dir_writable "$DOCKER_PACKAGE_DIR" "$DOCKER_PACKAGE_DIR"
+    ensure_dir_writable "$DOCKER_TMP_DIR" "$DOCKER_TMP_DIR"
+    ensure_dir_writable "$DOCKER_DATA_ROOT" "$DOCKER_DATA_ROOT"
+    chmod 755 "$ROOTFS_2ND_STORAGE_MOUNT_POINT" "$ROOTFS_2ND_STORAGE_APPS_DIR" "$DOCKER_ROOT" "$DOCKER_DATA_ROOT" 2>/dev/null || true
+
+    log "扩展盘: $ROOTFS_2ND_STORAGE_MOUNT_POINT，可用 ${docker_avail_mib}M"
+    log "Docker: $DOCKER_ROOT"
+}
+
+docker_resolve_feed_index_file() {
+    docker_feed_name="$1"
+    docker_feed_url="$2"
+    docker_feed_idx="$WORKDIR/feed-index/${docker_feed_name}.Packages"
+    docker_local_feed_idx=""
+
+    docker_local_feed_idx="$(find_local_feed_index_file "$docker_feed_name" 2>/dev/null || true)"
+    if [ -n "$docker_local_feed_idx" ] && [ -s "$docker_local_feed_idx" ]; then
+        printf '%s\n' "$docker_local_feed_idx"
+        return 0
+    fi
+
+    if [ -s "$docker_feed_idx" ] && feed_index_is_plain_packages "$docker_feed_idx"; then
+        printf '%s\n' "$docker_feed_idx"
+        return 0
+    fi
+
+    download_feed_index_file "$docker_feed_name" "$docker_feed_url"
+}
+
+docker_get_feed_package_field() {
+    docker_feed_name="$1"
+    docker_package_name="$2"
+    docker_field_name="$3"
+
+    docker_feed_url="$(get_feed_url "$docker_feed_name")"
+    [ -n "$docker_feed_url" ] || return 1
+    docker_feed_idx="$(docker_resolve_feed_index_file "$docker_feed_name" "$docker_feed_url" 2>/dev/null || true)"
+    [ -n "$docker_feed_idx" ] || return 1
+    read_feed_package_field_from_index "$docker_feed_idx" "$docker_package_name" "$docker_field_name"
+}
+
+docker_resolve_package_meta_any_feed() {
+    docker_package_name="$1"
+    docker_feed_names="$(awk '$1=="src/gz" {print $2}' "$FEEDS" 2>/dev/null)"
+
+    for docker_feed_name in $docker_feed_names; do
+        [ -n "$docker_feed_name" ] || continue
+        docker_feed_url="$(get_feed_url "$docker_feed_name")"
+        [ -n "$docker_feed_url" ] || continue
+        docker_filename="$(docker_get_feed_package_field "$docker_feed_name" "$docker_package_name" Filename 2>/dev/null || true)"
+        [ -n "$docker_filename" ] || continue
+        docker_version="$(docker_get_feed_package_field "$docker_feed_name" "$docker_package_name" Version 2>/dev/null || true)"
+        printf '%s|%s|%s|%s\n' "$docker_feed_name" "$docker_feed_url" "$docker_filename" "$docker_version"
+        return 0
+    done
+
+    return 1
+}
+
+docker_download_package_ipk_from_feeds() {
+    docker_pkg="$1"
+    docker_meta="$(docker_resolve_package_meta_any_feed "$docker_pkg" 2>/dev/null || true)"
+    [ -n "$docker_meta" ] || return 1
+
+    IFS='|' read -r docker_feed_name docker_feed_url docker_filename docker_version <<EOF_DOCKER_META
+$docker_meta
+EOF_DOCKER_META
+
+    docker_ipk_name="$(basename "$docker_filename")"
+    docker_out="$DOCKER_PACKAGE_DIR/$docker_ipk_name"
+    if [ -s "$docker_out" ]; then
+        printf '%s\n' "$docker_out"
+        return 0
+    fi
+
+    docker_urls="$(build_package_download_urls_from_meta "$docker_feed_url" "$docker_filename" 2>/dev/null || true)"
+    [ -n "$docker_urls" ] || return 1
+    download_from_urls "$docker_out" $docker_urls >/dev/null || return 1
+    printf '%s\n' "$docker_out"
+}
+
+docker_package_depends_any_feed() {
+    docker_pkg="$1"
+    docker_meta="$(docker_resolve_package_meta_any_feed "$docker_pkg" 2>/dev/null || true)"
+    [ -n "$docker_meta" ] || return 1
+    docker_feed_name="${docker_meta%%|*}"
+    docker_depends="$(docker_get_feed_package_field "$docker_feed_name" "$docker_pkg" Depends 2>/dev/null || true)"
+    [ -n "$docker_depends" ] || return 0
+    printf '%s\n' "$docker_depends" | tr ',' '\n' | while IFS= read -r docker_dep; do
+        docker_dep="$(printf '%s\n' "$docker_dep" | sed 's/(.*//; s/|.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
+        [ -n "$docker_dep" ] || continue
+        case "$docker_dep" in
+            kernel|libc|libgcc|libpthread|librt|libstdcpp|kmod-*) continue ;;
+        esac
+        printf '%s\n' "$docker_dep"
+    done
+}
+
+docker_package_queue_has() {
+    docker_need="$1"
+    docker_list="$2"
+    printf '%s\n' "$docker_list" | grep -Fxq "$docker_need"
+}
+
+docker_download_package_closure() {
+    docker_queue="$(printf '%s\n' docker dockerd containerd runc cgroupfs-mount)"
+    docker_done_pkgs=""
+    docker_downloaded_paths=""
+    docker_guard=0
+
+    while [ -n "$docker_queue" ]; do
+        docker_pkg="$(printf '%s\n' "$docker_queue" | sed -n '1p')"
+        docker_queue="$(printf '%s\n' "$docker_queue" | sed '1d')"
+        [ -n "$docker_pkg" ] || continue
+        docker_package_queue_has "$docker_pkg" "$docker_done_pkgs" && continue
+        docker_done_pkgs="$(printf '%s\n%s\n' "$docker_done_pkgs" "$docker_pkg" | sed '/^$/d')"
+
+        case "$docker_pkg" in
+            kernel|libc|libgcc|libpthread|librt|libstdcpp|kmod-*)
+                continue
+                ;;
+        esac
+
+        docker_ipk_path="$(docker_download_package_ipk_from_feeds "$docker_pkg" 2>/dev/null || true)"
+        [ -n "$docker_ipk_path" ] || {
+            case "$docker_pkg" in
+                docker|dockerd|containerd|runc)
+                    die "当前软件源无法解析 Docker 必需包：$docker_pkg"
+                    ;;
+                *)
+                    continue
+                    ;;
+            esac
+        }
+        docker_downloaded_paths="$docker_downloaded_paths $docker_ipk_path"
+
+        docker_deps="$(docker_package_depends_any_feed "$docker_pkg" 2>/dev/null || true)"
+        for docker_dep in $docker_deps; do
+            [ -n "$docker_dep" ] || continue
+            docker_package_queue_has "$docker_dep" "$docker_done_pkgs" && continue
+            docker_package_queue_has "$docker_dep" "$docker_queue" && continue
+            docker_queue="$(printf '%s\n%s\n' "$docker_queue" "$docker_dep" | sed '/^$/d')"
+        done
+
+        docker_guard=$((docker_guard + 1))
+        [ "$docker_guard" -le 160 ] || die "Docker 依赖解析超过上限，已停止"
+    done
+
+    printf '%s\n' "$docker_downloaded_paths"
+}
+
+docker_extract_ipk_data_to_opt() {
+    docker_ipk_path="$1"
+    docker_pkg_dir="$WORKDIR/ipk.$(basename "$docker_ipk_path" .ipk)"
+    rm -rf "$docker_pkg_dir" 2>/dev/null || true
+    mkdir -p "$docker_pkg_dir"
+    tar -xzf "$docker_ipk_path" -C "$docker_pkg_dir" >/dev/null 2>&1 || die "解包 ipk 失败：$docker_ipk_path"
+    if [ -f "$docker_pkg_dir/data.tar.gz" ]; then
+        tar -xzf "$docker_pkg_dir/data.tar.gz" -C "$DOCKER_OPT_DIR" >/dev/null 2>&1 || die "解压 data.tar.gz 失败：$docker_ipk_path"
+    elif [ -f "$docker_pkg_dir/data.tar.xz" ]; then
+        tar -xJf "$docker_pkg_dir/data.tar.xz" -C "$DOCKER_OPT_DIR" >/dev/null 2>&1 || die "解压 data.tar.xz 失败：$docker_ipk_path"
+    else
+        die "ipk 缺少 data.tar.gz/data.tar.xz：$docker_ipk_path"
+    fi
+}
+
+docker_payload_symlink_allowed() {
+    case "$1" in
+        /usr/bin/docker|/usr/bin/dockerd|/usr/sbin/dockerd|\
+        /usr/bin/containerd|/usr/bin/containerd-shim|\
+        /usr/bin/containerd-shim-runc-v1|/usr/bin/containerd-shim-runc-v2|\
+        /usr/bin/ctr|/usr/bin/runc|/usr/sbin/runc|\
+        /usr/bin/docker-init|/usr/bin/docker-proxy|/usr/bin/tini)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+docker_payload_copy_allowed() {
+    case "$1" in
+        /usr/bin/btrfs|/usr/bin/btrfs-map-logical|/usr/bin/btrfs-select-super|\
+        /usr/bin/cgroupfs-mount|/usr/bin/cgroupfs-umount|\
+        /usr/bin/containerd-stress|/usr/bin/dnet|\
+        /usr/bin/findmnt|/usr/bin/mountpoint|\
+        /etc/init.d/dockerd|/etc/init.d/cgroupfs-mount)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+docker_restore_system_busybox_command() {
+    docker_cmd_name="$1"
+    docker_cmd_path="/usr/bin/$docker_cmd_name"
+    [ -L "$docker_cmd_path" ] || return 0
+    case "$(readlink "$docker_cmd_path" 2>/dev/null || true)" in
+        "$DOCKER_OPT_DIR"/*)
+            rm -f "$docker_cmd_path" 2>/dev/null || true
+            if [ -x "/bin/$docker_cmd_name" ]; then
+                ln -s "/bin/$docker_cmd_name" "$docker_cmd_path" 2>/dev/null || true
+            elif [ -x /bin/busybox ]; then
+                ln -s /bin/busybox "$docker_cmd_path" 2>/dev/null || true
+            fi
+            ;;
+    esac
+}
+
+docker_restore_rom_backed_lib() {
+    docker_lib_path="$1"
+    [ -L "$docker_lib_path" ] || return 0
+    case "$(readlink "$docker_lib_path" 2>/dev/null || true)" in
+        "$DOCKER_OPT_DIR"/*)
+            if [ -f "/rom$docker_lib_path" ]; then
+                rm -f "$docker_lib_path" 2>/dev/null || true
+                cp "/rom$docker_lib_path" "$docker_lib_path" || die "恢复系统库失败：$docker_lib_path"
+                chmod 644 "$docker_lib_path" 2>/dev/null || true
+            else
+                rm -f "$docker_lib_path" 2>/dev/null || true
+            fi
+            ;;
+    esac
+}
+
+docker_restore_polluted_system_paths() {
+    docker_restore_system_busybox_command mount
+    docker_restore_system_busybox_command umount
+
+    for docker_lib_path in \
+        /usr/lib/libattr.so.1.1.2448 \
+        /usr/lib/libblkid.so.1.1.0 \
+        /usr/lib/libmount.so.1.1.0 \
+        /usr/lib/libsmartcols.so.1.1.0 \
+        /usr/lib/libuuid.so.1.3.0 \
+        /usr/lib/libz.so /usr/lib/libz.so.1 /usr/lib/libz.so.1.2.11; do
+        docker_restore_rom_backed_lib "$docker_lib_path"
+    done
+}
+
+docker_install_one_payload_file() {
+    docker_src="$1"
+    docker_rel="${docker_src#$DOCKER_OPT_DIR/}"
+    docker_dst="/$docker_rel"
+    docker_dst_dir="$(dirname "$docker_dst")"
+    docker_payload_install_mode=""
+
+    case "$docker_dst" in
+        /lib/*|/usr/lib/*)
+            if [ -e "/rom$docker_dst" ] || [ -L "/rom$docker_dst" ]; then
+                return 0
+            fi
+            if [ -L "$docker_dst" ]; then
+                case "$(readlink "$docker_dst" 2>/dev/null || true)" in
+                    "$DOCKER_OPT_DIR"/*) ;;
+                    *) return 0 ;;
+                esac
+            elif [ -e "$docker_dst" ]; then
+                return 0
+            fi
+            docker_payload_install_mode="copy"
+            ;;
+        /bin/*|/sbin/*|/usr/bin/*|/usr/sbin/*|/etc/init.d/*)
+            if docker_payload_symlink_allowed "$docker_dst"; then
+                docker_payload_install_mode="link"
+            elif docker_payload_copy_allowed "$docker_dst"; then
+                docker_payload_install_mode="copy"
+            else
+                return 0
+            fi
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    mkdir -p "$docker_dst_dir"
+    if [ -e "$docker_dst" ] || [ -L "$docker_dst" ]; then
+        backup_file "$docker_dst"
+        rm -f "$docker_dst" 2>/dev/null || true
+    fi
+    case "$docker_payload_install_mode" in
+        link)
+            ln -sf "$docker_src" "$docker_dst" || die "创建 Docker 入口链接失败：$docker_dst -> $docker_src"
+            chmod +x "$docker_src" 2>/dev/null || true
+            ;;
+        copy)
+            cp "$docker_src" "$docker_dst" || die "写入 Docker 依赖文件失败：$docker_dst"
+            case "$docker_dst" in
+                /bin/*|/sbin/*|/usr/bin/*|/usr/sbin/*|/usr/libexec/*|/etc/init.d/*)
+                    chmod 755 "$docker_dst" 2>/dev/null || true
+                    ;;
+                /lib/*|/usr/lib/*)
+                    chmod 644 "$docker_dst" 2>/dev/null || true
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+docker_install_payload_tree_to_system() {
+    docker_restore_polluted_system_paths
+    for docker_rel_dir in bin sbin usr/bin usr/sbin usr/lib usr/libexec lib etc/init.d; do
+        [ -d "$DOCKER_OPT_DIR/$docker_rel_dir" ] || continue
+        find "$DOCKER_OPT_DIR/$docker_rel_dir" -type f 2>/dev/null | while IFS= read -r docker_src; do
+            [ -n "$docker_src" ] || continue
+            docker_install_one_payload_file "$docker_src"
+        done
+    done
+}
+
+docker_cleanup_overlay_failed_files() {
+    for docker_path in \
+        /usr/bin/docker \
+        /usr/bin/dockerd \
+        /usr/sbin/dockerd \
+        /usr/bin/containerd \
+        /usr/bin/containerd-shim \
+        /usr/bin/containerd-shim-runc-v1 \
+        /usr/bin/containerd-shim-runc-v2 \
+        /usr/bin/ctr \
+        /usr/bin/runc \
+        /usr/sbin/runc; do
+        [ -e "$docker_path" ] || [ -L "$docker_path" ] || continue
+        case "$(readlink "$docker_path" 2>/dev/null || true)" in
+            "$DOCKER_OPT_DIR"/*) ;;
+            *) backup_file "$docker_path" ;;
+        esac
+        rm -f "$docker_path" 2>/dev/null || true
+    done
+    rm -f /usr/lib/opkg/info/docker.* /usr/lib/opkg/info/dockerd.* /usr/lib/opkg/info/containerd.* /usr/lib/opkg/info/runc.* 2>/dev/null || true
+    rm -rf /tmp/opkg-* /tmp/nradio-docker-* 2>/dev/null || true
+}
+
+docker_opkg_supports_cache() {
+    opkg --help 2>&1 | grep -q -- "--cache"
+}
+
+docker_opkg_cached() {
+    export TMPDIR="$DOCKER_TMP_DIR"
+    if docker_opkg_supports_cache; then
+        opkg --cache "$DOCKER_OPKG_CACHE" "$@"
+    else
+        opkg "$@"
+    fi
+}
+
+docker_ensure_opkg_update() {
+    ensure_default_feeds
+    if docker_opkg_cached update > "$DOCKER_LOG_DIR/opkg.update.log" 2>&1; then
+        log "软件源: opkg update 完成"
+        return 0
+    fi
+    sed -n '1,120p' "$DOCKER_LOG_DIR/opkg.update.log" >&2 || true
+    die "opkg update 失败"
+}
+
+docker_install_packages_to_expand_disk() {
+    export TMPDIR="$DOCKER_TMP_DIR"
+    docker_ensure_opkg_update
+    log "缓存:   Docker package cache = $DOCKER_PACKAGE_DIR"
+    log "缓存:   Docker workdir = $WORKDIR"
+    docker_cleanup_overlay_failed_files
+    docker_restore_polluted_system_paths
+    docker_package_paths="$(docker_download_package_closure)" || die "Docker 包下载失败"
+    [ -n "$docker_package_paths" ] || die "Docker 包下载失败"
+
+    rm -rf "$DOCKER_OPT_DIR/bin" "$DOCKER_OPT_DIR/sbin" "$DOCKER_OPT_DIR/usr" "$DOCKER_OPT_DIR/lib" "$DOCKER_OPT_DIR/etc/init.d" 2>/dev/null || true
+    mkdir -p "$DOCKER_OPT_DIR"
+    for docker_ipk_path in $docker_package_paths; do
+        docker_extract_ipk_data_to_opt "$docker_ipk_path"
+    done
+    docker_install_payload_tree_to_system
+
+    [ -x /etc/init.d/cgroupfs-mount ] && /etc/init.d/cgroupfs-mount start >/dev/null 2>&1 || true
+    log "安装:   Docker 包内容已解到扩展盘，必要入口和依赖写入系统盘"
+}
+
+docker_configure_storage() {
+    mkdir -p "$DOCKER_DATA_ROOT" /etc/docker
+    chmod 700 "$DOCKER_DATA_ROOT" 2>/dev/null || true
+
+    if command -v uci >/dev/null 2>&1; then
+        [ -f /etc/config/dockerd ] || printf "config globals 'globals'\n" > /etc/config/dockerd
+        backup_file /etc/config/dockerd
+        uci -q set dockerd.globals=globals >/dev/null 2>&1 || true
+        uci -q set "dockerd.globals.data_root=$DOCKER_DATA_ROOT" >/dev/null 2>&1 || true
+        uci -q set "dockerd.globals.log_level=warn" >/dev/null 2>&1 || true
+        uci -q set "dockerd.globals.iptables=0" >/dev/null 2>&1 || true
+        uci -q commit dockerd >/dev/null 2>&1 || true
+    fi
+
+    backup_file /etc/docker/daemon.json
+    cat > /etc/docker/daemon.json <<EOF_DOCKER_DAEMON
+{
+  "data-root": "$DOCKER_DATA_ROOT",
+  "storage-driver": "vfs",
+  "iptables": false,
+  "bridge": "none",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "2m",
+    "max-file": "3"
+  }
+}
+EOF_DOCKER_DAEMON
+
+    log "配置:   Docker data-root = $DOCKER_DATA_ROOT"
+}
+
+docker_service_running() {
+    if [ -x /etc/init.d/dockerd ]; then
+        /etc/init.d/dockerd status >/dev/null 2>&1 && return 0
+    fi
+    pidof dockerd >/dev/null 2>&1
+}
+
+docker_start_service() {
+    [ -x /etc/init.d/dockerd ] || die "缺少 /etc/init.d/dockerd"
+    /etc/init.d/dockerd enable >/dev/null 2>&1 || true
+    if /etc/init.d/dockerd restart > "$DOCKER_LOG_DIR/dockerd.restart.log" 2>&1; then
+        sleep 3
+        return 0
+    fi
+    sed -n '1,160p' "$DOCKER_LOG_DIR/dockerd.restart.log" >&2 || true
+    die "dockerd 启动失败"
+}
+
+write_docker_luci_controller() {
+    mkdir -p "$(dirname "$DOCKER_CONTROLLER")"
+    backup_file "$DOCKER_CONTROLLER"
+    cat > "$DOCKER_CONTROLLER" <<'EOF_DOCKER_CONTROLLER'
+module("luci.controller.nradio_adv.docker", package.seeall)
+
+local fs = require "nixio.fs"
+
+local function trim(s)
+    return (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function shell_quote(s)
+    s = tostring(s or "")
+    return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+local function command_output(cmd)
+    local fp = io.popen(cmd .. " 2>/dev/null")
+    if not fp then return "" end
+    local data = fp:read("*a") or ""
+    fp:close()
+    return trim(data)
+end
+
+local function exec_ok(cmd)
+    local a, b, c = os.execute(cmd .. " >/dev/null 2>&1")
+    if a == true or a == 0 then return true end
+    if b == "exit" and c == 0 then return true end
+    return false
+end
+
+local function write_json(data)
+    local http = require "luci.http"
+    http.prepare_content("application/json")
+    if type(http.write_json) == "function" then
+        http.write_json(data)
+        return
+    end
+    local ok, jsonc = pcall(require, "luci.jsonc")
+    if ok and jsonc and type(jsonc.stringify) == "function" then
+        http.write(jsonc.stringify(data))
+    else
+        http.write("{\"ok\":false,\"error\":\"json writer unavailable\"}")
+    end
+end
+
+local function docker_data_root()
+    local root = command_output("uci -q get dockerd.globals.data_root")
+    if root ~= "" then return root end
+    local daemon_root = command_output("sed -n 's/.*\"data-root\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' /etc/docker/daemon.json | sed -n '1p'")
+    if daemon_root ~= "" then return daemon_root end
+    return "/mnt/rootfs_2nd_data/nradio-apps/docker/data"
+end
+
+local function service_running()
+    if exec_ok("/etc/init.d/dockerd status") then return true end
+    return exec_ok("pidof dockerd")
+end
+
+local function action_log_path()
+    local root = docker_data_root()
+    local base = root:gsub("/data$", "")
+    if base == root then base = "/mnt/rootfs_2nd_data/nradio-apps/docker" end
+    os.execute("mkdir -p " .. shell_quote(base .. "/log") .. " >/dev/null 2>&1")
+    return base .. "/log/ui-action.log"
+end
+
+local function request_value(name)
+    local http = require "luci.http"
+    return trim(http.formvalue(name) or "")
+end
+
+local function background_action(cmd)
+    local log_path = action_log_path()
+    os.execute("(" .. cmd .. ") > " .. shell_quote(log_path) .. " 2>&1 &")
+    return log_path
+end
+
+function index()
+    local page = entry({"nradioadv", "system", "docker"}, template("nradio_adv/docker"), _("Docker"), 90)
+    page.dependent = false
+    page.leaf = false
+    local app_page = entry({"nradioadv", "system", "appcenter", "docker"}, alias("nradioadv", "system", "docker"), nil, nil, true)
+    app_page.leaf = false
+    entry({"nradioadv", "system", "docker", "status"}, call("action_status"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "start"}, call("action_start"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "stop"}, call("action_stop"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "restart"}, call("action_restart"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "pull"}, call("action_pull"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "run"}, call("action_run"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "container"}, call("action_container"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "logs"}, call("action_logs"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "inspect"}, call("action_inspect"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "image"}, call("action_image"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "prune"}, call("action_prune"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "network"}, call("action_network"), nil).leaf = true
+    entry({"nradioadv", "system", "docker", "volume"}, call("action_volume"), nil).leaf = true
+end
+
+function action_status()
+    local root = docker_data_root()
+    local root_q = shell_quote(root)
+    write_json({
+        ok = true,
+        running = service_running(),
+        docker = command_output("docker --version"),
+        dockerd = command_output("dockerd --version"),
+        data_root = root,
+        data_root_exists = fs.access(root) and true or false,
+        storage = command_output("df -hP " .. root_q .. " | awk 'NR==2{print $2\" total / \"$4\" free / \"$5\" used\"}'"),
+        containers = command_output("docker ps -a --size --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.Size}}' | sed -n '1,80p'"),
+        images = command_output("docker images --format '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}' | sed -n '1,80p'"),
+        networks = command_output("docker network ls --format '{{.ID}}\t{{.Name}}\t{{.Driver}}\t{{.Scope}}' | sed -n '1,80p'"),
+        volumes = command_output("docker volume ls --format '{{.Name}}\t{{.Driver}}\t{{.Mountpoint}}' | sed -n '1,80p'"),
+        stats = command_output("docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' | sed -n '1,80p'"),
+        disk = command_output("docker system df"),
+        logs = command_output("tail -n 80 " .. shell_quote(action_log_path())),
+        info = command_output("docker info 2>/dev/null | sed -n '1,42p'")
+    })
+end
+
+function action_start()
+    write_json({ ok = exec_ok("/etc/init.d/dockerd start"), running = service_running(), log = action_log_path() })
+end
+
+function action_stop()
+    write_json({ ok = exec_ok("/etc/init.d/dockerd stop"), running = service_running(), log = action_log_path() })
+end
+
+function action_restart()
+    write_json({ ok = exec_ok("/etc/init.d/dockerd restart"), running = service_running(), log = action_log_path() })
+end
+
+function action_pull()
+    local image = request_value("image")
+    if image == "" then write_json({ ok = false, error = "image required" }); return end
+    local log_path = background_action("docker pull " .. shell_quote(image))
+    write_json({ ok = true, msg = "pull started", log = log_path })
+end
+
+function action_run()
+    local image = request_value("image")
+    local name = request_value("name")
+    local ports = request_value("ports")
+    local volumes = request_value("volumes")
+    local envs = request_value("envs")
+    local restart = request_value("restart")
+    local network = request_value("network")
+    local privileged = request_value("privileged")
+    local command = request_value("command")
+    local cmd = "docker run -d"
+
+    if image == "" then write_json({ ok = false, error = "image required" }); return end
+    if name ~= "" then cmd = cmd .. " --name " .. shell_quote(name) end
+    if restart ~= "" and restart ~= "no" then cmd = cmd .. " --restart " .. shell_quote(restart) end
+    if network ~= "" then cmd = cmd .. " --network " .. shell_quote(network) end
+    if privileged == "1" then cmd = cmd .. " --privileged" end
+    for line in ports:gmatch("[^\r\n]+") do line = trim(line); if line ~= "" then cmd = cmd .. " -p " .. shell_quote(line) end end
+    for line in volumes:gmatch("[^\r\n]+") do line = trim(line); if line ~= "" then cmd = cmd .. " -v " .. shell_quote(line) end end
+    for line in envs:gmatch("[^\r\n]+") do line = trim(line); if line ~= "" then cmd = cmd .. " -e " .. shell_quote(line) end end
+    cmd = cmd .. " " .. shell_quote(image)
+    if command ~= "" then cmd = cmd .. " " .. shell_quote(command) end
+    local log_path = background_action(cmd)
+    write_json({ ok = true, msg = "run started", log = log_path })
+end
+
+function action_container()
+    local id = request_value("id")
+    local op = request_value("op")
+    local cmd = nil
+    if id == "" then write_json({ ok = false, error = "container id required" }); return end
+    if op == "start" then cmd = "docker start " .. shell_quote(id)
+    elseif op == "stop" then cmd = "docker stop " .. shell_quote(id)
+    elseif op == "restart" then cmd = "docker restart " .. shell_quote(id)
+    elseif op == "pause" then cmd = "docker pause " .. shell_quote(id)
+    elseif op == "unpause" then cmd = "docker unpause " .. shell_quote(id)
+    elseif op == "kill" then cmd = "docker kill " .. shell_quote(id)
+    elseif op == "remove" then cmd = "docker rm -f " .. shell_quote(id)
+    else write_json({ ok = false, error = "unsupported op" }); return end
+    local log_path = background_action(cmd)
+    write_json({ ok = true, msg = op .. " started", log = log_path })
+end
+
+function action_logs()
+    local id = request_value("id")
+    if id == "" then write_json({ ok = false, error = "container id required" }); return end
+    write_json({ ok = true, logs = command_output("docker logs --tail 120 " .. shell_quote(id) .. " 2>&1") })
+end
+
+function action_inspect()
+    local id = request_value("id")
+    if id == "" then write_json({ ok = false, error = "id required" }); return end
+    write_json({ ok = true, inspect = command_output("docker inspect " .. shell_quote(id) .. " 2>&1 | sed -n '1,220p'") })
+end
+
+function action_image()
+    local id = request_value("id")
+    local op = request_value("op")
+    if id == "" then write_json({ ok = false, error = "image id required" }); return end
+    if op == "remove" then
+        local log_path = background_action("docker rmi -f " .. shell_quote(id))
+        write_json({ ok = true, msg = "image remove started", log = log_path })
+        return
+    end
+    write_json({ ok = false, error = "unsupported op" })
+end
+
+function action_prune()
+    local target = request_value("target")
+    local cmd = nil
+    if target == "containers" then cmd = "docker container prune -f"
+    elseif target == "images" then cmd = "docker image prune -af"
+    elseif target == "networks" then cmd = "docker network prune -f"
+    elseif target == "volumes" then cmd = "docker volume prune -f"
+    elseif target == "system_volumes" then cmd = "docker system prune -af --volumes"
+    else cmd = "docker system prune -af" end
+    local log_path = background_action(cmd)
+    write_json({ ok = true, msg = "prune started", log = log_path })
+end
+
+function action_network()
+    local name = request_value("name")
+    local driver = request_value("driver")
+    local op = request_value("op")
+    if name == "" then write_json({ ok = false, error = "network name required" }); return end
+    if driver == "" then driver = "bridge" end
+    if op == "create" then
+        local log_path = background_action("docker network create -d " .. shell_quote(driver) .. " " .. shell_quote(name))
+        write_json({ ok = true, msg = "network create started", log = log_path })
+        return
+    elseif op == "remove" then
+        local log_path = background_action("docker network rm " .. shell_quote(name))
+        write_json({ ok = true, msg = "network remove started", log = log_path })
+        return
+    end
+    write_json({ ok = false, error = "unsupported op" })
+end
+
+function action_volume()
+    local name = request_value("name")
+    local op = request_value("op")
+    if name == "" then write_json({ ok = false, error = "volume name required" }); return end
+    if op == "create" then
+        local log_path = background_action("docker volume create " .. shell_quote(name))
+        write_json({ ok = true, msg = "volume create started", log = log_path })
+        return
+    elseif op == "remove" then
+        local log_path = background_action("docker volume rm " .. shell_quote(name))
+        write_json({ ok = true, msg = "volume remove started", log = log_path })
+        return
+    end
+    write_json({ ok = false, error = "unsupported op" })
+end
+EOF_DOCKER_CONTROLLER
+    chmod 644 "$DOCKER_CONTROLLER" 2>/dev/null || true
+}
+
+write_docker_luci_view() {
+    mkdir -p "$(dirname "$DOCKER_VIEW")"
+    backup_file "$DOCKER_VIEW"
+    cat > "$DOCKER_VIEW" <<'EOF_DOCKER_VIEW'
+<%+header%>
+<style>
+html,body{width:100%!important;max-width:none!important;margin:0!important;background:#0d1117!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.docker-shell{--panel:#0f172a;--panel2:#111c2f;--panel3:#0b1220;--line:rgba(148,163,184,.24);--text:#eef2ff;--muted:#9fb0c9;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--accent:#22d3ee;--accent2:#38bdf8;width:100%;max-width:none;min-height:100vh;margin:0;padding:24px 30px 36px;color:var(--text);font-family:Inter,Arial,"Microsoft YaHei",sans-serif;box-sizing:border-box}.docker-shell *{box-sizing:border-box}.docker-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#0b1424 0%,#10253a 54%,#0d3347 100%);border:1px solid rgba(34,211,238,.3);border-radius:8px;padding:20px 22px;box-shadow:0 18px 50px rgba(2,6,23,.28)}.docker-hero:after{content:"";position:absolute;left:20px;right:20px;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.8),rgba(34,197,94,.36),transparent)}.docker-titlebar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.docker-titlebar h2{margin:0 0 7px;font-size:28px;font-weight:900;letter-spacing:0;color:#38e7ff}.docker-titlebar p{margin:0;color:#bfd0e6;line-height:1.7}.docker-live{display:flex;align-items:center;gap:8px;min-width:132px;justify-content:flex-end;color:#dbeafe;font-weight:900}.docker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:16px}.docker-card{background:rgba(15,23,42,.75);border:1px solid var(--line);border-radius:8px;padding:13px;min-height:84px}.docker-card b{display:block;font-size:12px;color:#b8c6dd;font-weight:800;margin-bottom:8px}.docker-card span{font-size:14px;line-height:1.5;word-break:break-word}.docker-dot{display:inline-block;width:9px;height:9px;border-radius:999px;background:var(--bad);vertical-align:middle}.docker-dot.ok{background:var(--ok);box-shadow:0 0 0 4px rgba(34,197,94,.14)}.docker-toolbar,.docker-row-actions,.docker-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.docker-toolbar{margin:14px 0 12px}.docker-tabs{margin:0 0 14px;border-bottom:1px solid rgba(148,163,184,.18);padding-bottom:10px}.docker-btn,.docker-tab{min-height:36px;border:1px solid rgba(34,211,238,.35);background:#0d2638;color:#e0f7ff;border-radius:7px;padding:8px 12px;font-weight:800;cursor:pointer}.docker-tab{background:rgba(15,23,42,.74);color:#bdd7ee}.docker-tab.active{background:rgba(14,116,144,.34);border-color:rgba(34,211,238,.68);color:#e0f7ff}.docker-btn:hover,.docker-tab:hover{border-color:rgba(34,211,238,.68);background:#12354e}.docker-btn.danger{border-color:rgba(248,113,113,.44);background:rgba(127,29,29,.42);color:#fee2e2}.docker-btn.warn{border-color:rgba(245,158,11,.48);background:rgba(120,53,15,.38);color:#ffedd5}.docker-btn.good{border-color:rgba(34,197,94,.44);background:rgba(20,83,45,.38);color:#dcfce7}.docker-btn:disabled{opacity:.55;cursor:wait}.docker-select,.docker-input,.docker-textarea{width:100%;border:1px solid rgba(148,163,184,.28);background:#050b16;color:#eef2ff;border-radius:7px;padding:9px 10px;outline:0}.docker-select:focus,.docker-input:focus,.docker-textarea:focus{border-color:rgba(34,211,238,.68);box-shadow:0 0 0 3px rgba(34,211,238,.12)}.docker-toolbar .docker-select{width:auto;min-width:170px}.docker-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.docker-section{display:none}.docker-section.active{display:block}.docker-panel{background:#0b1220;border:1px solid var(--line);border-radius:8px;margin-top:12px;overflow:hidden}.docker-panel h3{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;padding:11px 13px;border-bottom:1px solid var(--line);font-size:14px;background:rgba(30,41,59,.78)}.docker-panel h3 small{color:var(--muted);font-weight:600}.docker-panel-body{padding:12px}.docker-split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:14px}.docker-form{display:grid;gap:10px}.docker-form label{display:grid;gap:5px;color:#b8c6dd;font-size:12px;font-weight:800}.docker-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.docker-check input{width:16px;height:16px}.docker-textarea{min-height:78px;resize:vertical;font:12px/1.5 Consolas,Monaco,"Courier New",monospace}.docker-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.docker-pre{margin:0;padding:12px;min-height:48px;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#dbeafe;font:12px/1.55 Consolas,Monaco,"Courier New",monospace;background:#070b12}.docker-table-wrap{width:100%;overflow:auto}.docker-table{width:100%;border-collapse:collapse;font-size:12px;min-width:760px}.docker-table.compact{min-width:560px}.docker-table th,.docker-table td{border-bottom:1px solid rgba(148,163,184,.14);padding:9px 8px;text-align:left;vertical-align:top}.docker-table th{color:#b8c6dd;font-weight:900;background:rgba(15,23,42,.66);position:sticky;top:0}.docker-table td{color:#e5eefc;word-break:break-word}.docker-empty{padding:16px;color:var(--muted)}.docker-statusline{min-height:22px;color:#a7f3d0;font-size:12px;font-weight:800}.docker-statusline.bad{color:#fecaca}.docker-copy{font-family:Consolas,Monaco,"Courier New",monospace}.docker-muted{color:var(--muted)}@media(max-width:1180px){.docker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.docker-split{grid-template-columns:1fr}.docker-shell{padding:18px}}@media(max-width:640px){.docker-grid,.docker-form-grid{grid-template-columns:1fr}.docker-titlebar{display:block}.docker-live{justify-content:flex-start;margin-top:10px}.docker-toolbar .docker-btn,.docker-row-actions .docker-btn,.docker-tabs .docker-tab{flex:1 1 auto}.docker-toolbar .docker-select{width:100%}.docker-titlebar h2{font-size:23px}.docker-shell{padding:14px}.docker-table{min-width:680px}}
+</style>
+<div class="docker-shell">
+  <section class="docker-hero">
+    <div class="docker-titlebar">
+      <div>
+        <h2>Docker</h2>
+        <p>容器、镜像、网络、卷、运行数据固定走 eMMC 扩展盘。常用 Docker 控制功能集中在此页面。</p>
+      </div>
+      <div class="docker-live"><i id="docker-dot" class="docker-dot"></i><span id="docker-running">读取中</span></div>
+    </div>
+    <div class="docker-grid">
+      <div class="docker-card"><b>Docker CLI</b><span id="docker-cli">-</span></div>
+      <div class="docker-card"><b>Docker daemon</b><span id="docker-daemon">-</span></div>
+      <div class="docker-card"><b>扩展盘空间</b><span id="docker-storage">-</span></div>
+      <div class="docker-card"><b>容器</b><span id="docker-container-count">0</span></div>
+      <div class="docker-card"><b>镜像</b><span id="docker-image-count">0</span></div>
+      <div class="docker-card"><b>数据目录</b><span id="docker-root-brief">-</span></div>
+    </div>
+  </section>
+  <div class="docker-toolbar">
+    <button class="docker-btn" type="button" onclick="dockerRefresh()">刷新</button>
+    <button class="docker-btn" type="button" onclick="dockerAction('start')">启动 daemon</button>
+    <button class="docker-btn warn" type="button" onclick="dockerAction('restart')">重启 daemon</button>
+    <button class="docker-btn danger" type="button" onclick="dockerAction('stop')">停止 daemon</button>
+    <select id="prune-target" class="docker-select">
+      <option value="system">清理未使用资源</option>
+      <option value="containers">清理停止容器</option>
+      <option value="images">清理未使用镜像</option>
+      <option value="networks">清理未使用网络</option>
+      <option value="volumes">清理未使用卷</option>
+      <option value="system_volumes">清理系统含卷</option>
+    </select>
+    <button class="docker-btn warn" type="button" onclick="dockerPrune()">执行清理</button>
+    <span id="docker-action-state" class="docker-statusline"></span>
+  </div>
+  <div class="docker-tabs">
+    <button class="docker-tab active" type="button" data-tab="overview">总览</button>
+    <button class="docker-tab" type="button" data-tab="containers">容器</button>
+    <button class="docker-tab" type="button" data-tab="images">镜像</button>
+    <button class="docker-tab" type="button" data-tab="networks">网络</button>
+    <button class="docker-tab" type="button" data-tab="volumes">卷</button>
+    <button class="docker-tab" type="button" data-tab="logs">日志</button>
+  </div>
+  <div class="docker-layout">
+    <section id="docker-tab-overview" class="docker-section active">
+      <div class="docker-split">
+        <div>
+          <div class="docker-panel"><h3>资源占用</h3><div id="docker-stats" class="docker-panel-body docker-empty">读取中</div></div>
+          <div class="docker-panel"><h3>磁盘占用</h3><pre id="docker-disk" class="docker-pre">-</pre></div>
+          <div class="docker-panel"><h3>Docker 信息</h3><pre id="docker-info" class="docker-pre">-</pre></div>
+        </div>
+        <div>
+          <div class="docker-panel"><h3>快速创建容器</h3><div class="docker-panel-body"><div class="docker-form">
+            <label>镜像<input id="run-image" class="docker-input" placeholder="nginx:alpine"></label>
+            <label>容器名<input id="run-name" class="docker-input" placeholder="nginx-test"></label>
+            <div class="docker-form-grid">
+              <label>重启策略<select id="run-restart" class="docker-select"><option value="unless-stopped">unless-stopped</option><option value="always">always</option><option value="on-failure">on-failure</option><option value="no">no</option></select></label>
+              <label>网络<input id="run-network" class="docker-input" placeholder="bridge"></label>
+            </div>
+            <div class="docker-form-grid">
+              <label>端口映射<textarea id="run-ports" class="docker-textarea" placeholder="8080:80"></textarea></label>
+              <label>环境变量<textarea id="run-envs" class="docker-textarea" placeholder="TZ=Asia/Shanghai"></textarea></label>
+            </div>
+            <label>目录挂载<textarea id="run-volumes" class="docker-textarea" placeholder="/mnt/rootfs_2nd_data/nradio-apps/docker/volumes/nginx:/usr/share/nginx/html"></textarea></label>
+            <label>启动命令<input id="run-command" class="docker-input" placeholder="留空使用镜像默认命令"></label>
+            <label class="docker-check"><input id="run-privileged" type="checkbox">特权模式</label>
+            <button class="docker-btn good" type="button" onclick="dockerRun()">创建并运行</button>
+          </div></div></div>
+          <div class="docker-panel"><h3>拉取镜像</h3><div class="docker-panel-body"><div class="docker-form"><label>镜像名<input id="pull-image" class="docker-input" placeholder="nginx:alpine"></label><button class="docker-btn" type="button" onclick="dockerPull()">拉取镜像</button></div></div></div>
+          <div class="docker-panel"><h3>数据目录</h3><pre id="docker-root" class="docker-pre">-</pre></div>
+        </div>
+      </div>
+    </section>
+    <section id="docker-tab-containers" class="docker-section"><div class="docker-panel"><h3>容器 <small id="docker-container-count-table">0</small></h3><div id="docker-containers" class="docker-panel-body docker-empty">读取中</div></div></section>
+    <section id="docker-tab-images" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>镜像 <small id="docker-image-count-table">0</small></h3><div id="docker-images" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>拉取镜像</h3><div class="docker-panel-body"><div class="docker-form"><label>镜像名<input id="pull-image-2" class="docker-input" placeholder="alpine:latest"></label><button class="docker-btn" type="button" onclick="dockerPullAlt()">拉取镜像</button></div></div></div></div></section>
+    <section id="docker-tab-networks" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>网络</h3><div id="docker-networks" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建网络</h3><div class="docker-panel-body"><div class="docker-form"><label>网络名<input id="network-name" class="docker-input" placeholder="app_net"></label><label>驱动<select id="network-driver" class="docker-select"><option value="bridge">bridge</option><option value="macvlan">macvlan</option><option value="ipvlan">ipvlan</option></select></label><button class="docker-btn" type="button" onclick="dockerNetworkCreate()">创建网络</button></div></div></div></div></section>
+    <section id="docker-tab-volumes" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>卷</h3><div id="docker-volumes" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建卷</h3><div class="docker-panel-body"><div class="docker-form"><label>卷名<input id="volume-name" class="docker-input" placeholder="app_data"></label><button class="docker-btn" type="button" onclick="dockerVolumeCreate()">创建卷</button></div></div></div></div></section>
+    <section id="docker-tab-logs" class="docker-section"><div class="docker-panel"><h3>操作日志</h3><pre id="docker-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>详情 / Inspect</h3><pre id="docker-detail" class="docker-pre">-</pre></div></section>
+  </div>
+</div>
+<script>
+(function(){
+  var base = '<%=controller%>nradioadv/system/docker';
+  var token = '<%=token%>';
+  function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function text(id,value){var el=document.getElementById(id);if(el)el.textContent=value||'-';}
+  function value(id){var el=document.getElementById(id);return el&&el.value?el.value.trim():'';}
+  function checked(id){var el=document.getElementById(id);return el&&el.checked?'1':'';}
+  function state(msg,bad){var el=document.getElementById('docker-action-state');if(!el)return;el.textContent=msg||'';el.className='docker-statusline'+(bad?' bad':'');}
+  function form(data){var out=[];for(var k in data){out.push(encodeURIComponent(k)+'='+encodeURIComponent(data[k]||''));}return out.join('&');}
+  function api(path,data,done){var payload=data||{};payload.token=token;payload._=Date.now();var x=new XMLHttpRequest(),url=base+'/'+path;x.open('POST',url,true);x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');x.setRequestHeader('X-Requested-With','XMLHttpRequest');x.onreadystatechange=function(){if(x.readyState===4){var json=null;try{json=JSON.parse(x.responseText||'{}');}catch(e){state('接口读取失败 HTTP '+x.status,true);done&&done(null);return;}done&&done(json);}};x.send(form(payload));}
+  function splitLines(v){return String(v||'').split(/\r?\n/).filter(function(x){return x.trim();});}
+  function empty(id,msg){var box=document.getElementById(id);if(!box)return;box.className='docker-panel-body docker-empty';box.textContent=msg;}
+  function table(id,html){var box=document.getElementById(id);if(!box)return;box.className='docker-panel-body';box.innerHTML='<div class="docker-table-wrap">'+html+'</div>';}
+  function actionButtons(id,type){var safe=esc(id);if(type==='container')return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-cop="start">启动</button><button class="docker-btn warn" data-id="'+safe+'" data-cop="restart">重启</button><button class="docker-btn" data-id="'+safe+'" data-cop="stop">停止</button><button class="docker-btn" data-id="'+safe+'" data-cop="pause">暂停</button><button class="docker-btn" data-id="'+safe+'" data-cop="unpause">恢复</button><button class="docker-btn danger" data-id="'+safe+'" data-cop="kill">强杀</button><button class="docker-btn" data-id="'+safe+'" data-log="1">日志</button><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-cop="remove">删除</button></div>';if(type==='image')return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-iop="remove">删除</button></div>';if(type==='network')return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-nop="remove">删除</button></div>';return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-vop="remove">删除</button></div>';}
+  function renderContainers(v){var rows=splitLines(v),html='<table class="docker-table"><thead><tr><th>ID</th><th>名称</th><th>镜像</th><th>状态</th><th>端口</th><th>大小</th><th>操作</th></tr></thead><tbody>';text('docker-container-count',String(rows.length));text('docker-container-count-table',String(rows.length));if(!rows.length){empty('docker-containers','当前没有容器');return;}rows.forEach(function(line){var p=line.split('\t'),id=p[0]||'',name=p[1]||'',img=p[2]||'',st=p[3]||'',ports=p[4]||'',size=p[5]||'';html+='<tr><td class="docker-copy">'+esc(id)+'</td><td>'+esc(name)+'</td><td>'+esc(img)+'</td><td>'+esc(st)+'</td><td>'+esc(ports)+'</td><td>'+esc(size)+'</td><td>'+actionButtons(id,'container')+'</td></tr>';});html+='</tbody></table>';table('docker-containers',html);}
+  function renderImages(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>镜像</th><th>ID</th><th>大小</th><th>创建</th><th>操作</th></tr></thead><tbody>';text('docker-image-count',String(rows.length));text('docker-image-count-table',String(rows.length));if(!rows.length){empty('docker-images','当前没有镜像');return;}rows.forEach(function(line){var p=line.split('\t'),name=p[0]||'',id=p[1]||'',size=p[2]||'',created=p[3]||'';html+='<tr><td>'+esc(name)+'</td><td class="docker-copy">'+esc(id)+'</td><td>'+esc(size)+'</td><td>'+esc(created)+'</td><td>'+actionButtons(id,'image')+'</td></tr>';});html+='</tbody></table>';table('docker-images',html);}
+  function renderNetworks(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>ID</th><th>名称</th><th>驱动</th><th>范围</th><th>操作</th></tr></thead><tbody>';if(!rows.length){empty('docker-networks','当前没有网络');return;}rows.forEach(function(line){var p=line.split('\t'),id=p[0]||'',name=p[1]||'',driver=p[2]||'',scope=p[3]||'';html+='<tr><td class="docker-copy">'+esc(id)+'</td><td>'+esc(name)+'</td><td>'+esc(driver)+'</td><td>'+esc(scope)+'</td><td>'+actionButtons(name,'network')+'</td></tr>';});html+='</tbody></table>';table('docker-networks',html);}
+  function renderVolumes(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>名称</th><th>驱动</th><th>挂载点</th><th>操作</th></tr></thead><tbody>';if(!rows.length){empty('docker-volumes','当前没有卷');return;}rows.forEach(function(line){var p=line.split('\t'),name=p[0]||'',driver=p[1]||'',mount=p[2]||'';html+='<tr><td>'+esc(name)+'</td><td>'+esc(driver)+'</td><td class="docker-copy">'+esc(mount)+'</td><td>'+actionButtons(name,'volume')+'</td></tr>';});html+='</tbody></table>';table('docker-volumes',html);}
+  function renderStats(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>容器</th><th>CPU</th><th>内存</th><th>网络 IO</th><th>磁盘 IO</th></tr></thead><tbody>';if(!rows.length){empty('docker-stats','暂无运行中容器资源数据');return;}rows.forEach(function(line){var p=line.split('\t');html+='<tr><td>'+esc(p[0]||'')+'</td><td>'+esc(p[1]||'')+'</td><td>'+esc(p[2]||'')+'</td><td>'+esc(p[3]||'')+'</td><td>'+esc(p[4]||'')+'</td></tr>';});html+='</tbody></table>';table('docker-stats',html);}
+  function apply(data){if(!data){text('docker-running','读取失败');return;}var dot=document.getElementById('docker-dot');if(dot)dot.className='docker-dot '+(data.running?'ok':'');text('docker-running',data.running?'运行中':'已停止');text('docker-cli',data.docker||'未检测到 docker');text('docker-daemon',data.dockerd||'未检测到 dockerd');text('docker-storage',data.storage||'-');text('docker-root',data.data_root||'-');text('docker-root-brief',data.data_root||'-');text('docker-info',data.info||'-');text('docker-disk',data.disk||'-');text('docker-logs',data.logs||'-');renderContainers(data.containers||'');renderImages(data.images||'');renderNetworks(data.networks||'');renderVolumes(data.volumes||'');renderStats(data.stats||'');}
+  window.dockerRefresh=function(){api('status',null,function(d){apply(d);});};
+  window.dockerAction=function(action){state(action+'...');api(action,{},function(d){state(d&&d.ok?'已提交':'操作失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,700);});};
+  window.dockerPull=function(){var image=value('pull-image');if(!image){state('镜像名不能为空',true);return;}state('pull '+image+'...');api('pull',{image:image},function(d){state(d&&d.ok?'拉取已开始':'拉取失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,1200);});};
+  window.dockerPullAlt=function(){var alt=value('pull-image-2'),main=document.getElementById('pull-image');if(main)main.value=alt;window.dockerPull();};
+  window.dockerRun=function(){var image=value('run-image');if(!image){state('镜像不能为空',true);return;}state('run '+image+'...');api('run',{image:image,name:value('run-name'),ports:value('run-ports'),volumes:value('run-volumes'),envs:value('run-envs'),restart:value('run-restart'),network:value('run-network'),privileged:checked('run-privileged'),command:value('run-command')},function(d){state(d&&d.ok?'容器创建已开始':'创建失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,1200);});};
+  window.dockerContainer=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除容器 '+id+' 吗？'))return;state(op+' '+id+'...');api('container',{id:id,op:op},function(d){state(d&&d.ok?'容器操作已提交':'容器操作失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
+  window.dockerLogs=function(id){if(!id)return;state('读取容器日志 '+id+'...');api('logs',{id:id},function(d){text('docker-logs',d&&d.logs?d.logs:'无日志');state(d&&d.ok?'日志已读取':'日志读取失败',!(d&&d.ok));});};
+  window.dockerInspect=function(id){if(!id)return;state('inspect '+id+'...');api('inspect',{id:id},function(d){text('docker-detail',d&&d.inspect?d.inspect:'无详情');state(d&&d.ok?'详情已读取':'详情读取失败',!(d&&d.ok));showTab('logs');});};
+  window.dockerImage=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除镜像 '+id+' 吗？'))return;state(op+' image '+id+'...');api('image',{id:id,op:op},function(d){state(d&&d.ok?'镜像操作已提交':'镜像操作失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
+  window.dockerPrune=function(){var target=value('prune-target')||'system';if(!confirm('确认执行 Docker 清理：'+target+' ?'))return;state('prune '+target+'...');api('prune',{target:target},function(d){state(d&&d.ok?'清理已开始':'清理失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,1400);});};
+  window.dockerNetworkCreate=function(){var name=value('network-name');if(!name){state('网络名不能为空',true);return;}api('network',{op:'create',name:name,driver:value('network-driver')},function(d){state(d&&d.ok?'网络创建已开始':'网络创建失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
+  window.dockerNetwork=function(name,op){if(!name)return;if(op==='remove'&&!confirm('确认删除网络 '+name+' 吗？'))return;api('network',{op:op,name:name},function(d){state(d&&d.ok?'网络操作已提交':'网络操作失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
+  window.dockerVolumeCreate=function(){var name=value('volume-name');if(!name){state('卷名不能为空',true);return;}api('volume',{op:'create',name:name},function(d){state(d&&d.ok?'卷创建已开始':'卷创建失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
+  window.dockerVolume=function(name,op){if(!name)return;if(op==='remove'&&!confirm('确认删除卷 '+name+' 吗？'))return;api('volume',{op:op,name:name},function(d){state(d&&d.ok?'卷操作已提交':'卷操作失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
+  function showTab(tab){var tabs=document.querySelectorAll('.docker-tab'),sections=document.querySelectorAll('.docker-section'),i;for(i=0;i<tabs.length;i++){tabs[i].className='docker-tab'+(tabs[i].getAttribute('data-tab')===tab?' active':'');}for(i=0;i<sections.length;i++){sections[i].className='docker-section'+(sections[i].id==='docker-tab-'+tab?' active':'');}}
+  document.addEventListener('click',function(e){var b=e.target;if(!b||!b.getAttribute)return;if(b.className&&String(b.className).indexOf('docker-tab')!==-1){showTab(b.getAttribute('data-tab'));return;}var id=b.getAttribute('data-id');if(!id)return;if(b.getAttribute('data-log')){window.dockerLogs(id);showTab('logs');return;}if(b.getAttribute('data-inspect')){window.dockerInspect(id);return;}var cop=b.getAttribute('data-cop');if(cop){window.dockerContainer(id,cop);return;}var iop=b.getAttribute('data-iop');if(iop){window.dockerImage(id,iop);return;}var nop=b.getAttribute('data-nop');if(nop){window.dockerNetwork(id,nop);return;}var vop=b.getAttribute('data-vop');if(vop)window.dockerVolume(id,vop);});
+  window.dockerRefresh();
+  setInterval(window.dockerRefresh,5000);
+})();
+</script>
+<%+footer%>
+EOF_DOCKER_VIEW
+    chmod 644 "$DOCKER_VIEW" 2>/dev/null || true
+}
+
+write_docker_icon() {
+    ensure_app_icon_dir
+    backup_file "$APP_ICON_DIR/$DOCKER_ICON_NAME"
+    cat > "$APP_ICON_DIR/$DOCKER_ICON_NAME" <<'EOF_DOCKER_ICON'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="26" fill="#0f172a"/>
+  <path d="M26 70h76c-4 22-20 34-43 34-18 0-31-8-39-22l6-12Z" fill="#38bdf8"/>
+  <path d="M31 57h13v11H31V57Zm16 0h13v11H47V57Zm16 0h13v11H63V57Zm16 0h13v11H79V57ZM47 43h13v11H47V43Zm16 0h13v11H63V43Zm0-14h13v11H63V29Z" fill="#e0f2fe"/>
+  <path d="M96 51c4-6 11-7 17-4-3 8-9 12-18 12" fill="#7dd3fc"/>
+  <circle cx="40" cy="81" r="3" fill="#082f49"/>
+</svg>
+EOF_DOCKER_ICON
+    chmod 644 "$APP_ICON_DIR/$DOCKER_ICON_NAME" 2>/dev/null || true
+}
+
+patch_appcenter_docker_frame_size() {
+    [ -f "$TPL" ] || return 0
+    grep -q "/nradioadv/system/docker" "$TPL" 2>/dev/null && return 0
+    backup_file "$TPL"
+    docker_tmp_file="$WORKDIR/appcenter-docker-frame.htm"
+    sed "s#frame.src.indexOf('/nradioadv/system/leigod') === -1#frame.src.indexOf('/nradioadv/system/leigod') === -1 \&\& frame.src.indexOf('/nradioadv/system/docker') === -1#g" "$TPL" > "$docker_tmp_file" || die "写入 Docker 弹窗尺寸补丁失败"
+    cp "$docker_tmp_file" "$TPL" || die "更新应用商店模板失败"
+    grep -q "/nradioadv/system/docker" "$TPL" 2>/dev/null || die "Docker 弹窗尺寸补丁校验失败"
+}
+
+patch_appcenter_docker_uninstall_key() {
+    [ -f "$TPL" ] || return 0
+    grep -q 'function nradio_plugin_uninstall_key(app_name)' "$TPL" 2>/dev/null || return 0
+    grep -q 'return "docker";' "$TPL" 2>/dev/null && return 0
+
+    backup_file "$TPL"
+    docker_tmp_file="$WORKDIR/appcenter-docker-uninstall-key.htm"
+    awk '
+        /return "ddnsgo";/ && inserted != 1 {
+            print
+            print "        if(app_name == \"Docker\" || app_name == \"docker\" || app_name == \"dockerd\" || app_name == \"nradio-docker\")"
+            print "            return \"docker\";"
+            inserted = 1
+            next
+        }
+        /return "";$/ && inserted != 1 {
+            print "        if(app_name == \"Docker\" || app_name == \"docker\" || app_name == \"dockerd\" || app_name == \"nradio-docker\")"
+            print "            return \"docker\";"
+            inserted = 1
+        }
+        { print }
+    ' "$TPL" > "$docker_tmp_file" || die "写入 Docker 卸载入口补丁失败"
+    cp "$docker_tmp_file" "$TPL" || die "更新 Docker 卸载入口失败"
+    grep -q 'return "docker";' "$TPL" 2>/dev/null || die "Docker 卸载入口补丁校验失败"
+}
+
+docker_cached_package_size() {
+    docker_total=0
+    for docker_file in "$DOCKER_PACKAGE_DIR"/*.ipk; do
+        [ -f "$docker_file" ] || continue
+        docker_size="$(wc -c < "$docker_file" 2>/dev/null | tr -d ' ' || printf 0)"
+        case "$docker_size" in ''|*[!0-9]*) docker_size=0 ;; esac
+        docker_total=$((docker_total + docker_size))
+    done
+    printf '%s\n' "$docker_total"
+}
+
+verify_docker_install() {
+    command -v docker >/dev/null 2>&1 || die "Docker 校验失败：缺少 docker"
+    command -v dockerd >/dev/null 2>&1 || [ -x /usr/bin/dockerd ] || [ -x /usr/sbin/dockerd ] || die "Docker 校验失败：缺少 dockerd"
+    [ -x /etc/init.d/dockerd ] || die "Docker 校验失败：缺少 init 脚本"
+    [ -d "$DOCKER_DATA_ROOT" ] || die "Docker 校验失败：data-root 目录缺失"
+    if command -v uci >/dev/null 2>&1; then
+        docker_configured_root="$(uci -q get dockerd.globals.data_root 2>/dev/null || true)"
+        [ "$docker_configured_root" = "$DOCKER_DATA_ROOT" ] || die "Docker 校验失败：dockerd data_root 未指向扩展盘"
+    fi
+    grep -Fq "$DOCKER_DATA_ROOT" /etc/docker/daemon.json 2>/dev/null || die "Docker 校验失败：daemon.json 未指向扩展盘"
+    verify_appcenter_route "$DOCKER_APP_NAME" "$DOCKER_ROUTE"
+    verify_file_exists "$DOCKER_CONTROLLER" "Docker LuCI 控制器"
+    verify_file_exists "$DOCKER_VIEW" "Docker LuCI 页面"
+    verify_file_exists "$APP_ICON_DIR/$DOCKER_ICON_NAME" "Docker 图标"
+    docker --version >/dev/null 2>&1 || die "Docker CLI 校验失败"
+    dockerd --version >/dev/null 2>&1 || die "dockerd 版本校验失败"
+    docker_service_running || die "dockerd 运行校验失败"
+}
+
+install_docker_plugin() {
+    log_stage 1 6 "Docker 环境与扩展盘检查"
+    docker_require_supported_model
+    game_accel_require_appcenter
+    docker_prepare_storage
+
+    confirm_or_exit "确认安装 Docker 并接入 NRadio 应用商店吗？所有下载缓存和 Docker 数据将写入 $DOCKER_ROOT"
+
+    log_stage 2 6 "下载 Docker 软件包到扩展盘"
+    docker_install_packages_to_expand_disk
+
+    log_stage 3 6 "配置 Docker 扩展盘 data-root"
+    docker_configure_storage
+    docker_start_service
+
+    log_stage 4 6 "写入 Docker LuCI 弹窗页面与图标"
+    write_docker_luci_controller
+    write_docker_luci_view
+    write_docker_icon
+
+    log_stage 5 6 "接入 NRadio 应用商店"
+    write_plugin_uninstall_assets
+    docker_version="$(docker_get_feed_package_field openwrt_packages dockerd Version 2>/dev/null || true)"
+    [ -n "$docker_version" ] || docker_version="$(dockerd --version 2>/dev/null | sed -n 's/.*version \([^, ]*\).*/\1/p' | sed -n '1p' || true)"
+    [ -n "$docker_version" ] || docker_version="$SCRIPT_VERSION"
+    docker_size="$(docker_cached_package_size)"
+    backup_file "$CFG"
+    game_accel_set_appcenter_entry "$DOCKER_APP_NAME" "$DOCKER_PACKAGE_NAME" "$docker_version" "$docker_size" "$DOCKER_ROUTE" "$DOCKER_CONTROLLER" "$DOCKER_ICON_NAME"
+    patch_appcenter_docker_frame_size
+    patch_appcenter_docker_uninstall_key
+    refresh_luci_appcenter
+    /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+
+    log_stage 6 6 "校验 Docker 与应用商店入口"
+    verify_docker_install
+
+    log "完成:   Docker 已接入 NRadio 应用商店"
+    log "机型:   $CURRENT_DETECTED_MODEL"
+    log "路由:   $DOCKER_ROUTE"
+    log "目录:   $DOCKER_DATA_ROOT"
+}
+
 qiyou_version() {
     qy_version="$(sed -n 's/^VERSION=//p' /tmp/qy/etc/PKG_INFO 2>/dev/null | head -n 1)"
     [ -n "$qy_version" ] || qy_version='1.2.1'
@@ -43457,7 +46701,18 @@ end
 local function trim(v) v=tostring(v or ""); local o=v:gsub("^%s+",""):gsub("%s+$",""); return o end
 local function readfile(p) local f=io.open(p,"r"); if not f then return "" end; local d=f:read("*a") or ""; f:close(); return d end
 local function exec(c) return trim(require("luci.sys").exec(c.." 2>/dev/null")) end
-local function write_json(data) local h=require "luci.http"; h.prepare_content("application/json"); if type(h.write_json)=="function" then h.write_json(data) else h.write("{}") end end
+local function write_json(data)
+    local h=require "luci.http"
+    local ok,jsonc=pcall(require,"luci.jsonc")
+    h.prepare_content("application/json")
+    if type(h.write_json)=="function" then
+        h.write_json(data)
+    elseif ok and jsonc and type(jsonc.stringify)=="function" then
+        h.write(jsonc.stringify(data or {}))
+    else
+        h.write("{}")
+    end
+end
 local function pkg_info()
     local info={}
     for line in readfile("/tmp/qy/etc/PKG_INFO"):gmatch("[^\r\n]+") do
@@ -43499,10 +46754,11 @@ qiyou_write_view() {
 <%+header%>
 <style>
 html,body{width:100%!important;max-width:none!important;margin:0!important;background:#0b121d!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.qy-wrap{width:100%;max-width:none;min-height:100vh;padding:34px 40px 42px;color:#eef8ff;background:radial-gradient(circle at 14% 8%,rgba(56,189,248,.18),transparent 30%),linear-gradient(135deg,#081522,#102b40 58%,#0a1420);box-sizing:border-box}.qy-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.qy-title{font-size:32px;font-weight:900}.qy-sub{margin-top:8px;color:#b8d7ea;font-size:14px}.qy-pill{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(125,211,252,.36);border-radius:999px;padding:10px 15px;background:rgba(14,165,233,.14);font-weight:900}.qy-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.qy-dot.boosting{background:#22c55e;color:#22c55e}.qy-dot.running{background:#38bdf8;color:#38bdf8}.qy-dot.off{background:#f97316;color:#f97316}.qy-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:22px 0 26px}.qy-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px 22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 36px rgba(0,0,0,.20)}.qy-label{color:#9ec6da;font-size:13px;font-weight:900}.qy-value{margin-top:10px;font-size:26px;font-weight:900;color:#fff;word-break:break-all}.qy-row{display:grid;grid-template-columns:240px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#cfe7f5}.qy-k{color:#9ec6da;font-weight:900}.qy-v{font-weight:900;word-break:break-all}.qy-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.qy-btn{border:1px solid rgba(125,211,252,.36);border-radius:10px;background:rgba(14,165,233,.17);color:#eef8ff;font-weight:900;padding:11px 18px;cursor:pointer}.qy-btn.danger{border-color:rgba(248,113,113,.48);background:rgba(239,68,68,.18)}.qy-note{margin-top:18px;color:#b8d7ea;line-height:1.7;font-size:13px}@media(max-width:900px){.qy-wrap{padding:24px 18px 30px}.qy-grid{grid-template-columns:1fr}.qy-row{grid-template-columns:1fr}.qy-head{align-items:flex-start;flex-direction:column}}
+/* NRadio QiYou premium visual finish */.qy-wrap{position:relative;overflow:hidden}.qy-wrap:before{content:"";position:absolute;left:34px;right:34px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(125,211,252,.68),rgba(34,197,94,.36),transparent);pointer-events:none}.qy-head,.qy-grid,.qy-card,.qy-actions,.qy-note{position:relative;z-index:1}.qy-title{text-shadow:0 1px 0 rgba(0,0,0,.32),0 0 24px rgba(56,189,248,.10)}.qy-sub{color:#c0d7e8}.qy-pill{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 12px 26px rgba(2,8,23,.20);backdrop-filter:blur(10px) saturate(1.06);-webkit-backdrop-filter:blur(10px) saturate(1.06)}.qy-card{border-color:rgba(125,211,252,.20);background:radial-gradient(circle at 14% 0%,rgba(56,189,248,.12),transparent 44%),linear-gradient(145deg,rgba(255,255,255,.095),rgba(255,255,255,.038));box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 22px 42px rgba(0,0,0,.24)}.qy-card:hover{border-color:rgba(125,211,252,.32);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 46px rgba(0,0,0,.26)}.qy-label{color:#b9dff1}.qy-value{text-shadow:0 1px 0 rgba(0,0,0,.34)}.qy-row{border-bottom-color:rgba(255,255,255,.10)}.qy-btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 22px rgba(2,8,23,.18)}.qy-btn:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(56,189,248,.18),inset 0 1px 0 rgba(255,255,255,.08),0 10px 22px rgba(2,8,23,.18)}.qy-btn:hover{border-color:rgba(125,211,252,.56);background:linear-gradient(180deg,rgba(14,165,233,.24),rgba(14,165,233,.10))}.qy-btn.danger:hover{border-color:rgba(248,113,113,.66);background:linear-gradient(180deg,rgba(239,68,68,.26),rgba(239,68,68,.12))}.qy-head,.qy-grid,.qy-card,.qy-row,.qy-v,.qy-value{min-width:0;overflow-wrap:anywhere}.qy-card,.qy-pill,.qy-btn{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.qy-title{font-size:26px}.qy-card{border-radius:13px}.qy-actions{align-items:stretch;flex-direction:column}.qy-btn{width:100%}}
 </style>
-<div class="qy-wrap"><div class="qy-head"><div><div class="qy-title">奇游联机宝</div><div class="qy-sub">只读监听奇游后台状态，绑定和选择游戏仍在奇游联机宝 App 内完成。</div></div><div class="qy-pill"><span id="qy-dot" class="qy-dot"></span><span id="qy-status">读取中</span></div></div><div class="qy-grid"><div class="qy-card"><div class="qy-label">插件状态</div><div id="qy-main" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">实际代理连接</div><div id="qy-proxy-conn" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">云端连接</div><div id="qy-cloud-conn" class="qy-value">-</div></div></div><div class="qy-card"><div class="qy-row"><div class="qy-k">安装返回</div><div id="qy-ret" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_acc</div><div id="qy-acc" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_mosq</div><div id="qy-mosq" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_proxy</div><div id="qy-proxy" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">包信息</div><div id="qy-pkg" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">代理监听</div><div id="qy-listen" class="qy-v">-</div></div></div><div class="qy-actions"><button class="qy-btn" onclick="qyRefresh()">刷新状态</button><button class="qy-btn danger" onclick="qyUninstall()">卸载奇游联机宝</button></div><div class="qy-note"><strong>状态解释：</strong>BOOSTING 表示正在加速；RUNNING 表示插件在线但未开启加速；实际代理连接不是连接路由器的设备数。</div></div>
+<div class="qy-wrap"><div class="qy-head"><div><div class="qy-title">奇游联机宝</div><div class="qy-sub">只读监听奇游后台状态，绑定和选择游戏仍在奇游联机宝 App 内完成。</div></div><div class="qy-pill"><span id="qy-dot" class="qy-dot"></span><span id="qy-status">读取中</span></div></div><div class="qy-grid"><div class="qy-card"><div class="qy-label">插件状态</div><div id="qy-main" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">实际代理连接</div><div id="qy-proxy-conn" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">云端连接</div><div id="qy-cloud-conn" class="qy-value">-</div></div></div><div class="qy-card"><div class="qy-row"><div class="qy-k">安装返回</div><div id="qy-ret" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_acc</div><div id="qy-acc" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_mosq</div><div id="qy-mosq" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_proxy</div><div id="qy-proxy" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">包信息</div><div id="qy-pkg" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">代理监听</div><div id="qy-listen" class="qy-v">-</div></div></div><div class="qy-actions"><button type="button" class="qy-btn" onclick="qyRefresh()">刷新状态</button><button type="button" class="qy-btn danger" onclick="qyUninstall()">卸载奇游联机宝</button></div><div class="qy-note"><strong>状态解释：</strong>BOOSTING 表示正在加速；RUNNING 表示插件在线但未开启加速；实际代理连接不是连接路由器的设备数。</div></div>
 <script>
-var qyBase='<%=controller%>nradioadv/system/qiyou';function qyText(id,text){var el=document.getElementById(id);if(el)el.textContent=text||'-';}function qyBool(v,p){return v?('运行中'+(p?' / '+p:'')):'未运行';}function qyApply(d){var st=d.status||'UNKNOWN';var dot=document.getElementById('qy-dot');qyText('qy-status',st);qyText('qy-main',st==='BOOSTING'?'正在加速':(st==='RUNNING'?'插件在线':st));qyText('qy-proxy-conn',String(d.proxy_conn||0));qyText('qy-cloud-conn',String(d.cloud_conn||0));qyText('qy-ret',d.ret||'-');qyText('qy-acc',qyBool(d.qy_acc,d.qy_acc_pid));qyText('qy-mosq',qyBool(d.qy_mosq,d.qy_mosq_pid));qyText('qy-proxy',qyBool(d.qy_proxy,d.qy_proxy_pid));qyText('qy-pkg',[d.mode,d.version,d.date].filter(Boolean).join(' / ')||'-');qyText('qy-listen',d.proxy_listen||'-');if(dot){dot.className='qy-dot '+(st==='BOOSTING'?'boosting':(st==='RUNNING'?'running':'off'));}}function qyRefresh(){var x=new XMLHttpRequest();x.open('GET',qyBase+'/status?_='+Date.now(),true);x.onreadystatechange=function(){if(x.readyState===4){try{qyApply(JSON.parse(x.responseText||'{}'));}catch(e){qyText('qy-status','读取失败');}}};x.send(null);}function qyUninstall(){if(!confirm('确认卸载奇游联机宝并移除应用商店入口吗？'))return;var x=new XMLHttpRequest();x.open('POST',qyBase+'/uninstall',true);x.onreadystatechange=function(){if(x.readyState===4)alert('已开始卸载，稍后刷新应用商店。');};x.send('');}qyRefresh();setInterval(qyRefresh,5000);
+var qyBase='<%=url("nradioadv/system/qiyou")%>';function qyText(id,text){var el=document.getElementById(id);if(el)el.textContent=text||'-';}function qyBool(v,p){return v?('运行中'+(p?' / '+p:'')):'未运行';}function qyApply(d){var st=d.status||'UNKNOWN';var dot=document.getElementById('qy-dot');qyText('qy-status',st);qyText('qy-main',st==='BOOSTING'?'正在加速':(st==='RUNNING'?'插件在线':st));qyText('qy-proxy-conn',String(d.proxy_conn||0));qyText('qy-cloud-conn',String(d.cloud_conn||0));qyText('qy-ret',d.ret||'-');qyText('qy-acc',qyBool(d.qy_acc,d.qy_acc_pid));qyText('qy-mosq',qyBool(d.qy_mosq,d.qy_mosq_pid));qyText('qy-proxy',qyBool(d.qy_proxy,d.qy_proxy_pid));qyText('qy-pkg',[d.mode,d.version,d.date].filter(Boolean).join(' / ')||'-');qyText('qy-listen',d.proxy_listen||'-');if(dot){dot.className='qy-dot '+(st==='BOOSTING'?'boosting':(st==='RUNNING'?'running':'off'));}}function qyRefresh(){var x=new XMLHttpRequest();x.open('GET',qyBase+'/status?_='+Date.now(),true);x.onreadystatechange=function(){if(x.readyState===4){try{qyApply(JSON.parse(x.responseText||'{}'));}catch(e){qyText('qy-status','读取失败');}}};x.send(null);}function qyUninstall(){if(!confirm('确认卸载奇游联机宝并移除应用商店入口吗？'))return;var x=new XMLHttpRequest();x.open('POST',qyBase+'/uninstall',true);x.onreadystatechange=function(){if(x.readyState===4)alert('已开始卸载，稍后刷新应用商店。');};x.send('');}qyRefresh();setInterval(qyRefresh,5000);
 </script>
 <%+footer%>
 EOF_QIYOU_VIEW
@@ -43677,7 +46933,18 @@ end
 local function trim(v) v=tostring(v or ""); local o=v:gsub("^%s+",""):gsub("%s+$",""); return o end
 local function exec(c) return trim(require("luci.sys").exec(c.." 2>/dev/null")) end
 local function has_file(p) return require("nixio.fs").access(p) and true or false end
-local function write_json(data) local h=require "luci.http"; h.prepare_content("application/json"); if type(h.write_json)=="function" then h.write_json(data) else h.write("{}") end end
+local function write_json(data)
+    local h=require "luci.http"
+    local ok,jsonc=pcall(require,"luci.jsonc")
+    h.prepare_content("application/json")
+    if type(h.write_json)=="function" then
+        h.write_json(data)
+    elseif ok and jsonc and type(jsonc.stringify)=="function" then
+        h.write(jsonc.stringify(data or {}))
+    else
+        h.write("{}")
+    end
+end
 local function listen_line(port) return exec("netstat -lntup | grep ':"..port.." ' | head -n 1") end
 local function conn_count(pattern) return tonumber(exec("netstat -tunap | grep "..pattern.." | grep ESTABLISHED | wc -l")) or 0 end
 local function detect_mode()
@@ -43724,10 +46991,11 @@ leigod_write_view() {
 <%+header%>
 <style>
 html,body{width:100%!important;max-width:none!important;margin:0!important;background:#101523!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.lg-wrap{width:100%;max-width:none;min-height:100vh;padding:34px 40px 42px;color:#f8fbff;background:radial-gradient(circle at 14% 8%,rgba(245,158,11,.18),transparent 30%),linear-gradient(135deg,#111827,#202a42 58%,#101827);box-sizing:border-box}.lg-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.lg-title{font-size:32px;font-weight:900}.lg-sub{margin-top:8px;color:#c6d3e1;font-size:14px}.lg-pill{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(248,181,74,.42);border-radius:999px;padding:10px 15px;background:rgba(245,158,11,.15);font-weight:900}.lg-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.lg-dot.ok{background:#22c55e;color:#22c55e}.lg-dot.warn{background:#f59e0b;color:#f59e0b}.lg-dot.bad{background:#ef4444;color:#ef4444}.lg-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:22px 0 26px}.lg-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px 22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 36px rgba(0,0,0,.20)}.lg-label{color:#fcd38a;font-size:13px;font-weight:900}.lg-value{margin-top:10px;font-size:26px;font-weight:900;color:#fff;word-break:break-all}.lg-row{display:grid;grid-template-columns:240px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#d8e2f0}.lg-k{color:#fcd38a;font-weight:900}.lg-v{font-weight:900;word-break:break-all}.lg-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.lg-btn{border:1px solid rgba(248,181,74,.44);border-radius:10px;background:rgba(245,158,11,.17);color:#fff7ed;font-weight:900;padding:11px 18px;cursor:pointer}.lg-btn.danger{border-color:rgba(248,113,113,.50);background:rgba(239,68,68,.18)}.lg-log{white-space:pre-wrap;line-height:1.55;font-family:monospace;font-size:12px;max-height:220px;overflow:auto;color:#dbeafe}.lg-note{margin-top:18px;color:#c6d3e1;line-height:1.7;font-size:13px}@media(max-width:900px){.lg-wrap{padding:24px 18px 30px}.lg-grid{grid-template-columns:1fr}.lg-row{grid-template-columns:1fr}.lg-head{align-items:flex-start;flex-direction:column}}
+/* NRadio Leigod premium visual finish */.lg-wrap{position:relative;overflow:hidden}.lg-wrap:before{content:"";position:absolute;left:34px;right:34px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(248,181,74,.70),rgba(248,113,113,.32),transparent);pointer-events:none}.lg-head,.lg-grid,.lg-card,.lg-actions,.lg-note{position:relative;z-index:1}.lg-title{text-shadow:0 1px 0 rgba(0,0,0,.32),0 0 24px rgba(245,158,11,.12)}.lg-sub{color:#d3dbe7}.lg-pill{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 12px 26px rgba(2,8,23,.20);backdrop-filter:blur(10px) saturate(1.06);-webkit-backdrop-filter:blur(10px) saturate(1.06)}.lg-card{border-color:rgba(248,181,74,.22);background:radial-gradient(circle at 14% 0%,rgba(245,158,11,.13),transparent 44%),linear-gradient(145deg,rgba(255,255,255,.095),rgba(255,255,255,.038));box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 22px 42px rgba(0,0,0,.24)}.lg-card:hover{border-color:rgba(248,181,74,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 46px rgba(0,0,0,.26)}.lg-label{color:#ffdf9a}.lg-value{text-shadow:0 1px 0 rgba(0,0,0,.34)}.lg-row{border-bottom-color:rgba(255,255,255,.10)}.lg-log{border:1px solid rgba(248,181,74,.18);border-radius:12px;background:rgba(2,8,23,.28);padding:10px}.lg-btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 22px rgba(2,8,23,.18)}.lg-btn:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(245,158,11,.20),inset 0 1px 0 rgba(255,255,255,.08),0 10px 22px rgba(2,8,23,.18)}.lg-btn:hover{border-color:rgba(248,181,74,.62);background:linear-gradient(180deg,rgba(245,158,11,.25),rgba(245,158,11,.10))}.lg-btn.danger:hover{border-color:rgba(248,113,113,.66);background:linear-gradient(180deg,rgba(239,68,68,.26),rgba(239,68,68,.12))}.lg-head,.lg-grid,.lg-card,.lg-row,.lg-v,.lg-value,.lg-log{min-width:0;overflow-wrap:anywhere}.lg-card,.lg-pill,.lg-btn{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.lg-title{font-size:26px}.lg-card{border-radius:13px}.lg-actions{align-items:stretch;flex-direction:column}.lg-btn{width:100%}}
 </style>
-<div class="lg-wrap"><div class="lg-head"><div><div class="lg-title">雷神加速器</div><div class="lg-sub">只读监听雷神后台状态；绑定设备和选择游戏仍在雷神 App 内完成。</div></div><div class="lg-pill"><span id="lg-dot" class="lg-dot"></span><span id="lg-status">读取中</span></div></div><div class="lg-grid"><div class="lg-card"><div class="lg-label">服务状态</div><div id="lg-main" class="lg-value">-</div></div><div class="lg-card"><div class="lg-label">代理连接</div><div id="lg-conn" class="lg-value">-</div></div><div class="lg-card"><div class="lg-label">运行模式</div><div id="lg-mode" class="lg-value">-</div></div></div><div class="lg-card"><div class="lg-row"><div class="lg-k">安装目录</div><div id="lg-installed" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">acc-gw</div><div id="lg-acc" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">升级监控</div><div id="lg-upgrade" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">5588 Web</div><div id="lg-web" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">10001 服务端口</div><div id="lg-port" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">6066 UDP</div><div id="lg-udp" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">启动脚本</div><div id="lg-init" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">最近日志</div><div id="lg-log" class="lg-v lg-log">-</div></div></div><div class="lg-actions"><button class="lg-btn" onclick="lgRefresh()">刷新状态</button><button class="lg-btn danger" onclick="lgUninstall()">卸载雷神加速器</button></div><div class="lg-note"><strong>状态解释：</strong>检测到 <code>-r acc</code> 进程显示加速中；仅后台 web/daemon 在线显示插件在线。</div></div>
+<div class="lg-wrap"><div class="lg-head"><div><div class="lg-title">雷神加速器</div><div class="lg-sub">只读监听雷神后台状态；绑定设备和选择游戏仍在雷神 App 内完成。</div></div><div class="lg-pill"><span id="lg-dot" class="lg-dot"></span><span id="lg-status">读取中</span></div></div><div class="lg-grid"><div class="lg-card"><div class="lg-label">服务状态</div><div id="lg-main" class="lg-value">-</div></div><div class="lg-card"><div class="lg-label">代理连接</div><div id="lg-conn" class="lg-value">-</div></div><div class="lg-card"><div class="lg-label">运行模式</div><div id="lg-mode" class="lg-value">-</div></div></div><div class="lg-card"><div class="lg-row"><div class="lg-k">安装目录</div><div id="lg-installed" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">acc-gw</div><div id="lg-acc" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">升级监控</div><div id="lg-upgrade" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">5588 Web</div><div id="lg-web" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">10001 服务端口</div><div id="lg-port" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">6066 UDP</div><div id="lg-udp" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">启动脚本</div><div id="lg-init" class="lg-v">-</div></div><div class="lg-row"><div class="lg-k">最近日志</div><div id="lg-log" class="lg-v lg-log">-</div></div></div><div class="lg-actions"><button type="button" class="lg-btn" onclick="lgRefresh()">刷新状态</button><button type="button" class="lg-btn danger" onclick="lgUninstall()">卸载雷神加速器</button></div><div class="lg-note"><strong>状态解释：</strong>检测到 <code>-r acc</code> 进程显示加速中；仅后台 web/daemon 在线显示插件在线。</div></div>
 <script>
-var lgBase='<%=controller%>nradioadv/system/leigod';function lgText(id,text){var el=document.getElementById(id);if(el)el.textContent=text||'-';}function lgApply(d){var dot=document.getElementById('lg-dot');var running=!!d.service_running;var accelerating=!!d.accelerating;var installed=!!d.installed;var statusText=accelerating?'加速中':(running?'插件在线':(installed?'已安装未在线':'未安装'));lgText('lg-status',statusText);lgText('lg-main',statusText);lgText('lg-conn',String(d.acc_conn||0));lgText('lg-mode',d.mode||'UNKNOWN');lgText('lg-installed',installed?'已安装':'未安装');lgText('lg-acc',accelerating?('加速中 / '+(d.acc_runner_pid||'-')):(running?('插件在线 / '+(d.acc_pid||'-')):'未运行'));lgText('lg-upgrade',d.upgrade_pid?('运行中 / '+d.upgrade_pid):'未运行');lgText('lg-web',d.web5588?d.web5588_line:'未监听');lgText('lg-port',d.port10001?d.port10001_line:'未监听');lgText('lg-udp',d.udp6066?d.udp6066_line:'未监听');lgText('lg-init',d.init_exists?(d.service_enabled?'已启用':'未启用'):'缺失');lgText('lg-log',d.log_tail||'-');if(dot){dot.className='lg-dot '+(running?'ok':(installed?'warn':'bad'));}}function lgRefresh(){var x=new XMLHttpRequest();x.open('GET',lgBase+'/status?_='+Date.now(),true);x.onreadystatechange=function(){if(x.readyState===4){try{lgApply(JSON.parse(x.responseText||'{}'));}catch(e){lgText('lg-status','读取失败');}}};x.send(null);}function lgUninstall(){if(!confirm('确认卸载雷神加速器并移除应用商店入口吗？'))return;var x=new XMLHttpRequest();x.open('POST',lgBase+'/uninstall',true);x.onreadystatechange=function(){if(x.readyState===4)alert('已开始卸载，稍后刷新应用商店。');};x.send('');}lgRefresh();setInterval(lgRefresh,5000);
+var lgBase='<%=url("nradioadv/system/leigod")%>';function lgText(id,text){var el=document.getElementById(id);if(el)el.textContent=text||'-';}function lgApply(d){var dot=document.getElementById('lg-dot');var running=!!d.service_running;var accelerating=!!d.accelerating;var installed=!!d.installed;var statusText=accelerating?'加速中':(running?'插件在线':(installed?'已安装未在线':'未安装'));lgText('lg-status',statusText);lgText('lg-main',statusText);lgText('lg-conn',String(d.acc_conn||0));lgText('lg-mode',d.mode||'UNKNOWN');lgText('lg-installed',installed?'已安装':'未安装');lgText('lg-acc',accelerating?('加速中 / '+(d.acc_runner_pid||'-')):(running?('插件在线 / '+(d.acc_pid||'-')):'未运行'));lgText('lg-upgrade',d.upgrade_pid?('运行中 / '+d.upgrade_pid):'未运行');lgText('lg-web',d.web5588?d.web5588_line:'未监听');lgText('lg-port',d.port10001?d.port10001_line:'未监听');lgText('lg-udp',d.udp6066?d.udp6066_line:'未监听');lgText('lg-init',d.init_exists?(d.service_enabled?'已启用':'未启用'):'缺失');lgText('lg-log',d.log_tail||'-');if(dot){dot.className='lg-dot '+(running?'ok':(installed?'warn':'bad'));}}function lgRefresh(){var x=new XMLHttpRequest();x.open('GET',lgBase+'/status?_='+Date.now(),true);x.onreadystatechange=function(){if(x.readyState===4){try{lgApply(JSON.parse(x.responseText||'{}'));}catch(e){lgText('lg-status','读取失败');}}};x.send(null);}function lgUninstall(){if(!confirm('确认卸载雷神加速器并移除应用商店入口吗？'))return;var x=new XMLHttpRequest();x.open('POST',lgBase+'/uninstall',true);x.onreadystatechange=function(){if(x.readyState===4)alert('已开始卸载，稍后刷新应用商店。');};x.send('');}lgRefresh();setInterval(lgRefresh,5000);
 </script>
 <%+footer%>
 EOF_LEIGOD_VIEW

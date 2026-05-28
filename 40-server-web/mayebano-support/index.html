@@ -392,7 +392,7 @@
     }
 
     .hero-copy::after {
-        content: "V2.0.70";
+        content: "V2.1.0";
       position: absolute;
       right: 28px;
       bottom: 2px;
@@ -2865,7 +2865,7 @@
     }
 
     .hero-copy::after {
-      content: "V2.0.70";
+      content: "V2.1.0";
       color: rgba(226, 58, 126, 0.08);
     }
 
@@ -6905,7 +6905,7 @@
     }
 
     .hero-latest::before {
-      content: "V2.0.70";
+      content: "V2.1.0";
       top: auto;
       right: clamp(18px, 4vw, 38px);
       bottom: clamp(8px, 2vw, 18px);
@@ -8108,6 +8108,76 @@
       }
     }
 
+
+    .feature-note {
+      margin: 0;
+      max-width: 52ch;
+      font-size: 13px;
+      line-height: 1.7;
+      font-weight: 750;
+      text-wrap: pretty;
+      overflow-wrap: anywhere;
+    }
+
+    .feature-lines {
+      display: grid;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1.5;
+    }
+
+    .feature-lines li {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .feature-lines b {
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .feature-lines span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      text-wrap: pretty;
+    }
+
+    .feature-tile,
+    .compat-item,
+    .release-card,
+    .download-section,
+    .path-card,
+    .download-note {
+      min-width: 0;
+    }
+
+    .feature-tags span,
+    .model-chip-list span,
+    .release-card p,
+    .download-list li,
+    .tutorial-steps li,
+    .tutorial-checks li,
+    .download-note span {
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 760px) {
+      .feature-lines {
+        font-size: 11.8px;
+      }
+
+      .feature-lines li {
+        grid-template-columns: 40px minmax(0, 1fr);
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -8119,7 +8189,7 @@
       <a href="#history">更新记录</a>
       <a href="#install">安装教程</a>
       <a href="#wechat">微信支持</a>
-      <span>V2.0.70 已发布</span>
+      <span>V2.1.0 已发布</span>
     </nav>
 
     <section class="hero">
@@ -8130,11 +8200,11 @@
           <h1>NRadio<br>插件工具</h1>
           <p class="lead">
             NRadio NROS2.0 设备 SSH 插件安装脚本。
-            当前已发布版本 <strong>V2.0.70</strong>，通过 SSH 在路由器执行。
+            当前已发布版本 <strong>V2.1.0</strong>，通过 SSH 在路由器执行。
           </p>
 
           <div class="hero-tags">
-            <span>V2.0.70</span>
+            <span>V2.1.0</span>
             <span>SSH 执行</span>
             <span>单一脚本入口</span>
             <span>NROS2.0 设备</span>
@@ -8145,7 +8215,7 @@
           </div>
 
           <div class="hero-status" aria-label="当前维护状态">
-            <span><b>版本</b>V2.0.70</span>
+            <span><b>版本</b>V2.1.0</span>
             <span><b>文件</b>ssh-nradio-plugin-installer.sh</span>
             <span><b>方式</b>SSH 终端执行</span>
             <span><b>入口</b>单一下载入口</span>
@@ -8169,27 +8239,32 @@
           <section class="hero-latest" aria-label="当前里程碑说明">
             <div class="hero-latest-top">
               <div class="hero-latest-label">已发布</div>
-              <div class="hero-latest-version">V2.0.70</div>
+              <div class="hero-latest-version">V2.1.0</div>
             </div>
-            <strong>5G 负载均衡与页面显示修复收口</strong>
+            <strong>Docker 扩展盘安装链接入</strong>
             <p>
-              负载均衡新增副 5G / 蜂窝权重设置并自动重启 mwan3 生效；
-              OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复和 C2000MAX 1 号卡白条修复同步回写。
+              Docker 加入常用插件安装菜单 1 &gt; 8，仅面向 NRadio_C5800-688 / NRadio_C8-688；
+              下载缓存、IPK 解包、备份和 data-root 统一写入 rootfs_2nd 扩展盘，Docker 页面、应用商店入口和卸载链同步接入。
             </p>
           </section>
 
           <div class="release-cards" id="history" aria-label="最新更新摘要">
             <article class="release-card">
+              <b>V2.0.70</b>
+              <strong>5G 负载均衡与页面显示修复</strong>
+              <p>负载均衡支持副 5G / 蜂窝权重设置并自动重启 mwan3；OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复和 C2000MAX 1 号卡白条修复同步回写。</p>
+            </article>
+            <article class="release-card">
               <b>V2.0.60</b>
               <strong>存储扩展还原与 OpenList 断链修复</strong>
-              <p>OpenClash / AdGuardHome 还原支持 hybrid 保留策略；OpenList 安装会识别 /mnt/app_data/openlist 扩展盘符号链接并修复目标目录；DDNS-GO 迁移后会修正 nradio-apps 路径权限。</p>
+              <p>哈基米 / AdGuardHome 还原支持 hybrid 保留策略；OpenList 安装会识别 /mnt/app_data/openlist 扩展盘符号链接并修复目标目录；DDNS-GO 迁移后会修正 nradio-apps 路径权限。</p>
             </article>
             <article class="release-card">
               <b>V2.0.55</b>
               <strong>应用商店状态卡 2 秒采样，AdGuardHome 页面热更新回写</strong>
               <p>
                 在统一体检增强和哈基米分流助手基础上，应用商店系统状态卡改为 2 秒采样并加入请求锁；
-                AdGuardHome 包装页和状态页已回写进总脚本，深色外壳、统计图表空态和移动端细节一并收口。
+                AdGuardHome 包装页和状态页已回写进总脚本，深色外壳、统计图表空态和移动端细节一并完成。
               </p>
             </article>
             <article class="release-card">
@@ -8215,7 +8290,7 @@
             <article class="release-card">
               <b>V2.0.20</b>
               <strong>OpenVPN 控制台界面升级</strong>
-              <p>OpenVPN 主界面删除冗余状态项，目标检查、可用操作、诊断与配置入口继续收口；基础配置、高级配置、文件编辑和导入页面同步统一为暗色控制台风格。</p>
+              <p>OpenVPN 主界面删除冗余状态项，目标检查、可用操作、诊断与配置入口继续完善；基础配置、高级配置、文件编辑和导入页面同步统一为暗色控制台风格。</p>
             </article>
             <article class="release-card">
               <b>V2.0.15</b>
@@ -8234,7 +8309,7 @@
             </article>
             <article class="release-card">
               <b>V2.0.6</b>
-              <strong>奇游状态与应用商店标记收口</strong>
+              <strong>奇游状态与应用商店标记修复</strong>
               <p>奇游联机宝状态查看修复未安装场景返回码；应用商店美化内部标记同步到 V2.0.6。OpenVPN 快速状态读取、NRadio_C8-688 / NRadio_C2000MAX 风扇分机型默认策略和单一脚本入口继续保留。</p>
             </article>
             <article class="release-card">
@@ -8244,7 +8319,7 @@
             </article>
             <article class="release-card">
               <b>V2.0.2</b>
-              <strong>入口链与提示收口</strong>
+              <strong>入口链与提示修复</strong>
               <p>FanControl 打开路由统一到当前页面，奇游和雷神阶段提示、依赖提示与官方脚本 SHA256 日志补齐。</p>
             </article>
             <article class="release-card">
@@ -8284,13 +8359,13 @@
             </article>
             <article class="release-card">
               <b>V1.50.1</b>
-              <strong>插件卸载体验收口</strong>
+              <strong>插件卸载体验优化</strong>
               <p>脚本安装的插件改为异步卸载链，Web SSH、哈基米、AdGuardHome、OpenVPN、OpenList、ZeroTier、EasyTier 和风扇控制纳入统一卸载入口。</p>
             </article>
             <article class="release-card">
               <b>V1.30.0</b>
               <strong>风扇控制接入</strong>
-              <p>新增 14 号 NRadio_C8-688 风扇控制，继续收口 EasyTier 路由表向导、防呆校验、安装页免责声明和支持页提示。</p>
+              <p>新增 14 号 NRadio_C8-688 风扇控制，继续完善 EasyTier 路由表向导、防呆校验、安装页免责声明和支持页提示。</p>
             </article>
             <article class="release-card">
               <b>V1.20.5</b>
@@ -8329,8 +8404,8 @@
             </article>
             <article class="release-card">
               <b>V1.0.5</b>
-              <strong>OpenList 与哈基米收口</strong>
-              <p>OpenList 安装、图标、应用商店残留清理完成收口；哈基米显示口径与按钮修复逻辑保留。</p>
+              <strong>OpenList 与哈基米完善</strong>
+              <p>OpenList 安装、图标、应用商店残留清理完成；哈基米显示口径与按钮修复逻辑保留。</p>
             </article>
             <article class="release-card">
               <b>V1.0.0</b>
@@ -8344,7 +8419,8 @@
               <section class="feature-intro" aria-label="功能说明">
                 <div class="feature-heading">
                   <div class="feature-kicker">功能清单</div>
-                  <h2>主要功能</h2>
+                  <h2>脚本功能</h2>
+                  <p class="feature-note">按脚本菜单展示；执行以 SSH 菜单提示为准。</p>
                 </div>
                 <div class="feature-brief" aria-label="功能概览">
                   <span><b>6</b><em>功能组</em></span>
@@ -8356,53 +8432,81 @@
               <div class="feature-grid">
                 <article class="feature-tile" data-code="01">
                   <strong>常用插件安装</strong>
+                  <ul class="feature-lines">
+                    <li><b>插件</b><span>DDNS-GO、Web SSH、OpenList、AdGuardHome、MosDNS</span></li>
+                    <li><b>页面</b><span>图标、入口、状态页、卸载入口</span></li>
+                  </ul>
                   <div class="feature-tags">
                     <span>DDNS-GO</span>
                     <span>Web SSH</span>
                     <span>OpenList</span>
                     <span>AdGuardHome</span>
+                    <span>MosDNS</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="02">
                   <strong>网络与异地组网</strong>
+                  <ul class="feature-lines">
+                    <li><b>插件</b><span>EasyTier、ZeroTier、OpenVPN</span></li>
+                    <li><b>网络</b><span>5G 负载均衡、路由、配置、诊断、导入</span></li>
+                  </ul>
                   <div class="feature-tags">
                     <span>EasyTier</span>
                     <span>ZeroTier</span>
                     <span>OpenVPN</span>
+                    <span>5G 负载均衡</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="03">
-                  <strong>应用商店重新美化</strong>
+                  <strong>应用商店美化</strong>
+                  <ul class="feature-lines">
+                    <li><b>页面</b><span>应用卡片、按钮、状态徽章、系统状态卡</span></li>
+                    <li><b>恢复</b><span>菜单内可恢复默认页面</span></li>
+                  </ul>
                   <div class="feature-tags">
                     <span>卡片布局修复</span>
                     <span>DDNS-GO 卡片</span>
                     <span>AdGuardHome 内页</span>
-                    <span>2 秒状态卡</span>
+                    <span>状态卡</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="04">
                   <strong>系统维护能力</strong>
+                  <ul class="feature-lines">
+                    <li><b>检查</b><span>统一体检、端口检查、插件健康矩阵</span></li>
+                    <li><b>存储</b><span>swap、rootfs_2nd 扩展、迁移、还原</span></li>
+                  </ul>
                   <div class="feature-tags">
                     <span>swap</span>
                     <span>统一体检</span>
-                    <span>哈基米分流助手</span>
+                    <span>eMMC 扩展</span>
                     <span>卸载链</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="05">
                   <strong>风扇控制</strong>
+                  <ul class="feature-lines">
+                    <li><b>机型</b><span>NRadio_C8-688、NRadio_C2000MAX</span></li>
+                    <li><b>策略</b><span>Smart PWM、阈值、定时、过热保护</span></li>
+                  </ul>
                   <div class="feature-tags">
                     <span>NRadio_C8-688</span>
                     <span>NRadio_C2000MAX</span>
                     <span>Smart PWM</span>
+                    <span>定时策略</span>
                   </div>
                 </article>
                 <article class="feature-tile" data-code="06">
                   <strong>游戏加速器入口</strong>
+                  <ul class="feature-lines">
+                    <li><b>插件</b><span>奇游联机宝、雷神加速器</span></li>
+                    <li><b>功能</b><span>状态读取、阶段提示、卸载清理</span></li>
+                  </ul>
                   <div class="feature-tags">
-                    <span>奇游</span>
-                    <span>雷神</span>
+                    <span>奇游联机宝</span>
+                    <span>雷神加速器</span>
                     <span>状态读取</span>
+                    <span>残留清理</span>
                   </div>
                 </article>
               </div>
@@ -8578,7 +8682,7 @@ sh ssh-nradio-plugin-installer.sh</code>
               </div>
               <div>
                 <strong>持续更新</strong>
-                <span>当前已发布版本整理到 V2.0.70，补入 5G 负载均衡权重设置、mwan3 运行态生效修复、OpenVPN pass10、AdGuardHome 状态页精修、应用商店显示修复和 C2000MAX 1 号卡白条修复。</span>
+                <span>当前已发布版本整理到 V2.1.0，补入 Docker 常用插件入口、C5800-688 / C8-688 rootfs_2nd 扩展盘落盘、Docker LuCI 页面、应用商店入口和卸载链。</span>
               </div>
             </div>
           </section>
@@ -8634,15 +8738,15 @@ sh ssh-nradio-plugin-installer.sh</code>
 
             <div class="timeline-group">
               <div class="timeline-label">
-                <strong>稳定收口</strong>
+                <strong>稳定完善</strong>
                 <span>2026-04-07 至 2026-04-08</span>
               </div>
               <div class="timeline-entries">
                 <article class="timeline-entry">
                   <div class="version">V1.0.5</div>
                   <div class="entry-copy">
-                    <strong>OpenList 与哈基米阶段完成收口</strong>
-                    <p>OpenList 安装、图标、应用商店残留清理完成收口；哈基米显示口径与按钮修复逻辑保留。</p>
+                    <strong>OpenList 与哈基米阶段完成</strong>
+                    <p>OpenList 安装、图标、应用商店残留清理完成；哈基米显示口径与按钮修复逻辑保留。</p>
                   </div>
                 </article>
 
@@ -8682,7 +8786,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                   <div class="version">V1.0.9</div>
                   <div class="entry-copy">
                     <strong>独立 swap 菜单出现</strong>
-                    <p>新增独立的扩容 swap 菜单，1~6 安装链保留已有虚拟内存接入逻辑，菜单 1 的特殊自动扩容被重新收口。</p>
+                    <p>新增独立的扩容 swap 菜单，1~6 安装链保留已有虚拟内存接入逻辑，菜单 1 的特殊自动扩容被重新完善。</p>
                   </div>
                 </article>
 
@@ -8722,7 +8826,7 @@ sh ssh-nradio-plugin-installer.sh</code>
 
             <div class="timeline-group">
               <div class="timeline-label">
-                <strong>深度收口</strong>
+                <strong>深度完善</strong>
                 <span>2026-04-14 至 2026-04-16</span>
               </div>
               <div class="timeline-entries">
@@ -8754,7 +8858,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                   <div class="version">V1.30.0</div>
                   <div class="entry-copy">
                     <strong>风扇控制接入并进入新阶段版本号</strong>
-                    <p>新增 14 号 NRadio_C8-688 风扇控制，同时继续收口 11 号 EasyTier 路由表向导、防呆校验、安装页免责声明和支持页提示；阶段版本号从 V1.25.0 统一提升到 V1.30.0。</p>
+                    <p>新增 14 号 NRadio_C8-688 风扇控制，同时继续完善 11 号 EasyTier 路由表向导、防呆校验、安装页免责声明和支持页提示；阶段版本号从 V1.25.0 统一提升到 V1.30.0。</p>
                   </div>
                 </article>
 
@@ -8809,7 +8913,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                 <article class="timeline-entry">
                   <div class="version">V1.60.5</div>
                   <div class="entry-copy">
-                    <strong>15 号应用商店修复与安全微调收口</strong>
+                    <strong>15 号应用商店修复与安全微调</strong>
                     <p>修复已跑过错误美化层后残留坏 CSS 的问题，改为清理旧美化块后写入当前唯一 CSS；补齐只读 sys_status 状态面板、进度条占比、破图图标兜底和空描述隐藏。后续继续美化只限定在卡片内部、按钮、徽标、图标、文字、存储条和状态面板内部，不改外层布局、下载链、安装链和卸载链。</p>
                   </div>
                 </article>
@@ -8841,7 +8945,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                 <article class="timeline-entry">
                   <div class="version">V2.0.2</div>
                   <div class="entry-copy">
-                    <strong>入口链与加速器提示收口</strong>
+                    <strong>入口链与加速器提示修复</strong>
                     <p>FanControl 应用商店打开路由统一为 nradioadv/system/fanctrl；奇游和雷神安装阶段号改为真实 3 阶段，补充官方脚本 SHA256 日志和雷神依赖失败提示。</p>
                   </div>
                 </article>
@@ -8855,7 +8959,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                 <article class="timeline-entry">
                   <div class="version">V2.0.6</div>
                   <div class="entry-copy">
-                    <strong>奇游状态与应用商店标记收口</strong>
+                    <strong>奇游状态与应用商店标记修复</strong>
                     <p>奇游联机宝状态查看修复未安装场景返回码；应用商店美化内部标记同步到 V2.0.6。OpenVPN 快速状态读取、NRadio_C8-688 / NRadio_C2000MAX 风扇分机型默认策略和单一脚本入口继续保留。</p>
                   </div>
                 </article>
@@ -8884,7 +8988,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                   <div class="version">V2.0.20</div>
                   <div class="entry-copy">
                     <strong>OpenVPN 控制台界面升级</strong>
-                    <p>OpenVPN 主界面删除冗余状态项，目标检查、可用操作、诊断与配置入口继续收口；基础配置、高级配置、文件编辑和导入页面同步统一为暗色控制台风格。</p>
+                    <p>OpenVPN 主界面删除冗余状态项，目标检查、可用操作、诊断与配置入口继续完善；基础配置、高级配置、文件编辑和导入页面同步统一为暗色控制台风格。</p>
                   </div>
                 </article>
                 <article class="timeline-entry">
@@ -8925,7 +9029,7 @@ sh ssh-nradio-plugin-installer.sh</code>
                 <article class="timeline-entry">
                   <div class="version">V2.0.55</div>
                   <div class="entry-copy">
-                    <strong>统一体检、哈基米助手、应用商店和 AdGuardHome 收口</strong>
+                    <strong>统一体检、哈基米助手、应用商店和 AdGuardHome 完善</strong>
                     <p>设备维护与检测补入系统资源、安装前预检、插件健康矩阵、应用商店一致性、端口冲突、哈基米规则检查和脱敏摘要；哈基米助手可按数字菜单写入域名、IP 或网段规则，并修复已有规则未启用自定义规则开关的问题。应用商店系统状态卡改为 2 秒采样，AdGuardHome 包装页和状态页也已回写进总脚本。</p>
                   </div>
                 </article>
@@ -8933,14 +9037,21 @@ sh ssh-nradio-plugin-installer.sh</code>
                   <div class="version">V2.0.60</div>
                   <div class="entry-copy">
                     <strong>C8/C5800 eMMC 存储扩展与 OpenList 安装修复</strong>
-                    <p>新增 C8-688 / C5800-688 专用 rootfs_2nd 扩展盘接入；应用商店双空间显示、动态应用迁移/还原、OpenList 扩展盘断链目标修复、hybrid 大项保留、DDNS-GO 迁移权限修复、第二系统烧录保护和深色玻璃界面精修同步收口。</p>
+                    <p>新增 C8-688 / C5800-688 专用 rootfs_2nd 扩展盘接入；应用商店双空间显示、动态应用迁移/还原、OpenList 扩展盘断链目标修复、hybrid 大项保留、DDNS-GO 迁移权限修复、第二系统烧录保护和深色玻璃界面精修同步完成。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry">
+                  <div class="version">V2.0.70</div>
+                  <div class="entry-copy">
+                    <strong>5G 负载均衡与页面显示修复</strong>
+                    <p>负载均衡支持副 5G / 蜂窝权重设置，保存后自动提交并重启 mwan3；OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店系统卡片内存短显示、OpenVPN 版本短显示和 C2000MAX 1 号卡白条修复同步回写。</p>
                   </div>
                 </article>
                 <article class="timeline-entry is-current">
-                  <div class="version">V2.0.70</div>
+                  <div class="version">V2.1.0</div>
                   <div class="entry-copy">
-                    <strong>5G 负载均衡与页面显示修复收口</strong>
-                    <p>负载均衡支持副 5G / 蜂窝权重设置，保存后自动提交并重启 mwan3；OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店系统卡片内存短显示、OpenVPN 版本短显示和 C2000MAX 1 号卡白条修复同步回写。</p>
+                    <strong>Docker 扩展盘安装链接入</strong>
+                    <p>Docker 加入常用插件安装菜单 1 &gt; 8，仅支持 NRadio_C5800-688 / NRadio_C8-688；下载缓存、工作目录、IPK 解包、备份和 data-root 统一落到 rootfs_2nd 扩展盘，Docker LuCI 页面、应用商店入口和卸载链同步接入。</p>
                   </div>
                 </article>
               </div>
