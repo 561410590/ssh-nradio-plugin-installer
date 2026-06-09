@@ -14,7 +14,7 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 | --- | --- | --- |
 | `NRadio_C8-688` | `HC-WT9104` | NROS 2.x |
 | `NRadio_C8-668` | `HC-WT9108` | NROS 2.x |
-| `NRadio_C5800-650` | `HC-WT9120` | NROS 1.9.x |
+| `NRadio_C5800-650` | `HC-WT9120` | NROS 2.x |
 | `NRadio_C5800-688` | `HC-WT9126` | NROS 2.x |
 | `NRadio_NBCPE` | `HC-WT9111` / `NRADIO-WT9111` | NROS 2.x |
 | `NRadio_C2000MAX` | `HC-WT9303` | NROS 2.x |
@@ -65,7 +65,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## V2.1.5 更新
 
-- 新增 `NRadio_C5800-650` / `HC-WT9120` 识别，NROS `1.9.4.n0.c3` 放行。
+- 新增 `NRadio_C5800-650` / `HC-WT9120` 识别，按 NROS 2.x 口径放行。
 - Docker / `rootfs_2nd` 扩展盘链补入 C5800-650。
 - 缺 NRadio 应用商店环境时，启动层直接退出并提示缺失路径。
 
@@ -107,7 +107,7 @@ sh ssh-nradio-plugin-installer.sh
 
 - `V2.2.5`：OpenClash iframe 黑屏兜底、原版页面顶层跳转、六标签保留、OEM 顶栏隐藏和半屏修复。
 - `V2.2.0`：C2000MAX 应用商店系统状态卡补入 swap 虚拟内存显示。
-- `V2.1.5`：C5800-650 / HC-WT9120 支持、NROS 1.9.4 放行、应用商店缺失启动阻断。
+- `V2.1.5`：C5800-650 / HC-WT9120 支持、NROS 2.x 口径放行、应用商店缺失启动阻断。
 - `V2.1.0`：Docker 扩展盘安装链接入、C8/C5800 rootfs_2nd 落盘、Docker LuCI 页面、应用商店入口和卸载链接入。
 - `V2.0.70`：5G 负载均衡权重设置、mwan3 运行态生效修复、OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复、C2000MAX 1 号卡白条修复和公网页粉色视觉精修。
 - `V2.0.60`：C8/C5800 eMMC 存储扩展、OpenList 存储扩展断链修复、hybrid 应用还原、DDNS-GO 迁移权限修复、OpenClash ASN.mmdb 防丢失校验、C2000MAX swap 菜单限制。
