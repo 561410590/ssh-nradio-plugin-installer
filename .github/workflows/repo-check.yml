@@ -15,6 +15,8 @@ jobs:
         run: |
           test -f 00-current/ssh-nradio-plugin-installer.sh
           test -f 40-server-web/mayebano-support/index.html
+          test -f 40-server-web/mayebano-support/ai_studio_code.html
+          test -f 40-server-web/mayebano-support/wechat-donate.png
           test -f vercel.json
           test -f README.md
           test -f CHANGELOG.md
@@ -41,14 +43,17 @@ jobs:
 
       - name: Verify support page state
         run: |
-          grep -q 'V2.2.5 已发布' 40-server-web/mayebano-support/index.html
-          grep -q '2026-06-09 已发布' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenClash 应用商店弹窗兼容' 40-server-web/mayebano-support/index.html
-          grep -q 'C2000MAX 系统状态卡补入 swap' 40-server-web/mayebano-support/index.html
-          grep -q '<b>V2.1.5</b>' 40-server-web/mayebano-support/index.html
-          grep -q '<div class="version">V2.2.5</div>' 40-server-web/mayebano-support/index.html
-          grep -q '<article class="timeline-entry is-current">' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenClash iframe 与原版页兼容' 40-server-web/mayebano-support/index.html
+          cmp -s 40-server-web/mayebano-support/ai_studio_code.html 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件工具 | 官方高级支持中心</title>' 40-server-web/mayebano-support/index.html
+          grep -q 'STABLE V2.2.5' 40-server-web/mayebano-support/index.html
+          grep -q 'NRadio_C5800-650' 40-server-web/mayebano-support/index.html
+          grep -q 'NRadio_C2000MAX' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.2.5 全新架构' 40-server-web/mayebano-support/index.html
+          grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
+          grep -q '拦截保护' 40-server-web/mayebano-support/index.html
+          grep -q '/_vercel/insights/script.js' 40-server-web/mayebano-support/index.html
+          grep -q 'wechat-donate.png' 40-server-web/mayebano-support/index.html
+          grep -q 'ssh-nradio-plugin-installer.sh' 40-server-web/mayebano-support/index.html
 
       - name: Verify Vercel public routes
         run: |
@@ -60,10 +65,12 @@ jobs:
         run: |
           grep -q '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' CHECKSUMS.txt
           grep -q '1899977  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q 'e69812fad9c05e6b58231ff27910fcb907832a5502d0d32798736b4578b80e66' CHECKSUMS.txt
-          grep -q '257078  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q 'bf6ecb04f2cb6578d3f78e98e61527819388a75841fe1ee50a50f21854c9e77f' CHECKSUMS.txt
+          grep -q '36612  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q '36612  40-server-web/mayebano-support/ai_studio_code.html' CHECKSUMS.txt
           printf '%s  %s\n' '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' 'e69812fad9c05e6b58231ff27910fcb907832a5502d0d32798736b4578b80e66' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          printf '%s  %s\n' 'bf6ecb04f2cb6578d3f78e98e61527819388a75841fe1ee50a50f21854c9e77f' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          printf '%s  %s\n' 'bf6ecb04f2cb6578d3f78e98e61527819388a75841fe1ee50a50f21854c9e77f' '40-server-web/mayebano-support/ai_studio_code.html' | sha256sum -c -
 
       - name: Verify repository docs
         run: |

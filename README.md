@@ -132,7 +132,8 @@ sh ssh-nradio-plugin-installer.sh
 | 文件 | 用途 |
 | --- | --- |
 | `00-current/ssh-nradio-plugin-installer.sh` | V2.2.5 当前主线脚本 |
-| `40-server-web/mayebano-support/index.html` | 公网支持页 |
+| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前与 `ai_studio_code.html` 保持一致 |
+| `40-server-web/mayebano-support/ai_studio_code.html` | 新版支持页源稿 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
 | `CHANGELOG.md` | 版本记录 |
