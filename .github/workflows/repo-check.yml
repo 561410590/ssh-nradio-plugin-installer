@@ -65,12 +65,12 @@ jobs:
         run: |
           grep -q '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' CHECKSUMS.txt
           grep -q '1899977  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q 'bf6ecb04f2cb6578d3f78e98e61527819388a75841fe1ee50a50f21854c9e77f' CHECKSUMS.txt
-          grep -q '36612  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
-          grep -q '36612  40-server-web/mayebano-support/ai_studio_code.html' CHECKSUMS.txt
+          grep -q '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' CHECKSUMS.txt
+          grep -q '36616  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q '36616  40-server-web/mayebano-support/ai_studio_code.html' CHECKSUMS.txt
           printf '%s  %s\n' '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' 'bf6ecb04f2cb6578d3f78e98e61527819388a75841fe1ee50a50f21854c9e77f' '40-server-web/mayebano-support/index.html' | sha256sum -c -
-          printf '%s  %s\n' 'bf6ecb04f2cb6578d3f78e98e61527819388a75841fe1ee50a50f21854c9e77f' '40-server-web/mayebano-support/ai_studio_code.html' | sha256sum -c -
+          printf '%s  %s\n' '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          printf '%s  %s\n' '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' '40-server-web/mayebano-support/ai_studio_code.html' | sha256sum -c -
 
       - name: Verify repository docs
         run: |
