@@ -1,6 +1,6 @@
 # NRadio 插件助手
 
-NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
+NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
 - 当前版本：`V2.2.5`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
@@ -8,15 +8,16 @@ NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
 ## 适用设备
 
-支持以下官方 NROS2.0 设备：
+支持以下官方 NROS 设备：
 
-| 设备 |
-| --- |
-| `NRadio_C8-688` |
-| `NRadio_C8-668` |
-| `NRadio_C5800-688` |
-| `NRadio_NBCPE` |
-| `NRadio_C2000MAX` |
+| 设备 | 机型代号 | NROS 范围 |
+| --- | --- | --- |
+| `NRadio_C8-688` | `HC-WT9104` | NROS 2.x |
+| `NRadio_C8-668` | `HC-WT9108` | NROS 2.x |
+| `NRadio_C5800-650` | `HC-WT9120` | NROS 1.9.x |
+| `NRadio_C5800-688` | `HC-WT9126` | NROS 2.x |
+| `NRadio_NBCPE` | `HC-WT9111` / `NRADIO-WT9111` | NROS 2.x |
+| `NRadio_C2000MAX` | `HC-WT9303` | NROS 2.x |
 
 标准 OpenWrt 不适用。脚本不是应用商店安装包，也不是固件升级包。
 
