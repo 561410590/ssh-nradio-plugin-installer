@@ -1,5 +1,29 @@
 # Changelog
 
+## V2.2.5 - 2026-06-09
+
+- `SCRIPT_VERSION` 更新为 `V2.2.5`。
+- `SCRIPT_RELEASE_DATE` 更新为 `2026-06-09`。
+- OpenClash 应用商店 iframe 弹窗保留原有弹窗逻辑和六个官方标签页。
+- OpenClash iframe 增加黑屏/空白兜底，可重载弹窗或顶层打开原版页面。
+- “原版页面”按钮顶层跳转到 `/cgi-bin/luci/admin/services/openclash/client`。
+- OpenClash 原版页面隐藏 OEM 顶栏、footer、首页、蜂窝、上网、Wi-Fi、终端和更多。
+- OpenClash 原版页面修复固定高度导致的半屏显示问题。
+- 公网页同步 V2.2.5 当前版本口径，并保留 V2.2.0、V2.1.5、V2.1.0 历史日志。
+
+## V2.2.0 - 2026-06-04
+
+- 应用商店系统状态卡新增 C2000MAX 识别。
+- C2000MAX 显示 swap 虚拟内存总量、用量和百分比。
+- 非 C2000MAX 隐藏 swap 指标；C2000MAX 未启用 swap 时显示“未启用”。
+
+## V2.1.5 - 2026-05-29
+
+- 新增 `NRadio_C5800-650` / `HC-WT9120` 识别。
+- NROS `1.9.4.n0.c3` 按 C5800-650 机型放行。
+- Docker / `rootfs_2nd` 扩展盘支持链补入 C5800-650。
+- 缺 NRadio 应用商店环境时，启动层直接退出并提示缺失路径。
+
 ## V2.1.0 - 2026-05-28
 
 - `SCRIPT_VERSION` 更新为 `V2.1.0`。

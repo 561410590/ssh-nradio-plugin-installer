@@ -392,7 +392,7 @@
     }
 
     .hero-copy::after {
-        content: "V2.1.0";
+        content: "V2.2.5";
       position: absolute;
       right: 28px;
       bottom: 2px;
@@ -2865,7 +2865,7 @@
     }
 
     .hero-copy::after {
-      content: "V2.1.0";
+      content: "V2.2.5";
       color: rgba(226, 58, 126, 0.08);
     }
 
@@ -6905,7 +6905,7 @@
     }
 
     .hero-latest::before {
-      content: "V2.1.0";
+      content: "V2.2.5";
       top: auto;
       right: clamp(18px, 4vw, 38px);
       bottom: clamp(8px, 2vw, 18px);
@@ -8189,7 +8189,7 @@
       <a href="#history">更新记录</a>
       <a href="#install">安装教程</a>
       <a href="#wechat">微信支持</a>
-      <span>V2.1.0 已发布</span>
+      <span>V2.2.5 已发布</span>
     </nav>
 
     <section class="hero">
@@ -8199,15 +8199,15 @@
           <div class="eyebrow">NRadio Plugin Tool</div>
           <h1>NRadio<br>插件工具</h1>
           <p class="lead">
-            NRadio NROS2.0 设备 SSH 插件安装脚本。
-            当前已发布版本 <strong>V2.1.0</strong>，通过 SSH 在路由器执行。
+            NRadio 官方 NROS 设备 SSH 插件安装脚本。
+            当前已发布版本 <strong>V2.2.5</strong>，通过 SSH 在路由器执行。
           </p>
 
           <div class="hero-tags">
-            <span>V2.1.0</span>
+            <span>V2.2.5</span>
             <span>SSH 执行</span>
             <span>单一脚本入口</span>
-            <span>NROS2.0 设备</span>
+            <span>官方 NROS 设备</span>
           </div>
 
           <div class="hero-actions" aria-label="项目入口">
@@ -8215,7 +8215,7 @@
           </div>
 
           <div class="hero-status" aria-label="当前维护状态">
-            <span><b>版本</b>V2.1.0</span>
+            <span><b>版本</b>V2.2.5</span>
             <span><b>文件</b>ssh-nradio-plugin-installer.sh</span>
             <span><b>方式</b>SSH 终端执行</span>
             <span><b>入口</b>单一下载入口</span>
@@ -8231,24 +8231,39 @@
               <span>公开下载脚本</span>
             </div>
             <div>
-              <strong>5</strong>
+              <strong>6</strong>
               <span>支持机型</span>
             </div>
           </div>
 
           <section class="hero-latest" aria-label="当前里程碑说明">
             <div class="hero-latest-top">
-              <div class="hero-latest-label">已发布</div>
-              <div class="hero-latest-version">V2.1.0</div>
+              <div class="hero-latest-label">2026-06-09 已发布</div>
+              <div class="hero-latest-version">V2.2.5</div>
             </div>
-            <strong>Docker 扩展盘安装链接入</strong>
+            <strong>OpenClash 应用商店弹窗兼容</strong>
             <p>
-              Docker 加入常用插件安装菜单 1 &gt; 8，仅面向 NRadio_C5800-688 / NRadio_C8-688；
-              下载缓存、IPK 解包、备份和 data-root 统一写入 rootfs_2nd 扩展盘，Docker 页面、应用商店入口和卸载链同步接入。
+              OpenClash 弹窗保留原应用商店逻辑和六个官方标签页；
+              iframe 黑屏时提供重载和原版页面兜底，原版页面按钮顶层跳到官方客户端页，并修复原版页 OEM 顶栏与半屏显示。
             </p>
           </section>
 
           <div class="release-cards" id="history" aria-label="最新更新摘要">
+            <article class="release-card">
+              <b>V2.2.0</b>
+              <strong>C2000MAX 系统状态卡补入 swap</strong>
+              <p>应用商店系统状态卡新增 C2000MAX 虚拟内存指标，读取 swap 总量、用量和百分比；非 C2000MAX 自动隐藏，未启用时显示未启用。</p>
+            </article>
+            <article class="release-card">
+              <b>V2.1.5</b>
+              <strong>C5800-650 支持与应用商店环境阻断</strong>
+              <p>新增 NRadio_C5800-650 / HC-WT9120 识别，NROS 1.9.4.n0.c3 放行；Docker / rootfs_2nd 扩展盘链补入 C5800-650，缺 NRadio 应用商店时启动层直接退出并提示缺失路径。</p>
+            </article>
+            <article class="release-card">
+              <b>V2.1.0</b>
+              <strong>Docker 扩展盘安装链接入</strong>
+              <p>Docker 加入常用插件安装菜单 1 &gt; 8，仅支持 NRadio_C5800-688 / NRadio_C8-688；下载缓存、工作目录、IPK 解包、备份和 data-root 统一落到 rootfs_2nd 扩展盘，Docker LuCI 页面、应用商店入口和卸载链同步接入。</p>
+            </article>
             <article class="release-card">
               <b>V2.0.70</b>
               <strong>5G 负载均衡与页面显示修复</strong>
@@ -8424,7 +8439,7 @@
                 </div>
                 <div class="feature-brief" aria-label="功能概览">
                   <span><b>6</b><em>功能组</em></span>
-                  <span><b>5</b><em>支持机型</em></span>
+                  <span><b>6</b><em>支持机型</em></span>
                   <span><b>1</b><em>脚本入口</em></span>
                 </div>
               </section>
@@ -8517,6 +8532,7 @@
                   <div class="model-chip-list" aria-label="支持机型列表">
                     <span>NRadio_C8-688</span>
                     <span>NRadio_C8-668</span>
+                    <span>NRadio_C5800-650</span>
                     <span>NRadio_C5800-688</span>
                     <span>NRadio_NBCPE</span>
                     <span>NRadio_C2000MAX</span>
@@ -8617,11 +8633,12 @@ sh ssh-nradio-plugin-installer.sh</code>
                     <span class="inline-models" aria-label="适用机型">
                       <span>NRadio_C8-688</span>
                       <span>NRadio_C8-668</span>
+                      <span>NRadio_C5800-650</span>
                       <span>NRadio_C5800-688</span>
                       <span>NRadio_NBCPE</span>
                       <span>NRadio_C2000MAX</span>
                     </span>
-                    <span class="model-scope-tail">官方 NROS2.0 系统；标准 OpenWrt 不适用。</span>
+                    <span class="model-scope-tail">官方 NROS 1.9 / 2.x 系统；标准 OpenWrt 不适用。</span>
                   </li>
                   <li>执行终端下载命令前，先确认路由器可以访问公网。</li>
                   <li>不要在未确认 IP 和机型的设备上执行；不同路由器、旁路由和服务器不要混用。</li>
@@ -8682,7 +8699,7 @@ sh ssh-nradio-plugin-installer.sh</code>
               </div>
               <div>
                 <strong>持续更新</strong>
-                <span>当前已发布版本整理到 V2.1.0，补入 Docker 常用插件入口、C5800-688 / C8-688 rootfs_2nd 扩展盘落盘、Docker LuCI 页面、应用商店入口和卸载链。</span>
+                <span>当前已发布版本整理到 V2.2.5，补入 C2000MAX swap 状态卡与 OpenClash iframe 黑屏兜底；OpenClash 原版页面保留六标签，隐藏 OEM 顶栏和 footer，并修复半屏显示。</span>
               </div>
             </div>
           </section>
@@ -8851,7 +8868,7 @@ sh ssh-nradio-plugin-installer.sh</code>
             <div class="timeline-group">
               <div class="timeline-label">
                 <strong>当前里程碑</strong>
-                <span>2026-04-16 至 2026-05-08</span>
+                <span>2026-04-16 至 2026-06-09</span>
               </div>
               <div class="timeline-entries">
                 <article class="timeline-entry">
@@ -9047,11 +9064,32 @@ sh ssh-nradio-plugin-installer.sh</code>
                     <p>负载均衡支持副 5G / 蜂窝权重设置，保存后自动提交并重启 mwan3；OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店系统卡片内存短显示、OpenVPN 版本短显示和 C2000MAX 1 号卡白条修复同步回写。</p>
                   </div>
                 </article>
-                <article class="timeline-entry is-current">
+                <article class="timeline-entry">
                   <div class="version">V2.1.0</div>
                   <div class="entry-copy">
                     <strong>Docker 扩展盘安装链接入</strong>
                     <p>Docker 加入常用插件安装菜单 1 &gt; 8，仅支持 NRadio_C5800-688 / NRadio_C8-688；下载缓存、工作目录、IPK 解包、备份和 data-root 统一落到 rootfs_2nd 扩展盘，Docker LuCI 页面、应用商店入口和卸载链同步接入。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry">
+                  <div class="version">V2.1.5</div>
+                  <div class="entry-copy">
+                    <strong>C5800-650 支持与应用商店环境阻断</strong>
+                    <p>新增 NRadio_C5800-650 / HC-WT9120 识别，NROS 1.9.4.n0.c3 放行；Docker / rootfs_2nd 扩展盘链补入 C5800-650，缺 NRadio 应用商店时启动层直接退出并提示缺失路径。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry">
+                  <div class="version">V2.2.0</div>
+                  <div class="entry-copy">
+                    <strong>C2000MAX 应用商店状态卡补入 swap</strong>
+                    <p>应用商店系统状态卡新增 C2000MAX 识别与虚拟内存显示，读取 swap 总量、用量和百分比；非 C2000MAX 隐藏，C2000MAX 未启用 swap 时显示未启用。</p>
+                  </div>
+                </article>
+                <article class="timeline-entry is-current">
+                  <div class="version">V2.2.5</div>
+                  <div class="entry-copy">
+                    <strong>OpenClash iframe 与原版页兼容</strong>
+                    <p>保留 OpenClash 应用商店弹窗逻辑和六个官方标签页；iframe 黑屏时显示重载和原版页面兜底，原版页面按钮顶层跳转到客户端页，并修复原版页 OEM 顶栏、footer 和半屏显示问题。</p>
                   </div>
                 </article>
               </div>

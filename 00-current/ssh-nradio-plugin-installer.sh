@@ -2,11 +2,11 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.1.0"
+SCRIPT_VERSION="V2.2.5"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-05-28"
+SCRIPT_RELEASE_DATE="2026-06-09"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
-SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS2.x系统"
+SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
 SCRIPT_DISCLAIMER="此脚本为免费分享的非商业项目，禁止任何形式的付费传播或倒卖"
 SCRIPT_SUPPORT_NOTICE="自愿支持仅用于脚本维护与后续更新"
@@ -929,6 +929,9 @@ normalize_nradio_model() {
         *HC-WT9104*)
             printf '%s\n' 'NRadio_C8-688'
             ;;
+        *HC-WT9120*)
+            printf '%s\n' 'NRadio_C5800-650'
+            ;;
         *HC-WT9126*)
             printf '%s\n' 'NRadio_C5800-688'
             ;;
@@ -945,9 +948,16 @@ normalize_nradio_model() {
 }
 
 is_supported_nros_revision() {
-    case "$1" in
+    revision="$1"
+    model="${2:-}"
+
+    case "$revision" in
         2.*)
             return 0
+            ;;
+        1.9.*)
+            [ "$model" = 'NRadio_C5800-650' ] && return 0
+            return 1
             ;;
         *)
             return 1
@@ -1136,9 +1146,9 @@ require_supported_nradio_model_environment() {
     nros_revision="$(detect_nros_revision)"
     normalized_model="$(normalize_nradio_model "$raw_model" "$raw_board" "$raw_compat")"
 
-    [ -n "$nros_revision" ] || die "环境检测失败：无法识别当前 NROS 版本"
-    is_supported_nros_revision "$nros_revision" || die "环境检测失败：当前系统不是受支持的 NROS2.x (revision=$nros_revision)"
     [ -n "$normalized_model" ] || die "环境检测失败：当前设备不在支持列表内 (model=$raw_model board_name=$raw_board)"
+    [ -n "$nros_revision" ] || die "环境检测失败：无法识别当前 NROS 版本"
+    is_supported_nros_revision "$nros_revision" "$normalized_model" || die "环境检测失败：当前系统不是受支持的 NROS 1.9/2.x (model=$normalized_model revision=$nros_revision)"
 
     CURRENT_DETECTED_MODEL="$normalized_model"
     log "检测到机型：$normalized_model NROS$nros_revision"
@@ -5247,20 +5257,119 @@ patch_common_template() {
         flex: 0 0 auto;
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        padding: 0 15px 12px;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 15px 12px;
         border-bottom: 1px solid rgba(104, 130, 166, .24);
     }
     .app_frame_nav_item{
-        display: inline-block;
-        padding: 6px 10px;
-        color: #666;
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 11px;
+        color: #9aa4b2;
         cursor: pointer;
+        border: 1px solid transparent;
+        border-radius: 4px;
         border-bottom: 2px solid transparent;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+    .app_frame_nav_item:hover{
+        color: #22b7ee;
+        background: rgba(0, 136, 204, .08);
+        border-color: rgba(0, 136, 204, .18);
     }
     .app_frame_nav_item_active{
-        color: #0088cc;
+        color: #10bdf2;
+        background: rgba(0, 136, 204, .12);
+        border-color: rgba(0, 136, 204, .32);
         border-bottom-color: #0088cc;
+    }
+    .app_frame_origin_button{
+        margin-left: auto;
+        min-height: 30px;
+        padding: 0 13px;
+        border: 1px solid rgba(0, 136, 204, .55);
+        border-radius: 4px;
+        background: #0088cc;
+        color: #fff;
+        cursor: pointer;
+        font-weight: 700;
+        line-height: 1.2;
+        box-shadow: 0 4px 12px rgba(0, 136, 204, .18);
+    }
+    .app_frame_origin_button:hover{
+        background: #009fe8;
+        border-color: #16b8f2;
+    }
+    .nr-openclash-fallback{
+        display: none;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 10px 15px 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(0, 136, 204, .28);
+        border-left: 4px solid #00b7ee;
+        border-radius: 5px;
+        background: rgba(24, 31, 43, .96);
+        color: #dce8f5;
+        box-sizing: border-box;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .app_frame_openclash.nr-openclash-fallback-on .nr-openclash-fallback{
+        display: flex;
+    }
+    .nr-openclash-fallback_text{
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .nr-openclash-fallback_badge{
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: rgba(0, 183, 238, .16);
+        color: #23c8f4;
+        font-weight: 800;
+    }
+    .nr-openclash-fallback_text strong{
+        display: block;
+        color: #eef7ff;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+    .nr-openclash-fallback_text em{
+        display: block;
+        color: #aeb9c7;
+        font-style: normal;
+        font-size: 12px;
+        line-height: 1.35;
+    }
+    .nr-openclash-fallback_actions{
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .nr-openclash-fallback_btn{
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid rgba(0, 136, 204, .45);
+        border-radius: 4px;
+        background: rgba(0, 136, 204, .12);
+        color: #40b9f2;
+        cursor: pointer;
+        font-weight: 700;
+    }
+    .nr-openclash-fallback_btn:hover{
+        background: rgba(0, 136, 204, .2);
+        border-color: rgba(0, 183, 238, .62);
     }
     .app_frame_box iframe{
         display: block;
@@ -5299,8 +5408,34 @@ patch_common_template() {
 EOF
 
     cat > "$js_file" <<'EOF'
+    function ensure_app_frame_polish_css(){
+        if(document.getElementById("nr-app-frame-polish-css"))
+            return;
+
+        var style = document.createElement("style");
+        style.id = "nr-app-frame-polish-css";
+        style.type = "text/css";
+        style.appendChild(document.createTextNode([
+            ".modal.app_frame .app_frame_nav{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:8px!important;padding:6px 15px 12px!important;border-bottom:1px solid rgba(104,130,166,.24)!important;}",
+            ".modal.app_frame .app_frame_nav_item{display:inline-flex!important;align-items:center!important;min-height:30px!important;padding:0 11px!important;color:#9aa4b2!important;cursor:pointer!important;border:1px solid transparent!important;border-radius:4px!important;border-bottom:2px solid transparent!important;font-weight:600!important;line-height:1.2!important;}",
+            ".modal.app_frame .app_frame_nav_item:hover{color:#22b7ee!important;background:rgba(0,136,204,.08)!important;border-color:rgba(0,136,204,.18)!important;}",
+            ".modal.app_frame .app_frame_nav_item_active{color:#10bdf2!important;background:rgba(0,136,204,.12)!important;border-color:rgba(0,136,204,.32)!important;border-bottom-color:#0088cc!important;}",
+            ".modal.app_frame .app_frame_origin_button{margin-left:auto!important;min-height:30px!important;padding:0 13px!important;border:1px solid rgba(0,136,204,.55)!important;border-radius:4px!important;background:#0088cc!important;color:#fff!important;cursor:pointer!important;font-weight:700!important;line-height:1.2!important;box-shadow:0 4px 12px rgba(0,136,204,.18)!important;}",
+            ".modal.app_frame .app_frame_origin_button:hover{background:#009fe8!important;border-color:#16b8f2!important;}",
+            ".modal.app_frame .nr-openclash-fallback{display:none!important;flex:0 0 auto!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;margin:10px 15px 0!important;padding:10px 12px!important;border:1px solid rgba(0,136,204,.28)!important;border-left:4px solid #00b7ee!important;border-radius:5px!important;background:rgba(24,31,43,.96)!important;color:#dce8f5!important;box-sizing:border-box!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;}",
+            ".modal.app_frame .app_frame_openclash.nr-openclash-fallback-on .nr-openclash-fallback{display:flex!important;}",
+            ".modal.app_frame .nr-openclash-fallback_badge{flex:0 0 auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:22px!important;height:22px!important;border-radius:50%!important;background:rgba(0,183,238,.16)!important;color:#23c8f4!important;font-weight:800!important;}",
+            ".modal.app_frame .nr-openclash-fallback_text{flex:1 1 auto!important;min-width:0!important;}",
+            ".modal.app_frame .nr-openclash-fallback_text strong{display:block!important;color:#eef7ff!important;font-size:13px!important;line-height:1.35!important;}",
+            ".modal.app_frame .nr-openclash-fallback_text em{display:block!important;color:#aeb9c7!important;font-style:normal!important;font-size:12px!important;line-height:1.35!important;}",
+            ".modal.app_frame .nr-openclash-fallback_actions{flex:0 0 auto!important;display:flex!important;flex-wrap:wrap!important;gap:8px!important;}",
+            ".modal.app_frame .nr-openclash-fallback_btn{min-height:28px!important;padding:0 10px!important;border:1px solid rgba(0,136,204,.45)!important;border-radius:4px!important;background:rgba(0,136,204,.12)!important;color:#40b9f2!important;cursor:pointer!important;font-weight:700!important;}"
+        ].join("\n")));
+        document.head.appendChild(style);
+    }
     function reload_iframe(){
         try {
+            ensure_app_frame_polish_css();
             $(".app_frame .modal-dialog").css({
                 "width": "88vw",
                 "max-width": "none",
@@ -5348,6 +5483,10 @@ EOF
             }
 
             var d = frame.contentWindow.document;
+            set_openclash_fallback(false);
+            if(is_openclash_frame(frame))
+                ensure_openclash_wide_css(d);
+
             var iframe_main = $('#sub_frame').contents().find('.main');
             var iframe_container = $('#sub_frame').contents().find('.body-container');
             if(iframe_main)
@@ -5415,16 +5554,101 @@ EOF
                 "opacity": "1",
                 "visibility": "visible"
             });
+            if(is_openclash_frame(frame))
+                schedule_openclash_render_check(frame);
         }
         catch(e) {
             $("#sub_frame").removeClass("nr-frame-loading").addClass("nr-frame-ready").css({
                 "opacity": "1",
                 "visibility": "visible"
             });
+            var frame = document.getElementById('sub_frame');
+            if(is_openclash_frame(frame))
+                set_openclash_fallback(true);
         }
     }
     function get_app_route_url(route){
         return "<%=controller%>" + route;
+    }
+    function open_openclash_original_page(){
+        window.top.location.href = "/cgi-bin/luci/admin/services/openclash/client";
+    }
+    function is_openclash_frame(frame){
+        return frame && frame.src && frame.src.indexOf('/admin/services/openclash') !== -1;
+    }
+    function set_openclash_fallback(show){
+        $(".app_frame_openclash").toggleClass("nr-openclash-fallback-on", !!show);
+    }
+    function reload_openclash_frame(){
+        var frame = document.getElementById('sub_frame');
+        if(!frame)
+            return;
+
+        set_openclash_fallback(false);
+        var src = frame.getAttribute("data-src") || get_app_route_url("admin/services/openclash/client");
+        $(frame).removeClass("nr-frame-ready").addClass("nr-frame-loading").attr("src", src);
+    }
+    function ensure_openclash_wide_css(d){
+        if(!d || !d.head || d.getElementById("nr-openclash-wide-css"))
+            return;
+
+        var style = d.createElement("style");
+        style.id = "nr-openclash-wide-css";
+        style.type = "text/css";
+        style.appendChild(d.createTextNode([
+            "html,body{width:100%!important;max-width:none!important;min-width:0!important;overflow-x:auto!important;background:#2e2e38!important;}",
+            ".container.body-container,.main,.main-content,#maincontent,#content{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;box-sizing:border-box!important;}",
+            ".container.body-container{padding:0 10px!important;}",
+            ".cbi-map,.cbi-section,.table,.table-responsive,form{max-width:none!important;box-sizing:border-box!important;}",
+            ".table-responsive{overflow-x:auto!important;}"
+        ].join("\\n")));
+        d.head.appendChild(style);
+    }
+    function openclash_content_visible(d){
+        if(!d || !d.body)
+            return false;
+
+        var body_text = (d.body.textContent || "").replace(/\s+/g, "");
+        var body_height = $(d.body).height() || d.body.scrollHeight || 0;
+        if(body_text.indexOf("OpenClash") >= 0)
+            return true;
+        if(body_text.length > 12 && body_height > 40)
+            return true;
+
+        var visible = false;
+        $(d).find(".cbi-map,.cbi-section,.table,.table-responsive,.panel,.alert-message,.alert,.main-content,.main").each(function(){
+            var rect = this.getBoundingClientRect ? this.getBoundingClientRect() : null;
+            if(rect && rect.width > 80 && rect.height > 24) {
+                visible = true;
+                return false;
+            }
+        });
+
+        if(visible && body_text.length > 0)
+            return true;
+        return false;
+    }
+    function check_openclash_render(frame, allow_show){
+        if(!is_openclash_frame(frame))
+            return;
+
+        try {
+            var d = frame.contentWindow.document;
+            ensure_openclash_wide_css(d);
+            if(openclash_content_visible(d))
+                set_openclash_fallback(false);
+            else if(allow_show)
+                set_openclash_fallback(true);
+        }
+        catch(e) {
+            set_openclash_fallback(false);
+        }
+    }
+    function schedule_openclash_render_check(frame){
+        window.setTimeout(function(){ check_openclash_render(frame, false); }, 800);
+        window.setTimeout(function(){ check_openclash_render(frame, false); }, 1800);
+        window.setTimeout(function(){ check_openclash_render(frame, true); }, 3500);
+        window.setTimeout(function(){ check_openclash_render(frame, true); }, 6500);
     }
     function build_app_iframe(route){
         if(route && route.length > 0)
@@ -5451,14 +5675,15 @@ EOF
             {route: "admin/services/openclash/log", title: "<%:Server Logs%>"}
         ];
 
-        var sub_web_ht = "<div class='app_frame_box app_frame_tabs'><div class='app_frame_nav'>";
+        var sub_web_ht = "<div class='app_frame_box app_frame_tabs app_frame_openclash'><div class='app_frame_nav'>";
         $.each(tabs, function(index, tab){
             var active_class = "";
             if(tab.route == current_route)
                 active_class = " app_frame_nav_item_active";
             sub_web_ht += "<span class='app_frame_nav_item" + active_class + "' data-route='" + tab.route + "' onclick='switch_app_frame_route(this)'>" + tab.title + "</span>";
         });
-        sub_web_ht += "</div>" + build_app_iframe(current_route) + "</div>";
+        sub_web_ht += "<button type='button' class='app_frame_origin_button' onclick='open_openclash_original_page()'>原版页面</button>";
+        sub_web_ht += "</div><div id='nr-openclash-fallback' class='nr-openclash-fallback'><span class='nr-openclash-fallback_badge'>!</span><span class='nr-openclash-fallback_text'><strong>OpenClash 页面未正常显示</strong><em>可重载弹窗，或在顶层打开原版页面。</em></span><span class='nr-openclash-fallback_actions'><button type='button' class='nr-openclash-fallback_btn' onclick='reload_openclash_frame()'>重载</button><button type='button' class='nr-openclash-fallback_btn' onclick='open_openclash_original_page()'>原版页面</button></span></div>" + build_app_iframe(current_route) + "</div>";
 
         return sub_web_ht;
     }
@@ -5632,6 +5857,7 @@ EOF
         return true;
     }
     function callback(id,route){
+        ensure_app_frame_polish_css();
         var sub_web_ht = build_app_frame(route);
         $(".top_menu").removeClass("top_menu_active");
         $(".top_menu").each(function(){
@@ -5763,6 +5989,13 @@ EOF
                 }
             }
         ' "$tmp2" > "$tmp3"
+    fi
+
+    bad_openclash_route='nradioadv/system/openclash''full'
+    if grep -q "open_route = \"$bad_openclash_route\";" "$tmp3"; then
+        tmp_openclash_route="$WORKDIR/appcenter.openclash-route"
+        sed "s#open_route = \"$bad_openclash_route\";#open_route = \"admin/services/openclash\";#g" "$tmp3" > "$tmp_openclash_route"
+        cp "$tmp_openclash_route" "$tmp3"
     fi
 
     if ! grep -q 'db.name == "OpenVPN"' "$tmp3"; then
@@ -5995,6 +6228,16 @@ EOF
     verify_template_marker 'app_frame_box app_frame_tabs' 'iframe 标签页弹窗容器'
     verify_template_marker 'app_frame_box app_frame_plain' 'iframe 普通弹窗容器'
     verify_template_marker 'rgba(104, 130, 166, .24)' 'iframe 标签栏暗色边线'
+    verify_template_marker 'app_frame_openclash' 'OpenClash iframe 弹窗容器'
+    verify_template_marker 'nr-openclash-fallback' 'OpenClash iframe 黑屏兜底'
+    verify_template_marker 'nr-openclash-wide-css' 'OpenClash iframe 宽屏 CSS'
+    verify_template_marker 'window.top.location.href = "/cgi-bin/luci/admin/services/openclash/client";' 'OpenClash 原版页面顶层跳转'
+    verify_template_marker 'admin/services/openclash/client' 'OpenClash 客户端标签'
+    verify_template_marker 'admin/services/openclash/settings' 'OpenClash 设置标签'
+    verify_template_marker 'admin/services/openclash/config-overwrite' 'OpenClash 覆写设置标签'
+    verify_template_marker 'admin/services/openclash/config-subscribe' 'OpenClash 订阅标签'
+    verify_template_marker 'admin/services/openclash/config' 'OpenClash 配置标签'
+    verify_template_marker 'admin/services/openclash/log' 'OpenClash 日志标签'
     verify_template_marker "action == 'uninstall' && nradio_plugin_uninstall_action(app_name)" '脚本插件异步卸载入口'
     verify_template_marker 'plugin_uninstall/start' '脚本插件异步卸载启动接口'
     verify_template_marker 'plugin_uninstall/check' '脚本插件异步卸载检查接口'
@@ -6008,6 +6251,8 @@ patch_appcenter_status_controller() {
 
     mkdir -p "$WORKDIR"
     backup_file "$APPCENTER_CONTROLLER"
+    status_lua_file="$WORKDIR/appcenter-controller.sys-status.lua"
+    tmp_controller_status="$WORKDIR/appcenter-controller.sys-status.tmp"
 
     if ! grep -q 'appcenter", "sys_status"' "$APPCENTER_CONTROLLER" 2>/dev/null; then
         tmp_controller_entry="$WORKDIR/appcenter-controller.sys-status-entry"
@@ -6023,8 +6268,7 @@ patch_appcenter_status_controller() {
         cp "$tmp_controller_entry" "$APPCENTER_CONTROLLER"
     fi
 
-    if ! grep -q 'function action_sys_status()' "$APPCENTER_CONTROLLER" 2>/dev/null; then
-        cat >> "$APPCENTER_CONTROLLER" <<'EOF_APPCENTER_SYS_STATUS_LUA'
+    cat > "$status_lua_file" <<'EOF_APPCENTER_SYS_STATUS_LUA'
 
 local function nradio_appcenter_read_first_line(path)
 	local fp = io.open(path, "r")
@@ -6158,10 +6402,60 @@ local function nradio_appcenter_read_system_memory()
 	return total, used, percent
 end
 
+local function nradio_appcenter_read_model_name()
+	local model = nradio_appcenter_read_first_line("/tmp/sysinfo/model") or ""
+	local board = nradio_appcenter_read_first_line("/tmp/sysinfo/board_name") or ""
+	local text = (model .. " " .. board):upper()
+	if text:find("HC-WT9303", 1, true) or text:find("C2000", 1, true) then
+		return "NRadio_C2000MAX"
+	end
+	if model ~= "" then
+		return model
+	end
+	return board
+end
+
+local function nradio_appcenter_read_swap_memory()
+	local total, free = 0, 0
+	local total_seen, free_seen = false, false
+	for line in io.lines("/proc/meminfo") do
+		local key, value = line:match("^(%w+):%s+(%d+)")
+		value = tonumber(value)
+		if key == "SwapTotal" and value then
+			total = value
+			total_seen = true
+		elseif key == "SwapFree" and value then
+			free = value
+			free_seen = true
+		end
+		if total_seen and free_seen then
+			break
+		end
+	end
+
+	local used = total - free
+	if used < 0 then
+		used = 0
+	end
+
+	local percent = 0
+	if total > 0 then
+		percent = math.floor((used * 1000 / total) + 0.5) / 10
+	end
+
+	return total, used, percent
+end
+
 function action_sys_status()
 	local load_line = nradio_appcenter_read_first_line("/proc/loadavg") or ""
 	local load1 = load_line:match("^(%S+)") or "-"
 	local mem_total, mem_used, mem_percent = nradio_appcenter_read_system_memory()
+	local model_name = nradio_appcenter_read_model_name()
+	local is_c2000max = model_name == "NRadio_C2000MAX"
+	local swap_total, swap_used, swap_percent = 0, 0, 0
+	if is_c2000max then
+		swap_total, swap_used, swap_percent = nradio_appcenter_read_swap_memory()
+	end
 
 	luci.nradio.luci_call_result({
 		cpu_percent = nradio_appcenter_read_cpu_usage_percent(),
@@ -6169,14 +6463,58 @@ function action_sys_status()
 		mem_total = mem_total,
 		mem_used = mem_used,
 		mem_percent = mem_percent,
+		model_name = model_name,
+		is_c2000max = is_c2000max,
+		swap_total = swap_total,
+		swap_used = swap_used,
+		swap_percent = swap_percent,
 		load1 = load1,
 	})
 end
 EOF_APPCENTER_SYS_STATUS_LUA
+
+    if ! grep -q 'function action_sys_status()' "$APPCENTER_CONTROLLER" 2>/dev/null; then
+        cat "$status_lua_file" >> "$APPCENTER_CONTROLLER"
+    elif ! grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null; then
+        awk -v lua_file="$status_lua_file" '
+            function emit_status() {
+                if (!inserted) {
+                    while ((getline extra < lua_file) > 0)
+                        print extra
+                    close(lua_file)
+                    inserted = 1
+                }
+            }
+            /^local function nradio_appcenter_read_first_line\(path\)/ {
+                skip_status = 1
+                emit_status()
+                next
+            }
+            /^function action_sys_status\(\)/ && !inserted {
+                skip_status = 1
+                in_action = 1
+                emit_status()
+                next
+            }
+            skip_status && /^function action_sys_status\(\)/ {
+                in_action = 1
+                next
+            }
+            skip_status && in_action && /^end[[:space:]]*$/ {
+                skip_status = 0
+                in_action = 0
+                next
+            }
+            !skip_status {
+                print
+            }
+        ' "$APPCENTER_CONTROLLER" > "$tmp_controller_status"
+        cp "$tmp_controller_status" "$APPCENTER_CONTROLLER"
     fi
 
     grep -q 'appcenter", "sys_status"' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing sys_status route"
     grep -q 'function action_sys_status()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing action_sys_status"
+    grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing swap_total"
 }
 
 patch_appcenter_card_polish() {
@@ -10499,6 +10837,12 @@ EOF_APPCENTER_CARD_POLISH_PRESERVED_ALIGN
             inset 0 .08em 0 rgba(255,255,255,.044),
             0 .40em .76em rgba(0,0,0,.11);
     }
+    .app_status_metric:nth-of-type(6){
+        --nr-metric-accent: 168,85,247;
+    }
+    .app_status_swap_bar{
+        background: linear-gradient(90deg, #a78bfa, #60a5fa 62%, #23c8e4) !important;
+    }
     .app_status_metric_row strong,
     .app_status_tile strong{
         font-variant-numeric: tabular-nums;
@@ -10626,6 +10970,10 @@ EOF_APPCENTER_PREMIUM_VISUAL_FINISH
         '        <div class="app_status_metric_row"><span>内存占用</span><strong class="app_status_mem">--</strong></div>'+
         '        <div class="app_status_bar"><span class="app_status_mem_bar"></span></div>'+
         '    </div>'+
+        '    <div class="app_status_metric app_status_swap_metric" style="display:none">'+
+        '        <div class="app_status_metric_row"><span>swap 虚拟内存</span><strong class="app_status_swap">--</strong></div>'+
+        '        <div class="app_status_bar"><span class="app_status_swap_bar"></span></div>'+
+        '    </div>'+
         '</aside>';
     }
 
@@ -10668,6 +11016,21 @@ EOF_APPCENTER_PREMIUM_VISUAL_FINISH
         var mem_text = format_kib(data.mem_used) + " / " + format_kib(data.mem_total);
         $(".app_status_mem").text(mem_text).attr("title", mem_text + " · " + mem_percent.toFixed(1) + "%");
         set_status_width(".app_status_mem_bar", mem_percent);
+
+        var is_c2000max = data.is_c2000max === true || data.is_c2000max == 1 || data.model_name == "NRadio_C2000MAX" || data.model == "NRadio_C2000MAX";
+        if(is_c2000max){
+            var swap_total = Number(data.swap_total || 0);
+            var swap_used = Number(data.swap_used || 0);
+            var swap_percent = Number(data.swap_percent || 0);
+            var swap_text = swap_total > 0 ? (format_kib(swap_used) + " / " + format_kib(swap_total)) : "未启用";
+            $(".app_status_swap_metric").show();
+            $(".app_status_swap").text(swap_text).attr("title", swap_total > 0 ? (swap_text + " · " + swap_percent.toFixed(1) + "%") : "C2000MAX 未启用 swap");
+            set_status_width(".app_status_swap_bar", swap_total > 0 ? swap_percent : 0);
+        }
+        else{
+            $(".app_status_swap_metric").hide();
+            set_status_width(".app_status_swap_bar", 0);
+        }
     }
 
     function get_system_status(){
@@ -11271,6 +11634,8 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'display_version: nr_appcenter_display_version(db.name, db.version)' '应用商店 OpenVPN 版本号显示数据'
     verify_template_marker '{{display_version}}' '应用商店 OpenVPN 版本号挂载'
     verify_template_marker 'app_status_mem").text(mem_text)' '应用商店系统卡片内存显示'
+    verify_template_marker 'app_status_swap").text(swap_text)' '应用商店 C2000MAX swap 显示'
+    verify_template_marker 'app_status_swap_bar' '应用商店 C2000MAX swap 状态条'
     verify_template_marker 'build_app_status_panel_from_data' '应用商店右侧系统状态面板'
     verify_template_marker 'function start_app_status_polling()' '应用商店系统状态刷新函数'
     verify_template_marker 'id="app_status_mount"' '应用商店右侧系统状态面板挂载点'
@@ -13069,7 +13434,7 @@ nradio_5g_aggregation_current_model() {
 
 nradio_5g_aggregation_model_supported() {
     case "$(nradio_5g_aggregation_current_model 2>/dev/null || true)" in
-        NRadio_C5800-688|NRadio_C8-688)
+        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688)
             return 0
             ;;
         *)
@@ -16998,6 +17363,268 @@ patch_openclash_cidr6_compat() {
     sed -i 's/datatype\.cidr6(value)/(datatype.cidr6 or datatype.ipmask6)(value)/' "$settings"
 }
 
+write_openclash_original_tabs_template() {
+    mkdir -p /usr/lib/lua/luci/view/openclash
+    backup_file /usr/lib/lua/luci/view/openclash/nradio_tabs.htm
+
+    cat > /usr/lib/lua/luci/view/openclash/nradio_tabs.htm <<'EOF'
+<%
+local dispatcher = require "luci.dispatcher"
+local request = dispatcher.context and dispatcher.context.request or {}
+local current = table.concat(request, "/")
+local tabs = {
+	{{"admin", "services", "openclash", "client"}, "Overviews"},
+	{{"admin", "services", "openclash", "settings"}, "Plugin Settings"},
+	{{"admin", "services", "openclash", "config-overwrite"}, "Overwrite Settings"},
+	{{"admin", "services", "openclash", "config-subscribe"}, "Config Subscribe"},
+	{{"admin", "services", "openclash", "config"}, "Config Manage"},
+	{{"admin", "services", "openclash", "log"}, "Server Logs"}
+}
+%>
+<style type="text/css">
+header,
+.menu_mobile,
+.mobile_bg_color.container.body-container.visible-xs-block,
+.tail_wave,
+.footer,
+footer,
+.footer_container,
+.footer_container_body,
+.menu-top,
+.logo-nradio,
+.large_banner,
+.small_banner,
+.main-logo-size,
+.mobile-logo-size,
+.qmenu,
+.nradio-right-btn,
+.sub_icon_list,
+.menu-tab,
+#mainmenu,
+#modemenu,
+.navbar,
+.navbar-inner{
+	display:none!important;
+}
+html.nr-openclash-oem-hidden,
+html.nr-openclash-oem-hidden body,
+body{
+	min-height:100vh!important;
+	height:auto!important;
+	padding-top:0!important;
+	overflow-y:auto!important;
+}
+.container.body-container:not(.visible-xs-block),
+.main,
+.main-content,
+#maincontent,
+#content{
+	margin-top:0!important;
+}
+html.nr-openclash-oem-hidden .container.body-container:not(.visible-xs-block){
+	width:100%!important;
+	max-width:none!important;
+	min-height:100vh!important;
+	height:auto!important;
+	margin:0!important;
+	padding:0 24px 24px!important;
+	position:relative!important;
+	top:auto!important;
+	box-sizing:border-box!important;
+}
+html.nr-openclash-oem-hidden .main{
+	width:100%!important;
+	max-width:none!important;
+	min-height:100vh!important;
+	height:auto!important;
+	margin:0!important;
+	padding:0!important;
+	overflow:visible!important;
+	border-radius:0!important;
+	box-shadow:none!important;
+}
+html.nr-openclash-oem-hidden .main-content{
+	min-height:100vh!important;
+	height:auto!important;
+	padding:24px 60px 40px!important;
+	overflow:visible!important;
+	box-sizing:border-box!important;
+}
+.nr-openclash-original-tabs{
+	display:flex;
+	flex-wrap:wrap;
+	align-items:center;
+	gap:18px;
+	margin:0 0 12px;
+	padding:0 0 10px;
+	border-bottom:1px solid rgba(104,130,166,.24);
+}
+.nr-openclash-original-tabs a{
+	display:inline-flex;
+	align-items:center;
+	min-height:28px;
+	padding:0 2px;
+	color:#666;
+	text-decoration:none;
+	border-bottom:2px solid transparent;
+	line-height:1.2;
+}
+.nr-openclash-original-tabs a:hover,
+.nr-openclash-original-tabs a.nr-openclash-original-tab-active{
+	color:#0088cc;
+	border-bottom-color:#0088cc;
+	text-decoration:none;
+}
+.container.body-container,.main,.main-content,#maincontent,#content{
+	width:100%!important;
+	max-width:none!important;
+	min-width:0!important;
+	box-sizing:border-box!important;
+}
+.table-responsive{
+	overflow-x:auto!important;
+}
+html.nr-openclash-embedded .nr-openclash-original-tabs{
+	display:none!important;
+}
+</style>
+<script type="text/javascript">//<![CDATA[
+(function(){
+	var hideSelectors = [
+		'header',
+		'.menu_mobile',
+		'.mobile_bg_color.container.body-container.visible-xs-block',
+		'.tail_wave',
+		'.footer',
+		'footer',
+		'.footer_container',
+		'.footer_container_body',
+		'.menu-top',
+		'.logo-nradio',
+		'.large_banner',
+		'.small_banner',
+		'.main-logo-size',
+		'.mobile-logo-size',
+		'.qmenu',
+		'.nradio-right-btn',
+		'.sub_icon_list',
+		'.menu-tab',
+		'#mainmenu',
+		'#modemenu',
+		'.navbar',
+		'.navbar-inner'
+	];
+	function hideOemHeader(){
+		if (document.documentElement.className.indexOf("nr-openclash-oem-hidden") === -1)
+			document.documentElement.className += " nr-openclash-oem-hidden";
+		for (var i = 0; i < hideSelectors.length; i++) {
+			var nodes = document.querySelectorAll(hideSelectors[i]);
+			for (var j = 0; j < nodes.length; j++)
+				nodes[j].style.display = 'none';
+		}
+	}
+	function expandOpenClashPage(){
+		var html = document.documentElement;
+		var body = document.body;
+		var targets = [
+			html,
+			body
+		];
+		var selectors = [
+			'.container.body-container:not(.visible-xs-block)',
+			'.main',
+			'.main-content',
+			'#maincontent',
+			'#content'
+		];
+		for (var i = 0; i < selectors.length; i++) {
+			var nodes = document.querySelectorAll(selectors[i]);
+			for (var j = 0; j < nodes.length; j++)
+				targets.push(nodes[j]);
+		}
+		for (var k = 0; k < targets.length; k++) {
+			if (!targets[k])
+				continue;
+			targets[k].style.height = 'auto';
+			targets[k].style.minHeight = '100vh';
+			targets[k].style.overflowY = 'visible';
+		}
+	}
+	try {
+		if (window.self !== window.top)
+			document.documentElement.className += " nr-openclash-embedded";
+	}
+	catch(e) {
+		document.documentElement.className += " nr-openclash-embedded";
+	}
+	if (document.readyState === 'loading')
+		document.addEventListener('DOMContentLoaded', function(){
+			hideOemHeader();
+			expandOpenClashPage();
+		});
+	else {
+		hideOemHeader();
+		expandOpenClashPage();
+	}
+	setTimeout(hideOemHeader, 300);
+	setTimeout(hideOemHeader, 1200);
+	setTimeout(expandOpenClashPage, 300);
+	setTimeout(expandOpenClashPage, 1200);
+})();
+//]]></script>
+<div class="nr-openclash-original-tabs">
+	<% for _, tab in ipairs(tabs) do %>
+		<% local route = table.concat(tab[1], "/") %>
+		<a class="<%=current == route and "nr-openclash-original-tab-active" or ""%>" href="<%=dispatcher.build_url(unpack(tab[1]))%>"><%=translate(tab[2])%></a>
+	<% end %>
+</div>
+EOF
+}
+
+patch_openclash_model_tabs_file() {
+    model_file="$1"
+    [ -f "$model_file" ] || return 0
+    grep -q 'openclash/nradio_tabs' "$model_file" && return 0
+
+    backup_file "$model_file"
+    tmp_model_tabs="$WORKDIR/openclash-tabs.$(basename "$model_file")"
+    awk '
+        BEGIN { inserted = 0 }
+        {
+            print
+            if (!inserted && $0 ~ /^[[:space:]]*m[[:space:]]*=[[:space:]]*(Map|SimpleForm)\(/) {
+                print "local nradio_tabs = m:section(SimpleSection)"
+                print "nradio_tabs.template = \"openclash/nradio_tabs\""
+                print "nradio_tabs.anonymous = true"
+                inserted = 1
+            }
+        }
+    ' "$model_file" > "$tmp_model_tabs"
+    cp "$tmp_model_tabs" "$model_file"
+
+    grep -q 'openclash/nradio_tabs' "$model_file" || die "OpenClash 原版页面标签注入失败: $model_file"
+}
+
+patch_openclash_original_page_tabs() {
+    write_openclash_original_tabs_template
+    tabs_model_count='0'
+    for model_file in \
+        /usr/lib/lua/luci/model/cbi/openclash/client.lua \
+        /usr/lib/lua/luci/model/cbi/openclash/settings.lua \
+        /usr/lib/lua/luci/model/cbi/openclash/config-overwrite.lua \
+        /usr/lib/lua/luci/model/cbi/openclash/config-subscribe.lua \
+        /usr/lib/lua/luci/model/cbi/openclash/config.lua \
+        /usr/lib/lua/luci/model/cbi/openclash/log.lua; do
+        [ -f "$model_file" ] || continue
+        patch_openclash_model_tabs_file "$model_file"
+        if grep -q 'openclash/nradio_tabs' "$model_file"; then
+            tabs_model_count=$((tabs_model_count + 1))
+        fi
+    done
+
+    [ "$tabs_model_count" -gt 0 ] || die "OpenClash 原版页面标签注入失败: 未找到可 patch 的页面模型"
+}
+
 install_openclash() {
     require_nradio_oem_appcenter
 
@@ -17115,6 +17742,7 @@ install_openclash() {
     patch_openclash_switch_mode_template
     patch_openclash_dashboard_settings
     patch_openclash_cidr6_compat
+    patch_openclash_original_page_tabs
     write_plugin_uninstall_assets
     patch_common_template
     refresh_luci_appcenter
@@ -17130,6 +17758,7 @@ install_openclash() {
     verify_luci_route admin/services/openclash/config-subscribe "$OPENCLASH_DISPLAY_NAME"
     verify_luci_route admin/services/openclash/config "$OPENCLASH_DISPLAY_NAME"
     verify_luci_route admin/services/openclash/log "$OPENCLASH_DISPLAY_NAME"
+    verify_file_exists /usr/lib/lua/luci/view/openclash/nradio_tabs.htm "$OPENCLASH_DISPLAY_NAME 原版页面标签"
 
     log_stage 7 7 "可选下载 smart 内核并完成最终校验"
     smart_core_downloaded='0'
@@ -22965,7 +23594,7 @@ is_adguard_placeholder_config() {
     grep -q '^bind_port: ' "$yaml_file" 2>/dev/null || return 1
     grep -q '^#bootstrap_dns$' "$yaml_file" 2>/dev/null || return 1
     grep -q '^#upstream_dns$' "$yaml_file" 2>/dev/null || return 1
-    grep -q '^- name: root$' "$yaml_file" 2>/dev/null || return 1
+    grep -Eq '^- name: (root|admin)$' "$yaml_file" 2>/dev/null || return 1
     return 0
 }
 
@@ -22977,6 +23606,97 @@ cleanup_adguard_placeholder_config() {
     backup_file "$configpath"
     rm -f "$configpath"
     log "备注:     已移除占位 AdGuardHome 配置，保留首次启动向导"
+}
+
+normalize_adguard_yaml_defaults() {
+    yaml_file="$1"
+    [ -s "$yaml_file" ] || return 0
+
+    adg_defaults_tmp="$WORKDIR/adguard-defaults.$$"
+    awk '
+        function print_antiad_filter() {
+            print "filters:"
+            print "  - enabled: true"
+            print "    url: https://cdn.jsdelivr.net/gh/privacy-protection-tools/anti-AD/anti-ad-easylist.txt"
+            print "    name: anti-AD"
+            print "    id: 1577113202"
+        }
+
+        BEGIN {
+            in_users = 0
+            in_filters = 0
+            saw_filters = 0
+        }
+
+        /^users:[[:space:]]*$/ {
+            in_users = 1
+            print
+            next
+        }
+
+        in_users && /^[^[:space:]]/ {
+            in_users = 0
+        }
+
+        in_users && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ {
+            print "  - name: admin"
+            next
+        }
+
+        in_users && /^[[:space:]]*name:[[:space:]]*/ {
+            print "    name: admin"
+            next
+        }
+
+        /^[[:space:]]*session_ttl:[[:space:]]*/ {
+            sub(/session_ttl:[[:space:]].*/, "session_ttl: 720h", $0)
+            print
+            next
+        }
+
+        /^auth_attempts:[[:space:]]*/ {
+            print "auth_attempts: 0"
+            next
+        }
+
+        /^block_auth_min:[[:space:]]*/ {
+            print "block_auth_min: 0"
+            next
+        }
+
+        /^filters:[[:space:]]*$/ {
+            print_antiad_filter()
+            saw_filters = 1
+            in_filters = 1
+            next
+        }
+
+        in_filters {
+            if ($0 ~ /^[^[:space:]][^:]*:[[:space:]]*/) {
+                in_filters = 0
+                print
+            }
+            next
+        }
+
+        { print }
+
+        END {
+            if (!saw_filters) {
+                print_antiad_filter()
+            }
+        }
+    ' "$yaml_file" > "$adg_defaults_tmp" || {
+        rm -f "$adg_defaults_tmp" 2>/dev/null || true
+        return 0
+    }
+
+    if ! cmp -s "$adg_defaults_tmp" "$yaml_file" 2>/dev/null; then
+        backup_file "$yaml_file"
+        mv "$adg_defaults_tmp" "$yaml_file" || rm -f "$adg_defaults_tmp" 2>/dev/null || true
+    else
+        rm -f "$adg_defaults_tmp" 2>/dev/null || true
+    fi
 }
 
 is_local_port_listening() {
@@ -23191,6 +23911,7 @@ ensure_adguard_config_from_template_if_ready() {
     chmod 600 "$configpath" 2>/dev/null || true
 
     ensure_adguard_dns_yaml_file "$configpath" "$lan_ip" "$dns_port" "$upstream_dns"
+    normalize_adguard_yaml_defaults "$configpath"
 
     if "$binpath" -c "$configpath" --check-config >/tmp/AdGuardHometest.log 2>&1; then
         adg_dns_chain_changed='1'
@@ -23263,6 +23984,8 @@ ensure_adguard_openclash_dns_chain() {
     configpath="$(get_adguard_configpath)"
     adg_binpath="$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)"
     [ -n "$adg_binpath" ] || adg_binpath="/usr/bin/AdGuardHome/AdGuardHome"
+    normalize_adguard_yaml_defaults "$template_yaml"
+    normalize_adguard_yaml_defaults "$configpath"
 
     if [ ! -x "$adg_binpath" ]; then
         restore_dnsmasq_system_dns_when_adguard_unready
@@ -23285,8 +24008,10 @@ ensure_adguard_openclash_dns_chain() {
     fi
 
     ensure_adguard_dns_yaml_file "$template_yaml" "$lan_ip" "$adg_dns_port" "$adg_upstream_dns"
+    normalize_adguard_yaml_defaults "$template_yaml"
     ensure_adguard_config_from_template_if_ready "$template_yaml" "$configpath" "$lan_ip" "$adg_binpath" "$adg_dns_port" "$adg_upstream_dns"
     ensure_adguard_dns_yaml_file "$configpath" "$lan_ip" "$adg_dns_port" "$adg_upstream_dns"
+    normalize_adguard_yaml_defaults "$configpath"
 
     if [ ! -s "$configpath" ]; then
         restore_dnsmasq_system_dns_when_adguard_unready
@@ -23393,9 +24118,8 @@ ensure_adguard_dashboard_auth_defaults() {
     dashboard_password="$(uci -q get AdGuardHome.AdGuardHome.dashboard_password 2>/dev/null || true)"
     adg_dashboard_changed='0'
 
-    if [ -z "$dashboard_user" ]; then
-        dashboard_user="$(read_adguard_primary_user_from_config 2>/dev/null || true)"
-        [ -n "$dashboard_user" ] || dashboard_user='admin'
+    if [ -z "$dashboard_user" ] || [ "$dashboard_user" = 'root' ]; then
+        dashboard_user='admin'
         uci set AdGuardHome.AdGuardHome.dashboard_user="$dashboard_user" >/dev/null 2>&1 || true
         adg_dashboard_changed='1'
     fi
@@ -25832,6 +26556,8 @@ install_adguardhome() {
     write_adguard_wrapper_files
     patch_adguard_enable_hook
     fix_adguard_start_order
+    normalize_adguard_yaml_defaults /usr/share/AdGuardHome/AdGuardHome_template.yaml
+    normalize_adguard_yaml_defaults "$(get_adguard_configpath)"
     cleanup_adguard_placeholder_config
     ensure_adguard_dashboard_auth_defaults
     ensure_adguard_openclash_dns_chain
@@ -45528,7 +46254,7 @@ common_plugin_menu() {
         printf '5. OpenList\n'
         printf '6. MosDNS\n'
         printf '7. DDNS-GO\n'
-        printf '8. Docker（仅支持 NRadio_C5800-688 / NRadio_C8-688）\n'
+        printf '8. Docker（仅支持 NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C8-688）\n'
         printf '0. 返回功能分类\n'
         printf '请选择 0、1、2、3、4、5、6、7 或 8: '
         read_category_choice
@@ -45649,11 +46375,11 @@ game_accel_set_appcenter_entry() {
 
 docker_require_supported_model() {
     case "${CURRENT_DETECTED_MODEL:-}" in
-        NRadio_C5800-688|NRadio_C8-688)
+        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688)
             return 0
             ;;
     esac
-    die "Docker 仅支持 NRadio_C5800-688 / NRadio_C8-688，当前机型：${CURRENT_DETECTED_MODEL:-unknown}"
+    die "Docker 仅支持 NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C8-688，当前机型：${CURRENT_DETECTED_MODEL:-unknown}"
 }
 
 docker_prepare_storage() {
@@ -47198,9 +47924,10 @@ main_menu() {
 printf '%s\n' "$SCRIPT_TITLE"
 printf '%s\n' "$SCRIPT_SIGNATURE"
 printf '%s\n' "$SCRIPT_MODEL_NOTICE"
-printf '%s\n' "$SCRIPT_SCOPE_NOTICE"
+    printf '%s\n' "$SCRIPT_SCOPE_NOTICE"
     require_supported_nradio_model_environment
     log_nradio_oem_environment_hint
+    require_nradio_oem_appcenter
 
     if [ -n "$choice" ]; then
         case "$choice" in

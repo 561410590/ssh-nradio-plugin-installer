@@ -11,7 +11,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify public release files
+      - name: Verify required files
         run: |
           test -f 00-current/ssh-nradio-plugin-installer.sh
           test -f 40-server-web/mayebano-support/index.html
@@ -22,304 +22,58 @@ jobs:
           test -f LICENSE
           test -f CONTRIBUTING.md
           test -f SECURITY.md
-          test -f .github/ISSUE_TEMPLATE/bug_report.yml
 
-      - name: Verify C2000MAX factory partition
+      - name: Verify V2.2.5 script state
         run: |
-          test ! -e 10-router-pages/appcenter-backup-66.1-20260427-141411
-          test ! -e 10-router-pages/factory-reset-66.1-20260426-222841
-          test -d 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted
-          test -f 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua
-          test -f 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm
-          test "$(find 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted -type f | wc -l)" -eq 4620
-          node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/etc/gcom/ncm.json','utf8'))"
-          ! grep -R -E 'NRadio appcenter card polish|sys_status|plugin_uninstall|appcenter-card-polish|appcenter-backup-66\.1-20260427' 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua 10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm
-          printf '%s  %s\n' '754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua' | sha256sum -c -
-          printf '%s  %s\n' 'c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23' '10-router-pages/factory-bin-C2000MAX-2.1.7.n0.c1-extracted/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm' | sha256sum -c -
-
-      - name: Verify V2.1.0 script state
-        run: |
-          grep -q 'SCRIPT_VERSION="V2.1.0"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-05-28"' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q '测试中' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -Eiq 'base64|gzip|GZ_B64|Packages\.gz|validate_tar_gzip' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "printf '3. 游戏加速器" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "printf '1. 奇游联机宝" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "printf '2. 雷神加速器" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "printf '6. MosDNS" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "printf '7. DDNS-GO" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "printf '8. Docker" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'install_mosdns' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'cleanup_mosdns' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'MOSDNS_VERSION' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'MosDNS 核心下载失败' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'install_ddnsgo' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'cleanup_ddnsgo' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'DDNSGO_ARCHIVE_SHA256' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'luci-i18n-ddns-go-zh-cn' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'configure_ddnsgo_web_login' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'seed_ddnsgo_config_yaml' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'ddnsgo_yaml_has_password' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'install_docker_plugin' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'docker_require_supported_model' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'docker_prepare_storage' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'DOCKER_ROOT="/mnt/rootfs_2nd_data/nradio-apps/docker"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'nradioadv/system/docker' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'Docker 仅支持 NRadio_C5800-688 / NRadio_C8-688' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'write_docker_luci_controller' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'write_docker_luci_view' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'game_accel_set_appcenter_entry "$DOCKER_APP_NAME"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '"data-root": "$DOCKER_DATA_ROOT"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'docker_payload_symlink_allowed' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'docker_restore_polluted_system_paths' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'download_openlist_from_urls' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'prepare_openlist_install_dirs' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenList 检测到存储扩展链接' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenList 安装根目录' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenList 使用普通存储目录' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'validate_tar_archive' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -Fq '$(".modal-dialog").css("display","none")' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'openlist-linux-musl-arm64-lite.tar.gz' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'C2000MAX 使用存储卡临时目录' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '文件过大导致安装失败' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '$2 != "noarch"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'UNINSTALL_LOG_FILE' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'opkg_wait_unlock' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio_C8-668' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'HC-WT9108' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio_C8-688|NRadio_C2000MAX' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio_C8-688 / C2000MAX 风扇控制' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '温度来源' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'Smart 最低风速' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '过热保护温度' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '检测间隔' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'open_route = "nradioadv/system/fanctrl";' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'QIYOU_INSTALLER_SHA256' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'LEIGOD_INSTALLER_SHA256' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'verify_remote_script_sha256 "奇游入口脚本"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'verify_remote_script_sha256 "雷神官方安装脚本"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'fast_probe' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio OpenVPN Mk3: dark command-center layer' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'EOF_OPENVPN_MK3_FINAL_POLISH' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'EOF_OPENVPN_OVPN_CSS_MK3_EXACT' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'EOF_OPENVPN_LEGACY_UNUSED_CSS_OLD' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'EOF_OPENVPN_STANDARD_MODEL' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-shell-mk3' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-shell-mk5' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenVPN Mk5 pass 7 precision finish: local six-file polish.' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish.' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenVPN Mk5 pass 9: 250-line webpage precision layer.' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'EOF_OPENVPN_MK5_PASS10_POLISH' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenVPN Mk5 pass 10 precision shell polish: modal-safe visual layer' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-hero-console' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-shell-config' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-entry-grid-import' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-shell-overview' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'vpn-cbi-descr' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'Mk2' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'mk2' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'MK2' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '哈基米 打开路由' 00-current/ssh-nradio-plugin-installer.sh
-          grep -Fq '[ -f /tmp/qy/etc/PKG_INFO ] && cat /tmp/qy/etc/PKG_INFO || true' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'schedule_enabled' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'schedule_start' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'schedule_end' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'schedule_mode' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '定时策略' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '定时期间' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenWrt 21.02.7 清华源' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '软件源: 当前不是 OpenWrt 21.02.7 清华源' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'ensure_opkg_update' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'opkg update || die "opkg update 失败"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'OpenVPN 控制台' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '目标检查' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '返回控制台' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '模板' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q '推荐动作' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q '实时校验' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q '诊断工作区' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'OEM 视图' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'priority 196' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'MosDNS SHA256 读取失败' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'dashboard_runtime' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'dashboard_stats' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'Dashboard API password' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'AdGuardHome 应用商店页已可读取本地运行态与监听' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '安装前一键预检' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '应用商店一致性扫描' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '哈基米傻瓜分流助手' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'hakimi_enable_custom_rules' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '相同规则已存在，未重复写入；已启用哈基米自定义规则' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'manage_rootfs_2nd_storage_expand' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'rootfs_2nd 存储扩展' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'storage_expand_require_app_runtime_files' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'storage_expand_make_searchable_storage_path' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'storage_expand_repair_migrated_runtime_paths' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'storage_expand_restore_hybrid_payload' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'storage_expand_allow_child_link_restore' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '修复扩展盘应用运行路径权限失败' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'AdGuardHome 运行文件缺失' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'openclash_asn_mmdb_valid' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'openclash_require_asn_mmdb' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '扩容 swap 虚拟内存仅支持 NRadio_C2000MAX' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '扩容 swap 虚拟内存（仅支持NRadio_C2000MAX）' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '负载均衡（副5G:蜂窝）' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'nradio_5g_aggregation_restart_mwan' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '副5G(cpe1_4)权重无效' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '蜂窝(cpe_4)权重无效' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio appcenter router hot polish: user pass 3' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio appcenter router hot polish: user pass 4 final' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio appcenter router hot polish: user pass 5 deep finish' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio appcenter router hot polish: user pass 6 precision finish' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'function nr_appcenter_display_version' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'display_version: nr_appcenter_display_version(db.name, db.version)' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'app_status_mem").text(mem_text)' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'app_box:nth-child(3n+1)::after' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRadio appcenter card polish V2.0.70 full repair layer' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '2>/dev/null' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.2.5"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-06-09"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'nr-openclash-fallback' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'nr-openclash-wide-css' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'window.top.location.href = "/cgi-bin/luci/admin/services/openclash/client";' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'admin/services/openclash/client' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'admin/services/openclash/settings' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'admin/services/openclash/config-overwrite' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'admin/services/openclash/config-subscribe' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'admin/services/openclash/config' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'admin/services/openclash/log' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'nr-openclash-oem-hidden' 00-current/ssh-nradio-plugin-installer.sh
+          ! grep -q 'nradioadv/system/openclashfull' 00-current/ssh-nradio-plugin-installer.sh
 
       - name: Verify support page state
         run: |
-          grep -q 'V2.1.0' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.1.0 已发布' 40-server-web/mayebano-support/index.html
-          grep -q 'Docker 扩展盘安装链接入' 40-server-web/mayebano-support/index.html
-          grep -q 'Docker 加入常用插件安装菜单 1 &gt; 8' 40-server-web/mayebano-support/index.html
-          grep -q 'rootfs_2nd 扩展盘' 40-server-web/mayebano-support/index.html
-          grep -q 'Docker LuCI 页面' 40-server-web/mayebano-support/index.html
-          grep -q '<div class="version">V2.1.0</div>' 40-server-web/mayebano-support/index.html
-          ! grep -q '<b>V2.1.0</b>' 40-server-web/mayebano-support/index.html
-          grep -q '<b>V2.0.70</b>' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.70 page polish pass' 40-server-web/mayebano-support/index.html
-          grep -q '5G 负载均衡与页面显示修复' 40-server-web/mayebano-support/index.html
-          grep -q 'mwan3' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenVPN Mk5 pass10' 40-server-web/mayebano-support/index.html
-          grep -q 'C2000MAX 1 号卡白条修复' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.60' 40-server-web/mayebano-support/index.html
-          grep -q 'C8/C5800 eMMC 存储扩展' 40-server-web/mayebano-support/index.html
-          grep -q 'rootfs_2nd 扩展盘接入' 40-server-web/mayebano-support/index.html
-          grep -q '动态应用迁移/还原' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenList 扩展盘断链目标修复' 40-server-web/mayebano-support/index.html
-          grep -q '存储扩展还原与 OpenList 断链修复' 40-server-web/mayebano-support/index.html
-          grep -q 'hybrid 大项保留' 40-server-web/mayebano-support/index.html
-          grep -q 'DDNS-GO 迁移权限修复' 40-server-web/mayebano-support/index.html
-          grep -q '第二系统烧录保护' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.55' 40-server-web/mayebano-support/index.html
-          grep -q '统一体检增强' 40-server-web/mayebano-support/index.html
-          grep -q '哈基米分流助手' 40-server-web/mayebano-support/index.html
-          grep -q '应用商店状态卡 2 秒采样' 40-server-web/mayebano-support/index.html
-          grep -q 'AdGuardHome 页面热更新回写' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.55 public page detail polish pass' 40-server-web/mayebano-support/index.html
-          grep -q '<b>V2.0.55</b>' 40-server-web/mayebano-support/index.html
-          grep -q '<b>V2.0.50</b>' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.50' 40-server-web/mayebano-support/index.html
-          grep -q 'DDNS-GO 集成' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenList C2000MAX 安装链降内存' 40-server-web/mayebano-support/index.html
-          grep -q 'C2000MAX 安装 OpenList 时改用 lite 包' 40-server-web/mayebano-support/index.html
-          grep -q '脚本新增 DDNS-GO 安装入口' 40-server-web/mayebano-support/index.html
-          grep -q 'AdGuardHome 内页二次重新美化' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.40' 40-server-web/mayebano-support/index.html
-          grep -q 'AdGuardHome 内页重新美化' 40-server-web/mayebano-support/index.html
-          grep -q '首页打开即可直接看到 DNS 查询和拦截统计数' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.35' 40-server-web/mayebano-support/index.html
-          grep -q 'MosDNS' 40-server-web/mayebano-support/index.html
-          grep -q '脚本新增 MosDNS 插件' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.30' 40-server-web/mayebano-support/index.html
-          grep -q '雷神卸载残留清理' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.25' 40-server-web/mayebano-support/index.html
-          grep -q '应用商店美化可以恢复默认' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.20' 40-server-web/mayebano-support/index.html
-          grep -q 'NRadio_C8-668' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenVPN 控制台界面升级' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenVPN 主界面删除冗余状态项' 40-server-web/mayebano-support/index.html
-          grep -q '暗色控制台风格' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.0.15' 40-server-web/mayebano-support/index.html
-          grep -q '奇游 / 雷神源切换' 40-server-web/mayebano-support/index.html
-          grep -q '奇游、雷神安装前复用哈基米软件源检查流程' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenWrt 21.02.7 清华源' 40-server-web/mayebano-support/index.html
-          grep -q 'OpenVPN 快速状态读取' 40-server-web/mayebano-support/index.html
-          grep -q '安装教程' 40-server-web/mayebano-support/index.html
-          grep -q '脚本功能' 40-server-web/mayebano-support/index.html
-          grep -q 'feature-brief' 40-server-web/mayebano-support/index.html
-          grep -q 'GitHub 开源' 40-server-web/mayebano-support/index.html
-          grep -q 'MobaXterm' 40-server-web/mayebano-support/index.html
-          grep -q '3. 路由器在线下载' 40-server-web/mayebano-support/index.html
-          grep -q 'wget -O ssh-nradio-plugin-installer.sh https://nradio.mayebano.shop/ssh-nradio-plugin-installer.sh' 40-server-web/mayebano-support/index.html
-          grep -q '哈基米' 40-server-web/mayebano-support/index.html
-          ! grep -q '<b>V2.0.5</b>' 40-server-web/mayebano-support/index.html
-          ! grep -q 'HC-WT9108' 40-server-web/mayebano-support/index.html
-          ! grep -q '我的项目' 40-server-web/mayebano-support/index.html
-          ! grep -q '安装方式提醒' 40-server-web/mayebano-support/index.html
-          ! grep -q '电脑下载后上传' 40-server-web/mayebano-support/index.html
-          ! grep -q 'SFTP' 40-server-web/mayebano-support/index.html
-          ! grep -q 'data-route="A"' 40-server-web/mayebano-support/index.html
-          ! grep -q 'data-route="B"' 40-server-web/mayebano-support/index.html
-          ! grep -q 'ssh-nradio-plugin-installer-2.0.0beta.sh' 40-server-web/mayebano-support/index.html
-          ! grep -q 'install-card' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.2.5 已发布' 40-server-web/mayebano-support/index.html
+          grep -q '2026-06-09 已发布' 40-server-web/mayebano-support/index.html
+          grep -q 'OpenClash 应用商店弹窗兼容' 40-server-web/mayebano-support/index.html
+          grep -q 'C2000MAX 系统状态卡补入 swap' 40-server-web/mayebano-support/index.html
+          grep -q '<b>V2.1.5</b>' 40-server-web/mayebano-support/index.html
+          grep -q '<div class="version">V2.2.5</div>' 40-server-web/mayebano-support/index.html
+          grep -q '<article class="timeline-entry is-current">' 40-server-web/mayebano-support/index.html
+          grep -q 'OpenClash iframe 与原版页兼容' 40-server-web/mayebano-support/index.html
 
       - name: Verify Vercel public routes
         run: |
           grep -q '"/ssh-nradio-plugin-installer.sh"' vercel.json
+          grep -q '"/00-current/ssh-nradio-plugin-installer.sh"' vercel.json
           ! grep -q 'ssh-nradio-plugin-installer-2.0.0beta.sh' vercel.json
 
       - name: Verify checksum record
         run: |
-          grep -q 'ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd' CHECKSUMS.txt
-          grep -q '1872225  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q 'daa0440a041c938df7c3554d26419e283669ebb847bf1e3f7b97f3af1309fee9' CHECKSUMS.txt
-          grep -q '254263  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
-          grep -q '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' CHECKSUMS.txt
-          grep -q '564  vercel.json' CHECKSUMS.txt
-          printf '%s  %s\n' 'ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' 'daa0440a041c938df7c3554d26419e283669ebb847bf1e3f7b97f3af1309fee9' '40-server-web/mayebano-support/index.html' | sha256sum -c -
-          printf '%s  %s\n' '14532b515ea892f02c6f601b9e6b48e98f82004d4c6c8820eb3c10f9980074c6' 'vercel.json' | sha256sum -c -
-
-      - name: Verify license
-        run: |
-          grep -q 'MIT License' LICENSE
-          grep -q 'Copyright (c) 2026 maye' LICENSE
-          grep -q 'MIT License' README.md
+          grep -q '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' CHECKSUMS.txt
+          grep -q '1899977  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q 'e69812fad9c05e6b58231ff27910fcb907832a5502d0d32798736b4578b80e66' CHECKSUMS.txt
+          grep -q '257078  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          printf '%s  %s\n' '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' 'e69812fad9c05e6b58231ff27910fcb907832a5502d0d32798736b4578b80e66' '40-server-web/mayebano-support/index.html' | sha256sum -c -
 
       - name: Verify repository docs
         run: |
-          grep -q 'V2.1.0' README.md
-          grep -q 'V2.1.0' CHANGELOG.md
-          grep -q 'V2.0.70' README.md
-          grep -q 'V2.0.70' CHANGELOG.md
-          grep -q 'V2.0.60' README.md
-          grep -q 'V2.0.55' README.md
-          grep -q 'V2.0.55' CHANGELOG.md
-          grep -q 'V2.0.50' README.md
-          grep -q 'V2.0.50' CHANGELOG.md
-          grep -q 'C8/C5800 eMMC 存储扩展' README.md
-          grep -q 'C8/C5800 eMMC 存储扩展' CHANGELOG.md
-          grep -q 'OpenList 存储扩展断链修复' README.md
-          grep -q 'OpenList 在 C8/C5800 存储扩展后' CHANGELOG.md
-          grep -q 'hybrid 应用还原' README.md
-          grep -q 'hybrid 状态' CHANGELOG.md
-          grep -q 'DDNS-GO 迁移权限修复' README.md
-          grep -q 'DDNS-GO 迁移到扩展盘后' CHANGELOG.md
-          grep -q 'OpenClash ASN.mmdb' README.md
-          grep -q 'ASN.mmdb' CHANGELOG.md
-          grep -q 'NRadio_C2000MAX' README.md
-          grep -q 'NRadio_C2000MAX' CHANGELOG.md
-          grep -q '哈基米傻瓜分流助手' README.md
-          grep -q '哈基米傻瓜分流助手' CHANGELOG.md
-          grep -q 'DDNS-GO' README.md
-          grep -q 'DDNS-GO' CHANGELOG.md
-          grep -q 'OpenList C2000MAX' README.md
-          grep -q 'OpenList lite 包' CHANGELOG.md
-          grep -q 'AdGuardHome' README.md
-          grep -q 'AdGuardHome' CHANGELOG.md
-          grep -q 'Docker 扩展盘安装链接入' README.md
-          grep -q 'Docker 扩展盘安装链接入' CHANGELOG.md
-          grep -q 'rootfs_2nd_data/nradio-apps/docker' README.md
-          grep -q 'rootfs_2nd_data/nradio-apps/docker' CHANGELOG.md
-          grep -q 'NRadio_C5800-688' README.md
-          grep -q 'NRadio_C8-688' CHANGELOG.md
-          grep -q '5G 负载均衡权重设置' README.md
-          grep -q 'mwan3' CHANGELOG.md
-          grep -q 'ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd' README.md
-          grep -q '1872225' README.md
-          grep -q 'GitHub main -> Vercel Production' CONTRIBUTING.md
-          grep -q 'Only the current public script is maintained' SECURITY.md
-          grep -q 'Do not include router passwords' .github/ISSUE_TEMPLATE/bug_report.yml
+          grep -q 'V2.2.5' README.md
+          grep -q 'V2.2.5' CHANGELOG.md
+          grep -q 'V2.2.0' README.md
+          grep -q 'V2.2.0' CHANGELOG.md
+          grep -q 'V2.1.5' README.md
+          grep -q 'V2.1.5' CHANGELOG.md
+          grep -q 'OpenClash iframe' README.md
+          grep -q 'OpenClash iframe' CHANGELOG.md
+          grep -q '2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93' README.md
+          grep -q '1899977' README.md

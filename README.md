@@ -2,7 +2,7 @@
 
 NRadio 官方 NROS2.0 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.1.0`
+- 当前版本：`V2.2.5`
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
@@ -48,6 +48,26 @@ sh ssh-nradio-plugin-installer.sh
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、通用卸载链、风扇控制 |
 
+## V2.2.5 更新
+
+- `SCRIPT_VERSION` 更新为 `V2.2.5`，发布日期 `2026-06-09`。
+- OpenClash 应用商店 iframe 弹窗保留原逻辑，补入黑屏兜底、重载按钮和原版页面顶层跳转。
+- OpenClash 保留六个官方标签页：运行状态、插件设置、覆写设置、配置订阅、配置管理、运行日志。
+- OpenClash 原版页面隐藏 OEM 顶栏、footer、首页、蜂窝、上网、Wi-Fi、终端和更多，并修复半屏显示。
+- 公网页同步 V2.2.5 版本口径，补入 V2.2.0 C2000MAX swap 状态卡日志和 V2.2.5 OpenClash 兼容日志。
+- 当前脚本 SHA256：`2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93`（大小 1899977 字节）。
+
+## V2.2.0 更新
+
+- 应用商店系统状态卡新增 C2000MAX 虚拟内存指标，读取 swap 总量、用量和百分比。
+- 非 C2000MAX 自动隐藏 swap 指标，C2000MAX 未启用 swap 时显示“未启用”。
+
+## V2.1.5 更新
+
+- 新增 `NRadio_C5800-650` / `HC-WT9120` 识别，NROS `1.9.4.n0.c3` 放行。
+- Docker / `rootfs_2nd` 扩展盘链补入 C5800-650。
+- 缺 NRadio 应用商店环境时，启动层直接退出并提示缺失路径。
+
 ## V2.1.0 更新
 
 - Docker 加入常用插件安装菜单第 8 项，仅支持 `NRadio_C5800-688` / `NRadio_C8-688`。
@@ -84,6 +104,9 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.2.5`：OpenClash iframe 黑屏兜底、原版页面顶层跳转、六标签保留、OEM 顶栏隐藏和半屏修复。
+- `V2.2.0`：C2000MAX 应用商店系统状态卡补入 swap 虚拟内存显示。
+- `V2.1.5`：C5800-650 / HC-WT9120 支持、NROS 1.9.4 放行、应用商店缺失启动阻断。
 - `V2.1.0`：Docker 扩展盘安装链接入、C8/C5800 rootfs_2nd 落盘、Docker LuCI 页面、应用商店入口和卸载链接入。
 - `V2.0.70`：5G 负载均衡权重设置、mwan3 运行态生效修复、OpenVPN Mk5 pass10、AdGuardHome 状态页精修、应用商店显示修复、C2000MAX 1 号卡白条修复和公网页粉色视觉精修。
 - `V2.0.60`：C8/C5800 eMMC 存储扩展、OpenList 存储扩展断链修复、hybrid 应用还原、DDNS-GO 迁移权限修复、OpenClash ASN.mmdb 防丢失校验、C2000MAX swap 菜单限制。
@@ -107,7 +130,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.1.0 当前主线脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.2.5 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -120,8 +143,8 @@ sh ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  ec15ab95aca25528f85ed57b1bf2fbc7d243222b2fa1d2262e480892f4da50bd
-Bytes   1872225
+SHA256  2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93
+Bytes   1899977
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
