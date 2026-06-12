@@ -325,6 +325,7 @@
         /* 页脚 */
         footer { padding: 80px 24px; text-align: center; border-top: 1px solid var(--rose-100); background: #fff; }
         .footer-logo { font-size: 1.8rem; font-weight: 1000; color: var(--rose-900); margin-bottom: 10px; display: block; }
+        .footer-pause { max-width: 760px; margin: 0 auto 22px; padding: 18px 22px; border: 1px solid rgba(244, 63, 94, .18); border-radius: 18px; background: rgba(255, 241, 242, .62); color: var(--rose-700); font-size: 14px; font-weight: 900; line-height: 1.8; }
         .footer-copy { color: var(--rose-400); font-size: 13px; font-weight: 700; }
 
         /* ==================== 响应式断点 (Responsive) ==================== */
@@ -370,7 +371,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info">STABLE V2.2.5</div>
+            <div class="nav-v-info">STABLE V2.3.0</div>
         </nav>
     </div>
 
@@ -499,7 +500,8 @@
                 <h2>版本演进档案</h2>
             </div>
             <div class="history-grid">
-                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.2.5 全新架构</h5><p>彻底解决 哈基米 弹窗渲染错位；重构容器注入引擎，修复 OEM 顶栏残留问题。</p></div>
+                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.3.0 龙虾扩展盘</h5><p>PicoClaw / 鲲鹏小龙虾接入 eMMC 扩展盘迁移与还原链，支持核心二进制和数据目录迁移。</p></div>
+                <div class="v-card"><span class="v-badge">V2.2.5</span><h5>OpenClash 兼容</h5><p>彻底解决 哈基米 弹窗渲染错位；重构容器注入引擎，修复 OEM 顶栏残留问题。</p></div>
                 <div class="v-card"><span class="v-badge">V2.2.0</span><h5>动态 Swap</h5><p>应用商店状态面板接入虚拟内存指标，支持监控 Swap 总量、用量及实时百分比。</p></div>
                 <div class="v-card"><span class="v-badge">V2.1.5</span><h5>拦截保护</h5><p>针对 C5800-650 机型提供专属放行算法，强化对非官方系统的环境阻断，保护主闪存。</p></div>
                 <div class="v-card"><span class="v-badge">V2.1.0</span><h5>Docker 存储链</h5><p>Docker 加入安装菜单，数据链路自动迁移至 rootfs_2nd 分区，大幅延长闪存寿命。</p></div>
@@ -545,7 +547,7 @@
                     <p>本项目致力于在尊重原厂系统的基础上，为硬核玩家提供最纯粹的系统增强方案。每一行脚本的推敲都是为了保障您路由器的绝对稳定。</p>
                     <p>代码完全开源透明，您可以放心地将其作为旗舰设备的长期运维伴侣。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.2.5 | 持续活跃维护中</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.3.0 | 后续更新暂缓</p>
                     </div>
                 </div>
             </div>
@@ -554,6 +556,7 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
+        <p class="footer-pause">暂停更新说明：由于暂时没有 ChatGPT 会员，后续脚本功能更新与页面维护将暂停或放缓；现有版本仍可按当前说明继续使用。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 

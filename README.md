@@ -2,9 +2,14 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V2.2.5`
+- 当前本地版本：`V2.3.0`
+- 当前状态：本地待发布；GitHub Release、Actions、远端网页状态以发布当次实测为准。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
+
+## 暂停更新公告
+
+由于暂时没有 ChatGPT 会员，后续脚本功能更新、页面维护、插件适配排查和发布节奏暂停或放缓。现有 `V2.3.0` 本地版本保留当前功能状态；后续如恢复更新，发布前必须重新校验脚本、README、CHANGELOG、CHECKSUMS、repo-check 和公网支持页。
 
 ## 适用设备
 
@@ -47,7 +52,16 @@ sh ssh-nradio-plugin-installer.sh
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
-| 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、通用卸载链、风扇控制 |
+| 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制 |
+
+## V2.3.0 更新
+
+- `SCRIPT_VERSION` 更新为 `V2.3.0`，发布日期 `2026-06-13`。
+- PicoClaw / 鲲鹏小龙虾接入 C8/C5800 `rootfs_2nd` 应用迁移与还原链，覆盖 `5 > 4 > 5` 和 `5 > 4 > 6`。
+- 新增迁移项 `/usr/bin/picoclaw`、`/usr/bin/picoclaw-launcher`、`/.picoclaw`，复用现有 `nradio-apps` 软链记录和服务停启流程。
+- 本次只处理已安装 PicoClaw / 鲲鹏小龙虾的落盘迁移，不负责安装插件、登录模型、OpenClash 规则或账号凭据。
+- 公网页同步 V2.3.0 版本口径，页脚写明后续更新暂缓，因为暂时没有 ChatGPT 会员。
+- 当前脚本 SHA256：`3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243`（大小 1902378 字节）。
 
 ## V2.2.5 更新
 
@@ -105,6 +119,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.3.0`：PicoClaw / 鲲鹏小龙虾接入扩展盘迁移与还原链，公网支持页同步并标注后续更新暂缓。
 - `V2.2.5`：OpenClash iframe 黑屏兜底、原版页面顶层跳转、六标签保留、OEM 顶栏隐藏和半屏修复。
 - `V2.2.0`：C2000MAX 应用商店系统状态卡补入 swap 虚拟内存显示。
 - `V2.1.5`：C5800-650 / HC-WT9120 支持、NROS 2.x 口径放行、应用商店缺失启动阻断。
@@ -131,22 +146,42 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.2.5 当前主线脚本 |
-| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前与 `ai_studio_code.html` 保持一致 |
-| `40-server-web/mayebano-support/ai_studio_code.html` | 新版支持页源稿 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.3.0 当前主线脚本 |
+| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前为 V2.3.0 展示页 |
+| `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
 | `CHANGELOG.md` | 版本记录 |
 | `CONTRIBUTING.md` | 反馈和贡献说明 |
 | `SECURITY.md` | 安全反馈 |
 
+## 发布前校验
+
+本地准备发布前，以下文件必须同步：
+
+- `README.md`
+- `CHANGELOG.md`
+- `CHECKSUMS.txt`
+- `.github/workflows/repo-check.yml`
+- `00-current/ssh-nradio-plugin-installer.sh`
+- `40-server-web/mayebano-support/index.html`
+
+建议本地先跑：
+
+```sh
+git diff --check -- README.md CHANGELOG.md CHECKSUMS.txt .github/workflows/repo-check.yml 00-current/ssh-nradio-plugin-installer.sh 40-server-web/mayebano-support/index.html
+sh -n 00-current/ssh-nradio-plugin-installer.sh
+```
+
+`CHECKSUMS.txt` 记录的是当前本地文件内容；发布 GitHub Release 或更新公网前，需要重新计算并核对脚本、支持页和 `vercel.json` 的 hash 与大小。
+
 ## 脚本校验
 
 当前脚本：
 
 ```text
-SHA256  2666c42c23cddc22ade3911eff0571c967d69821d0cadd3691bb7719a26c6c93
-Bytes   1899977
+SHA256  3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243
+Bytes   1902378
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

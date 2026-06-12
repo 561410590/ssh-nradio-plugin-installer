@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.3.0 - 2026-06-13
+
+- `SCRIPT_VERSION` 更新为 `V2.3.0`。
+- `SCRIPT_RELEASE_DATE` 更新为 `2026-06-13`。
+- PicoClaw / 鲲鹏小龙虾接入 C8/C5800 `rootfs_2nd` 应用迁移与还原链。
+- `5 > 4 > 5` 迁移和 `5 > 4 > 6` 还原新增 `/usr/bin/picoclaw`、`/usr/bin/picoclaw-launcher`、`/.picoclaw`。
+- 迁移复用现有 `nradio-apps` 软链记录、服务停启、运行文件校验和还原流程。
+- 公网页同步 V2.3.0 当前版本口径，并在页脚标注因为暂时没有 ChatGPT 会员，后续更新暂缓。
+
 ## V2.2.5 - 2026-06-09
 
 - `SCRIPT_VERSION` 更新为 `V2.2.5`。

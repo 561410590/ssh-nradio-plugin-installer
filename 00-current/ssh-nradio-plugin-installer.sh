@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.2.5"
+SCRIPT_VERSION="V2.3.0"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-06-09"
+SCRIPT_RELEASE_DATE="2026-06-13"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -6475,7 +6475,10 @@ EOF_APPCENTER_SYS_STATUS_LUA
 
     if ! grep -q 'function action_sys_status()' "$APPCENTER_CONTROLLER" 2>/dev/null; then
         cat "$status_lua_file" >> "$APPCENTER_CONTROLLER"
-    elif ! grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null; then
+    elif ! grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null || \
+         ! grep -q 'local function nradio_appcenter_read_model_name()' "$APPCENTER_CONTROLLER" 2>/dev/null || \
+         ! grep -q 'local function nradio_appcenter_read_swap_memory()' "$APPCENTER_CONTROLLER" 2>/dev/null || \
+         ! grep -q 'now - prev_time < min_interval' "$APPCENTER_CONTROLLER" 2>/dev/null; then
         awk -v lua_file="$status_lua_file" '
             function emit_status() {
                 if (!inserted) {
@@ -6514,6 +6517,9 @@ EOF_APPCENTER_SYS_STATUS_LUA
 
     grep -q 'appcenter", "sys_status"' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing sys_status route"
     grep -q 'function action_sys_status()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing action_sys_status"
+    grep -q 'local function nradio_appcenter_read_model_name()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing model reader"
+    grep -q 'local function nradio_appcenter_read_swap_memory()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing swap reader"
+    grep -q 'now - prev_time < min_interval' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing cpu sampling throttle"
     grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing swap_total"
 }
 
@@ -24660,6 +24666,15 @@ storage_expand_app_spec() {
         adguardhome)
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' "AdGuardHome" "AdGuardHome" "/usr/bin/AdGuardHome" "luci-app-adguardhome" "luci-app-adguardhome" "admin/services/AdGuardHome"
             ;;
+        picoclaw_bin)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "PicoClaw binary" "picoclaw" "/usr/bin/picoclaw" "picoclaw" "picoclaw" "picoclaw"
+            ;;
+        picoclaw_launcher)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "PicoClaw launcher" "picoclaw" "/usr/bin/picoclaw-launcher" "picoclaw" "picoclaw" "picoclaw"
+            ;;
+        picoclaw_home)
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "PicoClaw data" "picoclaw" "/.picoclaw" "picoclaw" "picoclaw" "picoclaw"
+            ;;
         openvpn)
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' "OpenVPN" "openvpn" "/etc/openvpn" "OpenVPN" "luci-app-openvpn" "nradioadv/system/openvpnfull"
             ;;
@@ -24698,6 +24713,9 @@ storage_expand_app_spec_keys() {
     printf '%s\n' \
         openclash \
         adguardhome \
+        picoclaw_bin \
+        picoclaw_launcher \
+        picoclaw_home \
         openvpn \
         openlist \
         zerotier \
@@ -25290,6 +25308,15 @@ storage_expand_require_app_runtime_files() {
     case "$app_key" in
         openclash)
             openclash_require_asn_mmdb
+            ;;
+        picoclaw_bin)
+            [ -x /usr/bin/picoclaw ] || die "PicoClaw runtime missing: /usr/bin/picoclaw"
+            ;;
+        picoclaw_launcher)
+            [ -x /usr/bin/picoclaw-launcher ] || die "PicoClaw launcher missing: /usr/bin/picoclaw-launcher"
+            ;;
+        picoclaw_home)
+            [ -d /.picoclaw ] || die "PicoClaw data directory missing: /.picoclaw"
             ;;
         adguardhome)
             [ -x /usr/bin/AdGuardHome/AdGuardHome ] || die "AdGuardHome 运行文件缺失：/usr/bin/AdGuardHome/AdGuardHome"
@@ -26356,8 +26383,13 @@ html = html:gsub("update_memory%(%s*TOTAL_MEMORY%s*,%s*USED_MEMORY%s*%);", "upda
 write_file(view, html)
 EOF_STORAGE_EXPAND_APPCENTER_PATCH
 
+    patch_appcenter_status_controller
     grep -q 'read_storage_stat("/overlay")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店空间显示补丁写入失败"
     grep -q 'nradio_appcenter_read_cpu_usage_percent' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态采样函数恢复失败"
+    grep -q 'function action_sys_status()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态接口恢复失败"
+    grep -q 'local function nradio_appcenter_read_model_name()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态机型识别恢复失败"
+    grep -q 'local function nradio_appcenter_read_swap_memory()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态 swap 采样恢复失败"
+    grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态 swap 字段恢复失败"
     grep -q 'storage_expand_memory_row' "$TPL" 2>/dev/null || die "应用商店双空间显示补丁写入失败"
     refresh_luci_appcenter
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
