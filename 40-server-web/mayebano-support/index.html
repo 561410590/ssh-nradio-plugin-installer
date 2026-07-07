@@ -256,7 +256,7 @@
             transform: translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(225, 29, 72, 0.2);
         }
         .device-card strong { font-size: 1.8rem; font-weight: 1000; display: block; margin-bottom: 12px; color: #fff; position: relative; z-index: 5; }
-        .device-card span { font-size: 13px; color: var(--rose-300); font-weight: 700; text-transform: uppercase; letter-spacing: 2px; position: relative; z-index: 5; }
+        .device-card span { font-size: 13px; color: var(--rose-300); font-weight: 700; letter-spacing: .5px; line-height: 1.7; position: relative; z-index: 5; }
 
         .device-footer-text {
             color: rgba(255,255,255,0.5); margin-top: 40px; font-weight: 700;
@@ -371,7 +371,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info">STABLE V2.3.0</div>
+            <div class="nav-v-info">STABLE V2.6.0</div>
         </nav>
     </div>
 
@@ -484,14 +484,14 @@
                     <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">精准自检，专属针对性策略优化</p>
                 </div>
                 <div class="device-grid">
-                    <div class="device-card"><strong>NRadio_C8-688</strong><span>旗舰性能之选</span></div>
-                    <div class="device-card"><strong>NRadio_C8-668</strong><span>标准稳定平衡</span></div>
-                    <div class="device-card"><strong>NRadio_C5800-650</strong><span>高性能 5G 终端</span></div>
-                    <div class="device-card"><strong>NRadio_C5800-688</strong><span>旗舰 5G 定制款</span></div>
-                    <div class="device-card"><strong>NRadio_NBCPE</strong><span>企业外置版</span></div>
-                    <div class="device-card"><strong>NRadio_C2000MAX</strong><span>超大存储旗舰</span></div>
+                    <div class="device-card"><strong>NRadio_C8-688</strong><span>C8-688 华为巴龙版 · AX3000 Wi-Fi6 双卡槽 5G CPE</span></div>
+                    <div class="device-card"><strong>NRadio_C8-668</strong><span>C8-668GL 全球版 · AX3000 Wi-Fi6，高通 X62 平台</span></div>
+                    <div class="device-card"><strong>NRadio_C5800-650</strong><span>C5800-650 展锐版 · 企业级 AX3000 Wi-Fi6 四卡槽 5G CPE</span></div>
+                    <div class="device-card"><strong>NRadio_C5800-688</strong><span>C5800-688 华为巴龙版 · 企业级 AX3000 Wi-Fi6 四卡槽 5G CPE</span></div>
+                    <div class="device-card"><strong>NRadio_NBCPE</strong><span>NBPCE / NBCPE 系列 · 5G Wi-Fi6 NB68+AK68 组合</span></div>
+                    <div class="device-card"><strong>NRadio_C2000MAX</strong><span>C2000 MAX · BE3600 Wi-Fi7 Mini 5G CPE</span></div>
+                    <div class="device-card"><strong>NRadio_C2000Pro</strong><span>C2000-518 · AX1500 Wi-Fi6 Mini 5G CPE</span></div>
                 </div>
-                <p class="device-footer-text">后续将支持更多 NRadio 机型。</p>
             </div>
         </section>
 
@@ -500,7 +500,9 @@
                 <h2>版本演进档案</h2>
             </div>
             <div class="history-grid">
-                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.3.0 龙虾扩展盘</h5><p>PicoClaw / 鲲鹏小龙虾接入 eMMC 扩展盘迁移与还原链，支持核心二进制和数据目录迁移。</p></div>
+                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.6.0 C2000Pro 适配</h5><p>新增 C2000-518 / UDX710 识别和兼容应用商店层，补入专属风险提示与官方机型矩阵说明。</p></div>
+                <div class="v-card"><span class="v-badge">V2.5.0</span><h5>哈基米依赖修复</h5><p>新增 OpenClash 本体、核心、ASN.mmdb 与 Model.bin 检查修复，并补充封版工具箱和动作日志。</p></div>
+                <div class="v-card"><span class="v-badge">V2.3.0</span><h5>龙虾扩展盘</h5><p>PicoClaw / 鲲鹏小龙虾接入 eMMC 扩展盘迁移与还原链，支持核心二进制和数据目录迁移。</p></div>
                 <div class="v-card"><span class="v-badge">V2.2.5</span><h5>OpenClash 兼容</h5><p>彻底解决 哈基米 弹窗渲染错位；重构容器注入引擎，修复 OEM 顶栏残留问题。</p></div>
                 <div class="v-card"><span class="v-badge">V2.2.0</span><h5>动态 Swap</h5><p>应用商店状态面板接入虚拟内存指标，支持监控 Swap 总量、用量及实时百分比。</p></div>
                 <div class="v-card"><span class="v-badge">V2.1.5</span><h5>拦截保护</h5><p>针对 C5800-650 机型提供专属放行算法，强化对非官方系统的环境阻断，保护主闪存。</p></div>
@@ -547,7 +549,7 @@
                     <p>本项目致力于在尊重原厂系统的基础上，为硬核玩家提供最纯粹的系统增强方案。每一行脚本的推敲都是为了保障您路由器的绝对稳定。</p>
                     <p>代码完全开源透明，您可以放心地将其作为旗舰设备的长期运维伴侣。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.3.0 | 后续更新暂缓</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.6.0 | C2000Pro 适配已补入</p>
                     </div>
                 </div>
             </div>
@@ -556,7 +558,6 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">暂停更新说明：由于暂时没有 ChatGPT 会员，后续脚本功能更新与页面维护将暂停或放缓；现有版本仍可按当前说明继续使用。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 

@@ -25,10 +25,15 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V2.3.0 script state
+      - name: Verify V2.6.0 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.3.0"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-06-13"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.6.0"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-06-15"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio_C2000Pro' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio C2000Pro compatibility appcenter layer' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'C2000Pro 专属风险提示' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '哈基米依赖检查修复' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '封版工具箱' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-openclash-fallback' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-openclash-wide-css' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'window.top.location.href = "/cgi-bin/luci/admin/services/openclash/client";' 00-current/ssh-nradio-plugin-installer.sh
@@ -50,13 +55,23 @@ jobs:
       - name: Verify support page state
         run: |
           grep -q '<title>NRadio 插件工具 | 官方高级支持中心</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'STABLE V2.3.0' 40-server-web/mayebano-support/index.html
+          grep -q 'STABLE V2.6.0' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C5800-650' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C2000MAX' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.3.0 龙虾扩展盘' 40-server-web/mayebano-support/index.html
+          grep -q 'NRadio_C2000Pro' 40-server-web/mayebano-support/index.html
+          grep -q 'C2000-518' 40-server-web/mayebano-support/index.html
+          grep -q 'C8-668GL 全球版' 40-server-web/mayebano-support/index.html
+          grep -q 'NBPCE / NBCPE 系列' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.6.0 C2000Pro 适配' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.5.0' 40-server-web/mayebano-support/index.html
+          grep -q '哈基米依赖修复' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.3.0' 40-server-web/mayebano-support/index.html
+          grep -q '龙虾扩展盘' 40-server-web/mayebano-support/index.html
           grep -q 'PicoClaw / 鲲鹏小龙虾' 40-server-web/mayebano-support/index.html
-          grep -q '暂停更新说明' 40-server-web/mayebano-support/index.html
-          grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html
+          grep -q '当前状态：Stable V2.6.0' 40-server-web/mayebano-support/index.html
+          ! grep -q '维护说明' 40-server-web/mayebano-support/index.html
+          ! grep -q '暂停更新说明' 40-server-web/mayebano-support/index.html
+          ! grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html
           grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
           grep -q '拦截保护' 40-server-web/mayebano-support/index.html
           grep -q '/_vercel/insights/script.js' 40-server-web/mayebano-support/index.html
@@ -71,18 +86,26 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q '3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243' CHECKSUMS.txt
-          grep -q '1902378  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q '8fd9f733ec2a8f4ab2c5e5c82a3fdeb1c09e90ab9c002d9dea7b3a0c173aa68b' CHECKSUMS.txt
-          grep -q '37304  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q 'e588646829a46fb300824f7e6e8a9f89448ff3b8193b82c6ba8633702a2a510f' CHECKSUMS.txt
+          grep -q '1963835  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q '575305c1e9b78b92be467402e93f96049d24f9af320c476f19e9bd015d12485f' CHECKSUMS.txt
+          grep -q '37822  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
           grep -q '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' CHECKSUMS.txt
           grep -q '36616  40-server-web/mayebano-support/ai_studio_code.html' CHECKSUMS.txt
-          printf '%s  %s\n' '3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' '8fd9f733ec2a8f4ab2c5e5c82a3fdeb1c09e90ab9c002d9dea7b3a0c173aa68b' '40-server-web/mayebano-support/index.html' | sha256sum -c -
+          printf '%s  %s\n' 'e588646829a46fb300824f7e6e8a9f89448ff3b8193b82c6ba8633702a2a510f' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
+          printf '%s  %s\n' '575305c1e9b78b92be467402e93f96049d24f9af320c476f19e9bd015d12485f' '40-server-web/mayebano-support/index.html' | sha256sum -c -
           printf '%s  %s\n' '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' '40-server-web/mayebano-support/ai_studio_code.html' | sha256sum -c -
 
       - name: Verify repository docs
         run: |
+          grep -q 'V2.6.0' README.md
+          grep -q 'V2.6.0' CHANGELOG.md
+          grep -q 'V2.5.0' README.md
+          grep -q 'V2.5.0' CHANGELOG.md
+          grep -q 'C2000Pro' README.md
+          grep -q 'C2000Pro' CHANGELOG.md
+          grep -q '哈基米依赖检查修复' README.md
+          grep -q '哈基米依赖检查修复' CHANGELOG.md
           grep -q 'V2.3.0' README.md
           grep -q 'V2.3.0' CHANGELOG.md
           grep -q 'V2.2.5' README.md
@@ -95,5 +118,5 @@ jobs:
           grep -q 'PicoClaw' CHANGELOG.md
           grep -q 'OpenClash iframe' README.md
           grep -q 'OpenClash iframe' CHANGELOG.md
-          grep -q '3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243' README.md
-          grep -q '1902378' README.md
+          grep -q 'e588646829a46fb300824f7e6e8a9f89448ff3b8193b82c6ba8633702a2a510f' README.md
+          grep -q '1963835' README.md

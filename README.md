@@ -2,14 +2,14 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前本地版本：`V2.3.0`
+- 当前本地版本：`V2.6.0`
 - 当前状态：本地待发布；GitHub Release、Actions、远端网页状态以发布当次实测为准。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 暂停更新公告
 
-由于暂时没有 ChatGPT 会员，后续脚本功能更新、页面维护、插件适配排查和发布节奏暂停或放缓。现有 `V2.3.0` 本地版本保留当前功能状态；后续如恢复更新，发布前必须重新校验脚本、README、CHANGELOG、CHECKSUMS、repo-check 和公网支持页。
+本地脚本已继续维护到 `V2.6.0`。GitHub Release、Actions、公网支持页和下载入口是否同步，必须以发布当次实测为准；发布前必须重新校验脚本、README、CHANGELOG、CHECKSUMS、repo-check 和公网支持页。
 
 ## 适用设备
 
@@ -23,6 +23,7 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 | `NRadio_C5800-688` | `HC-WT9126` | NROS 2.x |
 | `NRadio_NBCPE` | `HC-WT9111` / `NRADIO-WT9111` | NROS 2.x |
 | `NRadio_C2000MAX` | `HC-WT9303` | NROS 2.x |
+| `NRadio_C2000Pro` | `UDX710-MODULE` / `RG200U-CN` | NROS 2.x |
 
 标准 OpenWrt 不适用。脚本不是应用商店安装包，也不是固件升级包。
 
@@ -54,13 +55,32 @@ sh ssh-nradio-plugin-installer.sh
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制 |
 
+## V2.6.0 更新
+
+- `SCRIPT_VERSION` 更新为 `V2.6.0`，发布日期 `2026-06-15`。
+- 新增 `NRadio_C2000Pro` 识别与兼容应用商店层，覆盖 C2000-518 / UDX710 / RG200U-CN 口径。
+- C2000Pro 下写入应用商店前会生成兼容 controller/template；还原时只移除脚本生成的兼容层。
+- C2000Pro 启动免责声明新增专属风险提示，说明资源余量、第三方插件、Web 终端、代理服务和 overlay 写满风险。
+- `5 > 6` 新增哈基米依赖检查修复，覆盖 OpenClash 本体、配置、核心、`ASN.mmdb` 和 `Model.bin`。
+- `5 > 7` 新增封版工具箱，可导出脱敏诊断报告、查看备份清单和动作日志。
+- 公网页支持矩阵补入 `NRadio_C2000Pro`，设备介绍按官方蜂窝组网页面的产品定位更新，版本演进档案同步补入 V2.6.0 和 V2.5.0。
+- 当前脚本 SHA256：`e588646829a46fb300824f7e6e8a9f89448ff3b8193b82c6ba8633702a2a510f`（大小 1963835 字节）。
+
+## V2.5.0 更新
+
+- `SCRIPT_VERSION` 更新为 `V2.5.0`，发布日期 `2026-06-14`。
+- `5 > 6` 新增哈基米依赖检查修复，覆盖 OpenClash 本体、配置、服务、smart/meta 核心、`ASN.mmdb` 和 `Model.bin`。
+- `Model.bin` 支持从多个候选路径识别并复制修复，缺失时使用 OpenClash 官方 LightGBM 模型源和镜像源。
+- `5 > 1` 统一体检增强版补入封版摘要、备份清单摘要和动作日志摘要。
+- `5 > 7` 新增封版工具箱，可导出脱敏诊断报告、查看备份清单和动作日志。
+
 ## V2.3.0 更新
 
 - `SCRIPT_VERSION` 更新为 `V2.3.0`，发布日期 `2026-06-13`。
 - PicoClaw / 鲲鹏小龙虾接入 C8/C5800 `rootfs_2nd` 应用迁移与还原链，覆盖 `5 > 4 > 5` 和 `5 > 4 > 6`。
 - 新增迁移项 `/usr/bin/picoclaw`、`/usr/bin/picoclaw-launcher`、`/.picoclaw`，复用现有 `nradio-apps` 软链记录和服务停启流程。
 - 本次只处理已安装 PicoClaw / 鲲鹏小龙虾的落盘迁移，不负责安装插件、登录模型、OpenClash 规则或账号凭据。
-- 公网页同步 V2.3.0 版本口径，页脚写明后续更新暂缓，因为暂时没有 ChatGPT 会员。
+- 公网页同步 V2.3.0 版本口径。
 - 当前脚本 SHA256：`3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243`（大小 1902378 字节）。
 
 ## V2.2.5 更新
@@ -119,7 +139,9 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
-- `V2.3.0`：PicoClaw / 鲲鹏小龙虾接入扩展盘迁移与还原链，公网支持页同步并标注后续更新暂缓。
+- `V2.6.0`：C2000Pro 兼容应用商店层、专属免责声明、哈基米依赖检查修复、封版工具箱和支持矩阵产品介绍更新。
+- `V2.5.0`：哈基米依赖检查修复、OpenClash 核心/模型/ASN.mmdb 检查、封版摘要和动作日志。
+- `V2.3.0`：PicoClaw / 鲲鹏小龙虾接入扩展盘迁移与还原链。
 - `V2.2.5`：OpenClash iframe 黑屏兜底、原版页面顶层跳转、六标签保留、OEM 顶栏隐藏和半屏修复。
 - `V2.2.0`：C2000MAX 应用商店系统状态卡补入 swap 虚拟内存显示。
 - `V2.1.5`：C5800-650 / HC-WT9120 支持、NROS 2.x 口径放行、应用商店缺失启动阻断。
@@ -146,8 +168,8 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.3.0 当前主线脚本 |
-| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前为 V2.3.0 展示页 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.6.0 当前主线脚本 |
+| `40-server-web/mayebano-support/index.html` | 公网支持页入口，本地支持矩阵已补 C2000Pro |
 | `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -180,8 +202,8 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  3f912f428e44a725ed014f6a461d01661d2ded436d5fbec74a3e79e7e59b1243
-Bytes   1902378
+SHA256  e588646829a46fb300824f7e6e8a9f89448ff3b8193b82c6ba8633702a2a510f
+Bytes   1963835
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
