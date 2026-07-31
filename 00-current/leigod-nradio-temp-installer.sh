@@ -22,6 +22,7 @@ LEIGOD_INIT="/etc/init.d/acc"
 LEIGOD_MANAGER_URL="https://fastly.jsdelivr.net/gh/miaoermua/openwrt-leigodacc-manager@main/leigod.sh"
 LEIGOD_OFFICIAL_INSTALL_URL="http://119.3.40.126/router_plugin_new/plugin_install.sh"
 LEIGOD_INSTALLER="/tmp/leigod-plugin-install.sh"
+LEIGOD_INSTALLER_SHA256="04b52b5c3df51266e6f4d8568cd17679b37fe0cbd4a65ead0aa9958b5dd72f8d"
 
 log() {
     printf '%s\n' "$*"
@@ -64,10 +65,10 @@ download_url() {
 
     rm -f "$out"
     if command -v curl >/dev/null 2>&1; then
-        curl -s -k -L -m 180 "$url" -o "$out" 2>/dev/null || true
+        curl -s -L -m 180 "$url" -o "$out" 2>/dev/null || true
     fi
     if [ ! -s "$out" ] && command -v wget >/dev/null 2>&1; then
-        wget -q -T 180 "$url" -O "$out" --no-check-certificate 2>/dev/null || true
+        wget -q -T 180 "$url" -O "$out" 2>/dev/null || true
     fi
     [ -s "$out" ]
 }
@@ -692,6 +693,9 @@ EOF_LEIGOD_RISK
     fi
 
     download_url "$LEIGOD_OFFICIAL_INSTALL_URL" "$LEIGOD_INSTALLER" || die "下载雷神官方安装脚本失败：$LEIGOD_OFFICIAL_INSTALL_URL"
+    command -v sha256sum >/dev/null 2>&1 || die "系统缺少 sha256sum，拒绝执行远程安装脚本"
+    leigod_installer_actual_sha256="$(sha256sum "$LEIGOD_INSTALLER" 2>/dev/null | awk '{print $1}')"
+    [ "$leigod_installer_actual_sha256" = "$LEIGOD_INSTALLER_SHA256" ] || die "雷神官方安装脚本 SHA256 不匹配，已停止执行"
     grep -q 'leigod\|acc-gw\|accelerator' "$LEIGOD_INSTALLER" 2>/dev/null || die "雷神官方安装脚本内容异常，已停止执行"
     sh "$LEIGOD_INSTALLER" || die "雷神官方安装脚本执行失败"
     sleep 2

@@ -20,6 +20,7 @@ PLUGIN_UNINSTALL_HELPER="/usr/libexec/nradio-plugin-uninstall"
 PLUGIN_UNINSTALL_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/plugin_uninstall.lua"
 QY_INSTALL_URL="http://sd.qiyou.cn"
 QY_INSTALLER="/tmp/qiyou-install.sh"
+QY_INSTALLER_SHA256="deb8730e598e0cda45ad554127f87f2ee534c8a4a12efc8d4865f81fc12d56f1"
 
 log() {
     printf '%s\n' "$*"
@@ -62,10 +63,10 @@ download_url() {
 
     rm -f "$out"
     if command -v curl >/dev/null 2>&1; then
-        curl -s -k -L -m 120 "$url" -o "$out" 2>/dev/null || true
+        curl -s -L -m 120 "$url" -o "$out" 2>/dev/null || true
     fi
     if [ ! -s "$out" ] && command -v wget >/dev/null 2>&1; then
-        wget -q -T 120 "$url" -O "$out" --no-check-certificate 2>/dev/null || true
+        wget -q -T 120 "$url" -O "$out" 2>/dev/null || true
     fi
     [ -s "$out" ]
 }
@@ -102,6 +103,9 @@ install_dependencies() {
 install_qiyou_core() {
     log "[2/7] 下载并执行奇游官方安装脚本"
     download_url "$QY_INSTALL_URL" "$QY_INSTALLER" || die "下载奇游入口脚本失败：$QY_INSTALL_URL"
+    command -v sha256sum >/dev/null 2>&1 || die "系统缺少 sha256sum，拒绝执行远程安装脚本"
+    qy_installer_actual_sha256="$(sha256sum "$QY_INSTALLER" 2>/dev/null | awk '{print $1}')"
+    [ "$qy_installer_actual_sha256" = "$QY_INSTALLER_SHA256" ] || die "奇游入口脚本 SHA256 不匹配，已停止执行"
     grep -q 'qyplug.sh' "$QY_INSTALLER" 2>/dev/null || die "奇游入口脚本内容异常，已停止执行"
     sh "$QY_INSTALLER" || die "奇游官方安装脚本执行失败"
     sleep 2

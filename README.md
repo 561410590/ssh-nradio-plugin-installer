@@ -2,14 +2,14 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前本地版本：`V2.6.0`
+- 当前本地版本：`V2.6.1`
 - 当前状态：本地待发布；GitHub Release、Actions、远端网页状态以发布当次实测为准。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 暂停更新公告
 
-本地脚本已继续维护到 `V2.6.0`。GitHub Release、Actions、公网支持页和下载入口是否同步，必须以发布当次实测为准；发布前必须重新校验脚本、README、CHANGELOG、CHECKSUMS、repo-check 和公网支持页。
+本地脚本已继续维护到 `V2.6.1`。GitHub Release、Actions、公网支持页和下载入口是否同步，必须以发布当次实测为准；发布前必须重新校验脚本、README、CHANGELOG、CHECKSUMS、repo-check 和公网支持页。
 
 ## 适用设备
 
@@ -54,6 +54,15 @@ sh ssh-nradio-plugin-installer.sh
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米傻瓜分流助手、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制 |
+
+## V2.6.1 更新
+
+- 修复 OpenVPN / EasyTier 状态文件单引号转义错误，阻止状态文件加载时的命令注入。
+- 状态文件新增格式标记；旧版无标记状态文件会被拒绝并按现有配置重建。
+- 下载链恢复 TLS 证书校验，移除 `curl -k` 和 `wget --no-check-certificate`。
+- 奇游与雷神临时安装器执行远程脚本前强制校验固定 SHA256。
+- 关键安装链在 `opkg update` 失败时立即停止。
+- CI 新增所有 Shell 文件语法检查、安全下载参数检查和状态值转义回归测试。
 
 ## V2.6.0 更新
 
@@ -139,6 +148,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.6.1`：状态文件命令注入修复、TLS 安全下载、远程脚本固定哈希、opkg 失败阻断和 CI 安全回归。
 - `V2.6.0`：C2000Pro 兼容应用商店层、专属免责声明、哈基米依赖检查修复、封版工具箱和支持矩阵产品介绍更新。
 - `V2.5.0`：哈基米依赖检查修复、OpenClash 核心/模型/ASN.mmdb 检查、封版摘要和动作日志。
 - `V2.3.0`：PicoClaw / 鲲鹏小龙虾接入扩展盘迁移与还原链。
@@ -168,7 +178,7 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.6.0 当前主线脚本 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.6.1 当前主线脚本 |
 | `40-server-web/mayebano-support/index.html` | 公网支持页入口，本地支持矩阵已补 C2000Pro |
 | `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
@@ -192,7 +202,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ```sh
 git diff --check -- README.md CHANGELOG.md CHECKSUMS.txt .github/workflows/repo-check.yml 00-current/ssh-nradio-plugin-installer.sh 40-server-web/mayebano-support/index.html
-sh -n 00-current/ssh-nradio-plugin-installer.sh
+sh tests/repo-check.sh
 ```
 
 `CHECKSUMS.txt` 记录的是当前本地文件内容；发布 GitHub Release 或更新公网前，需要重新计算并核对脚本、支持页和 `vercel.json` 的 hash 与大小。
@@ -202,8 +212,8 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  e588646829a46fb300824f7e6e8a9f89448ff3b8193b82c6ba8633702a2a510f
-Bytes   1963835
+SHA256  c0671413e3568c507812bac67716a1e52b237cca7b29a79a9e3b6483fc51b313
+Bytes   1965393
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
