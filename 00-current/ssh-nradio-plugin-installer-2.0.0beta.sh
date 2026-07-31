@@ -42,6 +42,8 @@ TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
 OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
 OPENCLASH_SMART_DISPLAY_NAME="${OPENCLASH_SMART_DISPLAY_NAME:-哈基米 smart}"
+QIYOU_INSTALLER_SHA256="${QIYOU_INSTALLER_SHA256:-deb8730e598e0cda45ad554127f87f2ee534c8a4a12efc8d4865f81fc12d56f1}"
+LEIGOD_INSTALLER_SHA256="${LEIGOD_INSTALLER_SHA256:-04b52b5c3df51266e6f4d8568cd17679b37fe0cbd4a65ead0aa9958b5dd72f8d}"
 OPENCLASH_MIRRORS="${OPENCLASH_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH} https://fastly.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH} https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH}}"
 OPENCLASH_CORE_VERSION_MIRRORS="${OPENCLASH_CORE_VERSION_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev}"
 OPENCLASH_CORE_SMART_MIRRORS="${OPENCLASH_CORE_SMART_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart}"
@@ -357,7 +359,7 @@ get_url_content_length() {
     fi
 
     if command -v curl >/dev/null 2>&1; then
-        headers="$(curl -k -L -sSI --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" "$url" 2>/dev/null || true)"
+        headers="$(curl -L -sSI --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" "$url" 2>/dev/null || true)"
         content_length="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Ll]ength: *//p' | tail -n 1)"
     fi
 
@@ -1073,7 +1075,7 @@ download_file_once() {
         case "$url" in
             https://api.github.com/repos/*/releases/assets/*)
                 if [ -s "$tmp_out" ]; then
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1084,7 +1086,7 @@ download_file_once() {
                     fi
                 else
                     rm -f "$tmp_out" 2>/dev/null || true
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1097,7 +1099,7 @@ download_file_once() {
                 ;;
             *)
                 if [ -s "$tmp_out" ]; then
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1108,7 +1110,7 @@ download_file_once() {
                     fi
                 else
                     rm -f "$tmp_out" 2>/dev/null || true
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1122,7 +1124,7 @@ download_file_once() {
         esac
     elif command -v wget >/dev/null 2>&1; then
         LAST_DOWNLOAD_TOOL='wget'
-        if run_download_with_progress "$url" "$tmp_out" wget -q -c --no-check-certificate -T "$DOWNLOAD_STALL_TIME" -t "$DOWNLOAD_RETRY" -O "$tmp_out" "$url"; then
+        if run_download_with_progress "$url" "$tmp_out" wget -q -c -T "$DOWNLOAD_STALL_TIME" -t "$DOWNLOAD_RETRY" -O "$tmp_out" "$url"; then
             LAST_DOWNLOAD_RC='0'
         else
             LAST_DOWNLOAD_RC="$?"
@@ -1393,7 +1395,7 @@ probe_url_http_ms() {
         return 0
     }
 
-    probe_out="$(curl -k -L -I -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -L -I -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
     probe_code="${probe_out%%|*}"
     probe_time="${probe_out#*|}"
 
@@ -1404,7 +1406,7 @@ probe_url_http_ms() {
         return 0
     fi
 
-    probe_out="$(curl -k -L -r 0-0 -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -L -r 0-0 -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
     probe_code="${probe_out%%|*}"
     probe_time="${probe_out#*|}"
 
@@ -1427,7 +1429,7 @@ probe_url_partial_download_ms() {
         return 0
     }
 
-    probe_out="$(curl -k -L -r "0-$probe_range_end" -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_total}|%{size_download}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -L -r "0-$probe_range_end" -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_total}|%{size_download}' "$probe_url" 2>/dev/null || true)"
     probe_code="${probe_out%%|*}"
     probe_rest="${probe_out#*|}"
     probe_time="${probe_rest%%|*}"
@@ -1959,6 +1961,12 @@ LEIGOD_INIT="/etc/init.d/acc"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
 EASYTIER_ROUTE_APPLY_SCRIPT="/etc/easytier/route-apply.sh"
 
+state_file_is_v2() {
+    state_file="$1"
+    [ -f "$state_file" ] || return 1
+    [ "$(sed -n '1p' "$state_file" 2>/dev/null || true)" = "NRADIO_STATE_FORMAT='2'" ]
+}
+
 stop_disable() {
     init_script="$1"
     [ -f "$init_script" ] || return 0
@@ -2051,6 +2059,7 @@ load_easytier_route_state() {
     ET_ROUTE_LAN_IF=''
     ET_ROUTE_TUN_IF=''
     [ -f "$EASYTIER_ROUTE_STATE_FILE" ] || return 0
+    state_file_is_v2 "$EASYTIER_ROUTE_STATE_FILE" || return 0
     . "$EASYTIER_ROUTE_STATE_FILE" 2>/dev/null || true
 }
 
@@ -2254,7 +2263,7 @@ normalize_openvpn_route_state_vars() {
 load_openvpn_route_state_for_cleanup() {
     clear_openvpn_route_state_vars
     [ -f "$ROUTE_STATE_FILE" ] || return 0
-    if ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
+    if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
         clear_openvpn_route_state_vars
         return 0
     fi
@@ -2844,12 +2853,19 @@ EOF_PLUGIN_UNINSTALL_CONTROLLER
 }
 
 shell_quote() {
-    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\''/g")"
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+state_file_is_v2() {
+    state_file="$1"
+    [ -f "$state_file" ] || return 1
+    [ "$(sed -n '1p' "$state_file" 2>/dev/null || true)" = "NRADIO_STATE_FORMAT='2'" ]
 }
 
 write_openvpn_runtime_state_file() {
     ensure_state_dir
     {
+        printf '%s\n' "NRADIO_STATE_FORMAT='2'"
         printf 'OVPN_SERVER=%s\n' "$(shell_quote "${OVPN_SERVER:-}")"
         printf 'OVPN_PORT=%s\n' "$(shell_quote "${OVPN_PORT:-}")"
         printf 'OVPN_TRANSPORT=%s\n' "$(shell_quote "${OVPN_TRANSPORT:-}")"
@@ -2956,7 +2972,7 @@ load_openvpn_runtime_state() {
         synthesize_openvpn_runtime_state_from_current_profile
     fi
     if [ -f "$RUNTIME_STATE_FILE" ]; then
-        if ! . "$RUNTIME_STATE_FILE" 2>/dev/null; then
+        if ! state_file_is_v2 "$RUNTIME_STATE_FILE" || ! . "$RUNTIME_STATE_FILE" 2>/dev/null; then
             rm -f "$RUNTIME_STATE_FILE"
             clear_openvpn_runtime_state_vars
         fi
@@ -2989,6 +3005,7 @@ save_openvpn_route_state() {
     route_map_enable_save='n'
     [ "${route_map_enable:-0}" = '1' ] && route_map_enable_save='y'
     {
+        printf '%s\n' "NRADIO_STATE_FORMAT='2'"
         printf 'ROUTE_LAN_IF=%s\n' "$(shell_quote "$lan_if")"
         printf 'ROUTE_TUN_IF=%s\n' "$(shell_quote "$tun_if")"
         printf 'ROUTE_LAN_SUBNET=%s\n' "$(shell_quote "$lan_subnet")"
@@ -3054,7 +3071,7 @@ load_openvpn_route_state() {
     ensure_state_dir
     clear_openvpn_route_state_vars
     if [ -f "$ROUTE_STATE_FILE" ]; then
-        if ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
+        if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
             rm -f "$ROUTE_STATE_FILE"
             clear_openvpn_route_state_vars
         else
@@ -3246,7 +3263,7 @@ load_openvpn_route_state_snapshot() {
     [ -f "$ROUTE_STATE_FILE" ] || return 0
 
     clear_openvpn_route_state_vars
-    if ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
+    if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
         rm -f "$ROUTE_STATE_FILE"
         clear_openvpn_route_state_vars
         return 0
@@ -3444,7 +3461,8 @@ ensure_opkg_update() {
         return 0
     fi
 
-    log "警告: 当前软件源执行 opkg update 失败，保持现有源配置不变"
+    log "错误: 当前软件源执行 opkg update 失败，请查看 /tmp/nradio-plugin-opkg.update.log"
+    return 1
 }
 
 ensure_packages() {
@@ -3622,7 +3640,7 @@ get_github_release_asset_browser_url() {
     [ -n "$api_url" ] || return 1
     [ -n "$asset_name" ] || return 1
 
-    api_response="$(curl -k -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
+    api_response="$(curl -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
     [ -n "$api_response" ] || return 1
 
     browser_candidates="$(printf '%s' "$api_response" | tr -d '\r\n' | sed 's/[[:space:]]*,[[:space:]]*"/\n"/g' | sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed 's#\\/#/#g')"
@@ -3648,7 +3666,7 @@ get_github_release_asset_api_url() {
     [ -n "$api_url" ] || return 1
     [ -n "$asset_name" ] || return 1
 
-    api_response="$(curl -k -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
+    api_response="$(curl -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
     [ -n "$api_response" ] || return 1
 
     asset_api_url="$(printf '%s' "$api_response" | tr -d '\r\n' | sed 's#\\/#/#g' | sed -n 's#.*"url"[[:space:]]*:[[:space:]]*"\(https://api\.github\.com/repos/[^"]*/releases/assets/[^"]*\)".*"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*/'"$asset_name"'".*#\1#p')"
@@ -3663,10 +3681,10 @@ run_github_release_asset_resolve_curl() {
 
     case "$resolve_url" in
         https://api.github.com/repos/*/releases/assets/*)
-            curl -k "$@" -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
+            curl "$@" -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
             ;;
         *)
-            curl -k "$@" -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
+            curl "$@" -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
             ;;
     esac
 }
@@ -4197,7 +4215,7 @@ function act_status()
 	e.etwebram = command5:read("*all")
 	command5:close()
 
-	local command8 = io.popen("([ -s /tmp/easytiernew.tag ] && cat /tmp/easytiernew.tag ) || ( curl -L -k -s --connect-timeout 3 --user-agent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36' https://api.github.com/repos/EasyTier/EasyTier/releases/latest | grep tag_name | sed 's/[^0-9.]*//g' >/tmp/easytiernew.tag && cat /tmp/easytiernew.tag )")
+	local command8 = io.popen("([ -s /tmp/easytiernew.tag ] && cat /tmp/easytiernew.tag ) || ( curl -L -s --connect-timeout 3 --user-agent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36' https://api.github.com/repos/EasyTier/EasyTier/releases/latest | grep tag_name | sed 's/[^0-9.]*//g' >/tmp/easytiernew.tag && cat /tmp/easytiernew.tag )")
 	e.etnewtag = command8:read("*all")
 	command8:close()
 
@@ -8197,7 +8215,7 @@ install_openclash() {
     [ -n "${package_mirror_base:-}" ] && log "安装包来源: $package_mirror_base"
 
     log_stage 3 7 "刷新 opkg 软件源并检查依赖"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 $OPENCLASH_DISPLAY_NAME 安装"
     ensure_packages dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-inet-diag kmod-nft-tproxy kmod-tun unzip
 
     log_stage 4 7 "重打包并安装 $OPENCLASH_DISPLAY_NAME"
@@ -9906,7 +9924,7 @@ install_zerotier() {
     zerotier_download_size="$(wc -c < "$zerotier_ipk" | tr -d ' ')"
 
     log_stage 3 5 "安装 ZeroTier 核心并准备配置"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 ZeroTier 安装"
     install_ipk_file "$zerotier_ipk" "ZeroTier"
     ensure_zerotier_config_defaults
     [ -n "$zerotier_version" ] || zerotier_version="$(get_installed_package_version zerotier 2>/dev/null || true)"
@@ -10023,7 +10041,7 @@ install_easytier() {
     easytier_download_size="$(wc -c < "$easytier_archive" | tr -d ' ')"
 
     log_stage 3 5 "解压安装 $EASYTIER_DISPLAY_NAME 并修正 LuCI 控制器"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 $EASYTIER_DISPLAY_NAME 安装"
     ensure_packages kmod-tun unzip
     extract_easytier_release_bundle "$easytier_archive" "$easytier_unpack"
     for candidate in \
@@ -10476,13 +10494,21 @@ load_easytier_route_state() {
     ET_ROUTE_LAN_IF=''
     ET_ROUTE_TUN_IF=''
     if [ -f "$EASYTIER_ROUTE_STATE_FILE" ]; then
-        . "$EASYTIER_ROUTE_STATE_FILE" 2>/dev/null || true
+        if ! state_file_is_v2 "$EASYTIER_ROUTE_STATE_FILE" || ! . "$EASYTIER_ROUTE_STATE_FILE" 2>/dev/null; then
+            rm -f "$EASYTIER_ROUTE_STATE_FILE"
+            ET_ROUTE_VIRTUAL_IP=''
+            ET_ROUTE_LOCAL_SUBNET=''
+            ET_ROUTE_REMOTE_SUBNET=''
+            ET_ROUTE_LAN_IF=''
+            ET_ROUTE_TUN_IF=''
+        fi
     fi
 }
 
 save_easytier_route_state() {
     ensure_state_dir
     {
+        printf '%s\n' "NRADIO_STATE_FORMAT='2'"
         printf 'ET_ROUTE_VIRTUAL_IP=%s\n' "$(shell_quote "${ET_ROUTE_VIRTUAL_IP:-}")"
         printf 'ET_ROUTE_LOCAL_SUBNET=%s\n' "$(shell_quote "${ET_ROUTE_LOCAL_SUBNET:-}")"
         printf 'ET_ROUTE_REMOTE_SUBNET=%s\n' "$(shell_quote "${ET_ROUTE_REMOTE_SUBNET:-}")"
@@ -10657,6 +10683,7 @@ log() { printf '%s\n' "\$*"; }
 die() { printf 'ERROR: %s\n' "\$*" >&2; exit 1; }
 
 [ -f "\$STATE_FILE" ] || die '未找到 EasyTier 路由状态文件'
+[ "\$(sed -n '1p' "\$STATE_FILE" 2>/dev/null || true)" = "NRADIO_STATE_FORMAT='2'" ] || die 'EasyTier 路由状态文件格式不安全，请重新运行路由向导'
 . "\$STATE_FILE" 2>/dev/null || die '读取 EasyTier 路由状态文件失败'
 
 [ -n "\${ET_ROUTE_REMOTE_SUBNET:-}" ] || die '未找到远端 LAN 网段'
@@ -17567,7 +17594,7 @@ get_url_content_length() {
     content_length=""
 
     if command -v curl >/dev/null 2>&1; then
-        headers="$(curl -k -L -sSI --connect-timeout 15 --max-time 20 "$url" 2>/dev/null || true)"
+        headers="$(curl -L -sSI --connect-timeout 15 --max-time 20 "$url" 2>/dev/null || true)"
         content_length="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Ll]ength: *//p' | tail -n 1)"
     fi
 
@@ -17733,7 +17760,7 @@ download_file() {
     if command -v curl >/dev/null 2>&1; then
         run_download_with_progress "$download_url" "$download_tmp" curl -fL --retry 3 --silent --show-error --connect-timeout 15 --max-time 900 -o "$download_tmp" "$download_url" || return 1
     elif command -v wget >/dev/null 2>&1; then
-        run_download_with_progress "$download_url" "$download_tmp" wget -q --no-check-certificate -O "$download_tmp" "$download_url" || return 1
+        run_download_with_progress "$download_url" "$download_tmp" wget -q -O "$download_tmp" "$download_url" || return 1
     elif command -v uclient-fetch >/dev/null 2>&1; then
         run_download_with_progress "$download_url" "$download_tmp" uclient-fetch -q -O "$download_tmp" "$download_url" || return 1
     else
@@ -19601,6 +19628,20 @@ qiyou_install_assets() {
     refresh_luci_appcenter
 }
 
+verify_remote_script_sha256() {
+    verify_label="$1"
+    verify_file="$2"
+    verify_expected="$3"
+
+    [ -s "$verify_file" ] || die "$verify_label 下载文件为空，拒绝执行"
+    command -v sha256sum >/dev/null 2>&1 || die "$verify_label 无法校验 SHA256：系统缺少 sha256sum，拒绝执行远程脚本"
+    printf '%s\n' "$verify_expected" | grep -Eq '^[0-9A-Fa-f]{64}$' || die "$verify_label 未配置有效的固定 SHA256，拒绝执行远程脚本"
+
+    verify_actual="$(sha256sum "$verify_file" 2>/dev/null | awk '{print $1}')"
+    verify_expected="$(printf '%s' "$verify_expected" | tr 'A-F' 'a-f')"
+    [ "$verify_actual" = "$verify_expected" ] || die "$verify_label SHA256 不匹配，已停止执行"
+}
+
 qiyou_install_integrated() {
     game_accel_require_appcenter
     confirm_or_exit "确认安装奇游联机宝官方脚本并接入 NRadio 应用商店吗？"
@@ -19611,6 +19652,7 @@ qiyou_install_integrated() {
     log "[2/7] 下载并执行奇游官方安装脚本"
     download_file "http://sd.qiyou.cn" "/tmp/qiyou-install.sh" || die "下载奇游入口脚本失败"
     grep -q 'qyplug.sh' /tmp/qiyou-install.sh 2>/dev/null || die "奇游入口脚本内容异常，已停止执行"
+    verify_remote_script_sha256 "奇游入口脚本" /tmp/qiyou-install.sh "$QIYOU_INSTALLER_SHA256"
     sh /tmp/qiyou-install.sh || die "奇游官方安装脚本执行失败"
     sleep 2
     [ -f /etc/qy/qy_acc.sh ] || die "奇游安装后未发现 /etc/qy/qy_acc.sh"
@@ -19837,6 +19879,7 @@ EOF_LEIGOD_RISK
     log "[2/6] 下载并执行雷神官方安装脚本"
     download_file "http://119.3.40.126/router_plugin_new/plugin_install.sh" "/tmp/leigod-plugin-install.sh" || die "下载雷神官方安装脚本失败"
     grep -q 'leigod\|acc-gw\|accelerator' /tmp/leigod-plugin-install.sh 2>/dev/null || die "雷神官方安装脚本内容异常，已停止执行"
+    verify_remote_script_sha256 "雷神官方安装脚本" /tmp/leigod-plugin-install.sh "$LEIGOD_INSTALLER_SHA256"
     sh /tmp/leigod-plugin-install.sh || die "雷神官方安装脚本执行失败"
     sleep 2
     leigod_installed || die "安装后仍未检测到 /usr/sbin/leigod/acc-gw.router.*"

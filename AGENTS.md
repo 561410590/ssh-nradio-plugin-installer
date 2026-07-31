@@ -2,8 +2,8 @@
 
 ## First Read
 
-- On every resume, read `00-current/NRadio统一记忆文档.txt` before acting.
-- Treat that file as the current project authority for version, release state, router boundaries, and stale-work warnings.
+- On every resume, read `00-current/NRadio统一记忆文档.txt` when it exists.
+- Public clones intentionally omit that private file; when absent, use tracked `README.md`, `CHANGELOG.md`, `CHECKSUMS.txt`, and `.github/workflows/repo-check.yml` as the public project authority.
 - Old documents in `90-backup/` and `99-archive/` are historical references only unless the user explicitly points to them.
 
 ## Priority Rules
@@ -65,10 +65,10 @@
 ## Current Authority
 
 - Current main script: `00-current/ssh-nradio-plugin-installer.sh`
-- Current script version: `V2.0.30`
-- Current release date: `2026-05-04`
+- Current script version: `V2.6.1`
+- Current local release date: `2026-07-31`
 - Public page: `40-server-web/mayebano-support/index.html`
-- Current public release: `https://github.com/561410590/ssh-nradio-plugin-installer/releases/tag/v2.0.30`
+- Current public release and deployed page state must be verified in the same turn; do not infer them from local files.
 
 ## Release Hygiene
 
