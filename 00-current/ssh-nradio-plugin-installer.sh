@@ -2,11 +2,11 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.3.0"
+SCRIPT_VERSION="V2.7.5"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-06-13"
+SCRIPT_RELEASE_DATE="2026-08-02"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
-SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX 官方NROS系统"
+SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
 SCRIPT_DISCLAIMER="此脚本为免费分享的非商业项目，禁止任何形式的付费传播或倒卖"
 SCRIPT_SUPPORT_NOTICE="自愿支持仅用于脚本维护与后续更新"
@@ -18,6 +18,7 @@ FEEDS="/etc/opkg/distfeeds.conf"
 OPKG_LOCK_FILE="${OPKG_LOCK_FILE:-/var/lock/opkg.lock}"
 BACKUP_DIR="/root/nradio-plugin-fix"
 STATE_DIR="/root/.nradio-plugin-menu"
+ACTION_HISTORY_FILE="$STATE_DIR/action-history.log"
 CURRENT_DETECTED_MODEL=""
 RUNTIME_STATE_FILE="$STATE_DIR/openvpn_runtime.conf"
 ROUTE_STATE_FILE="$STATE_DIR/openvpn_routes.conf"
@@ -30,7 +31,7 @@ RUNTIME_TLS_FILE="$STATE_DIR/openvpn_tls.key"
 RUNTIME_EXTRA_FILE="$STATE_DIR/openvpn_extra.conf"
 ROUTE_LIST_FILE="$STATE_DIR/openvpn_routes.list"
 ROUTE_MAP_LIST_FILE="$STATE_DIR/openvpn_map_peers.list"
-DISCLAIMER_ACCEPT_VERSION="20260424-v1501-model-disclaimer-dynamic-full-v2"
+DISCLAIMER_ACCEPT_VERSION="20260615-v260-model-disclaimer-c2000pro-risk-v1"
 DISCLAIMER_ACCEPTED_FLAG_FILE="$STATE_DIR/disclaimer_accepted_${DISCLAIMER_ACCEPT_VERSION}.flag"
 EASYTIER_ROUTE_APPLY_SCRIPT="/etc/easytier/route-apply.sh"
 EASYTIER_CONFIG_FILE="/etc/easytier/config.toml"
@@ -74,6 +75,7 @@ OPENCLASH_MIRRORS="${OPENCLASH_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/Op
 OPENCLASH_CORE_VERSION_MIRRORS="${OPENCLASH_CORE_VERSION_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev}"
 OPENCLASH_CORE_SMART_MIRRORS="${OPENCLASH_CORE_SMART_MIRRORS:-https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart}"
 OPENCLASH_GEOASN_MIRRORS="${OPENCLASH_GEOASN_MIRRORS:-https://testingcf.jsdelivr.net/gh/xishang0128/geoip@release https://cdn.jsdelivr.net/gh/xishang0128/geoip@release https://fastly.jsdelivr.net/gh/xishang0128/geoip@release}"
+OPENCLASH_MODEL_URLS="${OPENCLASH_MODEL_URLS:-https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin https://ghproxy.net/https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin https://mirror.ghproxy.com/https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin https://gh-proxy.com/https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin}"
 ADGUARDHOME_VERSION="${ADGUARDHOME_VERSION:-1.8-9}"
 ADGUARDHOME_IPK_URLS="${ADGUARDHOME_IPK_URLS:-https://ghproxy.net/https://github.com/rufengsuixing/luci-app-adguardhome/releases/download/${ADGUARDHOME_VERSION}/luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk https://mirror.ghproxy.com/https://github.com/rufengsuixing/luci-app-adguardhome/releases/download/${ADGUARDHOME_VERSION}/luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk https://gh-proxy.com/https://github.com/rufengsuixing/luci-app-adguardhome/releases/download/${ADGUARDHOME_VERSION}/luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk}"
 ADGUARDHOME_CORE_MIRRORS="${ADGUARDHOME_CORE_MIRRORS:-https://static.adtidy.org/adguardhome/release}"
@@ -874,14 +876,66 @@ require_startup_disclaimer_acceptance_once() {
     esac
 }
 
+detect_current_nradio_model_quiet() {
+    model="${CURRENT_DETECTED_MODEL:-}"
+    if [ -z "$model" ]; then
+        model="$(normalize_nradio_model "$(detect_board_model_raw)" "$(detect_board_name_raw)" "$(detect_board_compatible_raw)" 2>/dev/null || true)"
+    fi
+    printf '%s\n' "$model"
+}
+
+is_current_model_c2000pro() {
+    [ "$(detect_current_nradio_model_quiet 2>/dev/null || true)" = 'NRadio_C2000Pro' ]
+}
+
+is_c2000pro_compat_appcenter_file() {
+    target_file="$1"
+    [ -f "$target_file" ] || return 1
+    grep -q 'NRadio C2000Pro compatibility appcenter layer' "$target_file" 2>/dev/null
+}
+
+detect_appcenter_environment_profile() {
+    profile_model="$(detect_current_nradio_model_quiet 2>/dev/null || true)"
+
+    if [ "$profile_model" = 'NRadio_C2000Pro' ]; then
+        if [ -f "$CFG" ] && is_c2000pro_compat_appcenter_file "$TPL" && is_c2000pro_compat_appcenter_file "$APPCENTER_CONTROLLER"; then
+            printf '%s\n' 'c2000pro_compat'
+        else
+            printf '%s\n' 'c2000pro_base'
+        fi
+        return 0
+    fi
+
+    if [ -f "$CFG" ] && [ -f "$TPL" ]; then
+        printf '%s\n' 'legacy_appcenter'
+    else
+        printf '%s\n' 'missing'
+    fi
+}
+
+is_c2000pro_appcenter_environment() {
+    case "$(detect_appcenter_environment_profile 2>/dev/null || true)" in
+        c2000pro_base|c2000pro_compat)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 has_nradio_oem_appcenter() {
-    [ -f "$CFG" ] && [ -f "$TPL" ]
+    case "$(detect_appcenter_environment_profile 2>/dev/null || true)" in
+        legacy_appcenter|c2000pro_compat)
+            return 0
+            ;;
+    esac
+    return 1
 }
 
 collect_missing_nradio_paths() {
     missing=""
     [ -f "$CFG" ] || missing="$missing $CFG"
     [ -f "$TPL" ] || missing="$missing $TPL"
+    [ -f "$APPCENTER_CONTROLLER" ] || missing="$missing $APPCENTER_CONTROLLER"
     printf '%s\n' "${missing# }"
 }
 
@@ -940,6 +994,9 @@ normalize_nradio_model() {
             ;;
         *HC-WT9303*)
             printf '%s\n' 'NRadio_C2000MAX'
+            ;;
+        *SPREADTRUM\ UDX710_4H10*|*SPRD,UDX710_4H10*|*UDX710-MODULE*|*UDX710\ MODULE*|*RG200U-CN*)
+            printf '%s\n' 'NRadio_C2000Pro'
             ;;
         *)
             printf '%s\n' ''
@@ -1156,10 +1213,24 @@ require_supported_nradio_model_environment() {
 }
 
 log_nradio_oem_environment_hint() {
-    if has_nradio_oem_appcenter; then
-        log "环境检测: 已检测到 NRadio 应用商店"
-        return 0
-    fi
+    appcenter_profile="$(detect_appcenter_environment_profile 2>/dev/null || true)"
+    case "$appcenter_profile" in
+        legacy_appcenter)
+            log "环境检测: 已检测到 NRadio 应用商店"
+            return 0
+            ;;
+        c2000pro_compat)
+            log "环境检测: 已检测到 C2000Pro 兼容应用商店层"
+            return 0
+            ;;
+        c2000pro_base)
+            missing_paths="$(collect_missing_nradio_paths)"
+            log "环境检测: C2000Pro 原厂 NRadio/QuecHALO UI，未检测到旧应用商店"
+            log "提示: 可进入主菜单；写入应用商店前会先生成 C2000Pro 兼容商店层"
+            [ -n "$missing_paths" ] && log "missing: $missing_paths"
+            return 0
+            ;;
+    esac
 
     missing_paths="$(collect_missing_nradio_paths)"
     log "环境检测: 未检测到 NRadio 应用商店"
@@ -1168,7 +1239,26 @@ log_nradio_oem_environment_hint() {
 }
 
 
+require_nradio_appcenter_startup_environment() {
+    appcenter_profile="$(detect_appcenter_environment_profile 2>/dev/null || true)"
+    case "$appcenter_profile" in
+        legacy_appcenter|c2000pro_compat|c2000pro_base)
+            return 0
+            ;;
+    esac
+
+    missing_paths="$(collect_missing_nradio_paths)"
+    missing_suffix=""
+    [ -n "$missing_paths" ] && missing_suffix=" (missing: $missing_paths)"
+    die "unsupported firmware: 未检测到 NRadio 应用商店环境；本脚本仅适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt$missing_suffix"
+}
+
 require_nradio_oem_appcenter() {
+    if is_c2000pro_appcenter_environment; then
+        ensure_c2000pro_compat_appcenter
+        return 0
+    fi
+
     has_nradio_oem_appcenter && return 0
     missing_paths="$(collect_missing_nradio_paths)"
     missing_suffix=""
@@ -2147,6 +2237,246 @@ ensure_state_dir() {
     chmod 700 "$STATE_DIR" 2>/dev/null || true
 }
 
+nradio_sanitize_stream() {
+    sed "s#https://[^[:space:]<>]*#<URL>#g; s#http://[^[:space:]<>]*#<URL>#g; s#[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*[:=][[:space:]]*[^[:space:]]*#password=<redacted>#g; s#[Tt][Oo][Kk][Ee][Nn][[:space:]]*[:=][[:space:]]*[^[:space:]]*#token=<redacted>#g; s#[Cc][Oo][Oo][Kk][Ii][Ee][[:space:]]*[:=][[:space:]]*[^[:space:]]*#cookie=<redacted>#g; s#[Ss][Ee][Cc][Rr][Ee][Tt][[:space:]]*[:=][[:space:]]*[^[:space:]]*#secret=<redacted>#g; s#[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-][Kk][Ee][Yy][[:space:]]*[:=][[:space:]]*[^[:space:]]*#private_key=<redacted>#g; s#[Bb][Ee][Aa][Rr][Ee][Rr][[:space:]][^[:space:]]*#Bearer <redacted>#g"
+}
+
+nradio_action_safe_field() {
+    printf '%s' "$1" | tr '\t\r\n' '   ' | nradio_sanitize_stream
+}
+
+record_action_history() {
+    action_path="$(nradio_action_safe_field "$1")"
+    action_name="$(nradio_action_safe_field "$2")"
+    action_result="$(nradio_action_safe_field "$3")"
+    action_backup="$(nradio_action_safe_field "${4:-${BACKUP_DIR:-}}")"
+    action_time="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' "$TS")"
+
+    mkdir -p "$STATE_DIR" >/dev/null 2>&1 || return 0
+    chmod 700 "$STATE_DIR" 2>/dev/null || true
+    printf '%s\tversion=%s\tpath=%s\taction=%s\tbackup=%s\tresult=%s\n' \
+        "$action_time" "$SCRIPT_VERSION" "$action_path" "$action_name" "${action_backup:-none}" "${action_result:-unknown}" >> "$ACTION_HISTORY_FILE" 2>/dev/null || return 0
+    chmod 600 "$ACTION_HISTORY_FILE" 2>/dev/null || true
+
+    if command -v tail >/dev/null 2>&1 && [ -f "$ACTION_HISTORY_FILE" ]; then
+        action_history_lines="$(wc -l < "$ACTION_HISTORY_FILE" 2>/dev/null | tr -d ' ' || printf '0')"
+        case "$action_history_lines" in
+            ''|*[!0-9]*) action_history_lines=0 ;;
+        esac
+        if [ "$action_history_lines" -gt 300 ] 2>/dev/null; then
+            action_history_tmp="/tmp/nradio-action-history.$$"
+            tail -n 300 "$ACTION_HISTORY_FILE" > "$action_history_tmp" 2>/dev/null && mv "$action_history_tmp" "$ACTION_HISTORY_FILE" 2>/dev/null || rm -f "$action_history_tmp" 2>/dev/null || true
+            chmod 600 "$ACTION_HISTORY_FILE" 2>/dev/null || true
+        fi
+    fi
+}
+
+run_recorded_menu_feature() {
+    recorded_menu_path="$1"
+    recorded_action_name="$2"
+    shift 2
+
+    "$@"
+    recorded_rc="$?"
+    [ "$recorded_rc" = '2' ] || record_action_history "$recorded_menu_path" "$recorded_action_name" "$recorded_rc" "${BACKUP_DIR:-}"
+    return "$recorded_rc"
+}
+
+nradio_print_backup_inventory_summary() {
+    backup_root="${1:-$BACKUP_DIR}"
+    backup_limit="${2:-10}"
+
+    selfcheck_print_header "备份清单摘要"
+    if [ -z "$backup_root" ] || [ ! -d "$backup_root" ]; then
+        log "备份:   ${backup_root:-未设置} = 暂无"
+    else
+        backup_count="$(find "$backup_root" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')"
+        case "$backup_count" in
+            ''|*[!0-9]*) backup_count=0 ;;
+        esac
+        log "备份:   $backup_root = ${backup_count} 个文件"
+        if [ "$backup_count" -gt 0 ] 2>/dev/null; then
+            find "$backup_root" -type f 2>/dev/null | sed -n "1,${backup_limit}p" | while IFS= read -r backup_item; do
+                [ -n "$backup_item" ] || continue
+                ls -ld "$backup_item" 2>/dev/null || true
+            done | sed 's/^/备份项: /'
+        fi
+    fi
+
+    if [ -d "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR" ]; then
+        hakimi_backup_count="$(find "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')"
+        log "备份:   $OPENCLASH_CUSTOM_RULES_BACKUP_DIR = ${hakimi_backup_count:-0} 个文件"
+    fi
+    if [ -n "${DOCKER_ROOT:-}" ] && [ -d "$DOCKER_ROOT/backup" ]; then
+        docker_backup_count="$(find "$DOCKER_ROOT/backup" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')"
+        log "备份:   $DOCKER_ROOT/backup = ${docker_backup_count:-0} 个文件"
+    fi
+    log "说明:   此处只列清单，不恢复文件"
+}
+
+nradio_print_action_history_summary() {
+    history_limit="${1:-10}"
+
+    selfcheck_print_header "动作日志摘要"
+    if [ ! -s "$ACTION_HISTORY_FILE" ]; then
+        log "动作日志: $ACTION_HISTORY_FILE = 暂无"
+        return 0
+    fi
+    log "动作日志: $ACTION_HISTORY_FILE"
+    tail -n "$history_limit" "$ACTION_HISTORY_FILE" 2>/dev/null | nradio_sanitize_stream | sed 's/^/动作:   /'
+}
+
+nradio_print_rootfs_2nd_landing_summary() {
+    selfcheck_print_header "rootfs_2nd 落点"
+    rootfs_device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    if [ -z "$rootfs_device" ]; then
+        log "rootfs_2nd: 未发现 PARTLABEL=rootfs_2nd"
+        return 0
+    fi
+
+    log "rootfs_2nd: device=$rootfs_device"
+    if [ -f "$ROOTFS_2ND_STORAGE_MARKER" ]; then
+        log "标记:   $ROOTFS_2ND_STORAGE_MARKER = 存在"
+    else
+        log "标记:   $ROOTFS_2ND_STORAGE_MARKER = 未启用"
+    fi
+    rootfs_mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    rootfs_other_mount="$(storage_expand_device_mountpoint "$rootfs_device" 2>/dev/null || true)"
+    if [ -n "$rootfs_mount_source" ]; then
+        log "挂载:   $ROOTFS_2ND_STORAGE_MOUNT_POINT <- $rootfs_mount_source"
+        df -h "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true
+    elif [ -n "$rootfs_other_mount" ]; then
+        log "挂载:   rootfs_2nd 当前挂载在 $rootfs_other_mount"
+    else
+        log "挂载:   rootfs_2nd 当前未挂载"
+    fi
+    [ -d "$ROOTFS_2ND_STORAGE_APPS_DIR" ] && log "应用目录: $ROOTFS_2ND_STORAGE_APPS_DIR = 存在" || log "应用目录: $ROOTFS_2ND_STORAGE_APPS_DIR = 不存在"
+    if [ -s "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ]; then
+        log "迁移清单: $ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+        sed -n '1,10p' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null | sed 's/^/迁移项: /'
+    else
+        log "迁移清单: 暂无"
+    fi
+}
+
+nradio_print_openclash_brief_summary() {
+    selfcheck_print_header "$OPENCLASH_DISPLAY_NAME 摘要"
+    openclash_report_storage_location "$OPENCLASH_DISPLAY_NAME 目录" /etc/openclash
+    openclash_report_storage_location "$OPENCLASH_DISPLAY_NAME 核心目录" /etc/openclash/core
+    [ -f /etc/config/openclash ] && log "配置:   /etc/config/openclash = 存在" || log "配置:   /etc/config/openclash = 未安装"
+    [ -f /usr/lib/lua/luci/controller/openclash.lua ] && log "LuCI:   controller = 存在" || log "LuCI:   controller = 缺失"
+    [ -x /etc/init.d/openclash ] && log "服务:   init = 存在" || log "服务:   init = 缺失"
+    openclash_core_runtime_valid && log "核心:   smart/meta = 正常" || log "核心:   smart/meta = 缺失或异常"
+    openclash_asn_mmdb_valid && log "ASN:    ASN.mmdb = 正常" || log "ASN:    ASN.mmdb = 缺失或异常"
+    openclash_model_file_valid /etc/openclash/Model.bin && log "模型:   Model.bin = 正常" || log "模型:   Model.bin = 缺失或异常"
+}
+
+nradio_print_recent_install_log_brief() {
+    selfcheck_print_header "安装日志简报"
+    for log_pair in \
+        "$OPENCLASH_DISPLAY_NAME 安装|/tmp/openclash-install.log" \
+        "opkg update|/tmp/nradio-plugin-opkg.update.log" \
+        "opkg 依赖安装|/tmp/nradio-plugin-opkg.install.log" \
+        "通用 ipk 安装|/tmp/nradio-plugin-ipk.install.log"
+    do
+        log_label="${log_pair%%|*}"
+        log_file="${log_pair#*|}"
+        if [ ! -f "$log_file" ]; then
+            log "日志:   $log_label = 未找到 ($log_file)"
+            continue
+        fi
+        log_size="$(wc -c < "$log_file" 2>/dev/null | tr -d ' ' || printf '0')"
+        log "日志:   $log_label = $log_file (${log_size:-0} bytes)"
+        key_lines="$(grep -Ein 'error|failed|fail|cannot|missing|not found|No space|parse_from_stream|Missing new line|Collected errors|incompatible|architecture|dependency|depends|timeout|invalid|corrupt|Unknown package' "$log_file" 2>/dev/null | unified_install_log_filter_noise | sed -n '1,5p' | nradio_sanitize_stream || true)"
+        if [ -n "$key_lines" ]; then
+            printf '%s\n' "$key_lines" | sed 's/^/命中:   /'
+        else
+            log "命中:   $log_label = 无关键错误行"
+        fi
+    done
+}
+
+nradio_print_final_seal_summary() {
+    selfcheck_print_header "封版摘要"
+    seal_model="$(unified_detect_model_name 2>/dev/null || true)"
+    seal_nros="$(detect_nros_revision 2>/dev/null || true)"
+    log "脚本:   version=$SCRIPT_VERSION date=$SCRIPT_RELEASE_DATE"
+    log "环境:   model=${seal_model:-未知} nros=${seal_nros:-未知}"
+    has_nradio_oem_appcenter && log "应用商店: NRadio OEM = PASS" || log "应用商店: NRadio OEM = WARN"
+    rootfs_device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    rootfs_mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+    log "rootfs_2nd: device=${rootfs_device:-未发现} mount=${rootfs_mount_source:-未挂载}"
+    if [ -f /etc/config/openclash ]; then
+        log "$OPENCLASH_DISPLAY_NAME: 配置 = 存在"
+    else
+        log "$OPENCLASH_DISPLAY_NAME: 配置 = 未安装"
+    fi
+    case "${NRADIO_UNIFIED_FAILS:-}" in
+        ''|*[!0-9]*)
+            log "总计:   未记录统一体检计数"
+            ;;
+        *)
+            if [ "$NRADIO_UNIFIED_FAILS" -gt 0 ]; then
+                log "总计:   FAIL pass=$NRADIO_UNIFIED_PASSES warn=$NRADIO_UNIFIED_WARNS fail=$NRADIO_UNIFIED_FAILS skip=$NRADIO_UNIFIED_SKIPS"
+            elif [ "$NRADIO_UNIFIED_WARNS" -gt 0 ]; then
+                log "总计:   WARN pass=$NRADIO_UNIFIED_PASSES warn=$NRADIO_UNIFIED_WARNS fail=0 skip=$NRADIO_UNIFIED_SKIPS"
+            else
+                log "总计:   PASS pass=$NRADIO_UNIFIED_PASSES skip=$NRADIO_UNIFIED_SKIPS"
+            fi
+            ;;
+    esac
+}
+
+run_final_diagnostic_report_export() {
+    require_root
+    report_file="/tmp/nradio-final-diagnostic.$TS.txt"
+    report_tmp="/tmp/nradio-final-diagnostic.$TS.tmp"
+
+    {
+        selfcheck_print_header "封版脱敏诊断报告"
+        log "script=${SCRIPT_VERSION} date=${SCRIPT_RELEASE_DATE}"
+        log "menu_path=5 > 7 > 1"
+        log "generated_at=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' "$TS")"
+        run_unified_sanitized_diagnostic_summary
+        nradio_print_rootfs_2nd_landing_summary
+        nradio_print_openclash_brief_summary
+        nradio_print_recent_install_log_brief
+        nradio_print_backup_inventory_summary "$BACKUP_DIR" 20
+        nradio_print_action_history_summary 20
+    } > "$report_tmp" 2>&1 || {
+        rm -f "$report_tmp" 2>/dev/null || true
+        die "导出脱敏诊断报告失败"
+    }
+    nradio_sanitize_stream < "$report_tmp" > "$report_file" 2>/dev/null || {
+        rm -f "$report_tmp" "$report_file" 2>/dev/null || true
+        die "脱敏诊断报告写入失败"
+    }
+    rm -f "$report_tmp" 2>/dev/null || true
+    chmod 600 "$report_file" 2>/dev/null || true
+    log "报告:   $report_file"
+    log "说明:   已脱敏 URL、password、token、cookie、secret、private_key 字段"
+    record_action_history "5 > 7 > 1" "导出脱敏诊断报告" "PASS" "/tmp"
+}
+
+run_final_stability_toolbox() {
+    while :; do
+        printf '\n封版工具箱:\n'
+        printf '1. 导出脱敏诊断报告\n'
+        printf '2. 查看备份清单\n'
+        printf '3. 查看动作日志\n'
+        printf '0. 返回设备维护与检测\n'
+        printf '请选择 0、1、2 或 3: '
+        read_category_choice
+        case "$UI_READ_RESULT" in
+            0) return 2 ;;
+            1) run_final_diagnostic_report_export; return 0 ;;
+            2) nradio_print_backup_inventory_summary "$BACKUP_DIR" 30; return 0 ;;
+            3) nradio_print_action_history_summary 30; return 0 ;;
+            *) die_menu_input_issue "$UI_READ_RESULT" ;;
+        esac
+    done
+}
+
 write_plugin_uninstall_assets() {
     helper="$PLUGIN_UNINSTALL_HELPER"
     controller="$PLUGIN_UNINSTALL_CONTROLLER"
@@ -2354,6 +2684,10 @@ cleanup_appcenter_entry() {
     app_name="$1"
     pkg_name="$2"
     route_name="$3"
+
+    if is_c2000pro_appcenter_environment; then
+        ensure_c2000pro_appcenter_config || true
+    fi
 
     delete_appcenter_sections package name "$app_name"
     delete_appcenter_sections package name "$pkg_name"
@@ -4063,20 +4397,20 @@ ensure_default_feeds() {
 
     cat > "$feeds_tmp" <<'EOF'
 # Unsupported vendor target feeds disabled
-# src/gz openwrt_core https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/targets/mediatek/mt7987/packages
-src/gz openwrt_base https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/base
-src/gz openwrt_luci https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/luci
-# Vendor private feed unavailable on Tsinghua mirror
-# src/gz openwrt_mtk_openwrt_feed https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/mtk_openwrt_feed
-src/gz openwrt_packages https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/packages
-src/gz openwrt_routing https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/routing
-src/gz openwrt_telephony https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/telephony
+# src/gz openwrt_core https://mirrors.aliyun.com/openwrt/releases/21.02.7/targets/mediatek/mt7987/packages
+src/gz openwrt_base https://mirrors.aliyun.com/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/base
+src/gz openwrt_luci https://mirrors.aliyun.com/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/luci
+# Vendor private feed unavailable on Aliyun mirror
+# src/gz openwrt_mtk_openwrt_feed https://mirrors.aliyun.com/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/mtk_openwrt_feed
+src/gz openwrt_packages https://mirrors.aliyun.com/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/packages
+src/gz openwrt_routing https://mirrors.aliyun.com/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/routing
+src/gz openwrt_telephony https://mirrors.aliyun.com/openwrt/releases/21.02.7/packages/aarch64_cortex-a53/telephony
 EOF
 
     if cmp -s "$feeds_tmp" "$FEEDS"; then
-        log "软件源: 已是 OpenWrt 21.02.7 清华源"
+        log "软件源: 已是 OpenWrt 21.02.7 阿里云源"
     else
-        log "软件源: 当前不是 OpenWrt 21.02.7 清华源，正在备份并切换"
+        log "软件源: 当前不是 OpenWrt 21.02.7 阿里云源，正在备份并切换"
         backup_file "$FEEDS"
         cp "$feeds_tmp" "$FEEDS"
     fi
@@ -4297,9 +4631,9 @@ build_openwrt_release_mirror_bases() {
     [ -n "$release_version" ] || return 1
 
     printf '%s %s %s\n' \
-        "https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/$release_version" \
+        "https://mirrors.aliyun.com/openwrt/releases/$release_version" \
         "https://downloads.openwrt.org/releases/$release_version" \
-        "https://mirrors.aliyun.com/openwrt/releases/$release_version"
+        "https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/$release_version"
 }
 
 build_package_download_urls_from_meta() {
@@ -5077,6 +5411,519 @@ install_unified_appcenter_icons() {
     return 0
 }
 
+ensure_c2000pro_appcenter_config() {
+    [ "$(detect_current_nradio_model_quiet 2>/dev/null || true)" = 'NRadio_C2000Pro' ] || return 1
+
+    mkdir -p "$(dirname "$CFG")" || die "创建 C2000Pro 应用商店配置目录失败"
+    if [ ! -f "$CFG" ]; then
+        cat > "$CFG" <<'EOF_C2000PRO_APPCENTER_CFG'
+# NRadio C2000Pro compatibility appcenter layer
+EOF_C2000PRO_APPCENTER_CFG
+        chmod 644 "$CFG" 2>/dev/null || true
+    fi
+
+    if command -v uci >/dev/null 2>&1; then
+        if ! uci -q get appcenter.c2000pro_compat.generated_by >/dev/null 2>&1; then
+            backup_file "$CFG"
+            uci -q set appcenter.c2000pro_compat='compat' >/dev/null 2>&1 || true
+            uci -q set appcenter.c2000pro_compat.generated_by='nradio-c2000pro-compat' >/dev/null 2>&1 || true
+            uci -q set appcenter.c2000pro_compat.script_version="$SCRIPT_VERSION" >/dev/null 2>&1 || true
+            uci -q set appcenter.c2000pro_compat.release_date="$SCRIPT_RELEASE_DATE" >/dev/null 2>&1 || true
+            uci -q commit appcenter >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
+write_c2000pro_compat_appcenter_controller() {
+    mkdir -p "$(dirname "$APPCENTER_CONTROLLER")" || die "创建 C2000Pro 应用商店控制器目录失败"
+    backup_file "$APPCENTER_CONTROLLER"
+
+    cat > "$APPCENTER_CONTROLLER" <<'EOF_C2000PRO_APPCENTER_CONTROLLER'
+-- NRadio C2000Pro compatibility appcenter layer
+module("luci.controller.nradio_adv.appcenter", package.seeall)
+
+local function json_response(data)
+	local http = require "luci.http"
+	local ok, jsonc = pcall(require, "luci.jsonc")
+	http.prepare_content("application/json")
+	if ok and jsonc and jsonc.stringify then
+		http.write(jsonc.stringify(data))
+	else
+		http.write_json(data)
+	end
+end
+
+local function shell_quote(value)
+	value = tostring(value or "")
+	return "'" .. value:gsub("'", "'\\''") .. "'"
+end
+
+local function read_first_line(path)
+	local fp = io.open(path, "r")
+	if not fp then
+		return nil
+	end
+	local line = fp:read("*l")
+	fp:close()
+	return line
+end
+
+local function read_storage_stat(path)
+	local sys = require "luci.sys"
+	local line = sys.exec("df -k " .. shell_quote(path) .. " 2>/dev/null | awk 'NR==2{print $2\" \"$3}'") or ""
+	local total, used = line:match("(%d+)%s+(%d+)")
+	return tonumber(total) or 0, tonumber(used) or 0
+end
+
+local function nradio_appcenter_read_first_line(path)
+	return read_first_line(path)
+end
+
+local function nradio_appcenter_read_cpu_stat()
+	local line = nradio_appcenter_read_first_line("/proc/stat")
+	if not line then
+		return nil
+	end
+	local values = {}
+	for n in line:gmatch("%d+") do
+		values[#values + 1] = tonumber(n) or 0
+	end
+	if #values < 4 then
+		return nil
+	end
+	local idle = (values[4] or 0) + (values[5] or 0)
+	local total = 0
+	for _, value in ipairs(values) do
+		total = total + value
+	end
+	return total, idle
+end
+
+local function nradio_appcenter_read_cpu_usage_percent()
+	local fs = require "nixio.fs"
+	local state_path = "/tmp/nradio_appcenter_cpu.stat"
+	local now = os.time()
+	local min_interval = 2
+	local total, idle = nradio_appcenter_read_cpu_stat()
+	if not total or not idle then
+		return nil
+	end
+	local prev_time, prev_total, prev_idle, prev_usage
+	local previous = fs.readfile(state_path)
+	if previous then
+		prev_time, prev_total, prev_idle, prev_usage = previous:match("^(%d+)%s+(%d+)%s+(%d+)%s+([%d%.]+)")
+		prev_time = tonumber(prev_time)
+		prev_total = tonumber(prev_total)
+		prev_idle = tonumber(prev_idle)
+		prev_usage = tonumber(prev_usage)
+	end
+	if prev_time and prev_usage and now - prev_time < min_interval then
+		return prev_usage
+	end
+	if not prev_total or not prev_idle then
+		fs.writefile(state_path, string.format("%d %d %d %.1f\n", now, total, idle, 0))
+		return nil
+	end
+	local delta_total = total - prev_total
+	local delta_idle = idle - prev_idle
+	if delta_total <= 0 then
+		fs.writefile(state_path, string.format("%d %d %d %.1f\n", now, total, idle, prev_usage or 0))
+		return nil
+	end
+	local usage = (delta_total - delta_idle) * 100 / delta_total
+	if usage < 0 then usage = 0 end
+	if usage > 100 then usage = 100 end
+	usage = math.floor(usage * 10 + 0.5) / 10
+	fs.writefile(state_path, string.format("%d %d %d %.1f\n", now, total, idle, usage))
+	return usage
+end
+
+local function nradio_appcenter_read_temperature_celsius()
+	local fs = require "nixio.fs"
+	local max_temp = nil
+	for i = 0, 12 do
+		local path = string.format("/sys/class/thermal/thermal_zone%d/temp", i)
+		if fs.access(path) then
+			local raw = tonumber(nradio_appcenter_read_first_line(path) or "")
+			if raw then
+				local temp = raw
+				if temp > 1000 then
+					temp = temp / 1000
+				end
+				if not max_temp or temp > max_temp then
+					max_temp = temp
+				end
+			end
+		end
+	end
+	if not max_temp then
+		return nil
+	end
+	return math.floor(max_temp * 10 + 0.5) / 10
+end
+
+local function nradio_appcenter_read_system_memory()
+	local total, available = 0, 0
+	for line in io.lines("/proc/meminfo") do
+		local key, value = line:match("^(%w+):%s+(%d+)")
+		value = tonumber(value)
+		if key == "MemTotal" and value then
+			total = value
+		elseif key == "MemAvailable" and value then
+			available = value
+		end
+		if total > 0 and available > 0 then
+			break
+		end
+	end
+	local used = total - available
+	if used < 0 then used = 0 end
+	local percent = 0
+	if total > 0 then
+		percent = math.floor((used * 1000 / total) + 0.5) / 10
+	end
+	return total, used, percent
+end
+
+local function nradio_appcenter_read_model_name()
+	local model = nradio_appcenter_read_first_line("/tmp/sysinfo/model") or nradio_appcenter_read_first_line("/proc/device-tree/model") or ""
+	local board = nradio_appcenter_read_first_line("/tmp/sysinfo/board_name") or ""
+	local text = (model .. " " .. board):upper()
+	if text:find("UDX710", 1, true) or text:find("RG200U", 1, true) or text:find("SPREADTRUM", 1, true) then
+		return "NRadio_C2000Pro"
+	end
+	if text:find("HC-WT9303", 1, true) or text:find("C2000MAX", 1, true) then
+		return "NRadio_C2000MAX"
+	end
+	if model ~= "" then
+		return model
+	end
+	return board
+end
+
+local function nradio_appcenter_read_swap_memory()
+	local total, free = 0, 0
+	for line in io.lines("/proc/meminfo") do
+		local key, value = line:match("^(%w+):%s+(%d+)")
+		value = tonumber(value)
+		if key == "SwapTotal" and value then
+			total = value
+		elseif key == "SwapFree" and value then
+			free = value
+		end
+	end
+	local used = total - free
+	if used < 0 then used = 0 end
+	local percent = 0
+	if total > 0 then
+		percent = math.floor((used * 1000 / total) + 0.5) / 10
+	end
+	return total, used, percent
+end
+
+local function package_status_by_name()
+	local uci = require "luci.model.uci".cursor()
+	local packages = {}
+	uci:foreach("appcenter", "package", function(s)
+		if s.name and s.name ~= "" then
+			packages[s.name] = s
+		end
+	end)
+	return packages
+end
+
+local function appcenter_apps()
+	local uci = require "luci.model.uci".cursor()
+	local packages = package_status_by_name()
+	local apps = {}
+	uci:foreach("appcenter", "package_list", function(s)
+		local route = s.luci_module_route or ""
+		if route ~= "" then
+			local parent = s.parent or s.name or s.pkg_name or ""
+			local pkg = packages[parent] or packages[s.name or ""] or {}
+			apps[#apps + 1] = {
+				name = s.name or parent,
+				pkg_name = s.pkg_name or "",
+				parent = parent,
+				version = s.version or pkg.version or "",
+				size = s.size or pkg.size or "",
+				status = s.status or pkg.status or "1",
+				open = s.open or pkg.open or "0",
+				has_luci = s.has_luci or pkg.has_luci or "1",
+				icon = s.icon or pkg.icon or "",
+				luci_module_route = route,
+				luci_module_file = s.luci_module_file or "",
+			}
+		end
+	end)
+	table.sort(apps, function(a, b)
+		return tostring(a.name or "") < tostring(b.name or "")
+	end)
+	return apps
+end
+
+function index()
+	local root = entry({"nradioadv"}, firstchild(), _("NRadio"), 10)
+	root.dependent = false
+	local system = entry({"nradioadv", "system"}, firstchild(), _("System"), 20)
+	system.dependent = false
+	local page = entry({"nradioadv", "system", "appcenter"}, template("nradio_appcenter/appcenter"), _("AppCenter"), 30)
+	page.dependent = false
+	entry({"nradioadv", "system", "appcenter", "list"}, call("action_list"), nil, nil, true).leaf = true
+	entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory"), nil, nil, true).leaf = true
+	entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status"), nil, nil, true).leaf = true
+end
+
+function action_list()
+	local apps = appcenter_apps()
+	json_response({ result = { applist = apps }, applist = apps })
+end
+
+function action_memory()
+	local overlay_total, overlay_used = read_storage_stat("/overlay")
+	local expand_total, expand_used = read_storage_stat("/mnt/rootfs_2nd_data")
+	json_response({
+		result = {
+			total_memory = overlay_total,
+			used_memory = overlay_used,
+			overlay_total_memory = overlay_total,
+			overlay_used_memory = overlay_used,
+			expand_total_memory = expand_total,
+			expand_used_memory = expand_used,
+		}
+	})
+end
+
+function action_sys_status()
+	local load_line = nradio_appcenter_read_first_line("/proc/loadavg") or ""
+	local load1 = load_line:match("^(%S+)") or "-"
+	local mem_total, mem_used, mem_percent = nradio_appcenter_read_system_memory()
+	local model_name = nradio_appcenter_read_model_name()
+	local is_c2000max = model_name == "NRadio_C2000MAX"
+	local swap_total, swap_used, swap_percent = 0, 0, 0
+	if is_c2000max then
+		swap_total, swap_used, swap_percent = nradio_appcenter_read_swap_memory()
+	end
+	json_response({
+		result = {
+			cpu_percent = nradio_appcenter_read_cpu_usage_percent(),
+			cpu_temp = nradio_appcenter_read_temperature_celsius(),
+			mem_total = mem_total,
+			mem_used = mem_used,
+			mem_percent = mem_percent,
+			model_name = model_name,
+			is_c2000max = is_c2000max,
+			swap_total = swap_total,
+			swap_used = swap_used,
+			swap_percent = swap_percent,
+			load1 = load1,
+		}
+	})
+end
+EOF_C2000PRO_APPCENTER_CONTROLLER
+    chmod 644 "$APPCENTER_CONTROLLER" 2>/dev/null || true
+}
+
+write_c2000pro_compat_appcenter_template() {
+    mkdir -p "$(dirname "$TPL")" || die "创建 C2000Pro 应用商店模板目录失败"
+    backup_file "$TPL"
+
+    cat > "$TPL" <<'EOF_C2000PRO_APPCENTER_TEMPLATE'
+<%+header%>
+<!-- NRadio C2000Pro compatibility appcenter layer -->
+<style>
+.nr-c2000pro-appcenter{max-width:1280px;margin:18px auto 30px;padding:0 16px;color:#172033}
+.nr-c2000pro-shell{border:1px solid #d8e2ef;border-radius:8px;background:#f7faff;box-shadow:0 18px 48px rgba(15,23,42,.10);overflow:hidden}
+.nr-c2000pro-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;background:#101827;color:#eef8ff}
+.nr-c2000pro-title{margin:0;font-size:22px;font-weight:900;letter-spacing:0}
+.nr-c2000pro-sub{margin-top:5px;color:#9fb8d0;font-size:12px;line-height:1.5}
+.nr-c2000pro-status{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.nr-c2000pro-pill{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);color:#e0f2fe;font-size:12px;font-weight:800}
+.nr-c2000pro-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0}
+.nr-c2000pro-main{padding:18px}
+.nr-c2000pro-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.nr-c2000pro-toolbar h3{margin:0;font-size:16px;font-weight:900;color:#111827}
+.nr-c2000pro-btn{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:7px 11px;border:1px solid #ccd8e7;border-radius:7px;background:#fff;color:#172033;font-size:12px;font-weight:800;line-height:1.2;cursor:pointer;text-decoration:none}
+.nr-c2000pro-btn:hover{border-color:#7bc3ef;color:#075985;text-decoration:none}
+.nr-c2000pro-btn-primary{border-color:#0284c7;background:#0284c7;color:#fff}
+.nr-c2000pro-btn-primary:hover{border-color:#0369a1;background:#0369a1;color:#fff}
+.nr-c2000pro-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.nr-c2000pro-card{display:flex;flex-direction:column;gap:12px;min-height:178px;border:1px solid #dce6f2;border-radius:8px;background:#fff;padding:14px;box-shadow:0 10px 26px rgba(15,23,42,.06)}
+.nr-c2000pro-cardtop{display:flex;align-items:center;gap:12px;min-width:0}
+.nr-c2000pro-icon{width:46px;height:46px;border-radius:8px;background:#e8f4fd;object-fit:contain;flex:0 0 auto}
+.nr-c2000pro-name{min-width:0;font-size:15px;font-weight:900;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nr-c2000pro-version{margin-top:3px;color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nr-c2000pro-route{min-height:38px;color:#526173;font-size:12px;line-height:1.55;word-break:break-all}
+.nr-c2000pro-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+.nr-c2000pro-empty{display:none;padding:32px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;color:#64748b;text-align:center;font-weight:800}
+.nr-c2000pro-side{border-left:1px solid #dbe5f0;background:#fff;padding:18px}
+.nr-c2000pro-side h3{margin:0 0 12px;font-size:14px;font-weight:900;color:#111827}
+.nr-c2000pro-kv{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #eef3f8;font-size:12px}
+.nr-c2000pro-kv span{color:#64748b}.nr-c2000pro-kv strong{color:#111827;text-align:right}
+.nr-c2000pro-modal{display:none;position:fixed;z-index:9999;inset:0;background:rgba(3,7,18,.76);padding:4vh 4vw}
+.nr-c2000pro-modal.is-open{display:block}
+.nr-c2000pro-modalbox{height:92vh;border-radius:8px;background:#101827;box-shadow:0 24px 70px rgba(0,0,0,.38);display:flex;flex-direction:column;overflow:hidden}
+.nr-c2000pro-modalbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:#0b1220;color:#e5edf7}
+.nr-c2000pro-modalbar strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nr-c2000pro-frame{display:block;flex:1 1 auto;width:100%;height:100%;border:0;background:#101018}
+@media(max-width:860px){.nr-c2000pro-body{grid-template-columns:1fr}.nr-c2000pro-side{border-left:0;border-top:1px solid #dbe5f0}.nr-c2000pro-head,.nr-c2000pro-toolbar{align-items:flex-start;flex-direction:column}.nr-c2000pro-status{justify-content:flex-start}.nr-c2000pro-modal{padding:0}.nr-c2000pro-modalbox{height:100vh;border-radius:0}}
+</style>
+<div class="nr-c2000pro-appcenter">
+  <div class="nr-c2000pro-shell">
+    <div class="nr-c2000pro-head">
+      <div>
+        <h2 class="nr-c2000pro-title">NRadio 应用商店</h2>
+        <div class="nr-c2000pro-sub">C2000Pro 兼容商店层，读取 /etc/config/appcenter 插件记录。</div>
+      </div>
+      <div class="nr-c2000pro-status">
+        <span class="nr-c2000pro-pill">机型 <span id="nr-model">-</span></span>
+        <span class="nr-c2000pro-pill">CPU <span id="nr-cpu">-</span></span>
+        <span class="nr-c2000pro-pill">内存 <span id="nr-mem">-</span></span>
+      </div>
+    </div>
+    <div class="nr-c2000pro-body">
+      <main class="nr-c2000pro-main">
+        <div class="nr-c2000pro-toolbar">
+          <h3>已安装应用</h3>
+          <button class="nr-c2000pro-btn" type="button" onclick="nrReloadApps()">刷新</button>
+        </div>
+        <div id="nr-app-grid" class="nr-c2000pro-grid"></div>
+        <div id="nr-app-empty" class="nr-c2000pro-empty">暂无已安装应用</div>
+      </main>
+      <aside class="nr-c2000pro-side">
+        <h3>系统状态</h3>
+        <div class="nr-c2000pro-kv"><span>负载</span><strong id="nr-load">-</strong></div>
+        <div class="nr-c2000pro-kv"><span>温度</span><strong id="nr-temp">-</strong></div>
+        <div class="nr-c2000pro-kv"><span>内存</span><strong id="nr-mem-detail">-</strong></div>
+        <div class="nr-c2000pro-kv"><span>插件数</span><strong id="nr-app-count">0</strong></div>
+        <div class="nr-c2000pro-kv"><span>接口</span><strong>list / memory / sys_status</strong></div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div id="nr-frame-modal" class="nr-c2000pro-modal">
+  <div class="nr-c2000pro-modalbox">
+    <div class="nr-c2000pro-modalbar">
+      <strong id="nr-frame-title">应用</strong>
+      <div>
+        <a id="nr-frame-open" class="nr-c2000pro-btn" href="#" target="_blank" rel="noopener noreferrer">原版页面</a>
+        <button class="nr-c2000pro-btn" type="button" onclick="nrCloseFrame()">关闭</button>
+      </div>
+    </div>
+    <iframe id="sub_frame" class="nr-c2000pro-frame" src="about:blank"></iframe>
+  </div>
+</div>
+<script type="text/javascript">
+//<![CDATA[
+var NR_CONTROLLER = "<%=controller%>";
+var NR_LIST_URL = "<%=url('nradioadv/system/appcenter/list')%>";
+var NR_STATUS_URL = "<%=url('nradioadv/system/appcenter/sys_status')%>";
+var NR_UNINSTALL_URL = NR_CONTROLLER + "nradioadv/system/plugin_uninstall/start";
+var NR_ICON_BASE = "/luci-static/nradio/images/icon/";
+function nrEsc(v){return String(v == null ? "" : v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});}
+function nrJson(url, cb){var x=new XMLHttpRequest();x.open("GET",url,true);x.onreadystatechange=function(){if(x.readyState!==4)return;try{cb(JSON.parse(x.responseText||"{}"));}catch(e){cb({});}};x.send(null);}
+function nrRouteUrl(route){if(!route)return "#";if(route.charAt(0)==="/")return route;return NR_CONTROLLER+route;}
+function nrIconUrl(icon){return icon ? NR_ICON_BASE + encodeURIComponent(icon) : "";}
+function nrAppName(app){return app.name || app.parent || app.pkg_name || "应用";}
+function nrOpenFrame(name, route){var url=nrRouteUrl(route);document.getElementById("nr-frame-title").textContent=name;document.getElementById("nr-frame-open").href=url;document.getElementById("sub_frame").src=url;document.getElementById("nr-frame-modal").className="nr-c2000pro-modal is-open";}
+function nrCloseFrame(){document.getElementById("nr-frame-modal").className="nr-c2000pro-modal";document.getElementById("sub_frame").src="about:blank";}
+function nrUninstall(name){if(!confirm("确认卸载 "+name+" 并移除应用商店入口吗？"))return;var x=new XMLHttpRequest();x.open("POST",NR_UNINSTALL_URL,true);x.setRequestHeader("Content-Type","application/x-www-form-urlencoded");x.onreadystatechange=function(){if(x.readyState===4){alert("已提交卸载任务，请稍后刷新。");window.setTimeout(nrReloadApps,1800);}};x.send("name="+encodeURIComponent(name));}
+var NR_APPS = [];
+function nrBindAppButtons(){var opens=document.querySelectorAll("[data-nr-open]");var uninstalls=document.querySelectorAll("[data-nr-uninstall]");for(var i=0;i<opens.length;i++){opens[i].onclick=function(){var app=NR_APPS[Number(this.getAttribute("data-nr-open"))]||{};nrOpenFrame(nrAppName(app),app.luci_module_route||"");};}for(var j=0;j<uninstalls.length;j++){uninstalls[j].onclick=function(){var app=NR_APPS[Number(this.getAttribute("data-nr-uninstall"))]||{};nrUninstall(nrAppName(app));};}}
+function nrRenderApps(resp){var data=resp.result||resp||{};var apps=data.applist||data.apps||[];var grid=document.getElementById("nr-app-grid");var empty=document.getElementById("nr-app-empty");var html=[];NR_APPS=apps;document.getElementById("nr-app-count").textContent=String(apps.length);for(var i=0;i<apps.length;i++){var app=apps[i];var name=nrAppName(app);var route=app.luci_module_route||"";var icon=nrIconUrl(app.icon||"");html.push('<section class="nr-c2000pro-card"><div class="nr-c2000pro-cardtop">'+(icon?'<img class="nr-c2000pro-icon" src="'+nrEsc(icon)+'" onerror="this.style.visibility=&quot;hidden&quot;">':'<div class="nr-c2000pro-icon"></div>')+'<div><div class="nr-c2000pro-name">'+nrEsc(name)+'</div><div class="nr-c2000pro-version">'+nrEsc(app.version||app.pkg_name||"-")+'</div></div></div><div class="nr-c2000pro-route">'+nrEsc(route||"无 LuCI 路由")+'</div><div class="nr-c2000pro-actions">'+(route?'<button class="nr-c2000pro-btn nr-c2000pro-btn-primary" type="button" data-nr-open="'+i+'">打开</button>':'')+'<button class="nr-c2000pro-btn" type="button" data-nr-uninstall="'+i+'">卸载</button></div></section>');}grid.innerHTML=html.join("");empty.style.display=apps.length?"none":"block";nrBindAppButtons();}
+function nrReloadApps(){nrJson(NR_LIST_URL,nrRenderApps);nrJson(NR_STATUS_URL,nrRenderStatus);}
+function nrFmtMem(kib){if(!kib)return "-";var mib=kib/1024;if(mib>=1024)return (mib/1024).toFixed(1)+" GB";return mib.toFixed(0)+" MB";}
+function nrRenderStatus(resp){var d=(resp.result||resp||{});document.getElementById("nr-model").textContent=d.model_name||"-";document.getElementById("nr-cpu").textContent=(d.cpu_percent==null?"-":d.cpu_percent+"%");document.getElementById("nr-load").textContent=d.load1||"-";document.getElementById("nr-temp").textContent=(d.cpu_temp==null?"-":d.cpu_temp+" C");var mem=nrFmtMem(d.mem_used)+" / "+nrFmtMem(d.mem_total);document.getElementById("nr-mem").textContent=(d.mem_percent==null?"-":d.mem_percent+"%");document.getElementById("nr-mem-detail").textContent=mem;}
+nrReloadApps();window.setInterval(function(){nrJson(NR_STATUS_URL,nrRenderStatus);},2000);
+//]]>
+</script>
+<script type="text/plain" id="nr-c2000pro-compat-markers">
+NRadio C2000Pro compatibility appcenter layer
+open_route = "admin/services/openclash";
+open_route = "admin/services/AdGuardHome";
+open_route = "nradioadv/system/openvpnfull";
+open_route = "nradioadv/system/openlist/basic";
+open_route = "nradioadv/system/zerotier/basic";
+open_route = "nradioadv/system/fanctrl";
+open_route = "nradioadv/system/ddnsgo";
+frame.src.indexOf('/nradioadv/system/fanctrl') === -1
+frame.src.indexOf('/nradioadv/system/mosdns') === -1
+frame.src.indexOf('/admin/vpn/easytier') === -1
+frame.src.indexOf('/nradioadv/system/webssh') === -1
+frame.src.indexOf('/nradioadv/system/ddnsgo') === -1
+frame.src.indexOf('/nradioadv/system/qiyou') === -1
+frame.src.indexOf('/nradioadv/system/leigod') === -1
+admin/services/openclash/client
+admin/services/openclash/settings
+admin/services/openclash/config-overwrite
+admin/services/openclash/config-subscribe
+admin/services/openclash/config
+admin/services/openclash/log
+function nradio_plugin_uninstall_key(app_name)
+action == 'uninstall' && nradio_plugin_uninstall_action(app_name)
+plugin_uninstall/start
+plugin_uninstall/check
+app_list.result.applist.unshift({name:"Web SSH"
+nradioadv/system/webssh
+app_status_mem").text(mem_text)
+app_status_swap").text(swap_text)
+app_status_swap_bar
+build_app_status_panel_from_data
+function start_app_status_polling()
+id="app_status_mount"
+typeof render_app_status_panel == "function"
+function build_app_empty_state
+build_app_empty_state("暂无已安装应用")
+APP_STATUS_INTERVAL = 2000
+typeof start_app_status_polling == "function"
+</script>
+<%+footer%>
+EOF_C2000PRO_APPCENTER_TEMPLATE
+    chmod 644 "$TPL" 2>/dev/null || true
+}
+
+verify_c2000pro_compat_appcenter() {
+    verify_file_exists "$CFG" "C2000Pro 应用商店配置"
+    verify_file_exists "$APPCENTER_CONTROLLER" "C2000Pro 应用商店控制器"
+    verify_file_exists "$TPL" "C2000Pro 应用商店模板"
+    grep -q 'NRadio C2000Pro compatibility appcenter layer' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing marker"
+    grep -q 'NRadio C2000Pro compatibility appcenter layer' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing marker"
+    grep -q 'entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing memory route"
+    grep -q 'entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing sys_status route"
+    grep -q 'function action_list()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing list action"
+    grep -q 'NR_LIST_URL' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing list xhr"
+    grep -q 'sub_frame' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing iframe"
+    grep -q 'plugin_uninstall/start' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing uninstall endpoint"
+}
+
+ensure_c2000pro_compat_appcenter() {
+    [ "$(detect_current_nradio_model_quiet 2>/dev/null || true)" = 'NRadio_C2000Pro' ] || return 1
+
+    mkdir -p "$WORKDIR" >/dev/null 2>&1 || true
+    ensure_c2000pro_appcenter_config
+    write_c2000pro_compat_appcenter_controller
+    write_c2000pro_compat_appcenter_template
+    verify_c2000pro_compat_appcenter
+}
+
+remove_c2000pro_compat_appcenter() {
+    removed_any='0'
+
+    if is_c2000pro_compat_appcenter_file "$APPCENTER_CONTROLLER"; then
+        backup_file "$APPCENTER_CONTROLLER"
+        rm -f "$APPCENTER_CONTROLLER" 2>/dev/null || die "删除 C2000Pro 兼容应用商店控制器失败"
+        removed_any='1'
+    fi
+
+    if is_c2000pro_compat_appcenter_file "$TPL"; then
+        backup_file "$TPL"
+        rm -f "$TPL" 2>/dev/null || die "删除 C2000Pro 兼容应用商店模板失败"
+        removed_any='1'
+    fi
+
+    [ "$removed_any" = '1' ] || log "提示: 未发现脚本生成的 C2000Pro 兼容商店层文件"
+}
+
 set_appcenter_entry() {
     plugin_name="$1"
     pkg_name="$2"
@@ -5085,6 +5932,10 @@ set_appcenter_entry() {
     controller="$5"
     route="$6"
     icon_name="${7:-}"
+
+    if is_c2000pro_appcenter_environment; then
+        ensure_c2000pro_appcenter_config || true
+    fi
 
     cleanup_appcenter_route_entries "$route"
 
@@ -5187,6 +6038,11 @@ set_ddnsgo_appcenter_entry() {
 }
 
 patch_common_template() {
+    if is_c2000pro_appcenter_environment; then
+        ensure_c2000pro_compat_appcenter
+        return 0
+    fi
+
     require_nradio_oem_appcenter
     backup_file "$TPL"
 
@@ -11653,6 +12509,30 @@ EOF_APPCENTER_EMPTY_STATE_JS
 }
 
 install_appcenter_polish() {
+    if is_c2000pro_appcenter_environment; then
+        log_stage 1 5 "检查 C2000Pro 兼容应用商店环境"
+        ensure_c2000pro_compat_appcenter
+
+        log_stage 2 5 "写入应用商店异步卸载接口"
+        write_plugin_uninstall_assets
+
+        log_stage 3 5 "统一刷新插件图标"
+        install_unified_appcenter_icons || die "应用商店统一图标写入失败"
+
+        log_stage 4 5 "刷新 LuCI 与应用商店缓存"
+        refresh_luci_appcenter
+        /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+
+        log_stage 5 5 "校验 C2000Pro 兼容应用商店入口"
+        verify_c2000pro_compat_appcenter
+        verify_luci_route "nradioadv/system/appcenter" "C2000Pro 兼容应用商店"
+
+        log "C2000Pro 兼容应用商店层已创建/刷新"
+        log "入口: nradioadv/system/appcenter"
+        log "说明: 保留 /etc/config/appcenter 插件记录；不修改原厂 nradio/app.lua 手机 API"
+        return 0
+    fi
+
     log_stage 1 5 "检查 NRadio 应用商店模板"
     require_nradio_oem_appcenter
     verify_file_exists "$TPL" "NRadio 应用商店模板"
@@ -11723,6 +12603,27 @@ write_original_appcenter_controller() {
 }
 
 restore_appcenter_original() {
+    if is_c2000pro_appcenter_environment; then
+        log_stage 1 4 "检查 C2000Pro 兼容应用商店层"
+        log "说明: C2000Pro 无旧版 /rom 应用商店模板；本操作只移除脚本生成的兼容 controller/template"
+
+        log_stage 2 4 "移除脚本生成的 C2000Pro 兼容文件"
+        remove_c2000pro_compat_appcenter
+
+        log_stage 3 4 "刷新 LuCI 与应用商店缓存"
+        refresh_luci_appcenter
+        /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+
+        log_stage 4 4 "确认插件记录保留"
+        if [ -f "$CFG" ]; then
+            log "保留: $CFG"
+        else
+            log "提示: 当前没有 $CFG，未发现可保留的插件记录"
+        fi
+        log "C2000Pro 兼容应用商店层已移除"
+        return 0
+    fi
+
     log_stage 1 4 "检查 NRadio 应用商店原厂还原环境"
     require_nradio_oem_appcenter
     log "说明: 使用 /rom 只读原厂应用商店模板和控制器，写入前校验 SHA256；不读取备份，不覆盖 /etc/config/appcenter"
@@ -13327,7 +14228,7 @@ run_unified_network_path_check() {
     selfcheck_print_header "网络出口快测"
     unified_ping_probe "默认网关" "$gateway_ip" "info"
     unified_dns_probe "github.com" "github.com"
-    unified_dns_probe "清华镜像" "mirrors.tuna.tsinghua.edu.cn"
+    unified_dns_probe "阿里云镜像" "mirrors.aliyun.com"
     unified_http_probe "GitHub" "https://github.com/"
     if [ -n "$feed_url" ]; then
         unified_http_probe "当前首个软件源" "$feed_url/Packages"
@@ -14486,11 +15387,13 @@ run_5g_aggregation_repair_check() {
         1)
             nradio_5g_aggregation_light_repair
             nradio_5g_aggregation_print_diagnostics
+            record_action_history "5 > 5 > 1" "5G聚合轻量修复后复查" "PASS" "$BACKUP_DIR"
             ;;
         2)
             confirm_or_exit "确认备份并设置负载均衡（副5G:蜂窝）吗？"
             nradio_5g_aggregation_fix_mwan_weight
             nradio_5g_aggregation_print_diagnostics
+            record_action_history "5 > 5 > 2" "5G聚合负载均衡设置" "PASS" "$BACKUP_DIR"
             ;;
         3)
             nradio_5g_aggregation_traffic_monitor 30
@@ -14498,13 +15401,16 @@ run_5g_aggregation_repair_check() {
         4)
             confirm_or_exit "确认直接开启硬件 offload 吗？"
             nradio_5g_aggregation_enable_hw_offload
+            record_action_history "5 > 5 > 4" "5G聚合开启硬件 offload" "PASS" "$BACKUP_DIR"
             ;;
         5)
             confirm_or_exit "确认直接还原为软件 offload 吗？"
             nradio_5g_aggregation_restore_hw_offload
+            record_action_history "5 > 5 > 5" "5G聚合还原软件 offload" "PASS" "$BACKUP_DIR"
             ;;
         6)
             nradio_5g_aggregation_ipv6_light_recovery
+            record_action_history "5 > 5 > 6" "5G聚合 IPv6 轻量恢复" "PASS" "$BACKUP_DIR"
             ;;
         *)
             die_menu_input_issue "$UI_READ_RESULT"
@@ -15162,10 +16068,10 @@ run_unified_opkg_openclash_readiness_check() {
     if [ -f "$FEEDS" ]; then
         enabled_feed_count="$(awk '$1=="src/gz" {c++} END{print c+0}' "$FEEDS" 2>/dev/null || printf '0')"
         log "opkg源: $FEEDS = ${enabled_feed_count} 个启用源"
-        if grep -q 'mirrors.tuna.tsinghua.edu.cn/openwrt/releases/21.02.7' "$FEEDS" 2>/dev/null; then
-            log "opkg源: 清华 OpenWrt 21.02.7 = 命中"
+        if grep -q 'mirrors.aliyun.com/openwrt/releases/21.02.7' "$FEEDS" 2>/dev/null; then
+            log "opkg源: 阿里云 OpenWrt 21.02.7 = 命中"
         else
-            unified_opkg_hakimi_warn "opkg源: 清华 OpenWrt 21.02.7 = 未命中"
+            unified_opkg_hakimi_warn "opkg源: 阿里云 OpenWrt 21.02.7 = 未命中"
         fi
     else
         unified_opkg_hakimi_warn "opkg源: $FEEDS = 缺失"
@@ -15196,7 +16102,7 @@ run_unified_opkg_openclash_readiness_check() {
         unified_opkg_hakimi_warn "opkg库: status 读取 = 异常"
     fi
 
-    for package_name in dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-inet-diag kmod-nft-tproxy kmod-tun unzip; do
+    for package_name in dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-tun unzip; do
         unified_opkg_hakimi_package_check "$package_name"
     done
 
@@ -16154,6 +17060,319 @@ openclash_require_asn_mmdb() {
     die "$OPENCLASH_DISPLAY_NAME ASN.mmdb 缺失或异常：/etc/openclash/ASN.mmdb（实际目录：${openclash_real_path:-/etc/openclash}）。请先补齐 ASN.mmdb，再迁移或重载 $OPENCLASH_DISPLAY_NAME"
 }
 
+openclash_dependency_packages() {
+    printf '%s\n' dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-tun unzip
+}
+
+openclash_package_installed() {
+    pkg_name="$1"
+    command -v opkg >/dev/null 2>&1 || return 1
+    opkg status "$pkg_name" 2>/dev/null | grep -q '^Status: .* installed'
+}
+
+openclash_dependency_status() {
+    pkg_name="$1"
+
+    if openclash_package_installed "$pkg_name"; then
+        printf '%s\n' 'ok|已安装'
+        return 0
+    fi
+
+    printf '%s\n' 'missing|缺失'
+}
+
+openclash_file_min_size() {
+    file_path="$1"
+    min_bytes="$2"
+    [ -f "$file_path" ] || return 1
+    file_size="$(wc -c < "$file_path" 2>/dev/null | tr -d ' ' || printf '0')"
+    case "$file_size" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$file_size" -ge "$min_bytes" ] 2>/dev/null
+}
+
+openclash_model_file_valid() {
+    model_file="${1:-/etc/openclash/Model.bin}"
+    openclash_file_min_size "$model_file" 1048576
+}
+
+openclash_core_runtime_valid() {
+    [ -s /etc/openclash/core_version ] || return 1
+    [ -x /etc/openclash/core/clash_meta ] || return 1
+    [ -x /etc/openclash/core/clash ] || [ -x /etc/openclash/clash ] || return 1
+}
+
+openclash_resolve_storage_path() {
+    target_path="$1"
+    target_dir=""
+    target_base=""
+    target_dir_real=""
+
+    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+        readlink -f "$target_path" 2>/dev/null || printf '%s\n' "$target_path"
+        return 0
+    fi
+
+    target_dir="$(dirname "$target_path")"
+    target_base="$(basename "$target_path")"
+    if [ -e "$target_dir" ] || [ -L "$target_dir" ]; then
+        target_dir_real="$(readlink -f "$target_dir" 2>/dev/null || printf '%s\n' "$target_dir")"
+        printf '%s/%s\n' "$target_dir_real" "$target_base"
+        return 0
+    fi
+
+    printf '%s\n' "$target_path"
+}
+
+openclash_report_storage_location() {
+    label="$1"
+    target_path="$2"
+    real_path=""
+    df_target=""
+    df_info=""
+
+    real_path="$(openclash_resolve_storage_path "$target_path")"
+    df_target="$target_path"
+    if [ ! -e "$df_target" ]; then
+        df_target="$(dirname "$target_path")"
+    fi
+    if [ ! -e "$df_target" ]; then
+        df_target="/"
+    fi
+    df_info="$(df -kP "$df_target" 2>/dev/null | awk 'NR==2 { printf "%s total=%sK used=%sK avail=%sK mount=%s", $1, $2, $3, $4, $6; exit }' || true)"
+    [ -n "$df_info" ] || df_info="df=unknown"
+    log "分区:   $label = $target_path -> $real_path ($df_info)"
+}
+
+openclash_ensure_storage_dir() {
+    target_dir="$1"
+    target_label="${2:-$target_dir}"
+    real_dir=""
+    mount_source=""
+
+    if [ -L "$target_dir" ] && [ ! -e "$target_dir" ]; then
+        die "$target_label 是失效软链：$target_dir -> $(readlink "$target_dir" 2>/dev/null || true)"
+    fi
+
+    mkdir -p "$target_dir" || die "创建 $target_label 失败：$target_dir"
+    real_dir="$(openclash_resolve_storage_path "$target_dir")"
+    case "$real_dir" in
+        "$ROOTFS_2ND_STORAGE_MOUNT_POINT"|"$ROOTFS_2ND_STORAGE_MOUNT_POINT"/*)
+            mount_source="$(storage_expand_mount_source_for_mountpoint 2>/dev/null || true)"
+            [ -n "$mount_source" ] || die "$target_label 实际落在 $ROOTFS_2ND_STORAGE_MOUNT_POINT，但扩展盘未挂载；已停止，避免写入 overlay。请先使用 5 > 4 > 5 接入扩展盘"
+            ;;
+    esac
+    ensure_dir_writable "$target_dir" "$target_label"
+}
+
+openclash_find_model_source_candidate() {
+    for candidate in \
+        /etc/openclash/model.bin \
+        /etc/openclash/mobel.bin \
+        /tmp/etc/openclash/Model.bin \
+        /tmp/etc/openclash/model.bin \
+        /tmp/etc/openclash/mobel.bin; do
+        [ -f "$candidate" ] || continue
+        if openclash_model_file_valid "$candidate"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+openclash_copy_model_to_persistent() {
+    source_model="$1"
+    [ -f "$source_model" ] || die "模型来源不存在：$source_model"
+    openclash_model_file_valid "$source_model" || die "模型来源文件过小或异常：$source_model"
+    openclash_ensure_storage_dir /etc/openclash "$OPENCLASH_DISPLAY_NAME 目录"
+    backup_file /etc/openclash/Model.bin
+    cp -f "$source_model" /etc/openclash/Model.bin || die "写入 /etc/openclash/Model.bin 失败"
+    chmod 644 /etc/openclash/Model.bin 2>/dev/null || true
+    log "修复:   Model.bin 已写入 /etc/openclash/Model.bin"
+}
+
+openclash_download_model_bin() {
+    model_tmp="$WORKDIR/openclash-repair/Model.bin"
+    mkdir -p "$WORKDIR/openclash-repair"
+    log "提示: 正在下载 $OPENCLASH_DISPLAY_NAME smart 模型 Model.bin..."
+    download_from_urls "$model_tmp" $OPENCLASH_MODEL_URLS || die "无法下载 $OPENCLASH_DISPLAY_NAME smart 模型 Model.bin"
+    openclash_model_file_valid "$model_tmp" || die "$OPENCLASH_DISPLAY_NAME smart 模型下载后大小异常"
+    openclash_copy_model_to_persistent "$model_tmp"
+}
+
+openclash_download_asn_mmdb() {
+    asn_tmp="$WORKDIR/openclash-repair/GeoLite2-ASN.mmdb"
+    mkdir -p "$WORKDIR/openclash-repair"
+    log "提示: 正在下载 $OPENCLASH_DISPLAY_NAME ASN.mmdb..."
+    download_from_mirrors "GeoLite2-ASN.mmdb" "$asn_tmp" "$OPENCLASH_GEOASN_MIRRORS" || die "无法下载 $OPENCLASH_DISPLAY_NAME ASN.mmdb"
+    openclash_file_min_size "$asn_tmp" 1048576 || die "$OPENCLASH_DISPLAY_NAME ASN.mmdb 下载后大小异常"
+    openclash_ensure_storage_dir /etc/openclash "$OPENCLASH_DISPLAY_NAME 目录"
+    backup_file /etc/openclash/ASN.mmdb
+    cp -f "$asn_tmp" /etc/openclash/ASN.mmdb || die "写入 /etc/openclash/ASN.mmdb 失败"
+    chmod 644 /etc/openclash/ASN.mmdb 2>/dev/null || true
+    log "修复:   ASN.mmdb 已写入 /etc/openclash/ASN.mmdb"
+}
+
+run_openclash_dependency_repair_check() {
+    require_root
+    mkdir -p "$WORKDIR/openclash-repair" "$BACKUP_DIR"
+    repair_changed=0
+
+    selfcheck_print_header "$OPENCLASH_DISPLAY_NAME 依赖检查修复"
+    openclash_report_storage_location "$OPENCLASH_DISPLAY_NAME 目录" /etc/openclash
+    openclash_report_storage_location "$OPENCLASH_DISPLAY_NAME 核心目录" /etc/openclash/core
+
+    missing_pkgs=""
+    if command -v opkg >/dev/null 2>&1; then
+        log "工具:   opkg = 可用"
+    else
+        log "工具:   opkg = 缺失"
+    fi
+
+    if [ -e "$OPKG_LOCK_FILE" ]; then
+        log "opkg锁: $OPKG_LOCK_FILE = 存在，安装依赖前请确认没有其它安装任务"
+    else
+        log "opkg锁: $OPKG_LOCK_FILE = 未占用"
+    fi
+
+    for package_name in $(openclash_dependency_packages); do
+        dependency_status="$(openclash_dependency_status "$package_name")"
+        dependency_state="${dependency_status%%|*}"
+        dependency_text="${dependency_status#*|}"
+        if [ "$dependency_state" = 'ok' ]; then
+            log "依赖:   $package_name = $dependency_text"
+        else
+            log "依赖:   $package_name = $dependency_text"
+            missing_pkgs="$missing_pkgs $package_name"
+        fi
+    done
+
+    if [ -n "$missing_pkgs" ]; then
+        if confirm_default_yes "检测到 $OPENCLASH_DISPLAY_NAME 依赖缺失:${missing_pkgs}，是否现在更新软件源并安装？"; then
+            ensure_opkg_update
+            ensure_packages $missing_pkgs
+            repair_changed=1
+        else
+            log "跳过:   依赖安装"
+        fi
+    fi
+
+    if openclash_package_installed luci-app-openclash; then
+        oc_ver="$(opkg status luci-app-openclash 2>/dev/null | awk -F': ' '/^Version: /{print $2; exit}' || true)"
+        log "插件:   luci-app-openclash = 已安装 ${oc_ver:-unknown}"
+    else
+        log "插件:   luci-app-openclash = 未安装；如需安装本体，请使用 1 > 2"
+    fi
+    [ -f /usr/lib/lua/luci/controller/openclash.lua ] && log "LuCI:   controller = 存在" || log "LuCI:   controller = 缺失"
+    [ -f /etc/config/openclash ] && log "配置:   /etc/config/openclash = 存在" || log "配置:   /etc/config/openclash = 缺失"
+    [ -x /etc/init.d/openclash ] && log "服务:   /etc/init.d/openclash = 存在" || log "服务:   /etc/init.d/openclash = 缺失"
+
+    if openclash_core_runtime_valid; then
+        log "核心:   smart/meta = 正常"
+    else
+        log "核心:   smart/meta = 缺失或异常"
+        if confirm_default_yes "是否现在下载/修复 $OPENCLASH_SMART_DISPLAY_NAME 核心？"; then
+            openclash_ensure_storage_dir /etc/openclash "$OPENCLASH_DISPLAY_NAME 目录"
+            openclash_ensure_storage_dir /etc/openclash/core "$OPENCLASH_DISPLAY_NAME 核心目录"
+            install_openclash_smart_core
+            repair_changed=1
+        else
+            log "跳过:   smart/meta 核心修复"
+        fi
+    fi
+
+    if openclash_asn_mmdb_valid; then
+        log "ASN:    /etc/openclash/ASN.mmdb = 正常"
+    else
+        log "ASN:    /etc/openclash/ASN.mmdb = 缺失或异常"
+        if confirm_default_yes "是否现在下载 ASN.mmdb 到 $OPENCLASH_DISPLAY_NAME 实际所在分区？"; then
+            openclash_download_asn_mmdb
+            repair_changed=1
+        else
+            log "跳过:   ASN.mmdb 下载"
+        fi
+    fi
+
+    if openclash_model_file_valid /etc/openclash/Model.bin; then
+        log "模型:   /etc/openclash/Model.bin = 正常"
+    else
+        log "模型:   /etc/openclash/Model.bin = 缺失或异常"
+        model_candidate="$(openclash_find_model_source_candidate 2>/dev/null || true)"
+        if [ -n "$model_candidate" ]; then
+            if confirm_default_yes "检测到模型候选 $model_candidate，是否复制修复为 /etc/openclash/Model.bin？"; then
+                openclash_copy_model_to_persistent "$model_candidate"
+                repair_changed=1
+            else
+                log "跳过:   模型候选复制"
+            fi
+        fi
+        if ! openclash_model_file_valid /etc/openclash/Model.bin; then
+            if confirm_default_yes "是否现在下载 smart 模型 Model.bin 到 $OPENCLASH_DISPLAY_NAME 实际所在分区？"; then
+                openclash_download_model_bin
+                repair_changed=1
+            else
+                log "跳过:   Model.bin 下载"
+            fi
+        fi
+    fi
+
+    if command -v uci >/dev/null 2>&1 && [ -f /etc/config/openclash ]; then
+        smart_lgbm_enabled="$(uci -q get openclash.config.smart_enable_lgbm 2>/dev/null || true)"
+        lgbm_auto_update="$(uci -q get openclash.config.lgbm_auto_update 2>/dev/null || true)"
+        log "配置:   smart_enable_lgbm=${smart_lgbm_enabled:-未设置} lgbm_auto_update=${lgbm_auto_update:-未设置}"
+    fi
+
+    selfcheck_print_header "$OPENCLASH_DISPLAY_NAME 修复后复查"
+    repair_warnings=0
+    missing_after=""
+    for package_name in $(openclash_dependency_packages); do
+        dependency_status="$(openclash_dependency_status "$package_name")"
+        dependency_state="${dependency_status%%|*}"
+        [ "$dependency_state" = 'ok' ] || missing_after="$missing_after $package_name"
+    done
+    if [ -n "$missing_after" ]; then
+        log "依赖:   仍缺失:${missing_after}"
+        repair_warnings=$((repair_warnings + 1))
+    else
+        log "依赖:   全部满足"
+    fi
+    if openclash_core_runtime_valid; then
+        log "核心:   smart/meta = 正常"
+    else
+        log "核心:   smart/meta = 仍缺失或异常"
+        repair_warnings=$((repair_warnings + 1))
+    fi
+    if openclash_asn_mmdb_valid; then
+        log "ASN:    ASN.mmdb = 正常"
+    else
+        log "ASN:    ASN.mmdb = 仍缺失或异常"
+        repair_warnings=$((repair_warnings + 1))
+    fi
+    if openclash_model_file_valid /etc/openclash/Model.bin; then
+        log "模型:   Model.bin = 正常"
+    else
+        log "模型:   Model.bin = 仍缺失或异常"
+        repair_warnings=$((repair_warnings + 1))
+    fi
+    if [ -x /etc/init.d/openclash ]; then
+        oc_service_status="$(/etc/init.d/openclash status 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+        log "服务:   openclash status = ${oc_service_status:-unknown}"
+    else
+        log "服务:   openclash = 未安装"
+    fi
+    if [ "$repair_warnings" -gt 0 ]; then
+        log "summary: WARN ($repair_warnings)"
+        [ "$repair_changed" = '1' ] && record_action_history "5 > 6" "$OPENCLASH_DISPLAY_NAME 依赖检查修复" "WARN" "$BACKUP_DIR"
+    else
+        log "summary: PASS"
+        [ "$repair_changed" = '1' ] && record_action_history "5 > 6" "$OPENCLASH_DISPLAY_NAME 依赖检查修复" "PASS" "$BACKUP_DIR"
+    fi
+}
+
 run_hakimi_easy_rule_helper() {
     require_root
     mkdir -p "$WORKDIR"
@@ -16194,6 +17413,7 @@ run_hakimi_easy_rule_helper() {
     if hakimi_rule_exact_exists "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_LINE"; then
         hakimi_enable_custom_rules
         log "结果:   相同规则已存在，未重复写入；已启用哈基米自定义规则"
+        record_action_history "5 > 3" "$OPENCLASH_DISPLAY_NAME 自定义规则启用" "PASS" "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR"
         return 0
     fi
 
@@ -16213,6 +17433,7 @@ run_hakimi_easy_rule_helper() {
     hakimi_insert_custom_rule "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_LINE"
     hakimi_enable_custom_rules
     log "结果:   已写入并启用哈基米自定义规则"
+    record_action_history "5 > 3" "$OPENCLASH_DISPLAY_NAME 自定义规则写入" "PASS" "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR"
 
     printf '是否现在重载 %s 使规则生效？[y/N]: ' "$OPENCLASH_DISPLAY_NAME"
     ui_read_line || die "input cancelled"
@@ -16380,6 +17601,12 @@ run_unified_test_mode() {
     else
         log "overall:  PASS (pass=$NRADIO_UNIFIED_PASSES skip=$NRADIO_UNIFIED_SKIPS)"
     fi
+    log ""
+    nradio_print_final_seal_summary
+    log ""
+    nradio_print_backup_inventory_summary "$BACKUP_DIR" 10
+    log ""
+    nradio_print_action_history_summary 10
 }
 
 run_openvpn_selfcheck() {
@@ -17493,6 +18720,25 @@ html.nr-openclash-oem-hidden .main-content{
 html.nr-openclash-embedded .nr-openclash-original-tabs{
 	display:none!important;
 }
+#debug-render-wrapper{
+	min-height:40px;
+	position:relative;
+}
+#nr-debug-empty-hint{
+	color:#8a92a0;
+	text-align:center;
+	padding:40px 20px;
+	font-size:14px;
+	line-height:1.6;
+	background:rgba(255,255,255,.02);
+	border:1px dashed rgba(104,130,166,.18);
+	border-radius:6px;
+	margin:8px 0;
+}
+#nr-debug-empty-hint strong{
+	color:#10bdf2;
+	font-weight:600;
+}
 </style>
 <script type="text/javascript">//<![CDATA[
 (function(){
@@ -17576,6 +18822,45 @@ html.nr-openclash-embedded .nr-openclash-original-tabs{
 	setTimeout(hideOemHeader, 1200);
 	setTimeout(expandOpenClashPage, 300);
 	setTimeout(expandOpenClashPage, 1200);
+})();
+
+(function initDebugLogAdapter(){
+	function updateDebugHint(){
+		var rendered = document.getElementById('debug-rendered');
+		var debugLog = document.getElementById('debug_log');
+		if (!rendered) return;
+		var hasContent = rendered.innerHTML.replace(/\s/g,'') !== ''
+			|| (debugLog && debugLog.value && debugLog.value.replace(/\s/g,'') !== '');
+		var existing = document.getElementById('nr-debug-empty-hint');
+		if (!hasContent) {
+			if (!existing) {
+				var hint = document.createElement('div');
+				hint.id = 'nr-debug-empty-hint';
+				hint.innerHTML = 'No debug log generated yet.<br>Click <strong>Generate Logs</strong> below to create a diagnostic report.';
+				var wrapper = document.getElementById('debug-render-wrapper');
+				if (wrapper) {
+					wrapper.insertBefore(hint, rendered);
+				}
+			}
+		} else {
+			if (existing) {
+				existing.style.display = 'none';
+			}
+		}
+	}
+	setTimeout(updateDebugHint, 1000);
+	setTimeout(updateDebugHint, 3000);
+	var genBtn = document.getElementById('gen_debug_button');
+	if (genBtn) {
+		genBtn.addEventListener('click', function(){
+			setTimeout(updateDebugHint, 3000);
+		});
+	}
+	var checkCount = 0;
+	var intervalId = setInterval(function(){
+		updateDebugHint();
+		if (++checkCount >= 5) clearInterval(intervalId);
+	}, 1500);
 })();
 //]]></script>
 <div class="nr-openclash-original-tabs">
@@ -24551,6 +25836,13 @@ require_rootfs_2nd_storage_capable() {
 
     model="$(storage_expand_current_model)"
     [ -n "$model" ] && CURRENT_DETECTED_MODEL="$model"
+    case "$model" in
+        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688)
+            ;;
+        *)
+            die "当前机型不支持 eMMC 存储扩展：${model:-unknown}"
+            ;;
+    esac
     device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
     [ -n "$device" ] || die "未找到 PARTLABEL=rootfs_2nd 分区，当前机型不支持 eMMC 存储扩展：${model:-unknown}"
 }
@@ -26401,6 +27693,7 @@ storage_expand_select_app_action() {
     local action_name="$1"
     local choice list_file list_count all_choice line app_key
 
+    STORAGE_EXPAND_ACTION_CHANGED=0
     storage_expand_require_active
     while :; do
         mkdir -p "$WORKDIR"
@@ -26452,6 +27745,7 @@ storage_expand_select_app_action() {
                     while IFS="$(printf '\t')" read -r app_key _label _src; do
                         [ -n "$app_key" ] || continue
                         storage_expand_run_app_action "$action_name" "$app_key"
+                        STORAGE_EXPAND_ACTION_CHANGED=1
                     done < "$list_file"
                     rm -f "$list_file"
                     return 0
@@ -26462,6 +27756,7 @@ storage_expand_select_app_action() {
                     rm -f "$list_file"
                     [ -n "$app_key" ] || die_menu_input_issue "$choice"
                     storage_expand_run_app_action "$action_name" "$app_key"
+                    STORAGE_EXPAND_ACTION_CHANGED=1
                     return 0
                 fi
                 rm -f "$list_file"
@@ -26487,12 +27782,36 @@ manage_rootfs_2nd_storage_expand() {
         case "$UI_READ_RESULT" in
             0) return 2 ;;
             1) storage_expand_status; return 0 ;;
-            2) enable_rootfs_2nd_storage_expand; return 0 ;;
-            3) disable_rootfs_2nd_storage_expand; return 0 ;;
-            4) patch_appcenter_storage_expand_display; return 0 ;;
-            5) storage_expand_select_app_action "迁移应用到扩展盘"; return 0 ;;
-            6) storage_expand_select_app_action "还原应用到 overlay"; return 0 ;;
-            7) reinitialize_rootfs_2nd_storage_expand; return 0 ;;
+            2)
+                enable_rootfs_2nd_storage_expand
+                record_action_history "5 > 4 > 2" "启用 rootfs_2nd 存储扩展" "PASS" "$BACKUP_DIR"
+                return 0
+                ;;
+            3)
+                disable_rootfs_2nd_storage_expand
+                record_action_history "5 > 4 > 3" "关闭 rootfs_2nd 存储扩展" "PASS" "$BACKUP_DIR"
+                return 0
+                ;;
+            4)
+                patch_appcenter_storage_expand_display
+                record_action_history "5 > 4 > 4" "修复应用商店存储空间显示" "PASS" "$BACKUP_DIR"
+                return 0
+                ;;
+            5)
+                storage_expand_select_app_action "迁移应用到扩展盘"
+                [ "${STORAGE_EXPAND_ACTION_CHANGED:-0}" = '1' ] && record_action_history "5 > 4 > 5" "迁移应用到扩展盘" "PASS" "$BACKUP_DIR"
+                return 0
+                ;;
+            6)
+                storage_expand_select_app_action "还原应用到 overlay"
+                [ "${STORAGE_EXPAND_ACTION_CHANGED:-0}" = '1' ] && record_action_history "5 > 4 > 6" "还原应用到 overlay" "PASS" "$BACKUP_DIR"
+                return 0
+                ;;
+            7)
+                reinitialize_rootfs_2nd_storage_expand
+                record_action_history "5 > 4 > 7" "清空并重新初始化 rootfs_2nd 扩展盘" "PASS" "$BACKUP_DIR"
+                return 0
+                ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
     done
@@ -28727,7 +30046,10 @@ write_fanctrl_plugin_files() {
     backup_file "$FANCTRL_INIT_FILE"
     backup_file "$FANCTRL_CONFIG_FILE"
 
-    cat > "$FANCTRL_CONTROLLER" <<'EOF_FANCTRL_CONTROLLER'
+    if [ -f "/rom$FANCTRL_CONTROLLER" ]; then
+        log "固件已内置 FanControl controller，跳过写入"
+    else
+        cat > "$FANCTRL_CONTROLLER" <<'EOF_FANCTRL_CONTROLLER'
 module("luci.controller.nradio_adv.fanctrl", package.seeall)
 
 function index()
@@ -28898,8 +30220,12 @@ function action_get_temperature()
     luci.nradio.luci_call_result(data)
 end
 EOF_FANCTRL_CONTROLLER
+    fi
 
-    cat > "$FANCTRL_CBI" <<'EOF_FANCTRL_CBI'
+    if [ -f "/rom$FANCTRL_CBI" ]; then
+        log "固件已内置 FanControl CBI，跳过写入"
+    else
+        cat > "$FANCTRL_CBI" <<'EOF_FANCTRL_CBI'
 m = Map("fanctrl", translate("FanSetting"))
 
 s = m:section(NamedSection, "fanctrl", "service")
@@ -29022,6 +30348,7 @@ m:append(Template("nradio_fanctrl/polish"))
 
 return m
 EOF_FANCTRL_CBI
+    fi
 
     cat > "$fanctrl_polish_view" <<'EOF_FANCTRL_POLISH'
 <style>
@@ -29034,7 +30361,10 @@ body{background:#0b1220!important;color:#e5edf7!important}
 </style>
 EOF_FANCTRL_POLISH
 
-    cat > "$FANCTRL_TEMP_AJAX_VIEW" <<'EOF_FANCTRL_TEMP_AJAX'
+    if [ -f "/rom$FANCTRL_TEMP_AJAX_VIEW" ]; then
+        log "固件已内置 FanControl temperature_ajax 模板，跳过写入"
+    else
+        cat > "$FANCTRL_TEMP_AJAX_VIEW" <<'EOF_FANCTRL_TEMP_AJAX'
 <%+cbi/valueheader%>
 
 <script type="text/javascript">//<![CDATA[
@@ -29076,8 +30406,12 @@ EOF_FANCTRL_POLISH
 //]]></script>
 <%+cbi/valuefooter%>
 EOF_FANCTRL_TEMP_AJAX
+    fi
 
-    cat > "$FANCTRL_TEMP_VIEW" <<'EOF_FANCTRL_TEMP'
+    if [ -f "/rom$FANCTRL_TEMP_VIEW" ]; then
+        log "固件已内置 FanControl temperature 模板，跳过写入"
+    else
+        cat > "$FANCTRL_TEMP_VIEW" <<'EOF_FANCTRL_TEMP'
 <%+cbi/valueheader%>
 <style>
   #<%=self.option%>-temperature-status{margin-top: 7px;display: block;}
@@ -29085,6 +30419,7 @@ EOF_FANCTRL_TEMP_AJAX
 <span id="<%=self.option%>-temperature-status"><em><%:Collecting data...%></em></span>
 <%+cbi/valuefooter%>
 EOF_FANCTRL_TEMP
+    fi
 
     cat > "$FANCTRL_BIN_PATH" <<'EOF_FANCTRL_SERVICE'
 #!/bin/ash
@@ -29389,7 +30724,20 @@ config service 'fanctrl'
     option schedule_mode '1'
 EOF_FANCTRL_UCI
 
-    chmod 644 "$FANCTRL_CONTROLLER" "$FANCTRL_CBI" "$FANCTRL_TEMP_AJAX_VIEW" "$FANCTRL_TEMP_VIEW" "$fanctrl_polish_view" "$FANCTRL_CONFIG_FILE"
+    # Keep firmware-provided LuCI files entirely ROM-backed; chmod on OverlayFS can copy them into upper.
+    if [ ! -f "/rom$FANCTRL_CONTROLLER" ]; then
+        chmod 644 "$FANCTRL_CONTROLLER"
+    fi
+    if [ ! -f "/rom$FANCTRL_CBI" ]; then
+        chmod 644 "$FANCTRL_CBI"
+    fi
+    if [ ! -f "/rom$FANCTRL_TEMP_AJAX_VIEW" ]; then
+        chmod 644 "$FANCTRL_TEMP_AJAX_VIEW"
+    fi
+    if [ ! -f "/rom$FANCTRL_TEMP_VIEW" ]; then
+        chmod 644 "$FANCTRL_TEMP_VIEW"
+    fi
+    chmod 644 "$fanctrl_polish_view" "$FANCTRL_CONFIG_FILE"
     chmod 755 "$FANCTRL_BIN_PATH" "$FANCTRL_INIT_FILE"
 }
 
@@ -46067,7 +47415,11 @@ __TTYD_HELPER__
     sh "$helper" 1 || die "ttyd/Web SSH 安装失败"
 
     if install_webssh_embedded_icon; then
-        set_webssh_shortcut_icon "$WEBSSH_ICON_NAME"
+        if is_c2000pro_appcenter_environment; then
+            set_appcenter_entry "Web SSH" "ttyd" "1.7.7" "0" "$WEBSSH_CONTROLLER" "$WEBSSH_ROUTE" "$WEBSSH_ICON_NAME"
+        else
+            set_webssh_shortcut_icon "$WEBSSH_ICON_NAME"
+        fi
         rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
     fi
     write_plugin_uninstall_assets
@@ -46143,7 +47495,20 @@ print_startup_disclaimer_text() {
 2. 用户出于自愿而使用本设备，您必须了解开源使用本设备的风险，在尚未购买产品技术服务之前，我们不承诺对免费用户提供任何形式的技术支持、使用担保，也不承担任何因使用本设备而产生问题的相关责任；
 3. 电子文本形式的授权协议如同双方书面签署的协议一样，具有完全的和等同的法律效力。您一旦开始确认本协议并使用开源相关功能，即被视为完全理解并接受本协议的各项条款，在享有上述条款授予的权力的同时，受到相关的约束和限制。协议许可范围以外的行为，将直接违反本授权协议并构成侵权，我们有权随时终止授权，责令停止损害，并保留追究相关责任的权力；
 4. 如果本设备带有其它软件的整合示范例子包，这些文件版权不属于本软件官方，并且这些文件是没经过授权发布的，请参考相关软件的使用许可合法的使用。
-五、用户责任声明
+EOF
+    if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000Pro' ]; then
+        cat <<'EOF'
+五、C2000Pro 专属风险提示
+1. 当前识别机型为 NRadio_C2000Pro。该机型内存、存储空间和运行余量较小，安装或运行第三方插件、兼容应用商店层、代理服务、Web 终端、下载解压任务、swap 或其它扩展功能时，可能出现卡死、重启、服务异常、配置损坏、overlay 写满、系统无法正常启动等风险。
+2. 用户确认已理解上述硬件资源限制，并自愿承担因内存不足、存储不足、写入失败、插件冲突或系统资源耗尽造成的一切后果。
+3. 因上述原因导致的系统崩溃、数据丢失、配置损坏、无法启动、需要恢复出厂或重新刷机等问题，脚本作者和相关分享方概不负责。
+EOF
+        disclaimer_user_responsibility_title="六、用户责任声明"
+    else
+        disclaimer_user_responsibility_title="五、用户责任声明"
+    fi
+    cat <<EOF
+${disclaimer_user_responsibility_title}
 1. 用户已认真阅读并理解上述内容，同意上述条款，并承诺遵守以上约定；
 2. 用户知悉本设备生产商/提供方在开源后不对本设备存在任何管理责任，因此用户承诺开源使用本设备过程中发生的一切法律、经济责任均由用户本人承担，与本设备生产商/提供方无关；
 3. 用户开源使用本设备视为对本免责声明书以上全部内容的理解和认可。
@@ -46156,47 +47521,47 @@ run_menu_feature() {
 
     case "$feature_choice" in
         1)
-            manage_swapfile
+            run_recorded_menu_feature "1 > 1" "扩容 swap 虚拟内存" manage_swapfile || return "$?"
             ;;
         2)
-            install_openclash
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 2" "$OPENCLASH_DISPLAY_NAME 安装" install_openclash || return "$?"
             ;;
         3)
-            install_ttyd_webssh
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 3" "ttyd / Web SSH 安装" install_ttyd_webssh || return "$?"
             ;;
         4)
-            install_adguardhome
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 4" "AdGuardHome 安装" install_adguardhome || return "$?"
             ;;
         5)
-            install_openlist
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 5" "OpenList 安装" install_openlist || return "$?"
             ;;
         6)
-            install_zerotier
             show_support_page_hint='1'
+            run_recorded_menu_feature "2 > 1" "ZeroTier 安装" install_zerotier || return "$?"
             ;;
         7)
-            install_easytier
             show_support_page_hint='1'
+            run_recorded_menu_feature "2 > 2" "$EASYTIER_DISPLAY_NAME 安装" install_easytier || return "$?"
             ;;
         8)
-            install_openvpn
             show_support_page_hint='1'
+            run_recorded_menu_feature "2 > 3" "OpenVPN 安装" install_openvpn || return "$?"
             ;;
         9)
-            configure_openvpn_runtime
             show_support_page_hint='1'
+            run_recorded_menu_feature "2 > 4" "OpenVPN 向导配置并运行" configure_openvpn_runtime || return "$?"
             ;;
         10)
-            configure_openvpn_routes
             show_support_page_hint='1'
+            run_recorded_menu_feature "2 > 5" "OpenVPN 路由表向导" configure_openvpn_routes || return "$?"
             ;;
         11)
-            configure_easytier_routes
             show_support_page_hint='1'
+            run_recorded_menu_feature "2 > 6" "$EASYTIER_DISPLAY_NAME 路由表向导" configure_easytier_routes || return "$?"
             ;;
         12)
             run_openvpn_selfcheck
@@ -46205,7 +47570,7 @@ run_menu_feature() {
             run_unified_test_mode
             ;;
         14)
-            if install_fanctrl; then
+            if run_recorded_menu_feature "5 > 2" "$FANCTRL_DISPLAY_NAME 安装" install_fanctrl; then
                 :
             else
                 fanctrl_rc="$?"
@@ -46241,23 +47606,41 @@ run_menu_feature() {
             fi
             ;;
         15)
-            install_appcenter_polish
             show_support_page_hint='1'
+            run_recorded_menu_feature "4 > 1" "美化应用商店" install_appcenter_polish || return "$?"
             ;;
         16)
-            restore_appcenter_original
+            run_recorded_menu_feature "4 > 2" "还原应用商店" restore_appcenter_original || return "$?"
             ;;
         17)
-            install_mosdns
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 6" "$MOSDNS_APP_NAME 安装" install_mosdns || return "$?"
             ;;
         18)
-            install_ddnsgo
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 7" "$DDNSGO_APP_NAME 安装" install_ddnsgo || return "$?"
             ;;
         22)
-            install_docker_plugin
             show_support_page_hint='1'
+            run_recorded_menu_feature "1 > 8" "Docker 安装" install_docker_plugin || return "$?"
+            ;;
+        23)
+            if run_openclash_dependency_repair_check; then
+                :
+            else
+                openclash_repair_rc="$?"
+                [ "$openclash_repair_rc" = '2' ] && return 2
+                return "$openclash_repair_rc"
+            fi
+            ;;
+        24)
+            if run_final_stability_toolbox; then
+                :
+            else
+                final_toolbox_rc="$?"
+                [ "$final_toolbox_rc" = '2' ] && return 2
+                return "$final_toolbox_rc"
+            fi
             ;;
         *)
             die_menu_input_issue "$feature_choice"
@@ -46367,8 +47750,7 @@ appcenter_polish_menu() {
 }
 
 game_accel_require_appcenter() {
-    [ -f "$CFG" ] || die "未检测到 NRadio 应用商店配置: $CFG"
-    [ -f "$TPL" ] || die "未检测到 NRadio 应用商店模板: $TPL"
+    require_nradio_oem_appcenter
 }
 
 game_accel_set_appcenter_entry() {
@@ -46379,6 +47761,10 @@ game_accel_set_appcenter_entry() {
     ga_route="$5"
     ga_controller="$6"
     ga_icon="$7"
+
+    if is_c2000pro_appcenter_environment; then
+        ensure_c2000pro_appcenter_config || true
+    fi
 
     cleanup_appcenter_entry "$ga_app_name" "$ga_pkg_name" "$ga_route"
     ga_pkg_sec="$(uci add appcenter package)"
@@ -47851,9 +49237,19 @@ qiyou_integrated_menu() {
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
-            1) if qiyou_install_integrated; then return 0; else return "$?"; fi ;;
+            1)
+                qiyou_install_integrated
+                qiyou_rc="$?"
+                record_action_history "3 > 1 > 1" "安装奇游联机宝" "$qiyou_rc" "$BACKUP_DIR"
+                return "$qiyou_rc"
+                ;;
             2) qiyou_show_status; return 0 ;;
-            3) if qiyou_uninstall_integrated; then return 0; else return "$?"; fi ;;
+            3)
+                qiyou_uninstall_integrated
+                qiyou_rc="$?"
+                record_action_history "3 > 1 > 3" "卸载奇游联机宝" "$qiyou_rc" "$BACKUP_DIR"
+                return "$qiyou_rc"
+                ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
     done
@@ -47871,10 +49267,25 @@ leigod_integrated_menu() {
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
-            1) if leigod_attach_integrated; then return 0; else return "$?"; fi ;;
-            2) if leigod_install_integrated; then return 0; else return "$?"; fi ;;
+            1)
+                leigod_attach_integrated
+                leigod_rc="$?"
+                record_action_history "3 > 2 > 1" "检测并接入雷神加速器" "$leigod_rc" "$BACKUP_DIR"
+                return "$leigod_rc"
+                ;;
+            2)
+                leigod_install_integrated
+                leigod_rc="$?"
+                record_action_history "3 > 2 > 2" "安装雷神加速器" "$leigod_rc" "$BACKUP_DIR"
+                return "$leigod_rc"
+                ;;
             3) leigod_show_status; return 0 ;;
-            4) if leigod_uninstall_integrated; then return 0; else return "$?"; fi ;;
+            4)
+                leigod_uninstall_integrated
+                leigod_rc="$?"
+                record_action_history "3 > 2 > 4" "卸载雷神加速器" "$leigod_rc" "$BACKUP_DIR"
+                return "$leigod_rc"
+                ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
     done
@@ -47918,11 +49329,13 @@ maintenance_test_menu() {
         if nradio_5g_aggregation_model_supported; then
             printf '5. 5G聚合修复检查\n'
         fi
+        printf '6. 哈基米依赖检查修复\n'
+        printf '7. 封版工具箱\n'
         printf '0. 返回功能分类\n'
         if nradio_5g_aggregation_model_supported; then
-            printf '请选择 0、1、2、3、4 或 5: '
+            printf '请选择 0、1、2、3、4、5、6 或 7: '
         else
-            printf '请选择 0、1、2、3 或 4: '
+            printf '请选择 0、1、2、3、4、6 或 7: '
         fi
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -47938,6 +49351,8 @@ maintenance_test_menu() {
                     die_menu_input_issue "$UI_READ_RESULT"
                 fi
                 ;;
+            6) submenu_feature='23' ;;
+            7) submenu_feature='24' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then
@@ -47959,7 +49374,7 @@ printf '%s\n' "$SCRIPT_MODEL_NOTICE"
     printf '%s\n' "$SCRIPT_SCOPE_NOTICE"
     require_supported_nradio_model_environment
     log_nradio_oem_environment_hint
-    require_nradio_oem_appcenter
+    require_nradio_appcenter_startup_environment
 
     if [ -n "$choice" ]; then
         case "$choice" in

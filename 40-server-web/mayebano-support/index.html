@@ -371,7 +371,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info">STABLE V2.3.0</div>
+            <div class="nav-v-info">STABLE V2.7.5</div>
         </nav>
     </div>
 
@@ -388,7 +388,7 @@
                 </div>
                 <div class="badge-list">
                     <div class="badge-item">官方 1:1 适配</div>
-                    <div class="badge-item">35+ 次版本更迭</div>
+                    <div class="badge-item">40+ 次版本更迭</div>
                     <div class="badge-item">毫秒级监控采集</div>
                 </div>
             </div>
@@ -490,6 +490,7 @@
                     <div class="device-card"><strong>NRadio_C5800-688</strong><span>旗舰 5G 定制款</span></div>
                     <div class="device-card"><strong>NRadio_NBCPE</strong><span>企业外置版</span></div>
                     <div class="device-card"><strong>NRadio_C2000MAX</strong><span>超大存储旗舰</span></div>
+                    <div class="device-card"><strong>NRadio_C2000Pro</strong><span>轻量有限兼容</span></div>
                 </div>
                 <p class="device-footer-text">后续将支持更多 NRadio 机型。</p>
             </div>
@@ -500,7 +501,12 @@
                 <h2>版本演进档案</h2>
             </div>
             <div class="history-grid">
-                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.3.0 龙虾扩展盘</h5><p>PicoClaw / 鲲鹏小龙虾接入 eMMC 扩展盘迁移与还原链，支持核心二进制和数据目录迁移。</p></div>
+                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.7.5 新固件兼容收口</h5><p>FanControl 固件 ROM 文件完全免写并跳过 chmod；保留 OpenClash v0.47.133 新 LuCI 兼容，C5800-688 智能频段 v3 完成现场验证。</p></div>
+                <div class="v-card"><span class="v-badge">V2.7.0</span><h5>FanControl ROM 保护</h5><p>适配 C2000MAX NROS 2.2.8 固件内置 controller、CBI 与温度模板，避免重复覆盖原厂 LuCI 文件。</p></div>
+                <div class="v-card"><span class="v-badge">V2.6.5</span><h5>阿里云源与调试日志</h5><p>OpenWrt feed 切换阿里云源；OpenClash Debug Logs 未生成时显示空状态提示，生成后自动更新。</p></div>
+                <div class="v-card"><span class="v-badge">V2.6.0</span><h5>C2000Pro 有限兼容</h5><p>新增 UDX710 / RG200U-CN 识别和最小应用商店兼容层，隔离不适用的扩展盘与硬件功能。</p></div>
+                <div class="v-card"><span class="v-badge">V2.5.0</span><h5>封版工具箱</h5><p>新增哈基米依赖检查修复、脱敏诊断报告、备份清单和写入动作日志。</p></div>
+                <div class="v-card"><span class="v-badge">V2.3.0</span><h5>龙虾扩展盘</h5><p>PicoClaw / 鲲鹏小龙虾接入 eMMC 扩展盘迁移与还原链，支持核心二进制和数据目录迁移。</p></div>
                 <div class="v-card"><span class="v-badge">V2.2.5</span><h5>OpenClash 兼容</h5><p>彻底解决 哈基米 弹窗渲染错位；重构容器注入引擎，修复 OEM 顶栏残留问题。</p></div>
                 <div class="v-card"><span class="v-badge">V2.2.0</span><h5>动态 Swap</h5><p>应用商店状态面板接入虚拟内存指标，支持监控 Swap 总量、用量及实时百分比。</p></div>
                 <div class="v-card"><span class="v-badge">V2.1.5</span><h5>拦截保护</h5><p>针对 C5800-650 机型提供专属放行算法，强化对非官方系统的环境阻断，保护主闪存。</p></div>
@@ -547,7 +553,7 @@
                     <p>本项目致力于在尊重原厂系统的基础上，为硬核玩家提供最纯粹的系统增强方案。每一行脚本的推敲都是为了保障您路由器的绝对稳定。</p>
                     <p>代码完全开源透明，您可以放心地将其作为旗舰设备的长期运维伴侣。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.3.0 | 后续更新暂缓</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.7.5 | 发布状态以 GitHub Release 为准</p>
                     </div>
                 </div>
             </div>
@@ -556,7 +562,7 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">暂停更新说明：由于暂时没有 ChatGPT 会员，后续脚本功能更新与页面维护将暂停或放缓；现有版本仍可按当前说明继续使用。</p>
+        <p class="footer-pause">维护状态：V2.7.5 脚本、页面与校验资料已同步；GitHub Release 和公网版本请以实际发布记录为准。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 

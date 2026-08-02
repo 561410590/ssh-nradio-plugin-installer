@@ -1,5 +1,44 @@
 # Changelog
 
+## V2.7.5 - 2026-08-02
+
+- `SCRIPT_VERSION` 更新为 `V2.7.5`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-02`。
+- 完成新固件 FanControl ROM 保护收口：固件已内置 controller、CBI、`temperature_ajax.htm` 或 `temperature.htm` 时，同时跳过内容写入和 `chmod`，避免 OverlayFS 将 ROM 文件 copy-up 到 upper。
+- FanControl ROM 判断位于 `NRadio_C8-688` / `NRadio_C2000MAX` 共用写入链，两种机型使用相同保护逻辑；脚本自建的美化模板、配置和服务文件仍正常写入与设置权限。
+- 保留 OpenClash `v0.47.133` 新 LuCI 调试日志页兼容：空状态提示、生成日志后的状态更新、六标签页注入、iframe 黑屏兜底和原版页面顶层跳转继续进入安装校验链。
+- 新增独立维护脚本 `00-current/nradio-smart-band.sh` v3：跳过已禁用蜂窝接口、清理旧重试状态、使用 2 小时冷却与 12 小时重试窗口、记录实时 band/频率/带宽，并增加并发锁和原子状态写入。
+- C5800-688（HC-WT9126、NROS `2.2.8.n0.c0`）已完成智能频段脚本现场验证：禁用 `cpe` 不再重启，启用 `cpe1` 保持 NR N1，默认路由不中断。
+- 同步总脚本、智能频段脚本、网页、README、CHANGELOG、CHECKSUMS 与仓库检查规则；线上状态以 GitHub Release 与公网实测为准。
+
+## V2.7.0 - 2026-07-31
+
+- `SCRIPT_VERSION` 更新为 `V2.7.0`，`SCRIPT_RELEASE_DATE` 更新为 `2026-07-31`。
+- 适配 C2000MAX NROS `2.2.8.n0.c1` 固件内置 FanControl LuCI 文件。
+- `write_fanctrl_plugin_files()` 检测 `/rom` 中的 controller、CBI、`temperature_ajax.htm` 和 `temperature.htm`；ROM 已存在时不再用 heredoc 覆盖。
+- 继续生成固件缺失的 `polish.htm`、后台服务、UCI 配置和 init 脚本，保持风扇页面与温控策略可用。
+
+## V2.6.5 - 2026-07-23
+
+- `SCRIPT_VERSION` 更新为 `V2.6.5`，`SCRIPT_RELEASE_DATE` 更新为 `2026-07-23`。
+- OpenWrt 21.02.7 活跃 feed 从不可用的清华源切换为阿里云源，镜像优先级调整为阿里云、OpenWrt 官方、清华备用。
+- 适配 OpenClash `v0.47.133` 新增的 `Debug Logs` 标签：未生成日志时显示明确空状态，点击 `Generate Logs` 后刷新提示状态。
+- OpenClash 原版页面继续保留六标签页、OEM 顶栏隐藏和全宽页面修复。
+
+## V2.6.0 - 2026-06-15
+
+- `SCRIPT_VERSION` 更新为 `V2.6.0`，`SCRIPT_RELEASE_DATE` 更新为 `2026-06-15`。
+- 新增 `NRadio_C2000Pro` 识别，覆盖 UDX710 / RG200U-CN 身份映射与 NROS `2.1.8.n0.c1`。
+- 新增 C2000Pro 应用商店兼容层，提供最小 appcenter UCI、controller、模板、插件卡片、iframe、卸载动作和系统状态接口。
+- C2000Pro 不套用 C2000MAX 存储卡、C8/C5800 `rootfs_2nd`、风扇和 5G 聚合逻辑；启动时显示专属资源与刷机风险提示。
+
+## V2.5.0 - 2026-06-14
+
+- `SCRIPT_VERSION` 更新为 `V2.5.0`，`SCRIPT_RELEASE_DATE` 更新为 `2026-06-14`。
+- `5 > 6` 新增哈基米 / OpenClash 依赖检查修复，覆盖配置、服务、核心、`ASN.mmdb` 和 `Model.bin`。
+- `5 > 1` 统一体检增加封版摘要、备份清单和动作日志摘要。
+- 新增 `5 > 7` 封版工具箱，支持导出脱敏诊断报告、查看备份清单和动作日志。
+- 写入型菜单动作记录到 `/root/.nradio-plugin-menu/action-history.log`，保留最近约 300 行且不记录密码和敏感 URL。
+
 ## V2.3.0 - 2026-06-13
 
 - `SCRIPT_VERSION` 更新为 `V2.3.0`。
