@@ -1,5 +1,28 @@
 # Changelog
 
+## V2.8.5 - 2026-08-10
+
+- `SCRIPT_VERSION` 更新为 `V2.8.5`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-10`。
+- 完整 `nradio-smart-band v5` 源码内嵌总脚本，运行和发布不再依赖旁置文件；总脚本释放前执行 shell 语法与固定 SHA256 校验，再原子写入 `/root/nradio-smart-band.sh`。
+- 新增 `5 > 8 智能频段管理（C5800-688）`，提供安装或更新、状态、只读模拟、立即执行、运行日志和卸载；cron 任务去重写入并纳入原有配置备份链。
+- `5 > 1` 统一体检加入智能频段脚本权限、语法、v5 SHA256、cron 唯一性、准确任务行和只读状态检查。
+- 智能频段策略升级为联网健康优先：健康 N28/N41 仅记录；IPv4 连续 3 次失败后先执行 DHCP/ifup 软恢复，CFUN 仅作带 12 小时冷却和 24 小时次数限制的最终手段；IPv6 异常不单独触发 CFUN。
+- 支持页同步 V2.8.5，新增单一总脚本和智能频段摘要、历史版本折叠、可靠复制反馈、键盘焦点、阅读进度、减少动态效果和移动端导航适配。
+- 2026-08-11 支持页新增 `NRadio_C2000Ultra`、`NRadio_AK68-798` 两款“即将支持、暂未适配”预告卡片，并明确两款尚未加入总脚本识别与功能放行。
+- README、CHANGELOG、CHECKSUMS 与仓库检查规则已在本地同步；工作流直接提取并验证总脚本内嵌 v5，不再把独立智能频段脚本列为公开发布依赖。
+- 当前只完成本地 GitHub 发布前闭环；未执行 commit、push、tag、Release 或公网更新。
+
+## V2.8.0 - 2026-08-03
+
+- `SCRIPT_VERSION` 更新为 `V2.8.0`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-03`。
+- 修复 `shell_quote()` 的单引号转义；OpenVPN 与 EasyTier 状态文件加入 `NRADIO_STATE_FORMAT='2'`，主脚本、内嵌卸载脚本和生成的 EasyTier 路由脚本均拒绝加载旧版无标记状态文件。
+- 下载、GitHub API、CDN 探测、EasyTier 状态查询及集成下载链移除 `curl -k`、`--insecure` 和 `wget --no-check-certificate`，恢复 TLS 证书校验。
+- `ensure_opkg_update()` 失败时显式返回 1；OpenClash、MosDNS、DDNS-GO、ZeroTier、EasyTier、奇游和雷神等 8 个调用点失败即停止对应安装。
+- 保留奇游和雷神入口脚本的固定 SHA256 与执行前校验。
+- 本地总脚本、支持页、README、CHANGELOG、CHECKSUMS 与仓库检查规则同步到 V2.8.0。
+- C5800-688 已直接运行 `5 > 1` 统一体检：26 PASS、2 WARN、0 FAIL、4 SKIP；OpenClash、AdGuardHome、OpenVPN 和默认路由等核心项目通过。
+- 本版本当前只在本地完成同步与验证；GitHub Release 和公网仍为 V2.7.5。
+
 ## V2.7.5 - 2026-08-02
 
 - `SCRIPT_VERSION` 更新为 `V2.7.5`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-02`。

@@ -14,7 +14,6 @@ jobs:
       - name: Verify required files
         run: |
           test -f 00-current/ssh-nradio-plugin-installer.sh
-          test -f 00-current/nradio-smart-band.sh
           test -f 40-server-web/mayebano-support/index.html
           test -f 40-server-web/mayebano-support/ai_studio_code.html
           test -f 40-server-web/mayebano-support/wechat-donate.png
@@ -26,10 +25,22 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V2.7.5 script state
+      - name: Verify V2.8.5 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.7.5"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-08-02"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.8.5"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-08-10"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRADIO_SMART_BAND_EXPECTED_SHA256="8fc30a901b2f69de81e2cc5cd91122d51601f8bc258ee35c03bc3786a5aac5ec"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^write_nradio_smart_band_script()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^manage_nradio_smart_band()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^run_nradio_smart_band_selfcheck()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '25)' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '智能频段管理（C5800-688）' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^state_file_is_v2()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "NRADIO_STATE_FORMAT='2'" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'opkg update 失败，已停止' 00-current/ssh-nradio-plugin-installer.sh
+          ! grep -q 'curl -k' 00-current/ssh-nradio-plugin-installer.sh
+          ! grep -q -- '--insecure' 00-current/ssh-nradio-plugin-installer.sh
+          ! grep -q 'wget --no-check-certificate' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-openclash-fallback' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-openclash-wide-css' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'window.top.location.href = "/cgi-bin/luci/admin/services/openclash/client";' 00-current/ssh-nradio-plugin-installer.sh
@@ -54,30 +65,61 @@ jobs:
           grep -q 'NRadio_C2000Pro' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'nradioadv/system/openclashfull' 00-current/ssh-nradio-plugin-installer.sh
           sh -n 00-current/ssh-nradio-plugin-installer.sh
+          bash -n 00-current/ssh-nradio-plugin-installer.sh
 
-      - name: Verify smart band companion
+      - name: Verify embedded smart band v5
         run: |
-          grep -q '智能频段切换 v3' 00-current/nradio-smart-band.sh
-          grep -q 'RETRY_WINDOW=43200' 00-current/nradio-smart-band.sh
-          grep -q '^interface_disabled()' 00-current/nradio-smart-band.sh
-          grep -q 'stale retry state cleared' 00-current/nradio-smart-band.sh
-          grep -q 'process "cpe1" "CU"' 00-current/nradio-smart-band.sh
-          sh -n 00-current/nradio-smart-band.sh
+          test "$(grep -c 'EOF_NRADIO_SMART_BAND_V5_8FC30A' 00-current/ssh-nradio-plugin-installer.sh)" -eq 2
+          awk '
+            index($0, "EOF_NRADIO_SMART_BAND_V5_8FC30A") {
+              if (capture) exit
+              capture = 1
+              next
+            }
+            capture { print }
+          ' 00-current/ssh-nradio-plugin-installer.sh > /tmp/nradio-smart-band.sh
+          test "$(wc -c < /tmp/nradio-smart-band.sh | tr -d ' ')" -eq 22982
+          printf '%s  %s\n' '8fc30a901b2f69de81e2cc5cd91122d51601f8bc258ee35c03bc3786a5aac5ec' '/tmp/nradio-smart-band.sh' | sha256sum -c -
+          grep -q '智能频段切换 v5' /tmp/nradio-smart-band.sh
+          grep -q 'HEALTH_FAILURE_LIMIT=3' /tmp/nradio-smart-band.sh
+          grep -q 'COOLDOWN=43200' /tmp/nradio-smart-band.sh
+          grep -q 'RETRY_WINDOW=86400' /tmp/nradio-smart-band.sh
+          grep -q 'IPv4健康，保持不切换' /tmp/nradio-smart-band.sh
+          grep -q 'process "cpe" "蜂窝接口1"' /tmp/nradio-smart-band.sh
+          grep -q 'process "cpe1" "蜂窝接口2"' /tmp/nradio-smart-band.sh
+          sh -n /tmp/nradio-smart-band.sh
+          if test -f 00-current/nradio-smart-band.sh; then
+            cmp -s /tmp/nradio-smart-band.sh 00-current/nradio-smart-band.sh
+          fi
 
       - name: Verify support page state
         run: |
-          grep -q '<title>NRadio 插件工具 | 官方高级支持中心</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'STABLE V2.7.5' 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件工具 V2.8.5 | 官方高级支持中心</title>' 40-server-web/mayebano-support/index.html
+          grep -q 'LOCAL V2.8.5' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.8.5 · 2026-08-10' 40-server-web/mayebano-support/index.html
+          grep -q '单一总脚本' 40-server-web/mayebano-support/index.html
+          grep -q 'v5 · 菜单 5 &gt; 8' 40-server-web/mayebano-support/index.html
+          grep -q 'role="progressbar"' 40-server-web/mayebano-support/index.html
+          grep -q 'aria-current="page"' 40-server-web/mayebano-support/index.html
+          grep -q 'history-toggle' 40-server-web/mayebano-support/index.html
+          grep -q '复制失败，请手动选择' 40-server-web/mayebano-support/index.html
+          grep -q 'prefers-reduced-motion' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C5800-650' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C2000MAX' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C2000Pro' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.7.5 新固件兼容收口' 40-server-web/mayebano-support/index.html
+          grep -q 'NRadio_C2000Ultra' 40-server-web/mayebano-support/index.html
+          grep -q 'NRadio_AK68-798' 40-server-web/mayebano-support/index.html
+          test "$(grep -c '即将支持 · 暂未适配' 40-server-web/mayebano-support/index.html)" -eq 2
+          ! grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
+          ! grep -q 'NRadio_AK68-798' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'V2.8.0' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.7.5' 40-server-web/mayebano-support/index.html
           grep -q 'V2.7.0' 40-server-web/mayebano-support/index.html
           grep -q 'V2.6.5' 40-server-web/mayebano-support/index.html
           grep -q 'V2.6.0' 40-server-web/mayebano-support/index.html
           grep -q 'V2.5.0' 40-server-web/mayebano-support/index.html
           grep -q 'PicoClaw / 鲲鹏小龙虾' 40-server-web/mayebano-support/index.html
-          grep -q '发布状态以 GitHub Release 为准' 40-server-web/mayebano-support/index.html
+          grep -q '公网发布状态以 GitHub Release 为准' 40-server-web/mayebano-support/index.html
           ! grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html
           grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
           grep -q '拦截保护' 40-server-web/mayebano-support/index.html
@@ -93,21 +135,43 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'e01fe2b37e0efe441bbd65630a5abeb881aa6536fe6cb0a4ed4e2e386ff48e8c' CHECKSUMS.txt
-          grep -q '1966324  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
-          grep -q '12d28c61a187aeba11568f8b8008ff8cec36c37384f20a85e2ff2f3a5e1a1d66' CHECKSUMS.txt
-          grep -q '6335  00-current/nradio-smart-band.sh' CHECKSUMS.txt
-          grep -q 'd2b41c2cbf17004e62a2bff88fb2a092a9b4c4fbd74d37ed002980796f2afff0' CHECKSUMS.txt
-          grep -q '38557  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
+          grep -q '68bdf853dfd5effdf313c81cc16780d206f27b871404f60e03f1ce1708596877' CHECKSUMS.txt
+          grep -q '2012065  00-current/ssh-nradio-plugin-installer.sh' CHECKSUMS.txt
+          grep -q 'd6e299aab6f72425d99e1fba9b4eb24003d91d82508812bb2934fafe9d77579a' CHECKSUMS.txt
+          grep -q '47786  40-server-web/mayebano-support/index.html' CHECKSUMS.txt
           grep -q '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' CHECKSUMS.txt
           grep -q '36616  40-server-web/mayebano-support/ai_studio_code.html' CHECKSUMS.txt
-          printf '%s  %s\n' 'e01fe2b37e0efe441bbd65630a5abeb881aa6536fe6cb0a4ed4e2e386ff48e8c' '00-current/ssh-nradio-plugin-installer.sh' | sha256sum -c -
-          printf '%s  %s\n' '12d28c61a187aeba11568f8b8008ff8cec36c37384f20a85e2ff2f3a5e1a1d66' '00-current/nradio-smart-band.sh' | sha256sum -c -
-          printf '%s  %s\n' 'd2b41c2cbf17004e62a2bff88fb2a092a9b4c4fbd74d37ed002980796f2afff0' '40-server-web/mayebano-support/index.html' | sha256sum -c -
-          printf '%s  %s\n' '096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0' '40-server-web/mayebano-support/ai_studio_code.html' | sha256sum -c -
+          ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt
+          records=0
+          main_seen=0
+          page_seen=0
+          source_seen=0
+          vercel_seen=0
+          while read -r hash size path; do
+            test -f "$path"
+            test "$(wc -c < "$path" | tr -d ' ')" = "$size"
+            printf '%s  %s\n' "$hash" "$path" | sha256sum -c -
+            records=$((records + 1))
+            case "$path" in
+              00-current/ssh-nradio-plugin-installer.sh) main_seen=$((main_seen + 1)) ;;
+              40-server-web/mayebano-support/index.html) page_seen=$((page_seen + 1)) ;;
+              40-server-web/mayebano-support/ai_studio_code.html) source_seen=$((source_seen + 1)) ;;
+              vercel.json) vercel_seen=$((vercel_seen + 1)) ;;
+              *) exit 1 ;;
+            esac
+          done < <(grep -E '^[0-9a-f]{64}[[:space:]]+[0-9]+[[:space:]]+' CHECKSUMS.txt)
+          test "$records" -eq 4
+          test "$main_seen" -eq 1
+          test "$page_seen" -eq 1
+          test "$source_seen" -eq 1
+          test "$vercel_seen" -eq 1
 
       - name: Verify repository docs
         run: |
+          grep -q 'V2.8.5' README.md
+          grep -q 'V2.8.5' CHANGELOG.md
+          grep -q 'V2.8.0' README.md
+          grep -q 'V2.8.0' CHANGELOG.md
           grep -q 'V2.7.5' README.md
           grep -q 'V2.7.5' CHANGELOG.md
           grep -q 'V2.7.0' README.md
@@ -132,5 +196,7 @@ jobs:
           grep -q 'OpenClash iframe' CHANGELOG.md
           grep -q 'nradio-smart-band.sh' README.md
           grep -q 'nradio-smart-band.sh' CHANGELOG.md
-          grep -q 'e01fe2b37e0efe441bbd65630a5abeb881aa6536fe6cb0a4ed4e2e386ff48e8c' README.md
-          grep -q '1966324' README.md
+          grep -q '单一总脚本' README.md
+          grep -q '不依赖旁置脚本' README.md
+          grep -q '68bdf853dfd5effdf313c81cc16780d206f27b871404f60e03f1ce1708596877' README.md
+          grep -q '2012065' README.md

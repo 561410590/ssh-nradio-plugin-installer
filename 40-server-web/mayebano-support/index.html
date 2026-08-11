@@ -2,8 +2,10 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NRadio 插件工具 | 官方高级支持中心</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="NRadio 官方 NROS 系统插件工具 V2.8.5：单一总脚本、智能频段、组网、控温、存储扩展与应用商店增强。">
+    <meta name="theme-color" content="#fff1f2">
+    <title>NRadio 插件工具 V2.8.5 | 官方高级支持中心</title>
     <style>
         /* 
          * ============================================================
@@ -36,7 +38,7 @@
             --spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
         body {
             background-color: var(--rose-50);
@@ -45,6 +47,11 @@
             line-height: 1.6;
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
+        }
+
+        :focus-visible {
+            outline: 3px solid var(--rose-500);
+            outline-offset: 4px;
         }
 
         /* 进度条 */
@@ -78,6 +85,8 @@
             border: 1px solid rgba(255, 255, 255, 0.5);
             border-radius: 100px; box-shadow: var(--shadow-lg);
             overflow-x: auto; scrollbar-width: none;
+            scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+            touch-action: pan-x;
         }
         .nav-pill::-webkit-scrollbar { display: none; }
 
@@ -85,7 +94,7 @@
             text-decoration: none; color: var(--rose-800);
             font-size: 14px; font-weight: 700; padding: 10px 22px;
             border-radius: 50px; transition: all 0.3s var(--ease);
-            white-space: nowrap;
+            white-space: nowrap; scroll-snap-align: center;
         }
         .nav-link:hover { color: var(--rose-600); background: rgba(255, 255, 255, 0.5); }
         .nav-link.active {
@@ -170,6 +179,48 @@
             border: 1px solid var(--rose-100); box-shadow: var(--shadow-sm);
         }
 
+        .release-panel {
+            width: min(920px, 100%);
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 32px;
+            padding: 14px;
+            border: 1px solid rgba(253, 164, 175, 0.65);
+            border-radius: 26px;
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .release-stat {
+            min-width: 0;
+            padding: 16px 14px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(255,241,242,.78));
+            border: 1px solid var(--rose-100);
+            text-align: left;
+        }
+
+        .release-stat span {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--rose-500);
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .release-stat strong {
+            display: block;
+            overflow-wrap: anywhere;
+            color: var(--rose-950);
+            font-size: 15px;
+            font-weight: 1000;
+        }
+
         /* 
          * ============================================================
          * 4. 保姆级教程区 (Tutorial Pipeline)
@@ -216,8 +267,10 @@
             border: 2px dashed var(--rose-200);
             position: relative; cursor: pointer; transition: all 0.3s var(--ease);
             box-shadow: inset 0 0 15px rgba(255,255,255,0.5);
+            display: block; width: 100%; text-align: left; font: inherit; color: inherit;
         }
         .code-well:hover { background: white; border-color: var(--rose-400); box-shadow: var(--shadow-md); }
+        .code-well:active { transform: translateY(1px); }
         .code-well code { color: var(--rose-700); font-weight: 700; font-size: 14px; font-family: monospace; overflow-wrap: anywhere; word-break: break-all; white-space: pre-wrap; display: block;}
 
         .copy-info {
@@ -258,6 +311,17 @@
         .device-card strong { font-size: 1.8rem; font-weight: 1000; display: block; margin-bottom: 12px; color: #fff; position: relative; z-index: 5; }
         .device-card span { font-size: 13px; color: var(--rose-300); font-weight: 700; text-transform: uppercase; letter-spacing: 2px; position: relative; z-index: 5; }
 
+        .device-card.is-coming {
+            border-style: dashed;
+            border-color: rgba(251, 191, 36, 0.55);
+            background: linear-gradient(145deg, rgba(251, 191, 36, 0.09), rgba(255,255,255,0.03));
+        }
+        .device-card.is-coming:hover {
+            border-color: rgba(251, 191, 36, 0.85);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 24px rgba(251, 191, 36, 0.18);
+        }
+        .device-card.is-coming span { color: #fcd34d; }
+
         .device-footer-text {
             color: rgba(255,255,255,0.5); margin-top: 40px; font-weight: 700;
             text-align: center; font-size: 15px; letter-spacing: 1px;
@@ -275,9 +339,21 @@
             margin-top: 60px; 
         }
 
+        .history-grid.is-collapsed .v-card:nth-child(n + 9) { display: none; }
+
         .v-card {
             background: white; padding: 24px 20px; border-radius: 24px;
             border: 1px solid var(--rose-100); transition: 0.3s var(--ease); display: flex; flex-direction: column;
+        }
+
+        .v-card.is-latest {
+            grid-column: span 2;
+            padding: 34px;
+            border-color: var(--rose-300);
+            background:
+                radial-gradient(circle at top right, rgba(251, 113, 133, .18), transparent 42%),
+                linear-gradient(145deg, #fff, #fff1f2);
+            box-shadow: var(--shadow-lg);
         }
         .v-card:hover { 
             transform: translateY(-4px); 
@@ -296,6 +372,37 @@
             font-size: 0.9rem; color: var(--rose-800); opacity: 0.85; font-weight: 500;
             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
             overflow: hidden; text-overflow: ellipsis; line-height: 1.5;
+        }
+
+        .v-card.is-latest p {
+            display: block;
+            overflow: visible;
+            font-size: 1rem;
+            line-height: 1.75;
+            opacity: .92;
+        }
+
+        .history-toggle {
+            display: block;
+            min-width: 220px;
+            margin: 32px auto 0;
+            padding: 14px 24px;
+            border: 1px solid var(--rose-200);
+            border-radius: 16px;
+            background: rgba(255,255,255,.82);
+            color: var(--rose-700);
+            box-shadow: var(--shadow-sm);
+            font: inherit;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all .25s var(--ease);
+        }
+
+        .history-toggle:hover {
+            border-color: var(--rose-400);
+            background: #fff;
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
         }
 
         /* 
@@ -337,22 +444,44 @@
         }
 
         @media (max-width: 768px) {
+            .nav-anchor {
+                top: max(10px, env(safe-area-inset-top));
+                left: 12px;
+                width: calc(100% - 24px);
+                max-width: none;
+                transform: none;
+            }
+            .nav-pill { width: 100%; }
+            .release-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .step-list::before { display: none; }
             .step-item { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 20px;}
             .device-section { padding: 80px 20px; border-radius: 40px;}
             .history-grid { grid-template-columns: 1fr; }
+            .v-card.is-latest { grid-column: span 1; padding: 28px 24px; }
             .danger-card { padding: 30px 20px; border-radius: 24px;}
             .danger-grid li { text-align: left; }
         }
 
         @media (max-width: 480px) {
             .nav-link { padding: 8px 14px; font-size: 13px;}
+            .nav-v-info { display: none; }
             .hero-section { padding-top: 130px; }
             .btn { width: 100%; padding: 16px; font-size: 1rem;}
             .qr-frame img { width: 180px; }
             .donate-gift { padding: 40px 20px; border-radius: 32px;}
             .data-card { padding: 20px; border-radius: 16px; }
             .code-well { padding: 16px 16px 36px 16px; }
+            .release-panel { grid-template-columns: 1fr; padding: 10px; }
+            .release-stat { text-align: center; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
     <script>
@@ -362,16 +491,16 @@
 </head>
 <body>
 
-    <div class="progress-wrap" id="pBar"></div>
+    <div class="progress-wrap" id="pBar" role="progressbar" aria-label="页面阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
 
     <div class="nav-anchor">
-        <nav class="nav-pill">
-            <a href="#home" class="nav-link active">旗舰首页</a>
+        <nav class="nav-pill" aria-label="页面章节导航">
+            <a href="#home" class="nav-link active" aria-current="page">旗舰首页</a>
             <a href="#tutorial" class="nav-link">保姆教程</a>
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info">STABLE V2.7.5</div>
+            <div class="nav-v-info" aria-label="当前为本地开发版">LOCAL V2.8.5</div>
         </nav>
     </div>
 
@@ -390,6 +519,13 @@
                     <div class="badge-item">官方 1:1 适配</div>
                     <div class="badge-item">40+ 次版本更迭</div>
                     <div class="badge-item">毫秒级监控采集</div>
+                    <div class="badge-item">智能频段单文件内嵌</div>
+                </div>
+                <div class="release-panel" aria-label="当前版本信息">
+                    <div class="release-stat"><span>Local version</span><strong>V2.8.5</strong></div>
+                    <div class="release-stat"><span>Release date</span><strong>2026-08-10</strong></div>
+                    <div class="release-stat"><span>Delivery</span><strong>单一总脚本</strong></div>
+                    <div class="release-stat"><span>Smart band</span><strong>v5 · 菜单 5 &gt; 8</strong></div>
                 </div>
             </div>
         </section>
@@ -443,11 +579,11 @@
                         <div class="step-index">03</div>
                         <div class="step-content">
                             <h3>路由器在线下载</h3>
-                            <p>连接成功后，直接点击下方代码块复制命令，在终端粘贴并回车。脚本会自动完成下载、环境自检与机型识别。执行前会有免责声明，输入 <code>y</code> 同意即可进入全中文菜单。</p>
-                            <div class="code-well" onclick="copyShell(this)">
+                            <p>连接成功后，直接点击下方代码块复制命令，在终端粘贴并回车。单一总脚本已内嵌全部智能频段源码，会自动完成下载、环境自检与机型识别。执行前会有免责声明，输入 <code>y</code> 同意即可进入全中文菜单。</p>
+                            <button class="code-well" type="button" onclick="copyShell(this)" aria-label="复制路由器安装命令">
                                 <code>cd /root && wget -O ssh-nradio-plugin-installer.sh https://nradio.mayebano.shop/ssh-nradio-plugin-installer.sh && sh ssh-nradio-plugin-installer.sh</code>
-                                <div class="copy-info">点击复制代码</div>
-                            </div>
+                                <span class="copy-info" aria-live="polite">点击复制代码</span>
+                            </button>
                         </div>
                     </div>
 
@@ -455,7 +591,7 @@
                         <div class="step-index">04</div>
                         <div class="step-content">
                             <h3>菜单化安装与验证</h3>
-                            <p>出现全中文交互菜单后，按数字键进行功能安装或卸载。完成后刷新 NRadio 官方应用商店确认效果。</p>
+                            <p>出现全中文交互菜单后，按数字键进行功能安装或卸载。C5800-688 可通过 <code>5 &gt; 8</code> 管理智能频段；完成后刷新 NRadio 官方应用商店确认效果。</p>
                             <div class="badge-list">
                                 <div class="badge-item">出现菜单 = 环境识别通过</div>
                                 <div class="badge-item">刷新商店 = 验证 UI 效果</div>
@@ -471,7 +607,7 @@
                         <li>仅适用于官方 NROS 1.9 / 2.x 系列固件，标准 OpenWrt 不适用</li>
                         <li>执行前务必确认路由器已成功连通互联网</li>
                         <li>安装过程中严禁强行关闭终端窗口或断开电源</li>
-                        <li>仅限下方列出的受支持的极客官方机型</li>
+                        <li>仅限下方已适配机型使用；标记“即将支持”的机型暂未适配，请勿运行脚本</li>
                     </ul>
                 </div>
             </div>
@@ -480,8 +616,8 @@
         <section class="device-section" id="compatibility">
             <div class="container">
                 <div class="guide-header">
-                    <h2 style="color:white;">受支持的官方机型矩阵</h2>
-                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">精准自检，专属针对性策略优化</p>
+                    <h2 style="color:white;">官方机型适配矩阵</h2>
+                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">已适配机型可用；“即将支持”机型暂未开放</p>
                 </div>
                 <div class="device-grid">
                     <div class="device-card"><strong>NRadio_C8-688</strong><span>旗舰性能之选</span></div>
@@ -491,8 +627,10 @@
                     <div class="device-card"><strong>NRadio_NBCPE</strong><span>企业外置版</span></div>
                     <div class="device-card"><strong>NRadio_C2000MAX</strong><span>超大存储旗舰</span></div>
                     <div class="device-card"><strong>NRadio_C2000Pro</strong><span>轻量有限兼容</span></div>
+                    <div class="device-card is-coming"><strong>NRadio_C2000Ultra</strong><span>即将支持 · 暂未适配</span></div>
+                    <div class="device-card is-coming"><strong>NRadio_AK68-798</strong><span>即将支持 · 暂未适配</span></div>
                 </div>
-                <p class="device-footer-text">后续将支持更多 NRadio 机型。</p>
+                <p class="device-footer-text">即将支持机型尚未加入总脚本的识别与功能放行，请等待正式适配公告。</p>
             </div>
         </section>
 
@@ -500,8 +638,10 @@
             <div class="guide-header">
                 <h2>版本演进档案</h2>
             </div>
-            <div class="history-grid">
-                <div class="v-card"><span class="v-badge">LATEST</span><h5>V2.7.5 新固件兼容收口</h5><p>FanControl 固件 ROM 文件完全免写并跳过 chmod；保留 OpenClash v0.47.133 新 LuCI 兼容，C5800-688 智能频段 v3 完成现场验证。</p></div>
+            <div class="history-grid" id="historyGrid">
+                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V2.8.5 · 2026-08-10</h5><p>智能频段 v5 完整源码内嵌总脚本，单文件即可安装、更新和恢复；新增 <code>5 &gt; 8</code> 中文管理入口、状态检查、只读模拟、立即执行、日志、卸载与统一体检。移动/广电 N28/N41 改为联网健康优先，健康链路不再因频段变化反复重启。</p></div>
+                <div class="v-card"><span class="v-badge">V2.8.0</span><h5>安全加固</h5><p>状态文件加入格式标记并修复单引号转义；恢复全部 TLS 证书校验，软件源更新失败时立即停止对应安装，避免继续执行不完整流程。</p></div>
+                <div class="v-card"><span class="v-badge">V2.7.5</span><h5>新固件兼容收口</h5><p>FanControl 固件 ROM 文件完全免写并跳过 chmod；保留 OpenClash v0.47.133 新 LuCI 兼容，C5800-688 智能频段 v3 完成现场验证。</p></div>
                 <div class="v-card"><span class="v-badge">V2.7.0</span><h5>FanControl ROM 保护</h5><p>适配 C2000MAX NROS 2.2.8 固件内置 controller、CBI 与温度模板，避免重复覆盖原厂 LuCI 文件。</p></div>
                 <div class="v-card"><span class="v-badge">V2.6.5</span><h5>阿里云源与调试日志</h5><p>OpenWrt feed 切换阿里云源；OpenClash Debug Logs 未生成时显示空状态提示，生成后自动更新。</p></div>
                 <div class="v-card"><span class="v-badge">V2.6.0</span><h5>C2000Pro 有限兼容</h5><p>新增 UDX710 / RG200U-CN 识别和最小应用商店兼容层，隔离不适用的扩展盘与硬件功能。</p></div>
@@ -536,6 +676,7 @@
                 <div class="v-card"><span class="v-badge">V1.0.5</span><h5>哈基米收口</h5><p>哈基米 阶段底层逻辑收口，核心代理显示口径和冲突按钮修复逻辑正式确立。</p></div>
                 <div class="v-card"><span class="v-badge">V1.0.0</span><h5>首版发布</h5><p>菜单闭环初步成型，奠定了插件全生命周期自动下载、部署、路由检测的基础架构。</p></div>
             </div>
+            <button class="history-toggle" id="historyToggle" type="button" aria-controls="historyGrid" aria-expanded="false" hidden>查看全部版本</button>
         </section>
 
         <section id="donate">
@@ -544,7 +685,7 @@
                     <h2>支持本<br>项目开发</h2>
                     <p style="opacity:0.8; margin-top:20px; font-size:1.1rem; font-weight: 500;">如果您喜欢本工具带来的便利，<br>欢迎支持作者持续维护！</p>
                     <div class="qr-frame">
-                        <img src="./wechat-donate.png" alt="WeChat Pay">
+                        <img src="./wechat-donate.png" alt="微信赞赏二维码">
                     </div>
                     <div class="owner-txt">Bano马野(*野)</div>
                 </div>
@@ -553,7 +694,7 @@
                     <p>本项目致力于在尊重原厂系统的基础上，为硬核玩家提供最纯粹的系统增强方案。每一行脚本的推敲都是为了保障您路由器的绝对稳定。</p>
                     <p>代码完全开源透明，您可以放心地将其作为旗舰设备的长期运维伴侣。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：Stable V2.7.5 | 发布状态以 GitHub Release 为准</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：本地开发版 V2.8.5 | 公网发布状态以 GitHub Release 为准</p>
                     </div>
                 </div>
             </div>
@@ -562,101 +703,140 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">维护状态：V2.7.5 脚本、页面与校验资料已同步；GitHub Release 和公网版本请以实际发布记录为准。</p>
+        <p class="footer-pause">维护状态：本地 V2.8.5 总脚本与支持页面已同步；本页更新不代表 GitHub Release 已发布。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 
     <script>
-        // 高性能被动监听与 RequestAnimationFrame 锁
-        let isScrolling = false;
-        window.addEventListener('scroll', function() {
-            if (!isScrolling) {
-                window.requestAnimationFrame(function() {
-                    let st = window.scrollY || document.documentElement.scrollTop;
-                    let height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-                    // 防 NaN 处理
-                    let percent = height > 0 ? (st / height) * 100 : 0;
-                    document.getElementById("pBar").style.width = percent + "%";
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const progressBar = document.getElementById('pBar');
+        const sections = Array.from(document.querySelectorAll('section[id]'));
+        const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+        const navPill = document.querySelector('.nav-pill');
+        let scrollFramePending = false;
+        let activeSectionId = '';
 
-                    const sects = document.querySelectorAll("section");
-                    const links = document.querySelectorAll(".nav-link");
-                    let cur = "";
-                    sects.forEach(s => {
-                        if (st >= s.offsetTop - 160) cur = s.getAttribute("id");
-                    });
-                    
-                    // 滚动到底部自动点亮最后一项
-                    if (Math.ceil(st) >= height && sects.length > 0) {
-                        cur = sects[sects.length - 1].getAttribute("id");
-                    }
-                    
-                    links.forEach(l => {
-                        l.classList.remove("active");
-                        if (cur && l.getAttribute("href").includes(cur)) {
-                            l.classList.add("active");
-                        }
-                    });
-                    if (!cur && links.length > 0) {
-                        links[0].classList.add("active");
-                    }
-                    
-                    isScrolling = false;
-                });
-                isScrolling = true;
+        function centerActiveNav(link) {
+            if (!link || !navPill || navPill.scrollWidth <= navPill.clientWidth) return;
+            const left = link.offsetLeft - (navPill.clientWidth - link.offsetWidth) / 2;
+            navPill.scrollTo({ left: Math.max(0, left), behavior: reduceMotion ? 'auto' : 'smooth' });
+        }
+
+        function updateScrollState() {
+            const scrollTop = window.scrollY || document.documentElement.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const percent = scrollHeight > 0 ? Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100)) : 0;
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+                progressBar.setAttribute('aria-valuenow', String(Math.round(percent)));
             }
-        }, { passive: true });
 
-        // 全局唯一高并发安全拷贝函数，支持局部元素高亮更新
-        let copyTimer = null;
-        function copyShell(el) {
-            // 动态获取 HTML 中渲染的代码，不再写死
-            const codeEl = el.querySelector('code');
-            if (!codeEl) return;
-            const c = codeEl.textContent.trim();
-            const hint = el.querySelector('.copy-info');
-            const originalText = hint.textContent;
-            const originalColor = hint.style.color;
-            
-            const showSuccess = function() {
-                hint.textContent = "已复制成功！";
-                hint.style.color = "#10b981"; // 成功绿
-                if (copyTimer) clearTimeout(copyTimer);
-                copyTimer = setTimeout(() => {
-                    hint.textContent = originalText || "点击复制代码";
-                    // 恢复原本的级联颜色
-                    if (originalColor) {
-                        hint.style.color = originalColor;
+            let nextSectionId = sections.length ? sections[0].id : '';
+            sections.forEach(section => {
+                if (scrollTop >= section.offsetTop - 160) nextSectionId = section.id;
+            });
+            if (Math.ceil(scrollTop) >= scrollHeight && sections.length) {
+                nextSectionId = sections[sections.length - 1].id;
+            }
+
+            if (nextSectionId !== activeSectionId) {
+                activeSectionId = nextSectionId;
+                let activeLink = null;
+                navLinks.forEach(link => {
+                    const isActive = link.getAttribute('href') === '#' + activeSectionId;
+                    link.classList.toggle('active', isActive);
+                    if (isActive) {
+                        link.setAttribute('aria-current', 'page');
                     } else {
-                        hint.style.color = ""; 
+                        link.removeAttribute('aria-current');
                     }
-                }, 2000);
-            };
-
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(c).then(showSuccess).catch(function() {
-                    fallbackCopy(c, showSuccess);
+                    if (isActive) activeLink = link;
                 });
-            } else {
-                fallbackCopy(c, showSuccess);
+                centerActiveNav(activeLink);
+            }
+            scrollFramePending = false;
+        }
+
+        function requestScrollUpdate() {
+            if (scrollFramePending) return;
+            scrollFramePending = true;
+            window.requestAnimationFrame(updateScrollState);
+        }
+
+        window.addEventListener('scroll', requestScrollUpdate, { passive: true });
+        window.addEventListener('resize', requestScrollUpdate, { passive: true });
+        requestScrollUpdate();
+
+        const historyGrid = document.getElementById('historyGrid');
+        const historyToggle = document.getElementById('historyToggle');
+        const visibleHistoryCards = 8;
+        if (historyGrid && historyToggle) {
+            const historyCards = Array.from(historyGrid.querySelectorAll('.v-card'));
+            if (historyCards.length > visibleHistoryCards) {
+                historyGrid.classList.add('is-collapsed');
+                historyToggle.hidden = false;
+                historyToggle.textContent = '查看全部 ' + historyCards.length + ' 个版本';
+                historyToggle.addEventListener('click', function() {
+                    const willExpand = historyGrid.classList.contains('is-collapsed');
+                    historyGrid.classList.toggle('is-collapsed', !willExpand);
+                    historyToggle.setAttribute('aria-expanded', String(willExpand));
+                    historyToggle.textContent = willExpand ? '收起历史版本' : '查看全部 ' + historyCards.length + ' 个版本';
+                    if (!willExpand) {
+                        historyGrid.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+                    }
+                });
             }
         }
 
-        // 老旧浏览器或非 HTTPS 降级兜底方案
-        function fallbackCopy(text, callback) {
-            const textArea = document.createElement("textarea");
+        const copyTimers = new WeakMap();
+
+        function showCopyFeedback(el, success) {
+            const hint = el.querySelector('.copy-info');
+            if (!hint) return;
+            if (!hint.dataset.defaultText) hint.dataset.defaultText = hint.textContent || '点击复制代码';
+            hint.textContent = success ? '已复制成功！' : '复制失败，请手动选择';
+            hint.style.color = success ? '#059669' : '#dc2626';
+            const previousTimer = copyTimers.get(el);
+            if (previousTimer) window.clearTimeout(previousTimer);
+            const timer = window.setTimeout(function() {
+                hint.textContent = hint.dataset.defaultText;
+                hint.style.color = '';
+                copyTimers.delete(el);
+            }, 2400);
+            copyTimers.set(el, timer);
+        }
+
+        function copyShell(el) {
+            const codeEl = el.querySelector('code');
+            if (!codeEl) return;
+            const command = codeEl.textContent.trim();
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(command)
+                    .then(function() { showCopyFeedback(el, true); })
+                    .catch(function() { showCopyFeedback(el, fallbackCopy(command, el)); });
+            } else {
+                showCopyFeedback(el, fallbackCopy(command, el));
+            }
+        }
+
+        function fallbackCopy(text, returnFocusTo) {
+            const textArea = document.createElement('textarea');
             textArea.value = text;
-            textArea.style.position = "fixed";
-            textArea.style.left = "-9999px";
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
             document.body.appendChild(textArea);
             textArea.focus();
             textArea.select();
+            let copied = false;
             try {
-                document.execCommand('copy');
-                callback();
+                copied = document.execCommand('copy');
             } catch (err) {
-                console.error('Fallback copy failed', err);
+                copied = false;
             }
             document.body.removeChild(textArea);
+            if (returnFocusTo) returnFocusTo.focus({ preventScroll: true });
+            return copied;
         }
     </script>
 </body>

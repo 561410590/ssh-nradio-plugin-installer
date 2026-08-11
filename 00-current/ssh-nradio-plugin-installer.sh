@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.7.5"
+SCRIPT_VERSION="V2.8.5"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-08-02"
+SCRIPT_RELEASE_DATE="2026-08-10"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -20,6 +20,14 @@ BACKUP_DIR="/root/nradio-plugin-fix"
 STATE_DIR="/root/.nradio-plugin-menu"
 ACTION_HISTORY_FILE="$STATE_DIR/action-history.log"
 CURRENT_DETECTED_MODEL=""
+NRADIO_SMART_BAND_SCRIPT="${NRADIO_SMART_BAND_SCRIPT:-/root/nradio-smart-band.sh}"
+NRADIO_SMART_BAND_EXPECTED_SHA256="8fc30a901b2f69de81e2cc5cd91122d51601f8bc258ee35c03bc3786a5aac5ec"
+NRADIO_SMART_BAND_CRON_FILE="${NRADIO_SMART_BAND_CRON_FILE:-/etc/crontabs/root}"
+NRADIO_SMART_BAND_CRON_MARKER="# nradio-smart-band"
+NRADIO_SMART_BAND_CRON_LINE="*/30 * * * * sh /root/nradio-smart-band.sh >/dev/null 2>&1 # nradio-smart-band"
+NRADIO_SMART_BAND_STATE_FILE="/tmp/nradio_band_state"
+NRADIO_SMART_BAND_RUNTIME_LOG="/tmp/nradio-smart-band.log"
+NRADIO_SMART_BAND_LOCK_DIR="/tmp/nradio-smart-band.lock"
 RUNTIME_STATE_FILE="$STATE_DIR/openvpn_runtime.conf"
 ROUTE_STATE_FILE="$STATE_DIR/openvpn_routes.conf"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
@@ -469,7 +477,7 @@ get_url_content_length() {
     fi
 
     if command -v curl >/dev/null 2>&1; then
-        headers="$(curl -k -L -sSI --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" "$url" 2>/dev/null || true)"
+        headers="$(curl -L -sSI --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" "$url" 2>/dev/null || true)"
         content_length="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Ll]ength: *//p' | tail -n 1)"
     fi
 
@@ -1385,7 +1393,7 @@ download_file_once() {
         case "$url" in
             https://api.github.com/repos/*/releases/assets/*)
                 if [ -s "$tmp_out" ]; then
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1396,7 +1404,7 @@ download_file_once() {
                     fi
                 else
                     rm -f "$tmp_out" 2>/dev/null || true
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1409,7 +1417,7 @@ download_file_once() {
                 ;;
             *)
                 if [ -s "$tmp_out" ]; then
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -C - -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1420,7 +1428,7 @@ download_file_once() {
                     fi
                 else
                     rm -f "$tmp_out" 2>/dev/null || true
-                    if run_download_with_progress "$url" "$tmp_out" curl -k -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
+                    if run_download_with_progress "$url" "$tmp_out" curl -LfS --silent --show-error --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_MAX_TIME" --speed-time "$DOWNLOAD_STALL_TIME" --speed-limit "$DOWNLOAD_STALL_SPEED" --retry "$DOWNLOAD_RETRY" --retry-delay 2 "$url" -o "$tmp_out"; then
                         LAST_DOWNLOAD_RC='0'
                     else
                         LAST_DOWNLOAD_RC="$?"
@@ -1434,7 +1442,7 @@ download_file_once() {
         esac
     elif command -v wget >/dev/null 2>&1; then
         LAST_DOWNLOAD_TOOL='wget'
-        if run_download_with_progress "$url" "$tmp_out" wget -q -c --no-check-certificate -T "$DOWNLOAD_STALL_TIME" -t "$DOWNLOAD_RETRY" -O "$tmp_out" "$url"; then
+        if run_download_with_progress "$url" "$tmp_out" wget -q -c -T "$DOWNLOAD_STALL_TIME" -t "$DOWNLOAD_RETRY" -O "$tmp_out" "$url"; then
             LAST_DOWNLOAD_RC='0'
         else
             LAST_DOWNLOAD_RC="$?"
@@ -1705,7 +1713,7 @@ probe_url_http_ms() {
         return 0
     }
 
-    probe_out="$(curl -k -L -I -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -L -I -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
     probe_code="${probe_out%%|*}"
     probe_time="${probe_out#*|}"
 
@@ -1716,7 +1724,7 @@ probe_url_http_ms() {
         return 0
     fi
 
-    probe_out="$(curl -k -L -r 0-0 -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -L -r 0-0 -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
     probe_code="${probe_out%%|*}"
     probe_time="${probe_out#*|}"
 
@@ -1739,7 +1747,7 @@ probe_url_partial_download_ms() {
         return 0
     }
 
-    probe_out="$(curl -k -L -r "0-$probe_range_end" -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_total}|%{size_download}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -L -r "0-$probe_range_end" -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_total}|%{size_download}' "$probe_url" 2>/dev/null || true)"
     probe_code="${probe_out%%|*}"
     probe_rest="${probe_out#*|}"
     probe_time="${probe_rest%%|*}"
@@ -2605,6 +2613,12 @@ DOCKER_ROOT="/mnt/rootfs_2nd_data/nradio-apps/docker"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
 EASYTIER_ROUTE_APPLY_SCRIPT="/etc/easytier/route-apply.sh"
 
+state_file_is_v2() {
+    state_file="$1"
+    [ -f "$state_file" ] || return 1
+    [ "$(sed -n '1p' "$state_file" 2>/dev/null || true)" = "NRADIO_STATE_FORMAT='2'" ]
+}
+
 stop_disable() {
     init_script="$1"
     [ -f "$init_script" ] || return 0
@@ -2724,6 +2738,7 @@ load_easytier_route_state() {
     ET_ROUTE_LAN_IF=''
     ET_ROUTE_TUN_IF=''
     [ -f "$EASYTIER_ROUTE_STATE_FILE" ] || return 0
+    state_file_is_v2 "$EASYTIER_ROUTE_STATE_FILE" || return 0
     . "$EASYTIER_ROUTE_STATE_FILE" 2>/dev/null || true
 }
 
@@ -3006,7 +3021,7 @@ normalize_openvpn_route_state_vars() {
 load_openvpn_route_state_for_cleanup() {
     clear_openvpn_route_state_vars
     [ -f "$ROUTE_STATE_FILE" ] || return 0
-    if ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
+    if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
         clear_openvpn_route_state_vars
         return 0
     fi
@@ -3791,12 +3806,19 @@ EOF_PLUGIN_UNINSTALL_CONTROLLER
 }
 
 shell_quote() {
-    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\''/g")"
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+state_file_is_v2() {
+    state_file="$1"
+    [ -f "$state_file" ] || return 1
+    [ "$(sed -n '1p' "$state_file" 2>/dev/null || true)" = "NRADIO_STATE_FORMAT='2'" ]
 }
 
 write_openvpn_runtime_state_file() {
     ensure_state_dir
     {
+        printf '%s\n' "NRADIO_STATE_FORMAT='2'"
         printf 'OVPN_SERVER=%s\n' "$(shell_quote "${OVPN_SERVER:-}")"
         printf 'OVPN_PORT=%s\n' "$(shell_quote "${OVPN_PORT:-}")"
         printf 'OVPN_TRANSPORT=%s\n' "$(shell_quote "${OVPN_TRANSPORT:-}")"
@@ -3903,7 +3925,7 @@ load_openvpn_runtime_state() {
         synthesize_openvpn_runtime_state_from_current_profile
     fi
     if [ -f "$RUNTIME_STATE_FILE" ]; then
-        if ! . "$RUNTIME_STATE_FILE" 2>/dev/null; then
+        if ! state_file_is_v2 "$RUNTIME_STATE_FILE" || ! . "$RUNTIME_STATE_FILE" 2>/dev/null; then
             rm -f "$RUNTIME_STATE_FILE"
             clear_openvpn_runtime_state_vars
         fi
@@ -3936,6 +3958,7 @@ save_openvpn_route_state() {
     route_map_enable_save='n'
     [ "${route_map_enable:-0}" = '1' ] && route_map_enable_save='y'
     {
+        printf '%s\n' "NRADIO_STATE_FORMAT='2'"
         printf 'ROUTE_LAN_IF=%s\n' "$(shell_quote "$lan_if")"
         printf 'ROUTE_TUN_IF=%s\n' "$(shell_quote "$tun_if")"
         printf 'ROUTE_LAN_SUBNET=%s\n' "$(shell_quote "$lan_subnet")"
@@ -4001,7 +4024,7 @@ load_openvpn_route_state() {
     ensure_state_dir
     clear_openvpn_route_state_vars
     if [ -f "$ROUTE_STATE_FILE" ]; then
-        if ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
+        if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
             rm -f "$ROUTE_STATE_FILE"
             clear_openvpn_route_state_vars
         else
@@ -4193,7 +4216,7 @@ load_openvpn_route_state_snapshot() {
     [ -f "$ROUTE_STATE_FILE" ] || return 0
 
     clear_openvpn_route_state_vars
-    if ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
+    if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
         rm -f "$ROUTE_STATE_FILE"
         clear_openvpn_route_state_vars
         return 0
@@ -4424,7 +4447,8 @@ ensure_opkg_update() {
         return 0
     fi
 
-    log "警告: 当前软件源执行 opkg update 失败，请查看 /tmp/nradio-plugin-opkg.update.log"
+    log "错误: 当前软件源执行 opkg update 失败，请查看 /tmp/nradio-plugin-opkg.update.log"
+    return 1
 }
 
 ensure_packages() {
@@ -4693,7 +4717,7 @@ get_github_release_asset_browser_url() {
     [ -n "$api_url" ] || return 1
     [ -n "$asset_name" ] || return 1
 
-    api_response="$(curl -k -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
+    api_response="$(curl -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
     [ -n "$api_response" ] || return 1
 
     browser_candidates="$(printf '%s' "$api_response" | tr -d '\r\n' | sed 's/[[:space:]]*,[[:space:]]*"/\n"/g' | sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed 's#\\/#/#g')"
@@ -4719,7 +4743,7 @@ get_github_release_asset_api_url() {
     [ -n "$api_url" ] || return 1
     [ -n "$asset_name" ] || return 1
 
-    api_response="$(curl -k -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
+    api_response="$(curl -L -sS --connect-timeout "$DOWNLOAD_HEAD_CONNECT_TIMEOUT" --max-time "$DOWNLOAD_HEAD_MAX_TIME" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$api_url" 2>/dev/null || true)"
     [ -n "$api_response" ] || return 1
 
     asset_api_url="$(printf '%s' "$api_response" | tr -d '\r\n' | sed 's#\\/#/#g' | sed -n 's#.*"url"[[:space:]]*:[[:space:]]*"\(https://api\.github\.com/repos/[^"]*/releases/assets/[^"]*\)".*"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*/'"$asset_name"'".*#\1#p')"
@@ -4734,10 +4758,10 @@ run_github_release_asset_resolve_curl() {
 
     case "$resolve_url" in
         https://api.github.com/repos/*/releases/assets/*)
-            curl -k "$@" -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
+            curl "$@" -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
             ;;
         *)
-            curl -k "$@" -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
+            curl "$@" -H 'User-Agent: nradio-plugin-assistant' "$resolve_url"
             ;;
     esac
 }
@@ -5274,7 +5298,7 @@ function act_status()
 	e.etwebram = command5:read("*all")
 	command5:close()
 
-	local command8 = io.popen("([ -s /tmp/easytiernew.tag ] && cat /tmp/easytiernew.tag ) || ( curl -L -k -s --connect-timeout 3 --user-agent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36' https://api.github.com/repos/EasyTier/EasyTier/releases/latest | grep tag_name | sed 's/[^0-9.]*//g' >/tmp/easytiernew.tag && cat /tmp/easytiernew.tag )")
+	local command8 = io.popen("([ -s /tmp/easytiernew.tag ] && cat /tmp/easytiernew.tag ) || ( curl -L -s --connect-timeout 3 --user-agent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36' https://api.github.com/repos/EasyTier/EasyTier/releases/latest | grep tag_name | sed 's/[^0-9.]*//g' >/tmp/easytiernew.tag && cat /tmp/easytiernew.tag )")
 	e.etnewtag = command8:read("*all")
 	command8:close()
 
@@ -12590,7 +12614,7 @@ write_original_appcenter_template() {
     copy_verified_factory_appcenter_file \
         "/rom/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm" \
         "$TPL" \
-        "c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23 dd9b637ec1e9cac9a92680cc04014b395f447b5b82cb1fb563c18f7cd45cce97" \
+        "c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23 dd9b637ec1e9cac9a92680cc04014b395f447b5b82cb1fb563c18f7cd45cce97 dbfe5f7b4ecd56ab93aaac481c093546f8d80482e6183eb40b5f35a5c605e525" \
         "原厂应用商店模板"
 }
 
@@ -14195,11 +14219,11 @@ unified_http_probe() {
         return 0
     fi
 
-    http_out="$(curl -k -L -I -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}|%{time_starttransfer}' "$http_url" 2>/dev/null || true)"
+    http_out="$(curl -L -I -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}|%{time_starttransfer}' "$http_url" 2>/dev/null || true)"
     http_code="${http_out%%|*}"
     http_time="${http_out#*|}"
     if [ -z "$http_code" ] || [ "$http_code" = '000' ] || [ "$http_code" = "$http_out" ]; then
-        http_out="$(curl -k -L -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}|%{time_starttransfer}' "$http_url" 2>/dev/null || true)"
+        http_out="$(curl -L -o /dev/null -sS --connect-timeout 5 --max-time 8 -w '%{http_code}|%{time_starttransfer}' "$http_url" 2>/dev/null || true)"
         http_code="${http_out%%|*}"
         http_time="${http_out#*|}"
     fi
@@ -17253,7 +17277,7 @@ run_openclash_dependency_repair_check() {
 
     if [ -n "$missing_pkgs" ]; then
         if confirm_default_yes "检测到 $OPENCLASH_DISPLAY_NAME 依赖缺失:${missing_pkgs}，是否现在更新软件源并安装？"; then
-            ensure_opkg_update
+            ensure_opkg_update || die "opkg update 失败，已停止依赖修复"
             ensure_packages $missing_pkgs
             repair_changed=1
         else
@@ -17502,6 +17526,11 @@ run_unified_test_mode() {
     run_unified_nros_outlet_health_check
     record_unified_selfcheck_summary "NROS 出口"
     log ""
+    if nradio_smart_band_model_supported; then
+        run_nradio_smart_band_selfcheck
+        record_unified_selfcheck_summary "智能频段"
+        log ""
+    fi
     run_unified_storage_expand_health_check
     record_unified_selfcheck_summary "eMMC 存储扩展"
     log ""
@@ -18986,7 +19015,7 @@ install_openclash() {
     [ -n "${package_mirror_base:-}" ] && log "安装包来源: $package_mirror_base"
 
     log_stage 3 7 "刷新 opkg 软件源并检查依赖"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 $OPENCLASH_DISPLAY_NAME 安装"
     ensure_packages dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-inet-diag kmod-nft-tproxy kmod-tun unzip
 
     log_stage 4 7 "重打包并安装 $OPENCLASH_DISPLAY_NAME"
@@ -28973,7 +29002,7 @@ download_mosdns_core() {
 
     mkdir -p "$WORKDIR/mosdns/unpack"
     ensure_default_feeds
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 MosDNS 安装"
     ensure_packages unzip
     if command -v unzip >/dev/null 2>&1; then
         unzip -tq "$zip_path" >/tmp/mosdns-archive-validate.log 2>&1 || {
@@ -29274,7 +29303,7 @@ install_ddnsgo() {
     ddnsgo_archive_size="$(ddnsgo_size_value "$ddnsgo_archive" "0")"
 
     log_stage 3 7 "解包并安装 DDNS-GO 三件套"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 DDNS-GO 安装"
     ddnsgo_extract_need="$(estimate_archive_extract_bytes "$ddnsgo_archive" 2>/dev/null || true)"
     rm -rf "$ddnsgo_unpack"
     mkdir -p "$ddnsgo_unpack"
@@ -29797,7 +29826,7 @@ install_zerotier() {
     zerotier_download_size="$(wc -c < "$zerotier_ipk" | tr -d ' ')"
 
     log_stage 3 5 "安装 ZeroTier 核心并准备配置"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 ZeroTier 安装"
     install_ipk_file "$zerotier_ipk" "ZeroTier"
     ensure_zerotier_config_defaults
     [ -n "$zerotier_version" ] || zerotier_version="$(get_installed_package_version zerotier 2>/dev/null || true)"
@@ -29915,7 +29944,7 @@ install_easytier() {
     easytier_download_size="$(wc -c < "$easytier_archive" | tr -d ' ')"
 
     log_stage 3 5 "解压安装 $EASYTIER_DISPLAY_NAME 并修正 LuCI 控制器"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止 $EASYTIER_DISPLAY_NAME 安装"
     ensure_packages kmod-tun unzip
     extract_easytier_release_bundle "$easytier_archive" "$easytier_unpack"
     for candidate in \
@@ -30819,13 +30848,21 @@ load_easytier_route_state() {
     ET_ROUTE_LAN_IF=''
     ET_ROUTE_TUN_IF=''
     if [ -f "$EASYTIER_ROUTE_STATE_FILE" ]; then
-        . "$EASYTIER_ROUTE_STATE_FILE" 2>/dev/null || true
+        if ! state_file_is_v2 "$EASYTIER_ROUTE_STATE_FILE" || ! . "$EASYTIER_ROUTE_STATE_FILE" 2>/dev/null; then
+            rm -f "$EASYTIER_ROUTE_STATE_FILE"
+            ET_ROUTE_VIRTUAL_IP=''
+            ET_ROUTE_LOCAL_SUBNET=''
+            ET_ROUTE_REMOTE_SUBNET=''
+            ET_ROUTE_LAN_IF=''
+            ET_ROUTE_TUN_IF=''
+        fi
     fi
 }
 
 save_easytier_route_state() {
     ensure_state_dir
     {
+        printf '%s\n' "NRADIO_STATE_FORMAT='2'"
         printf 'ET_ROUTE_VIRTUAL_IP=%s\n' "$(shell_quote "${ET_ROUTE_VIRTUAL_IP:-}")"
         printf 'ET_ROUTE_LOCAL_SUBNET=%s\n' "$(shell_quote "${ET_ROUTE_LOCAL_SUBNET:-}")"
         printf 'ET_ROUTE_REMOTE_SUBNET=%s\n' "$(shell_quote "${ET_ROUTE_REMOTE_SUBNET:-}")"
@@ -31000,6 +31037,7 @@ log() { printf '%s\n' "\$*"; }
 die() { printf 'ERROR: %s\n' "\$*" >&2; exit 1; }
 
 [ -f "\$STATE_FILE" ] || die '未找到 EasyTier 路由状态文件'
+[ "\$(sed -n '1p' "\$STATE_FILE" 2>/dev/null || true)" = "NRADIO_STATE_FORMAT='2'" ] || die 'EasyTier 路由状态文件格式不安全，请重新运行路由向导'
 . "\$STATE_FILE" 2>/dev/null || die '读取 EasyTier 路由状态文件失败'
 
 [ -n "\${ET_ROUTE_REMOTE_SUBNET:-}" ] || die '未找到远端 LAN 网段'
@@ -45452,7 +45490,7 @@ get_url_content_length() {
     content_length=""
 
     if command -v curl >/dev/null 2>&1; then
-        headers="$(curl -k -L -sSI --connect-timeout 15 --max-time 20 "$url" 2>/dev/null || true)"
+        headers="$(curl -L -sSI --connect-timeout 15 --max-time 20 "$url" 2>/dev/null || true)"
         content_length="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Ll]ength: *//p' | tail -n 1)"
     fi
 
@@ -45618,7 +45656,7 @@ download_file() {
     if command -v curl >/dev/null 2>&1; then
         run_download_with_progress "$download_url" "$download_tmp" curl -fL --retry 3 --silent --show-error --connect-timeout 15 --max-time 900 -o "$download_tmp" "$download_url" || return 1
     elif command -v wget >/dev/null 2>&1; then
-        run_download_with_progress "$download_url" "$download_tmp" wget -q --no-check-certificate -O "$download_tmp" "$download_url" || return 1
+        run_download_with_progress "$download_url" "$download_tmp" wget -q -O "$download_tmp" "$download_url" || return 1
     elif command -v uclient-fetch >/dev/null 2>&1; then
         run_download_with_progress "$download_url" "$download_tmp" uclient-fetch -q -O "$download_tmp" "$download_url" || return 1
     else
@@ -47515,6 +47553,1022 @@ ${disclaimer_user_responsibility_title}
 EOF
 }
 
+nradio_smart_band_current_model() {
+    if [ -n "${CURRENT_DETECTED_MODEL:-}" ]; then
+        printf '%s\n' "$CURRENT_DETECTED_MODEL"
+        return 0
+    fi
+
+    normalize_nradio_model "$(detect_board_model_raw)" "$(detect_board_name_raw)" "$(detect_board_compatible_raw)" 2>/dev/null || true
+}
+
+nradio_smart_band_model_supported() {
+    case "$(nradio_smart_band_current_model 2>/dev/null || true)" in
+        NRadio_C5800-688)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+require_nradio_smart_band_supported_model() {
+    smart_band_model="$(nradio_smart_band_current_model 2>/dev/null || true)"
+    [ "$smart_band_model" = 'NRadio_C5800-688' ] || die "智能频段管理当前仅支持已实测的 NRadio_C5800-688；当前机型: ${smart_band_model:-未知}"
+}
+
+write_nradio_smart_band_script() {
+    smart_band_tmp="${NRADIO_SMART_BAND_SCRIPT}.tmp.$$"
+    rm -f "$smart_band_tmp" 2>/dev/null || true
+
+    cat > "$smart_band_tmp" <<'EOF_NRADIO_SMART_BAND_V5_8FC30A'
+#!/bin/sh
+# NRadio 智能频段切换 v5 - 联网健康优先，频段仅作决策参考
+LOG_TAG="nradio-band"
+STATE_FILE="/tmp/nradio_band_state"
+LOCK_DIR="/tmp/nradio-smart-band.lock"
+RUNTIME_LOG="/tmp/nradio-smart-band.log"
+MIN_BW=20000
+MAX_RETRIES=1
+COOLDOWN=43200
+RETRY_WINDOW=86400
+HEALTH_FAILURE_LIMIT=3
+HEALTH_PROBE_COUNT=2
+HEALTH_PROBE_TIMEOUT=2
+HEALTH_TARGET_1="223.5.5.5"
+HEALTH_TARGET_2="119.29.29.29"
+SOFT_RECOVERY_WAIT=20
+IPV4_RECOVERY_WAIT=180
+IPV6_RECOVERY_WAIT=60
+IPV6_RECOVERY_COOLDOWN=21600
+DAY_START=5
+DAY_END=22
+
+TMP_FILE=""
+BAND_STATUS="unknown"
+BAND_REASON="unknown"
+BAND_KEY="unknown"
+RETRY_COUNT=0
+RETRY_WINDOW_START=0
+RETRY_BLOCK_REASON=""
+OBS_PREVIOUS_BAND=""
+OBS_SINCE=0
+OBS_COUNT=0
+HEALTH_STATUS="unknown"
+HEALTH_REASON="not-checked"
+ACTIVE_DEVICE=""
+OPERATOR_NAME="unknown"
+OPERATOR_PROFILE="unknown"
+IPV6_STATUS="unknown"
+EXEC_MODE="apply"
+
+log() {
+    local _line _size _log_tmp
+    _line="$(date '+%Y-%m-%d %H:%M:%S') $1"
+    logger -t "$LOG_TAG" "$1"
+    printf '%s\n' "$_line" >> "$RUNTIME_LOG"
+    _size="$(wc -c < "$RUNTIME_LOG" 2>/dev/null || echo 0)"
+    if is_uint "$_size" && [ "$_size" -gt 65536 ]; then
+        _log_tmp="${RUNTIME_LOG}.tmp.$$"
+        tail -n 240 "$RUNTIME_LOG" > "$_log_tmp" 2>/dev/null || true
+        mv "$_log_tmp" "$RUNTIME_LOG"
+    fi
+    echo "$_line"
+}
+
+is_uint() {
+    case "${1:-}" in
+        ''|*[!0-9]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+state_get() {
+    local _iface="$1" _key="$2"
+    [ -f "$STATE_FILE" ] || return 0
+    grep "^${_iface}_${_key}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2 | head -n 1
+}
+
+state_has() {
+    local _iface="$1"
+    [ -f "$STATE_FILE" ] && grep -q "^${_iface}_" "$STATE_FILE" 2>/dev/null
+}
+
+state_clear() {
+    local _iface="$1"
+    state_has "$_iface" || return 0
+
+    TMP_FILE="${STATE_FILE}.tmp.$$"
+    grep -v "^${_iface}_" "$STATE_FILE" > "$TMP_FILE" 2>/dev/null || true
+    mv "$TMP_FILE" "$STATE_FILE"
+    TMP_FILE=""
+}
+
+state_write() {
+    local _iface="$1" _count="$2" _last="$3" _window="$4" _band="$5" _since="$6" _samples="$7" _failures="$8" _ipv6_last="$9"
+
+    TMP_FILE="${STATE_FILE}.tmp.$$"
+    if [ -f "$STATE_FILE" ]; then
+        grep -v "^${_iface}_" "$STATE_FILE" 2>/dev/null | grep -v '^format=' > "$TMP_FILE" 2>/dev/null || true
+    else
+        : > "$TMP_FILE"
+    fi
+    printf '%s\n' \
+        "format=5" \
+        "${_iface}_c=${_count}" \
+        "${_iface}_t=${_last}" \
+        "${_iface}_w=${_window}" \
+        "${_iface}_b=${_band}" \
+        "${_iface}_s=${_since}" \
+        "${_iface}_n=${_samples}" \
+        "${_iface}_f=${_failures}" \
+        "${_iface}_v=${_ipv6_last}" >> "$TMP_FILE"
+    mv "$TMP_FILE" "$STATE_FILE"
+    TMP_FILE=""
+}
+
+state_write_retry() {
+    local _iface="$1" _count="$2" _last="$3" _window="$4" _failures="${5:-0}" _band _since _samples _ipv6_last
+
+    _band="$(state_get "$_iface" b)"
+    _since="$(state_get "$_iface" s)"
+    _samples="$(state_get "$_iface" n)"
+    _ipv6_last="$(state_get "$_iface" v)"
+    [ -n "$_band" ] || _band="$BAND_KEY"
+    is_uint "$_since" || _since="$(date +%s)"
+    is_uint "$_samples" || _samples=1
+    is_uint "$_failures" || _failures=0
+    is_uint "$_ipv6_last" || _ipv6_last=0
+    state_write "$_iface" "$_count" "$_last" "$_window" "$_band" "$_since" "$_samples" "$_failures" "$_ipv6_last"
+}
+
+record_band_observation() {
+    local _iface="$1" _now _count _last _window _previous _since _samples _failures _ipv6_last
+
+    _now="$(date +%s)"
+    _count="$(state_get "$_iface" c)"
+    _last="$(state_get "$_iface" t)"
+    _window="$(state_get "$_iface" w)"
+    _previous="$(state_get "$_iface" b)"
+    _since="$(state_get "$_iface" s)"
+    _samples="$(state_get "$_iface" n)"
+    _failures="$(state_get "$_iface" f)"
+    _ipv6_last="$(state_get "$_iface" v)"
+
+    is_uint "$_count" || _count=0
+    is_uint "$_last" || _last=0
+    is_uint "$_window" || _window="$_now"
+    is_uint "$_failures" || _failures=0
+    is_uint "$_ipv6_last" || _ipv6_last=0
+    OBS_PREVIOUS_BAND="$_previous"
+
+    if [ "$_previous" = "$BAND_KEY" ] && is_uint "$_since" && is_uint "$_samples"; then
+        if [ "$_now" -lt "$_since" ]; then
+            _since="$_now"
+            _samples=1
+        else
+            _samples=$((_samples + 1))
+        fi
+    else
+        _since="$_now"
+        _samples=1
+    fi
+
+    OBS_SINCE="$_since"
+    OBS_COUNT="$_samples"
+    state_write "$_iface" "$_count" "$_last" "$_window" "$BAND_KEY" "$_since" "$_samples" "$_failures" "$_ipv6_last"
+}
+
+state_set_health_failures() {
+    local _iface="$1" _failures="$2" _now _count _last _window _band _since _samples _ipv6_last
+    _now="$(date +%s)"
+    _count="$(state_get "$_iface" c)"
+    _last="$(state_get "$_iface" t)"
+    _window="$(state_get "$_iface" w)"
+    _band="$(state_get "$_iface" b)"
+    _since="$(state_get "$_iface" s)"
+    _samples="$(state_get "$_iface" n)"
+    _ipv6_last="$(state_get "$_iface" v)"
+    is_uint "$_count" || _count=0
+    is_uint "$_last" || _last=0
+    is_uint "$_window" || _window="$_now"
+    [ -n "$_band" ] || _band="$BAND_KEY"
+    is_uint "$_since" || _since="$_now"
+    is_uint "$_samples" || _samples=1
+    is_uint "$_failures" || _failures=0
+    is_uint "$_ipv6_last" || _ipv6_last=0
+    state_write "$_iface" "$_count" "$_last" "$_window" "$_band" "$_since" "$_samples" "$_failures" "$_ipv6_last"
+}
+
+state_set_ipv6_last() {
+    local _iface="$1" _ipv6_last="$2" _now _count _last _window _band _since _samples _failures
+    _now="$(date +%s)"
+    _count="$(state_get "$_iface" c)"
+    _last="$(state_get "$_iface" t)"
+    _window="$(state_get "$_iface" w)"
+    _band="$(state_get "$_iface" b)"
+    _since="$(state_get "$_iface" s)"
+    _samples="$(state_get "$_iface" n)"
+    _failures="$(state_get "$_iface" f)"
+    is_uint "$_count" || _count=0
+    is_uint "$_last" || _last=0
+    is_uint "$_window" || _window="$_now"
+    [ -n "$_band" ] || _band="$BAND_KEY"
+    is_uint "$_since" || _since="$_now"
+    is_uint "$_samples" || _samples=1
+    is_uint "$_failures" || _failures=0
+    is_uint "$_ipv6_last" || _ipv6_last=0
+    state_write "$_iface" "$_count" "$_last" "$_window" "$_band" "$_since" "$_samples" "$_failures" "$_ipv6_last"
+}
+
+interface_disabled() {
+    local _iface="$1" _disabled
+    _disabled="$(uci -q get "network.${_iface}.disabled" 2>/dev/null || true)"
+    [ "$_disabled" = "1" ]
+}
+
+detect_operator() {
+    local _iface="$1" _line _name _upper
+    OPERATOR_NAME="unknown"
+    OPERATOR_PROFILE="unknown"
+    _line="$(atsd_cli -i "$_iface" -c 'AT+COPS?' 2>/dev/null | grep '+COPS:' | head -n 1)"
+    [ -n "$_line" ] || return 1
+    _name="$(printf '%s\n' "$_line" | cut -d'"' -f2 | tr -d '\r\n')"
+    [ -n "$_name" ] || _name="$(printf '%s\n' "$_line" | cut -d',' -f3 | tr -d ' "\r\n')"
+    [ -n "$_name" ] || return 1
+    OPERATOR_NAME="$_name"
+    _upper="$(printf '%s' "$_line $_name" | tr '[:lower:]' '[:upper:]')"
+    case "$_upper" in
+        *CHINA\ MOBILE*|*CMCC*|*BROADNET*|*CBN*|*46000*|*46002*|*46004*|*46007*|*46008*|*46015*)
+            OPERATOR_PROFILE="mobile-broadnet"
+            ;;
+        *UNICOM*|*46001*|*46006*|*46009*)
+            OPERATOR_PROFILE="unicom"
+            ;;
+        *TELECOM*|*46003*|*46005*|*46011*|*46012*)
+            OPERATOR_PROFILE="telecom"
+            ;;
+    esac
+    return 0
+}
+
+status_field() {
+    local _text="$1" _field="$2"
+    printf '%s\n' "$_text" | sed -n "s/^[[:space:]]*\"${_field}\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
+}
+
+ipv4_interface_status() {
+    local _iface="$1"
+    command -v ifstatus >/dev/null 2>&1 || return 1
+    ifstatus "${_iface}_4" 2>/dev/null
+}
+
+check_ipv4_health() {
+    local _iface="$1" _status _dev
+    HEALTH_STATUS="unhealthy"
+    HEALTH_REASON="interface-status-missing"
+    ACTIVE_DEVICE=""
+
+    _status="$(ipv4_interface_status "$_iface")"
+    [ -n "$_status" ] || return 1
+    printf '%s\n' "$_status" | grep -F '"up": true' >/dev/null 2>&1 || {
+        HEALTH_REASON="ipv4-interface-down"
+        return 1
+    }
+    printf '%s\n' "$_status" | grep -F '"address": "' >/dev/null 2>&1 || {
+        HEALTH_REASON="ipv4-address-missing"
+        return 1
+    }
+    _dev="$(status_field "$_status" l3_device)"
+    [ -n "$_dev" ] || _dev="$(status_field "$_status" device)"
+    case "$_dev" in
+        ''|*[!A-Za-z0-9_.:-]*)
+            HEALTH_REASON="ipv4-device-invalid"
+            return 1
+            ;;
+    esac
+    ACTIVE_DEVICE="$_dev"
+    ip -4 route show default 2>/dev/null | grep -F "dev $_dev" >/dev/null 2>&1 || {
+        HEALTH_REASON="ipv4-default-route-missing"
+        return 1
+    }
+
+    if ping -I "$_dev" -c "$HEALTH_PROBE_COUNT" -W "$HEALTH_PROBE_TIMEOUT" "$HEALTH_TARGET_1" >/dev/null 2>&1; then
+        HEALTH_STATUS="healthy"
+        HEALTH_REASON="probe-${HEALTH_TARGET_1}-ok"
+        return 0
+    fi
+    if ping -I "$_dev" -c "$HEALTH_PROBE_COUNT" -W "$HEALTH_PROBE_TIMEOUT" "$HEALTH_TARGET_2" >/dev/null 2>&1; then
+        HEALTH_STATUS="healthy"
+        HEALTH_REASON="probe-${HEALTH_TARGET_2}-ok"
+        return 0
+    fi
+    HEALTH_REASON="both-probes-failed"
+    return 1
+}
+
+soft_ipv4_recover() {
+    local _iface="$1" _status _elapsed
+    log "${_iface}: IPv4 连续异常，先执行轻量续租，不重启模组"
+    _status="$(ipv4_interface_status "$_iface")"
+    if printf '%s\n' "$_status" | grep -F '"up": true' >/dev/null 2>&1; then
+        ubus call "network.interface.${_iface}_4" renew >/dev/null 2>&1 || true
+    elif command -v ifup >/dev/null 2>&1; then
+        ifup "${_iface}_4" >/dev/null 2>&1 || true
+    fi
+
+    _elapsed=0
+    while [ "$_elapsed" -lt "$SOFT_RECOVERY_WAIT" ]; do
+        sleep 5
+        _elapsed=$((_elapsed + 5))
+        if check_ipv4_health "$_iface"; then
+            log "${_iface}: 轻量续租后 IPv4 已恢复，用时 ${_elapsed}s"
+            return 0
+        fi
+    done
+    log "${_iface}: 轻量续租 ${SOFT_RECOVERY_WAIT}s 后仍异常；reason=${HEALTH_REASON}"
+    return 1
+}
+
+wait_for_ipv4_recovery() {
+    local _iface="$1" _elapsed
+    _elapsed=0
+    while [ "$_elapsed" -le "$IPV4_RECOVERY_WAIT" ]; do
+        if check_ipv4_health "$_iface"; then
+            log "${_iface}: CFUN 后 IPv4 已恢复，用时 ${_elapsed}s；${HEALTH_REASON}"
+            return 0
+        fi
+        sleep 10
+        _elapsed=$((_elapsed + 10))
+    done
+    log "${_iface}: CFUN 后 ${IPV4_RECOVERY_WAIT}s 内 IPv4 未恢复；reason=${HEALTH_REASON}"
+    return 1
+}
+
+check_band() {
+    local _iface="$1" _info _mode _band _freq _bw _tech
+
+    BAND_STATUS="unknown"
+    BAND_REASON="query-failed"
+    BAND_KEY="unknown"
+    _info="$(atsd_cli -i "$_iface" -c 'AT^HFREQINFO?' 2>/dev/null | grep 'HFREQINFO:' | head -n 1)"
+    [ -n "$_info" ] || return 1
+
+    _mode="$(echo "$_info" | cut -d',' -f2 | tr -d ' \r\n')"
+    _band="$(echo "$_info" | cut -d',' -f3 | tr -d ' \r\n')"
+    _freq="$(echo "$_info" | cut -d',' -f5 | tr -d ' \r\n')"
+    _bw="$(echo "$_info" | cut -d',' -f6 | tr -d ' \r\n')"
+    is_uint "$_mode" && is_uint "$_band" && is_uint "$_freq" && is_uint "$_bw" || return 1
+
+    case "$_mode" in
+        7) _tech="NR" ;;
+        6) _tech="LTE" ;;
+        *) _tech="MODE${_mode}" ;;
+    esac
+    BAND_KEY="${_tech}:${_band}"
+    BAND_STATUS="${_tech} band=${_band} freq_field=${_freq} bw=${_bw}kHz"
+
+    if [ "$_mode" = "7" ]; then
+        case "$_band" in
+            28)
+                BAND_REASON="nr28-coverage-band"
+                return 0
+                ;;
+            5|8)
+                BAND_REASON="low-coverage-band"
+                return 0
+                ;;
+            1|3|41|78|79)
+                BAND_REASON="preferred-nr-band"
+                return 2
+                ;;
+        esac
+    fi
+
+    if [ "$_mode" = "6" ]; then
+        case "$_band" in
+            1|3|7|38|39|40|41|42|43)
+                BAND_REASON="preferred-lte-band"
+                return 2
+                ;;
+            5|8|12|17|20|26|28)
+                BAND_REASON="low-lte-coverage-band"
+                return 0
+                ;;
+        esac
+    fi
+
+    if [ "$_bw" -lt "$MIN_BW" ]; then
+        BAND_REASON="low-bandwidth"
+        return 0
+    fi
+
+    BAND_REASON="adequate-bandwidth"
+    return 2
+}
+
+ipv6_interface_status() {
+    local _iface="$1"
+    command -v ifstatus >/dev/null 2>&1 || return 1
+    ifstatus "${_iface}_6" 2>/dev/null
+}
+
+check_ipv6_ready() {
+    local _iface="$1" _status
+    IPV6_STATUS="unavailable"
+    _status="$(ipv6_interface_status "$_iface")"
+    [ -n "$_status" ] || return 1
+    if ! printf '%s\n' "$_status" | grep -F '"up": true' >/dev/null 2>&1; then
+        if printf '%s\n' "$_status" | grep -F '"pending": true' >/dev/null 2>&1; then
+            IPV6_STATUS="pending"
+        else
+            IPV6_STATUS="down"
+        fi
+        return 1
+    fi
+    if printf '%s\n' "$_status" | grep -F '"pending": true' >/dev/null 2>&1; then
+        IPV6_STATUS="pending"
+        return 1
+    fi
+    printf '%s\n' "$_status" | grep -F '"address": "' >/dev/null 2>&1 || {
+        IPV6_STATUS="address-missing"
+        return 1
+    }
+    IPV6_STATUS="ready"
+    return 0
+}
+
+device_has_link_local() {
+    local _dev="$1"
+    [ -n "$_dev" ] || return 1
+    ip -6 address show dev "$_dev" 2>/dev/null | grep -F 'inet6 fe80:' | grep -F ' scope link ' >/dev/null 2>&1
+}
+
+device_eui64_link_local() {
+    local _dev="$1" _mac _b1 _b2 _b3 _b4 _b5 _b6
+    [ -r "/sys/class/net/${_dev}/address" ] || return 1
+    _mac="$(tr 'A-F' 'a-f' < "/sys/class/net/${_dev}/address" 2>/dev/null)"
+    case "$_mac" in
+        [0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]) ;;
+        *) return 1 ;;
+    esac
+    _b1="$(printf '%s\n' "$_mac" | cut -d: -f1)"
+    _b2="$(printf '%s\n' "$_mac" | cut -d: -f2)"
+    _b3="$(printf '%s\n' "$_mac" | cut -d: -f3)"
+    _b4="$(printf '%s\n' "$_mac" | cut -d: -f4)"
+    _b5="$(printf '%s\n' "$_mac" | cut -d: -f5)"
+    _b6="$(printf '%s\n' "$_mac" | cut -d: -f6)"
+    printf 'fe80::%02x%02x:%02xff:fe%02x:%02x%02x\n' \
+        "$((0x$_b1 ^ 2))" "$((0x$_b2))" "$((0x$_b3))" \
+        "$((0x$_b4))" "$((0x$_b5))" "$((0x$_b6))"
+}
+
+ensure_device_link_local() {
+    local _dev="$1" _link_local
+    device_has_link_local "$_dev" && return 0
+    _link_local="$(device_eui64_link_local "$_dev")"
+    [ -n "$_link_local" ] || return 1
+    log "IPv6恢复: ${_dev} 缺少 link-local，补 ${_link_local}/64"
+    ip -6 address add "${_link_local}/64" dev "$_dev" >/dev/null 2>&1 || true
+    device_has_link_local "$_dev"
+}
+
+recover_ipv6_if_needed() {
+    local _iface="$1" _status _dev _now _last _elapsed
+    check_ipv6_ready "$_iface" && return 0
+    _status="$(ipv6_interface_status "$_iface")"
+    [ -n "$_status" ] || return 0
+
+    _now="$(date +%s)"
+    _last="$(state_get "$_iface" v)"
+    is_uint "$_last" || _last=0
+    if [ "$_now" -ge "$_last" ] && [ $((_now - _last)) -lt "$IPV6_RECOVERY_COOLDOWN" ]; then
+        return 1
+    fi
+    state_set_ipv6_last "$_iface" "$_now"
+
+    _dev="$(status_field "$_status" l3_device)"
+    [ -n "$_dev" ] || _dev="$(status_field "$_status" device)"
+    [ -n "$_dev" ] || _dev="$ACTIVE_DEVICE"
+    case "$_dev" in
+        ''|*[!A-Za-z0-9_.:-]*)
+            log "${_iface}: IPv6 ${IPV6_STATUS}，但设备名无效，跳过恢复"
+            return 1
+            ;;
+    esac
+
+    log "${_iface}: IPv6 ${IPV6_STATUS}，开始独立恢复；不重启蜂窝模组"
+    ensure_device_link_local "$_dev" || true
+    ip -6 neigh flush dev "$_dev" >/dev/null 2>&1 || true
+    ifdown "${_iface}_6" >/dev/null 2>&1 || true
+    sleep 2
+    ensure_device_link_local "$_dev" || true
+    ifup "${_iface}_6" >/dev/null 2>&1 || true
+
+    _elapsed=0
+    while [ "$_elapsed" -le "$IPV6_RECOVERY_WAIT" ]; do
+        if check_ipv6_ready "$_iface"; then
+            log "${_iface}: IPv6 已恢复，用时 ${_elapsed}s"
+            [ -x /etc/init.d/odhcpd ] && /etc/init.d/odhcpd restart >/dev/null 2>&1 || true
+            return 0
+        fi
+        sleep 10
+        _elapsed=$((_elapsed + 10))
+    done
+    log "${_iface}: IPv6 独立恢复 ${IPV6_RECOVERY_WAIT}s 后仍为 ${IPV6_STATUS}；6小时内不重复扰动"
+    return 1
+}
+
+retry_ok() {
+    local _iface="$1" _count _last _window _now _elapsed _remaining
+
+    RETRY_COUNT=0
+    RETRY_WINDOW_START=0
+    RETRY_BLOCK_REASON=""
+    _count="$(state_get "$_iface" c)"
+    _last="$(state_get "$_iface" t)"
+    _window="$(state_get "$_iface" w)"
+    _now="$(date +%s)"
+
+    is_uint "$_count" || _count=0
+    if ! is_uint "$_window"; then
+        _window="$_now"
+        _count=0
+    elif [ "$_now" -lt "$_window" ] || [ $((_now - _window)) -ge "$RETRY_WINDOW" ]; then
+        _window="$_now"
+        _count=0
+    fi
+
+    if is_uint "$_last"; then
+        if [ "$_now" -lt "$_last" ]; then
+            _last=0
+            _window="$_now"
+            _count=0
+        else
+            _elapsed=$((_now - _last))
+            if [ "$_elapsed" -lt "$COOLDOWN" ]; then
+                _remaining=$((COOLDOWN - _elapsed))
+                RETRY_BLOCK_REASON="cooldown ${_remaining}s"
+                return 1
+            fi
+        fi
+    fi
+
+    if [ "$_count" -ge "$MAX_RETRIES" ]; then
+        _remaining=$((RETRY_WINDOW - (_now - _window)))
+        [ "$_remaining" -lt 0 ] && _remaining=0
+        RETRY_BLOCK_REASON="budget ${_count}/${MAX_RETRIES}, reset in ${_remaining}s"
+        return 1
+    fi
+
+    RETRY_COUNT="$_count"
+    RETRY_WINDOW_START="$_window"
+    return 0
+}
+
+do_cfun() {
+    local _iface="$1" _count _now _window _rc
+
+    _now="$(date +%s)"
+    _count=$((RETRY_COUNT + 1))
+    _window="$RETRY_WINDOW_START"
+    is_uint "$_window" || _window="$_now"
+
+    log "${_iface}: 双探针连续失败，轻量续租无效；执行最后手段 CFUN ${_count}/${MAX_RETRIES}; operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}; ${BAND_STATUS}; health=${HEALTH_REASON}"
+    if atsd_cli -i "$_iface" -c 'AT+CFUN=1,1' -w 5000 >/dev/null 2>&1; then
+        _rc=0
+    else
+        _rc=$?
+    fi
+    state_write_retry "$_iface" "$_count" "$_now" "$_window" 0
+    if [ "$_rc" -ne 0 ]; then
+        log "${_iface}: AT+CFUN returned rc=${_rc}; retry budget retained"
+        return "$_rc"
+    fi
+    if wait_for_ipv4_recovery "$_iface"; then
+        state_set_health_failures "$_iface" 0
+        recover_ipv6_if_needed "$_iface" || true
+        return 0
+    fi
+    return 1
+}
+
+process() {
+    local _iface="$1" _desc="$2" _band_rc _health_rc _failures _next_failures _old_failures _count _last _ipv6
+
+    if interface_disabled "$_iface"; then
+        if [ "$EXEC_MODE" = "apply" ] && state_has "$_iface"; then
+            state_clear "$_iface"
+            log "${_iface}(${_desc}): 接口已禁用，旧状态已清理"
+        fi
+        echo "${_iface}=DISABLED"
+        return 0
+    fi
+
+    detect_operator "$_iface" >/dev/null 2>&1 || true
+    check_band "$_iface"
+    _band_rc=$?
+    check_ipv4_health "$_iface"
+    _health_rc=$?
+
+    _failures="$(state_get "$_iface" f)"
+    _count="$(state_get "$_iface" c)"
+    _last="$(state_get "$_iface" t)"
+    is_uint "$_failures" || _failures=0
+    is_uint "$_count" || _count=0
+    is_uint "$_last" || _last=0
+    if check_ipv6_ready "$_iface"; then _ipv6="ready"; else _ipv6="$IPV6_STATUS"; fi
+
+    if [ "$EXEC_MODE" != "apply" ]; then
+        if [ "$_health_rc" -eq 0 ]; then
+            echo "${_iface}=HOLD mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON} ipv6=${_ipv6} retries=${_count}/${MAX_RETRIES} last=${_last}"
+        else
+            _next_failures=$((_failures + 1))
+            if [ "$_next_failures" -lt "$HEALTH_FAILURE_LIMIT" ]; then
+                echo "${_iface}=WAIT mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON} failures=${_next_failures}/${HEALTH_FAILURE_LIMIT} ipv6=${_ipv6}"
+            elif retry_ok "$_iface"; then
+                echo "${_iface}=WOULD-SOFT-RECOVER-THEN-CFUN mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON}"
+            else
+                echo "${_iface}=BLOCKED mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON} block=${RETRY_BLOCK_REASON}"
+            fi
+        fi
+        return 0
+    fi
+
+    record_band_observation "$_iface"
+
+    if [ "$_health_rc" -eq 0 ]; then
+        _old_failures="$_failures"
+        state_set_health_failures "$_iface" 0
+        if [ -n "$OBS_PREVIOUS_BAND" ] && [ "$OBS_PREVIOUS_BAND" != "$BAND_KEY" ]; then
+            log "${_iface}(${_desc}): 频段变化 ${OBS_PREVIOUS_BAND} -> ${BAND_KEY}；IPv4健康，保持不切换；operator=${OPERATOR_NAME}; ${BAND_STATUS}"
+        elif [ "$_old_failures" -gt 0 ]; then
+            log "${_iface}(${_desc}): IPv4 已恢复；失败计数 ${_old_failures} -> 0；保持当前频段 ${BAND_KEY}"
+        fi
+        echo "${_iface}=HEALTHY HOLD operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} ${HEALTH_REASON} ipv6=${_ipv6}"
+        recover_ipv6_if_needed "$_iface" || true
+        return 0
+    fi
+
+    _next_failures=$((_failures + 1))
+    state_set_health_failures "$_iface" "$_next_failures"
+    log "${_iface}(${_desc}): IPv4异常 ${_next_failures}/${HEALTH_FAILURE_LIMIT}; operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}; band=${BAND_KEY}; reason=${HEALTH_REASON}"
+    if [ "$_next_failures" -lt "$HEALTH_FAILURE_LIMIT" ]; then
+        echo "${_iface}=UNHEALTHY WAIT failures=${_next_failures}/${HEALTH_FAILURE_LIMIT} reason=${HEALTH_REASON}"
+        return 1
+    fi
+
+    if soft_ipv4_recover "$_iface"; then
+        state_set_health_failures "$_iface" 0
+        recover_ipv6_if_needed "$_iface" || true
+        echo "${_iface}=RECOVERED WITHOUT-CFUN"
+        return 0
+    fi
+
+    if ! retry_ok "$_iface"; then
+        log "${_iface}(${_desc}): CFUN 已阻止；${RETRY_BLOCK_REASON}"
+        echo "${_iface}=UNHEALTHY BLOCKED ${RETRY_BLOCK_REASON}"
+        return 1
+    fi
+
+    if do_cfun "$_iface"; then
+        echo "${_iface}=RECOVERED CFUN"
+        return 0
+    fi
+    echo "${_iface}=UNHEALTHY CFUN-FAILED"
+    return 1
+}
+
+if [ "${NRADIO_SMART_BAND_LIB_ONLY:-0}" = "1" ]; then
+    return 0 2>/dev/null || exit 0
+fi
+
+case "${1:-}" in
+    ''|apply|--apply) EXEC_MODE="apply" ;;
+    status|--status) EXEC_MODE="status" ;;
+    dry-run|--dry-run) EXEC_MODE="dry-run" ;;
+    *) echo "usage: $0 [apply|status|dry-run]" >&2; exit 2 ;;
+esac
+
+if [ "$EXEC_MODE" = "apply" ]; then
+    HOUR="$(date +%H)"
+    if [ "$HOUR" -lt "$DAY_START" ] || [ "$HOUR" -ge "$DAY_END" ]; then
+        exit 0
+    fi
+fi
+
+if [ "$EXEC_MODE" = "apply" ]; then
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        log "已有实例运行，跳过本轮"
+        exit 0
+    fi
+fi
+
+cleanup() {
+    [ -n "$TMP_FILE" ] && rm -f "$TMP_FILE"
+    [ "$EXEC_MODE" = "apply" ] && rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM HUP
+
+RESULT=0
+process "cpe" "蜂窝接口1" || RESULT=1
+process "cpe1" "蜂窝接口2" || RESULT=1
+exit "$RESULT"
+EOF_NRADIO_SMART_BAND_V5_8FC30A
+
+    if ! sh -n "$smart_band_tmp" >/dev/null 2>&1; then
+        rm -f "$smart_band_tmp" 2>/dev/null || true
+        die "内嵌智能频段脚本语法校验失败，拒绝覆盖"
+    fi
+    command -v sha256sum >/dev/null 2>&1 || {
+        rm -f "$smart_band_tmp" 2>/dev/null || true
+        die "系统缺少 sha256sum，无法校验内嵌智能频段脚本"
+    }
+    smart_band_actual_sha="$(sha256sum "$smart_band_tmp" 2>/dev/null | awk '{print $1}')"
+    if [ "$smart_band_actual_sha" != "$NRADIO_SMART_BAND_EXPECTED_SHA256" ]; then
+        rm -f "$smart_band_tmp" 2>/dev/null || true
+        die "内嵌智能频段脚本 SHA256 异常: ${smart_band_actual_sha:-读取失败}"
+    fi
+
+    if [ -f "$NRADIO_SMART_BAND_SCRIPT" ] && command -v cmp >/dev/null 2>&1 && cmp -s "$smart_band_tmp" "$NRADIO_SMART_BAND_SCRIPT"; then
+        rm -f "$smart_band_tmp"
+        chmod 700 "$NRADIO_SMART_BAND_SCRIPT"
+        log "脚本:   已是内嵌最新版 v5"
+        return 0
+    fi
+
+    chmod 700 "$smart_band_tmp"
+    mv -f "$smart_band_tmp" "$NRADIO_SMART_BAND_SCRIPT"
+    log "脚本:   已从总脚本释放到 $NRADIO_SMART_BAND_SCRIPT"
+    log "SHA256: $NRADIO_SMART_BAND_EXPECTED_SHA256"
+}
+
+restart_nradio_smart_band_cron() {
+    if [ -x /etc/init.d/cron ]; then
+        /etc/init.d/cron restart >/dev/null 2>&1 || die "crond 重启失败"
+        return 0
+    fi
+    if command -v killall >/dev/null 2>&1 && killall -HUP crond >/dev/null 2>&1; then
+        return 0
+    fi
+    die "未找到可用的 crond 重载方式"
+}
+
+update_nradio_smart_band_cron() {
+    smart_band_cron_mode="${1:-install}"
+    smart_band_cron_dir="$(dirname "$NRADIO_SMART_BAND_CRON_FILE")"
+    smart_band_cron_tmp="${NRADIO_SMART_BAND_CRON_FILE}.tmp.$$"
+
+    mkdir -p "$smart_band_cron_dir"
+    : > "$smart_band_cron_tmp"
+    if [ -f "$NRADIO_SMART_BAND_CRON_FILE" ]; then
+        grep -Fv "$NRADIO_SMART_BAND_CRON_MARKER" "$NRADIO_SMART_BAND_CRON_FILE" > "$smart_band_cron_tmp" 2>/dev/null || true
+    fi
+    if [ "$smart_band_cron_mode" = 'install' ]; then
+        printf '%s\n' "$NRADIO_SMART_BAND_CRON_LINE" >> "$smart_band_cron_tmp"
+    fi
+
+    if [ -f "$NRADIO_SMART_BAND_CRON_FILE" ] && command -v cmp >/dev/null 2>&1 && cmp -s "$smart_band_cron_tmp" "$NRADIO_SMART_BAND_CRON_FILE"; then
+        rm -f "$smart_band_cron_tmp"
+        log "定时:   配置未变化"
+        return 0
+    fi
+
+    backup_file "$NRADIO_SMART_BAND_CRON_FILE"
+    chmod 600 "$smart_band_cron_tmp"
+    mv -f "$smart_band_cron_tmp" "$NRADIO_SMART_BAND_CRON_FILE"
+    restart_nradio_smart_band_cron
+    if [ "$smart_band_cron_mode" = 'install' ]; then
+        log "定时:   每 30 分钟检查；脚本仅在 05:00-21:59 执行恢复"
+    else
+        log "定时:   已移除智能频段任务"
+    fi
+}
+
+require_nradio_smart_band_installed() {
+    [ -x "$NRADIO_SMART_BAND_SCRIPT" ] || die "智能频段脚本未安装；请先执行 5 > 8 > 1"
+    sh -n "$NRADIO_SMART_BAND_SCRIPT" >/dev/null 2>&1 || die "已安装智能频段脚本语法异常"
+}
+
+install_nradio_smart_band() {
+    require_root
+    require_nradio_smart_band_supported_model
+    write_nradio_smart_band_script
+    update_nradio_smart_band_cron install
+    log "结果:   智能频段 v5 已安装并启用"
+}
+
+show_nradio_smart_band_status() {
+    require_root
+    require_nradio_smart_band_supported_model
+    require_nradio_smart_band_installed
+    log "智能频段状态:"
+    if sh "$NRADIO_SMART_BAND_SCRIPT" status; then
+        return 0
+    else
+        smart_band_rc="$?"
+    fi
+    log "状态:   存在异常接口，退出码=$smart_band_rc"
+    return "$smart_band_rc"
+}
+
+dry_run_nradio_smart_band() {
+    require_root
+    require_nradio_smart_band_supported_model
+    require_nradio_smart_band_installed
+    log "智能频段只读模拟:"
+    sh "$NRADIO_SMART_BAND_SCRIPT" dry-run
+}
+
+run_nradio_smart_band_now() {
+    require_root
+    require_nradio_smart_band_supported_model
+    require_nradio_smart_band_installed
+    log "智能频段立即执行:"
+    sh "$NRADIO_SMART_BAND_SCRIPT" apply
+}
+
+show_nradio_smart_band_log() {
+    require_root
+    require_nradio_smart_band_supported_model
+    if [ ! -s "$NRADIO_SMART_BAND_RUNTIME_LOG" ]; then
+        log "日志:   暂无 $NRADIO_SMART_BAND_RUNTIME_LOG"
+        return 0
+    fi
+    log "最近 120 行运行日志:"
+    tail -n 120 "$NRADIO_SMART_BAND_RUNTIME_LOG"
+}
+
+uninstall_nradio_smart_band() {
+    require_root
+    require_nradio_smart_band_supported_model
+    printf '确认卸载智能频段脚本、定时任务及运行状态？[y/N]: '
+    ui_read_line || die "input cancelled"
+    case "$UI_READ_RESULT" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            log "已取消"
+            return 0
+            ;;
+    esac
+
+    update_nradio_smart_band_cron remove
+    rm -f "$NRADIO_SMART_BAND_SCRIPT" "$NRADIO_SMART_BAND_STATE_FILE" "$NRADIO_SMART_BAND_RUNTIME_LOG" 2>/dev/null || true
+    rmdir "$NRADIO_SMART_BAND_LOCK_DIR" 2>/dev/null || true
+    log "结果:   智能频段脚本、定时任务及临时状态已移除"
+}
+
+run_nradio_smart_band_selfcheck() {
+    smart_band_failures=0
+    smart_band_warnings=0
+    smart_band_cron_count=0
+
+    selfcheck_print_header "智能频段"
+    if [ ! -e "$NRADIO_SMART_BAND_SCRIPT" ] && ! grep -Fq "$NRADIO_SMART_BAND_CRON_MARKER" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null; then
+        log "summary:  SKIP (optional feature not installed)"
+        set_last_selfcheck_status SKIP 0 0
+        return 0
+    fi
+
+    if [ -x "$NRADIO_SMART_BAND_SCRIPT" ]; then
+        log "脚本:   $NRADIO_SMART_BAND_SCRIPT = 可执行"
+        if sh -n "$NRADIO_SMART_BAND_SCRIPT" >/dev/null 2>&1; then
+            log "语法:   PASS"
+        else
+            log "语法:   FAIL"
+            smart_band_failures=$((smart_band_failures + 1))
+        fi
+        if command -v sha256sum >/dev/null 2>&1; then
+            smart_band_installed_sha="$(sha256sum "$NRADIO_SMART_BAND_SCRIPT" 2>/dev/null | awk '{print $1}')"
+            if [ "$smart_band_installed_sha" = "$NRADIO_SMART_BAND_EXPECTED_SHA256" ]; then
+                log "版本:   v5 SHA256 匹配"
+            else
+                log "版本:   WARN SHA256=${smart_band_installed_sha:-读取失败}"
+                smart_band_warnings=$((smart_band_warnings + 1))
+            fi
+        else
+            log "版本:   WARN 缺少 sha256sum"
+            smart_band_warnings=$((smart_band_warnings + 1))
+        fi
+    else
+        log "脚本:   FAIL 缺失或不可执行"
+        smart_band_failures=$((smart_band_failures + 1))
+    fi
+
+    if [ -f "$NRADIO_SMART_BAND_CRON_FILE" ]; then
+        smart_band_cron_count="$(grep -Fc "$NRADIO_SMART_BAND_CRON_MARKER" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null || true)"
+    fi
+    case "$smart_band_cron_count" in
+        ''|*[!0-9]*) smart_band_cron_count=0 ;;
+    esac
+    if [ "$smart_band_cron_count" -eq 1 ] && grep -Fxq "$NRADIO_SMART_BAND_CRON_LINE" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null; then
+        log "定时:   PASS 每 30 分钟"
+    else
+        log "定时:   FAIL marker=$smart_band_cron_count"
+        smart_band_failures=$((smart_band_failures + 1))
+    fi
+
+    if [ -x "$NRADIO_SMART_BAND_SCRIPT" ]; then
+        if smart_band_status_output="$(sh "$NRADIO_SMART_BAND_SCRIPT" status 2>&1)"; then
+            log "状态:   PASS"
+        else
+            smart_band_status_rc="$?"
+            log "状态:   WARN 退出码=$smart_band_status_rc"
+            smart_band_warnings=$((smart_band_warnings + 1))
+        fi
+        [ -n "${smart_band_status_output:-}" ] && printf '%s\n' "$smart_band_status_output"
+    fi
+
+    if [ "$smart_band_failures" -gt 0 ]; then
+        log "summary:  FAIL ($smart_band_failures fail, $smart_band_warnings warn)"
+        set_last_selfcheck_status FAIL "$smart_band_failures" "$smart_band_warnings"
+    elif [ "$smart_band_warnings" -gt 0 ]; then
+        log "summary:  WARN ($smart_band_warnings)"
+        set_last_selfcheck_status WARN 0 "$smart_band_warnings"
+    else
+        log "summary:  PASS"
+        set_last_selfcheck_status PASS 0 0
+    fi
+}
+
+manage_nradio_smart_band() {
+    while :; do
+        printf '\nNRadio 智能频段管理（C5800-688）:\n'
+        printf '1. 安装或更新（完整源码由总脚本释放）\n'
+        printf '2. 查看当前状态\n'
+        printf '3. 只读模拟运行\n'
+        printf '4. 立即执行一次\n'
+        printf '5. 查看运行日志\n'
+        printf '6. 卸载智能频段\n'
+        printf '0. 返回设备维护与检测\n'
+        printf '请选择 0、1、2、3、4、5 或 6: '
+        read_category_choice
+        case "$UI_READ_RESULT" in
+            0)
+                return 2
+                ;;
+            1)
+                if install_nradio_smart_band; then
+                    record_action_history "5 > 8 > 1" "智能频段安装或更新" "PASS" "$BACKUP_DIR"
+                    return 0
+                else
+                    smart_band_menu_rc="$?"
+                fi
+                record_action_history "5 > 8 > 1" "智能频段安装或更新" "FAIL" "$BACKUP_DIR"
+                return "$smart_band_menu_rc"
+                ;;
+            2)
+                if show_nradio_smart_band_status; then
+                    return 0
+                else
+                    return "$?"
+                fi
+                ;;
+            3)
+                if dry_run_nradio_smart_band; then
+                    return 0
+                else
+                    return "$?"
+                fi
+                ;;
+            4)
+                if run_nradio_smart_band_now; then
+                    record_action_history "5 > 8 > 4" "智能频段立即执行" "PASS" "$BACKUP_DIR"
+                    return 0
+                else
+                    smart_band_menu_rc="$?"
+                fi
+                record_action_history "5 > 8 > 4" "智能频段立即执行" "FAIL" "$BACKUP_DIR"
+                return "$smart_band_menu_rc"
+                ;;
+            5)
+                if show_nradio_smart_band_log; then
+                    return 0
+                else
+                    return "$?"
+                fi
+                ;;
+            6)
+                if uninstall_nradio_smart_band; then
+                    record_action_history "5 > 8 > 6" "智能频段卸载" "PASS" "$BACKUP_DIR"
+                    return 0
+                else
+                    smart_band_menu_rc="$?"
+                fi
+                record_action_history "5 > 8 > 6" "智能频段卸载" "FAIL" "$BACKUP_DIR"
+                return "$smart_band_menu_rc"
+                ;;
+            *)
+                die_menu_input_issue "$UI_READ_RESULT"
+                ;;
+        esac
+    done
+}
+
+
 run_menu_feature() {
     feature_choice="$1"
     show_support_page_hint='0'
@@ -47640,6 +48694,15 @@ run_menu_feature() {
                 final_toolbox_rc="$?"
                 [ "$final_toolbox_rc" = '2' ] && return 2
                 return "$final_toolbox_rc"
+            fi
+            ;;
+        25)
+            if manage_nradio_smart_band; then
+                :
+            else
+                smart_band_manager_rc="$?"
+                [ "$smart_band_manager_rc" = '2' ] && return 2
+                return "$smart_band_manager_rc"
             fi
             ;;
         *)
@@ -48832,6 +49895,51 @@ EOF_QIYOU_UNINSTALL
     chmod 755 /usr/libexec/nradio-qiyou-uninstall
 }
 
+qiyou_detect_identity() {
+    QIYOU_IDENTITY_RAW_MODEL="$(cat /tmp/sysinfo/model 2>/dev/null | sed -n '1p')"
+    QIYOU_IDENTITY_BOARD="$(cat /tmp/sysinfo/board_name 2>/dev/null | sed -n '1p')"
+    QIYOU_IDENTITY_HOSTNAME="$(cat /proc/sys/kernel/hostname 2>/dev/null | sed -n '1p')"
+
+    case "$QIYOU_IDENTITY_RAW_MODEL/$QIYOU_IDENTITY_BOARD" in
+        HC-WT9126/*) QIYOU_IDENTITY_MODEL='C5800-688' ;;
+        HC-WT9120/*) QIYOU_IDENTITY_MODEL='C5800-650' ;;
+        HC-WT9303/*) QIYOU_IDENTITY_MODEL='C2000MAX' ;;
+        HC-WT9111/*|NRADIO-WT9111/*) QIYOU_IDENTITY_MODEL='NBCPE' ;;
+        *UDX710*|*udx710*|*RG200U-CN*) QIYOU_IDENTITY_MODEL='C2000Pro' ;;
+        */HCMT7981-EMMC) QIYOU_IDENTITY_MODEL='C5800-688' ;;
+        */HCMT7987-SNSD) QIYOU_IDENTITY_MODEL='C2000MAX' ;;
+        *)
+            QIYOU_IDENTITY_MODEL="$QIYOU_IDENTITY_RAW_MODEL"
+            [ -n "$QIYOU_IDENTITY_MODEL" ] || QIYOU_IDENTITY_MODEL="$QIYOU_IDENTITY_BOARD"
+            [ -n "$QIYOU_IDENTITY_MODEL" ] || QIYOU_IDENTITY_MODEL='未知机型'
+            ;;
+    esac
+    QIYOU_IDENTITY_DEVICE_NAME="NRadio $QIYOU_IDENTITY_MODEL"
+
+    QIYOU_IDENTITY_INTERFACE=''
+    QIYOU_IDENTITY_MAC=''
+    for qy_identity_ifname in br-lan br0 eth0; do
+        [ -r "/sys/class/net/$qy_identity_ifname/address" ] || continue
+        QIYOU_IDENTITY_MAC="$(cat "/sys/class/net/$qy_identity_ifname/address" 2>/dev/null | sed -n '1p' | tr 'a-f' 'A-F')"
+        [ -n "$QIYOU_IDENTITY_MAC" ] || continue
+        QIYOU_IDENTITY_INTERFACE="$qy_identity_ifname"
+        break
+    done
+
+    qy_identity_prefix="$(sed -n 's/^NAME=//p' /tmp/qy/etc/PKG_INFO 2>/dev/null | sed -n '1p')"
+    [ -n "$qy_identity_prefix" ] || qy_identity_prefix="$(sed -n 's/^BRAND=//p' /tmp/qy/etc/PKG_INFO 2>/dev/null | sed -n '1p')"
+    qy_identity_prefix="$(printf '%s' "${qy_identity_prefix:-SYS}" | tr -cd 'A-Za-z0-9_-')"
+    [ -n "$qy_identity_prefix" ] || qy_identity_prefix='SYS'
+    qy_identity_prefix="$(printf '%s' "$qy_identity_prefix" | tr 'a-z' 'A-Z')"
+    qy_identity_compact_mac="$(printf '%s' "$QIYOU_IDENTITY_MAC" | tr -cd '0-9A-F')"
+    qy_identity_suffix="$(printf '%s' "$qy_identity_compact_mac" | sed 's/.*\(....\)$/\1/')"
+    if [ -n "$qy_identity_suffix" ]; then
+        QIYOU_IDENTITY_DEVICE_ID="${qy_identity_prefix}_${qy_identity_suffix}"
+    else
+        QIYOU_IDENTITY_DEVICE_ID="${qy_identity_prefix}_UNKNOWN"
+    fi
+}
+
 qiyou_write_controller() {
     mkdir -p /usr/lib/lua/luci/controller/nradio_adv
     cat > /usr/lib/lua/luci/controller/nradio_adv/qiyou.lua <<'EOF_QIYOU_CONTROLLER'
@@ -48865,6 +49973,46 @@ local function pkg_info()
     end
     return info
 end
+local function first_readable(paths)
+    for _,path in ipairs(paths or {}) do
+        local value=trim(readfile(path))
+        if value~="" then return value,path end
+    end
+    return "",""
+end
+local function friendly_model(raw_model,board)
+    local raw=trim(raw_model)
+    local key=raw:upper()
+    local board_key=trim(board):upper()
+    if key=="HC-WT9126" then return "C5800-688" end
+    if key=="HC-WT9120" then return "C5800-650" end
+    if key=="HC-WT9303" then return "C2000MAX" end
+    if key=="HC-WT9111" or key=="NRADIO-WT9111" then return "NBCPE" end
+    if key:find("UDX710",1,true) or key:find("RG200U-CN",1,true) or board_key:find("UDX710",1,true) then return "C2000Pro" end
+    if board_key=="HCMT7981-EMMC" then return "C5800-688" end
+    if board_key=="HCMT7987-SNSD" then return "C2000MAX" end
+    if raw~="" then return raw end
+    if trim(board)~="" then return trim(board) end
+    return "未知机型"
+end
+local function qiyou_identity(info)
+    local raw_model=trim(readfile("/tmp/sysinfo/model"))
+    local board=trim(readfile("/tmp/sysinfo/board_name"))
+    local hostname=trim(readfile("/proc/sys/kernel/hostname"))
+    local mac,mac_path=first_readable({"/sys/class/net/br-lan/address","/sys/class/net/br0/address","/sys/class/net/eth0/address"})
+    mac=mac:upper()
+    local compact=mac:gsub("[^0-9A-F]","")
+    local prefix=trim(info.NAME or info.BRAND or "SYS"):upper():gsub("[^A-Z0-9_%-]","")
+    if prefix=="" then prefix="SYS" end
+    local suffix=#compact>=4 and compact:sub(-4) or "UNKNOWN"
+    local ifname=mac_path:match("/net/([^/]+)/address$") or ""
+    local model=friendly_model(raw_model,board)
+    return {
+        raw_model=raw_model,board=board,hostname=hostname,model=model,
+        device_name="NRadio "..model,lan_mac=mac,identity_interface=ifname,
+        qiyou_device_id=prefix.."_"..suffix,qiyou_name=info.NAME or "",qiyou_brand=info.BRAND or ""
+    }
+end
 function action_status()
     local fs=require "nixio.fs"
     local installed=fs.access("/etc/qy/qy_acc.sh") and true or false
@@ -48874,9 +50022,14 @@ function action_status()
     local qy_acc=exec("pidof qy_acc")
     local qy_mosq=exec("pidof qy_mosq")
     local qy_proxy=exec("pidof qy_proxy")
+    local identity=qiyou_identity(info)
     write_json({
         installed=installed,status=status,ret=trim(readfile("/tmp/qyplug.ret")),
         mode=info.MODE or "",version=info.VERSION or "",date=info.DATE or "",pver=info.PVER or "",
+        device_name=identity.device_name,qiyou_device_id=identity.qiyou_device_id,
+        lan_mac=identity.lan_mac,identity_interface=identity.identity_interface,
+        raw_model=identity.raw_model,board=identity.board,hostname=identity.hostname,
+        qiyou_name=identity.qiyou_name,qiyou_brand=identity.qiyou_brand,
         qy_acc=qy_acc~="",qy_mosq=qy_mosq~="",qy_proxy=qy_proxy~="",
         qy_acc_pid=qy_acc,qy_mosq_pid=qy_mosq,qy_proxy_pid=qy_proxy,
         proxy_conn=tonumber(exec("netstat -tunap | grep qy_proxy | grep ESTABLISHED | wc -l")) or 0,
@@ -48897,16 +50050,24 @@ qiyou_write_view() {
     cat > /usr/lib/lua/luci/view/nradiobridge_qiyou/qiyou.htm <<'EOF_QIYOU_VIEW'
 <%+header%>
 <style>
-html,body{width:100%!important;max-width:none!important;margin:0!important;background:#0b121d!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.qy-wrap{width:100%;max-width:none;min-height:100vh;padding:34px 40px 42px;color:#eef8ff;background:radial-gradient(circle at 14% 8%,rgba(56,189,248,.18),transparent 30%),linear-gradient(135deg,#081522,#102b40 58%,#0a1420);box-sizing:border-box}.qy-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.qy-title{font-size:32px;font-weight:900}.qy-sub{margin-top:8px;color:#b8d7ea;font-size:14px}.qy-pill{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(125,211,252,.36);border-radius:999px;padding:10px 15px;background:rgba(14,165,233,.14);font-weight:900}.qy-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.qy-dot.boosting{background:#22c55e;color:#22c55e}.qy-dot.running{background:#38bdf8;color:#38bdf8}.qy-dot.off{background:#f97316;color:#f97316}.qy-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:22px 0 26px}.qy-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px 22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 36px rgba(0,0,0,.20)}.qy-label{color:#9ec6da;font-size:13px;font-weight:900}.qy-value{margin-top:10px;font-size:26px;font-weight:900;color:#fff;word-break:break-all}.qy-row{display:grid;grid-template-columns:240px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#cfe7f5}.qy-k{color:#9ec6da;font-weight:900}.qy-v{font-weight:900;word-break:break-all}.qy-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.qy-btn{border:1px solid rgba(125,211,252,.36);border-radius:10px;background:rgba(14,165,233,.17);color:#eef8ff;font-weight:900;padding:11px 18px;cursor:pointer}.qy-btn.danger{border-color:rgba(248,113,113,.48);background:rgba(239,68,68,.18)}.qy-note{margin-top:18px;color:#b8d7ea;line-height:1.7;font-size:13px}@media(max-width:900px){.qy-wrap{padding:24px 18px 30px}.qy-grid{grid-template-columns:1fr}.qy-row{grid-template-columns:1fr}.qy-head{align-items:flex-start;flex-direction:column}}
+html,body{width:100%!important;max-width:none!important;margin:0!important;background:#0b121d!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.qy-wrap{width:100%;max-width:none;min-height:100vh;padding:34px 40px 42px;color:#eef8ff;background:radial-gradient(circle at 14% 8%,rgba(56,189,248,.18),transparent 30%),linear-gradient(135deg,#081522,#102b40 58%,#0a1420);box-sizing:border-box}.qy-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.qy-title{font-size:32px;font-weight:900}.qy-sub{margin-top:8px;color:#b8d7ea;font-size:14px}.qy-pill{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(125,211,252,.36);border-radius:999px;padding:10px 15px;background:rgba(14,165,233,.14);font-weight:900}.qy-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 10px currentColor}.qy-dot.boosting{background:#22c55e;color:#22c55e}.qy-dot.running{background:#38bdf8;color:#38bdf8}.qy-dot.off{background:#f97316;color:#f97316}.qy-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin:22px 0 26px}.qy-card{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px 22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 36px rgba(0,0,0,.20)}.qy-label{color:#9ec6da;font-size:13px;font-weight:900}.qy-value{margin-top:10px;font-size:26px;font-weight:900;color:#fff;word-break:break-all}.qy-card.qy-device-card{border-color:rgba(34,197,94,.34);background:radial-gradient(circle at 12% 0%,rgba(34,197,94,.17),transparent 52%),linear-gradient(145deg,rgba(255,255,255,.095),rgba(255,255,255,.038))}.qy-card.qy-device-card .qy-value{color:#dcfce7}.qy-row{display:grid;grid-template-columns:240px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);color:#cfe7f5}.qy-k{color:#9ec6da;font-weight:900}.qy-v{font-weight:900;word-break:break-all}.qy-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}.qy-btn{border:1px solid rgba(125,211,252,.36);border-radius:10px;background:rgba(14,165,233,.17);color:#eef8ff;font-weight:900;padding:11px 18px;cursor:pointer}.qy-btn.danger{border-color:rgba(248,113,113,.48);background:rgba(239,68,68,.18)}.qy-note{margin-top:18px;color:#b8d7ea;line-height:1.7;font-size:13px}@media(max-width:1100px){.qy-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:900px){.qy-wrap{padding:24px 18px 30px}.qy-grid{grid-template-columns:1fr}.qy-row{grid-template-columns:1fr}.qy-head{align-items:flex-start;flex-direction:column}}
 /* NRadio QiYou premium visual finish */.qy-wrap{position:relative;overflow:hidden}.qy-wrap:before{content:"";position:absolute;left:34px;right:34px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(125,211,252,.68),rgba(34,197,94,.36),transparent);pointer-events:none}.qy-head,.qy-grid,.qy-card,.qy-actions,.qy-note{position:relative;z-index:1}.qy-title{text-shadow:0 1px 0 rgba(0,0,0,.32),0 0 24px rgba(56,189,248,.10)}.qy-sub{color:#c0d7e8}.qy-pill{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 12px 26px rgba(2,8,23,.20);backdrop-filter:blur(10px) saturate(1.06);-webkit-backdrop-filter:blur(10px) saturate(1.06)}.qy-card{border-color:rgba(125,211,252,.20);background:radial-gradient(circle at 14% 0%,rgba(56,189,248,.12),transparent 44%),linear-gradient(145deg,rgba(255,255,255,.095),rgba(255,255,255,.038));box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 22px 42px rgba(0,0,0,.24)}.qy-card:hover{border-color:rgba(125,211,252,.32);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 46px rgba(0,0,0,.26)}.qy-label{color:#b9dff1}.qy-value{text-shadow:0 1px 0 rgba(0,0,0,.34)}.qy-row{border-bottom-color:rgba(255,255,255,.10)}.qy-btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 22px rgba(2,8,23,.18)}.qy-btn:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(56,189,248,.18),inset 0 1px 0 rgba(255,255,255,.08),0 10px 22px rgba(2,8,23,.18)}.qy-btn:hover{border-color:rgba(125,211,252,.56);background:linear-gradient(180deg,rgba(14,165,233,.24),rgba(14,165,233,.10))}.qy-btn.danger:hover{border-color:rgba(248,113,113,.66);background:linear-gradient(180deg,rgba(239,68,68,.26),rgba(239,68,68,.12))}.qy-head,.qy-grid,.qy-card,.qy-row,.qy-v,.qy-value{min-width:0;overflow-wrap:anywhere}.qy-card,.qy-pill,.qy-btn{backdrop-filter:saturate(1.04) blur(3px);-webkit-backdrop-filter:saturate(1.04) blur(3px)}@media(max-width:520px){.qy-title{font-size:26px}.qy-card{border-radius:13px}.qy-actions{align-items:stretch;flex-direction:column}.qy-btn{width:100%}}
 </style>
-<div class="qy-wrap"><div class="qy-head"><div><div class="qy-title">奇游联机宝</div><div class="qy-sub">只读监听奇游后台状态，绑定和选择游戏仍在奇游联机宝 App 内完成。</div></div><div class="qy-pill"><span id="qy-dot" class="qy-dot"></span><span id="qy-status">读取中</span></div></div><div class="qy-grid"><div class="qy-card"><div class="qy-label">插件状态</div><div id="qy-main" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">实际代理连接</div><div id="qy-proxy-conn" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">云端连接</div><div id="qy-cloud-conn" class="qy-value">-</div></div></div><div class="qy-card"><div class="qy-row"><div class="qy-k">安装返回</div><div id="qy-ret" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_acc</div><div id="qy-acc" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_mosq</div><div id="qy-mosq" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_proxy</div><div id="qy-proxy" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">包信息</div><div id="qy-pkg" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">代理监听</div><div id="qy-listen" class="qy-v">-</div></div></div><div class="qy-actions"><button type="button" class="qy-btn" onclick="qyRefresh()">刷新状态</button><button type="button" class="qy-btn danger" onclick="qyUninstall()">卸载奇游联机宝</button></div><div class="qy-note"><strong>状态解释：</strong>BOOSTING 表示正在加速；RUNNING 表示插件在线但未开启加速；实际代理连接不是连接路由器的设备数。</div></div>
+<div class="qy-wrap"><div class="qy-head"><div><div class="qy-title">奇游联机宝</div><div class="qy-sub">显示当前路由器的真实机型、LAN MAC 与奇游设备 ID；绑定和选择游戏仍在奇游联机宝 App 内完成。</div></div><div class="qy-pill"><span id="qy-dot" class="qy-dot"></span><span id="qy-status">读取中</span></div></div><div class="qy-grid"><div class="qy-card qy-device-card"><div class="qy-label">设备名称</div><div id="qy-device-name" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">插件状态</div><div id="qy-main" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">实际代理连接</div><div id="qy-proxy-conn" class="qy-value">-</div></div><div class="qy-card"><div class="qy-label">云端连接</div><div id="qy-cloud-conn" class="qy-value">-</div></div></div><div class="qy-card"><div class="qy-row"><div class="qy-k">奇游设备 ID</div><div id="qy-device-id" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">LAN MAC / 识别接口</div><div id="qy-lan-mac" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">硬件型号 / 板型</div><div id="qy-model" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">主机名</div><div id="qy-hostname" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">安装返回</div><div id="qy-ret" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_acc</div><div id="qy-acc" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_mosq</div><div id="qy-mosq" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">qy_proxy</div><div id="qy-proxy" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">包信息</div><div id="qy-pkg" class="qy-v">-</div></div><div class="qy-row"><div class="qy-k">代理监听</div><div id="qy-listen" class="qy-v">-</div></div></div><div class="qy-actions"><button type="button" class="qy-btn" onclick="qyRefresh()">刷新状态</button><button type="button" class="qy-btn danger" onclick="qyUninstall()">卸载奇游联机宝</button></div><div class="qy-note"><strong>识别说明：</strong>奇游通用 SYS 包的设备 ID 由包前缀与本机 LAN MAC 后四位组成。若 App 显示的 ID 与本页不同，表示 App 发现的是另一台路由器或仍在使用旧绑定缓存。<br><strong>状态解释：</strong>BOOSTING 表示正在加速；RUNNING 表示插件在线但未开启加速；实际代理连接不是连接路由器的设备数。</div></div>
 <script>
-var qyBase='<%=url("nradioadv/system/qiyou")%>';function qyText(id,text){var el=document.getElementById(id);if(el)el.textContent=text||'-';}function qyBool(v,p){return v?('运行中'+(p?' / '+p:'')):'未运行';}function qyApply(d){var st=d.status||'UNKNOWN';var dot=document.getElementById('qy-dot');qyText('qy-status',st);qyText('qy-main',st==='BOOSTING'?'正在加速':(st==='RUNNING'?'插件在线':st));qyText('qy-proxy-conn',String(d.proxy_conn||0));qyText('qy-cloud-conn',String(d.cloud_conn||0));qyText('qy-ret',d.ret||'-');qyText('qy-acc',qyBool(d.qy_acc,d.qy_acc_pid));qyText('qy-mosq',qyBool(d.qy_mosq,d.qy_mosq_pid));qyText('qy-proxy',qyBool(d.qy_proxy,d.qy_proxy_pid));qyText('qy-pkg',[d.mode,d.version,d.date].filter(Boolean).join(' / ')||'-');qyText('qy-listen',d.proxy_listen||'-');if(dot){dot.className='qy-dot '+(st==='BOOSTING'?'boosting':(st==='RUNNING'?'running':'off'));}}function qyRefresh(){var x=new XMLHttpRequest();x.open('GET',qyBase+'/status?_='+Date.now(),true);x.onreadystatechange=function(){if(x.readyState===4){try{qyApply(JSON.parse(x.responseText||'{}'));}catch(e){qyText('qy-status','读取失败');}}};x.send(null);}function qyUninstall(){if(!confirm('确认卸载奇游联机宝并移除应用商店入口吗？'))return;var x=new XMLHttpRequest();x.open('POST',qyBase+'/uninstall',true);x.onreadystatechange=function(){if(x.readyState===4)alert('已开始卸载，稍后刷新应用商店。');};x.send('');}qyRefresh();setInterval(qyRefresh,5000);
+var qyBase='<%=url("nradioadv/system/qiyou")%>';function qyText(id,text){var el=document.getElementById(id);if(el)el.textContent=text||'-';}function qyBool(v,p){return v?('运行中'+(p?' / '+p:'')):'未运行';}function qyApply(d){var st=d.status||'UNKNOWN';var dot=document.getElementById('qy-dot');qyText('qy-status',st);qyText('qy-device-name',d.device_name||'NRadio 未知机型');qyText('qy-device-id',d.qiyou_device_id||'-');qyText('qy-lan-mac',[d.lan_mac,d.identity_interface].filter(Boolean).join(' / ')||'-');qyText('qy-model',[d.raw_model,d.board].filter(Boolean).join(' / ')||'-');qyText('qy-hostname',d.hostname||'-');qyText('qy-main',st==='BOOSTING'?'正在加速':(st==='RUNNING'?'插件在线':st));qyText('qy-proxy-conn',String(d.proxy_conn||0));qyText('qy-cloud-conn',String(d.cloud_conn||0));qyText('qy-ret',d.ret||'-');qyText('qy-acc',qyBool(d.qy_acc,d.qy_acc_pid));qyText('qy-mosq',qyBool(d.qy_mosq,d.qy_mosq_pid));qyText('qy-proxy',qyBool(d.qy_proxy,d.qy_proxy_pid));qyText('qy-pkg',[d.mode,d.version,d.date].filter(Boolean).join(' / ')||'-');qyText('qy-listen',d.proxy_listen||'-');if(dot){dot.className='qy-dot '+(st==='BOOSTING'?'boosting':(st==='RUNNING'?'running':'off'));}}function qyRefresh(){var x=new XMLHttpRequest();x.open('GET',qyBase+'/status?_='+Date.now(),true);x.onreadystatechange=function(){if(x.readyState===4){try{qyApply(JSON.parse(x.responseText||'{}'));}catch(e){qyText('qy-status','读取失败');}}};x.send(null);}function qyUninstall(){if(!confirm('确认卸载奇游联机宝并移除应用商店入口吗？'))return;var x=new XMLHttpRequest();x.open('POST',qyBase+'/uninstall',true);x.onreadystatechange=function(){if(x.readyState===4)alert('已开始卸载，稍后刷新应用商店。');};x.send('');}qyRefresh();setInterval(qyRefresh,5000);
 </script>
 <%+footer%>
 EOF_QIYOU_VIEW
     chmod 644 /usr/lib/lua/luci/view/nradiobridge_qiyou/qiyou.htm 2>/dev/null || true
+}
+
+qiyou_verify_identity_assets() {
+    [ -s "$QIYOU_CONTROLLER" ] || die "奇游设备识别控制器写入失败: $QIYOU_CONTROLLER"
+    [ -s "$QIYOU_VIEW" ] || die "奇游设备识别页面写入失败: $QIYOU_VIEW"
+    grep -q 'qiyou_device_id=identity.qiyou_device_id' "$QIYOU_CONTROLLER" 2>/dev/null || die "奇游控制器缺少设备 ID 输出"
+    grep -q 'id="qy-device-name"' "$QIYOU_VIEW" 2>/dev/null || die "奇游页面缺少设备名称卡片"
+    grep -q 'id="qy-lan-mac"' "$QIYOU_VIEW" 2>/dev/null || die "奇游页面缺少 LAN MAC 信息"
 }
 
 qiyou_install_assets() {
@@ -48917,6 +50078,7 @@ qiyou_install_assets() {
     write_plugin_uninstall_assets
     qiyou_write_controller
     qiyou_write_view
+    qiyou_verify_identity_assets
     game_accel_set_appcenter_entry "奇游联机宝" "nradio-qiyou" "$(qiyou_version)" "$(qiyou_size)" "nradioadv/system/qiyou" "/usr/lib/lua/luci/controller/nradio_adv/qiyou.lua" "qiyou.svg"
     refresh_luci_appcenter
 }
@@ -48948,7 +50110,7 @@ qiyou_install_integrated() {
     grep -q 'qyplug.sh' /tmp/qiyou-install.sh 2>/dev/null || die "奇游入口脚本内容异常，已停止执行"
     verify_remote_script_sha256 "奇游入口脚本" "/tmp/qiyou-install.sh" "${QIYOU_INSTALLER_SHA256:-}" "QIYOU_INSTALLER_SHA256"
     log "[2/4] 安装奇游依赖"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止奇游依赖安装"
     opkg install curl kmod-tun ip-full || die "安装 curl/kmod-tun/ip-full 失败"
     log "[3/4] 执行奇游官方安装脚本"
     sh /tmp/qiyou-install.sh || die "奇游官方安装脚本执行失败"
@@ -48960,6 +50122,7 @@ qiyou_install_integrated() {
 }
 
 qiyou_show_status() {
+    qiyou_detect_identity
     log "奇游状态:"
     if [ -x /etc/qy/qy_acc.sh ]; then
         qy_status_text="$(/etc/qy/qy_acc.sh status 2>/dev/null || true)"
@@ -48971,7 +50134,19 @@ qiyou_show_status() {
     log "qy_acc: $(pidof qy_acc 2>/dev/null || printf '-')"
     log "qy_mosq: $(pidof qy_mosq 2>/dev/null || printf '-')"
     log "qy_proxy: $(pidof qy_proxy 2>/dev/null || printf '-')"
+    log "设备名称: $QIYOU_IDENTITY_DEVICE_NAME"
+    log "奇游设备 ID: $QIYOU_IDENTITY_DEVICE_ID"
+    log "LAN MAC: ${QIYOU_IDENTITY_MAC:-未知} / ${QIYOU_IDENTITY_INTERFACE:-未知接口}"
+    log "硬件型号: ${QIYOU_IDENTITY_RAW_MODEL:-未知} / ${QIYOU_IDENTITY_BOARD:-未知}"
     [ -f /tmp/qy/etc/PKG_INFO ] && cat /tmp/qy/etc/PKG_INFO || true
+}
+
+qiyou_refresh_identity_assets() {
+    game_accel_require_appcenter
+    [ -f /etc/qy/qy_acc.sh ] || die "尚未安装奇游联机宝，无法刷新设备识别页面"
+    qiyou_install_assets "刷新奇游设备识别与应用商店页面"
+    qiyou_show_status
+    log "完成：奇游插件页已显示当前路由器的设备名称与设备 ID"
 }
 
 qiyou_uninstall_integrated() {
@@ -49179,7 +50354,7 @@ EOF_LEIGOD_RISK
     grep -q 'leigod\|acc-gw\|accelerator' /tmp/leigod-plugin-install.sh 2>/dev/null || die "雷神官方安装脚本内容异常，已停止执行"
     verify_remote_script_sha256 "雷神官方安装脚本" "/tmp/leigod-plugin-install.sh" "${LEIGOD_INSTALLER_SHA256:-}" "LEIGOD_INSTALLER_SHA256"
     log "[2/4] 安装雷神依赖"
-    ensure_opkg_update
+    ensure_opkg_update || die "opkg update 失败，已停止雷神依赖安装"
     lg_dep_failed=''
     for lg_pkg in curl libpcap iptables kmod-ipt-nat iptables-mod-tproxy kmod-ipt-ipset ipset kmod-tun kmod-ipt-tproxy kmod-netem tc-full conntrack miniupnpd luci-app-upnp; do
         if ! opkg list-installed 2>/dev/null | grep -q "^$lg_pkg "; then
@@ -49232,8 +50407,9 @@ qiyou_integrated_menu() {
         printf '1. 安装奇游官方脚本并接入应用商店\n'
         printf '2. 查看奇游状态\n'
         printf '3. 卸载奇游联机宝\n'
+        printf '4. 刷新设备识别与插件页面\n'
         printf '0. 返回游戏加速器\n'
-        printf '请选择 0、1、2 或 3: '
+        printf '请选择 0、1、2、3 或 4: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 2 ;;
@@ -49248,6 +50424,12 @@ qiyou_integrated_menu() {
                 qiyou_uninstall_integrated
                 qiyou_rc="$?"
                 record_action_history "3 > 1 > 3" "卸载奇游联机宝" "$qiyou_rc" "$BACKUP_DIR"
+                return "$qiyou_rc"
+                ;;
+            4)
+                qiyou_refresh_identity_assets
+                qiyou_rc="$?"
+                record_action_history "3 > 1 > 4" "刷新奇游设备识别与插件页面" "$qiyou_rc" "$BACKUP_DIR"
                 return "$qiyou_rc"
                 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
@@ -49331,9 +50513,16 @@ maintenance_test_menu() {
         fi
         printf '6. 哈基米依赖检查修复\n'
         printf '7. 封版工具箱\n'
+        if nradio_smart_band_model_supported; then
+            printf '8. 智能频段管理（C5800-688）\n'
+        fi
         printf '0. 返回功能分类\n'
-        if nradio_5g_aggregation_model_supported; then
+        if nradio_5g_aggregation_model_supported && nradio_smart_band_model_supported; then
+            printf '请选择 0、1、2、3、4、5、6、7 或 8: '
+        elif nradio_5g_aggregation_model_supported; then
             printf '请选择 0、1、2、3、4、5、6 或 7: '
+        elif nradio_smart_band_model_supported; then
+            printf '请选择 0、1、2、3、4、6、7 或 8: '
         else
             printf '请选择 0、1、2、3、4、6 或 7: '
         fi
@@ -49353,6 +50542,13 @@ maintenance_test_menu() {
                 ;;
             6) submenu_feature='23' ;;
             7) submenu_feature='24' ;;
+            8)
+                if nradio_smart_band_model_supported; then
+                    submenu_feature='25'
+                else
+                    die_menu_input_issue "$UI_READ_RESULT"
+                fi
+                ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         if run_menu_feature "$submenu_feature"; then
