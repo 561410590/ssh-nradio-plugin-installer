@@ -2,14 +2,14 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前本地版本：`V2.8.5`
-- 当前状态：`V2.8.5` 单一总脚本、网页和仓库资料已在本地同步验证，尚未提交或发布；线上状态需在正式发布时另行核验。
+- 当前正式版本：`V2.8.5`
+- 当前状态：`V2.8.5` 单一总脚本、网页和仓库资料已同步至 GitHub `main`，并通过仓库工作流验证。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-`V2.8.5` 已完成单一总脚本、网页和仓库发布资料的本地同步与验证，尚未提交、推送、打 tag 或创建 Release。本地状态不代表线上已经更新。
+`V2.8.5` 已完成单一总脚本、网页和仓库发布资料同步，并作为当前正式版本发布。
 
 ## 适用设备
 
@@ -66,7 +66,7 @@ sh ssh-nradio-plugin-installer.sh
 - `5 > 1` 统一体检加入智能频段脚本权限、语法、内嵌 SHA256、cron 唯一性、准确任务行和只读状态检查。
 - 支持页升级为 V2.8.5：增加单一总脚本和智能频段状态摘要、历史版本折叠、复制失败提示、键盘焦点、阅读进度与移动端适配。
 - 2026-08-11 支持页新增 `NRadio_C2000Ultra`、`NRadio_AK68-798` 两款“即将支持、暂未适配”预告卡片；未把两款机型加入总脚本识别或功能放行。
-- 当前只完成本地 GitHub 发布前闭环；未执行 commit、push、tag、Release 或公网更新。
+- 总脚本、网页和仓库资料已同步至 GitHub `main`，并纳入 `v2.8.5` 正式发布。
 
 ## V2.8.0 更新
 
@@ -206,9 +206,9 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.8.5 当前本地主线及唯一发布脚本，已内嵌智能频段 v5 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.8.5 当前正式版及唯一发布脚本，已内嵌智能频段 v5 |
 | `00-current/nradio-smart-band.sh` | 智能频段 v5 开发校验源；不是运行或发布依赖 |
-| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前本地为 V2.8.5 展示页 |
+| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前为 V2.8.5 展示页 |
 | `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
