@@ -3,9 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="NRadio 官方 NROS 系统插件工具 V2.8.5：单一总脚本、智能频段、组网、控温、存储扩展与应用商店增强。">
+    <meta name="description" content="NRadio 官方 NROS 系统插件工具 V2.9.5：应用商店 V3、单一总脚本、智能频段、组网、控温与存储扩展。">
     <meta name="theme-color" content="#fff1f2">
-    <title>NRadio 插件工具 V2.8.5 | 官方高级支持中心</title>
+    <title>NRadio 插件工具 V2.9.5 | 官方高级支持中心</title>
     <style>
         /* 
          * ============================================================
@@ -463,16 +463,93 @@
         }
 
         @media (max-width: 480px) {
-            .nav-link { padding: 8px 14px; font-size: 13px;}
+            .container { padding-left: 16px; padding-right: 16px; }
+            .nav-anchor {
+                top: max(8px, env(safe-area-inset-top));
+                left: 10px;
+                width: calc(100% - 20px);
+            }
+            .nav-pill {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 2px;
+                padding: 5px;
+                overflow: hidden;
+                scroll-snap-type: none;
+            }
+            .nav-link {
+                min-width: 0;
+                padding: 9px 2px;
+                font-size: 11px;
+                line-height: 1.2;
+                text-align: center;
+                letter-spacing: -.03em;
+            }
             .nav-v-info { display: none; }
-            .hero-section { padding-top: 130px; }
+            .hero-section {
+                min-height: auto;
+                padding-top: 88px;
+                padding-bottom: 52px;
+            }
+            .hero-title {
+                font-size: clamp(2.55rem, 11.6vw, 3.15rem);
+                line-height: 1.02;
+                margin-bottom: 18px;
+            }
+            .hero-subtitle {
+                font-size: .96rem;
+                line-height: 1.65;
+                margin-bottom: 24px;
+            }
+            .hero-btns {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+                margin-bottom: 24px;
+            }
             .btn { width: 100%; padding: 16px; font-size: 1rem;}
+            .hero-btns .btn {
+                min-width: 0;
+                padding: 13px 8px;
+                border-radius: 16px;
+                font-size: .92rem;
+            }
+            .hero-content > .badge-list {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+                margin-top: 0;
+            }
+            .hero-content > .badge-list .badge-item {
+                min-width: 0;
+                padding: 7px 5px;
+                font-size: 11px;
+                line-height: 1.4;
+                overflow-wrap: anywhere;
+            }
             .qr-frame img { width: 180px; }
             .donate-gift { padding: 40px 20px; border-radius: 32px;}
             .data-card { padding: 20px; border-radius: 16px; }
             .code-well { padding: 16px 16px 36px 16px; }
-            .release-panel { grid-template-columns: 1fr; padding: 10px; }
+            .release-panel {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+                margin-top: 22px;
+                padding: 8px;
+                border-radius: 20px;
+            }
+            .release-stat { padding: 11px 10px; border-radius: 14px; }
+            .release-stat span { margin-bottom: 2px; font-size: 9px; }
+            .release-stat strong { font-size: 13px; }
             .release-stat { text-align: center; }
+        }
+
+        @media (max-width: 350px) {
+            .nav-link { font-size: 10px; }
+            .hero-title { font-size: 2.35rem; }
+            .hero-content > .badge-list .badge-item { font-size: 10px; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -500,7 +577,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info" aria-label="当前为本地开发版">LOCAL V2.8.5</div>
+            <div class="nav-v-info" aria-label="当前正式版本">RELEASE V2.9.5</div>
         </nav>
     </div>
 
@@ -522,8 +599,8 @@
                     <div class="badge-item">智能频段单文件内嵌</div>
                 </div>
                 <div class="release-panel" aria-label="当前版本信息">
-                    <div class="release-stat"><span>Local version</span><strong>V2.8.5</strong></div>
-                    <div class="release-stat"><span>Release date</span><strong>2026-08-10</strong></div>
+                    <div class="release-stat"><span>Release version</span><strong>V2.9.5</strong></div>
+                    <div class="release-stat"><span>Release date</span><strong>2026-08-13</strong></div>
                     <div class="release-stat"><span>Delivery</span><strong>单一总脚本</strong></div>
                     <div class="release-stat"><span>Smart band</span><strong>v5 · 菜单 5 &gt; 8</strong></div>
                 </div>
@@ -604,7 +681,8 @@
                     <h4>重要安全准则</h4>
                     <ul class="danger-grid">
                         <li>请勿作为固件包在 Web 页面上传，仅限 SSH 终端内执行</li>
-                        <li>仅适用于官方 NROS 1.9 / 2.x 系列固件，标准 OpenWrt 不适用</li>
+                        <li>仅限 NROS 2.x 系列固件使用，标准 OpenWrt 不适用</li>
+                        <li>此插件是 SSH 脚本，不是应用商店安装包；请勿在应用商店安装，仅限 SSH 终端执行</li>
                         <li>执行前务必确认路由器已成功连通互联网</li>
                         <li>安装过程中严禁强行关闭终端窗口或断开电源</li>
                         <li>仅限下方已适配机型使用；标记“即将支持”的机型暂未适配，请勿运行脚本</li>
@@ -628,7 +706,7 @@
                     <div class="device-card"><strong>NRadio_C2000MAX</strong><span>超大存储旗舰</span></div>
                     <div class="device-card"><strong>NRadio_C2000Pro</strong><span>轻量有限兼容</span></div>
                     <div class="device-card is-coming"><strong>NRadio_C2000Ultra</strong><span>即将支持 · 暂未适配</span></div>
-                    <div class="device-card is-coming"><strong>NRadio_AK68-798</strong><span>即将支持 · 暂未适配</span></div>
+                    <div class="device-card is-coming"><strong>NRadio_N5000</strong><span>即将支持 · 暂未适配</span></div>
                 </div>
                 <p class="device-footer-text">即将支持机型尚未加入总脚本的识别与功能放行，请等待正式适配公告。</p>
             </div>
@@ -639,7 +717,8 @@
                 <h2>版本演进档案</h2>
             </div>
             <div class="history-grid" id="historyGrid">
-                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V2.8.5 · 2026-08-10</h5><p>智能频段 v5 完整源码内嵌总脚本，单文件即可安装、更新和恢复；新增 <code>5 &gt; 8</code> 中文管理入口、状态检查、只读模拟、立即执行、日志、卸载与统一体检。移动/广电 N28/N41 改为联网健康优先，健康链路不再因频段变化反复重启。</p></div>
+                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V2.9.5 · 2026-08-13</h5><p>应用商店 V3 完成搜索、状态徽标、双存储显示与多机型兼容；修复所有插件共用的应用商店接入链，撤除应用安装固定哈希门禁和持久备份写入，并收口 NRadio 定制固件下的 OpenClash 依赖安装。</p></div>
+                <div class="v-card"><span class="v-badge">V2.8.5</span><h5>智能频段单文件</h5><p>智能频段 v5 完整源码内嵌总脚本，新增 <code>5 &gt; 8</code> 中文管理入口、状态检查、只读模拟、立即执行、日志与卸载；移动/广电 N28/N41 改为联网健康优先。</p></div>
                 <div class="v-card"><span class="v-badge">V2.8.0</span><h5>安全加固</h5><p>状态文件加入格式标记并修复单引号转义；恢复全部 TLS 证书校验，软件源更新失败时立即停止对应安装，避免继续执行不完整流程。</p></div>
                 <div class="v-card"><span class="v-badge">V2.7.5</span><h5>新固件兼容收口</h5><p>FanControl 固件 ROM 文件完全免写并跳过 chmod；保留 OpenClash v0.47.133 新 LuCI 兼容，C5800-688 智能频段 v3 完成现场验证。</p></div>
                 <div class="v-card"><span class="v-badge">V2.7.0</span><h5>FanControl ROM 保护</h5><p>适配 C2000MAX NROS 2.2.8 固件内置 controller、CBI 与温度模板，避免重复覆盖原厂 LuCI 文件。</p></div>
@@ -694,7 +773,7 @@
                     <p>本项目致力于在尊重原厂系统的基础上，为硬核玩家提供最纯粹的系统增强方案。每一行脚本的推敲都是为了保障您路由器的绝对稳定。</p>
                     <p>代码完全开源透明，您可以放心地将其作为旗舰设备的长期运维伴侣。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：本地开发版 V2.8.5 | 公网发布状态以 GitHub Release 为准</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：正式版 V2.9.5 | 下载与校验以 GitHub Release 为准</p>
                     </div>
                 </div>
             </div>
@@ -703,7 +782,7 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">维护状态：本地 V2.8.5 总脚本与支持页面已同步；本页更新不代表 GitHub Release 已发布。</p>
+        <p class="footer-pause">维护状态：V2.9.5 总脚本、支持页面与仓库资料同步发布。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 

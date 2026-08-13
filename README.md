@@ -2,14 +2,15 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前正式版本：`V2.8.5`
-- 当前状态：`V2.8.5` 单一总脚本、网页和仓库资料已同步至 GitHub `main`，并通过仓库工作流验证。
+- 当前正式版本：`V2.9.5`（2026-08-13）
+- 当前公网正式版本：`V2.9.5`，下载与校验以 GitHub Releases 页面为准
+- 当前状态：`V2.9.5` 单一总脚本、支持页和仓库资料同步发布；Repository checks 是正式发布门禁。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-`V2.8.5` 已完成单一总脚本、网页和仓库发布资料同步，并作为当前正式版本发布。
+`V2.9.5` 已完成脚本、支持页、仓库资料与检查规则同步，并通过 GitHub `main` 工作流后创建同版本 tag 和 Release。
 
 ## 适用设备
 
@@ -25,7 +26,7 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 | `NRadio_C2000MAX` | `HC-WT9303` | NROS 2.x |
 | `NRadio_C2000Pro` | `UDX710` / `RG200U-CN` | NROS 2.x（有限兼容） |
 
-支持页已预告 `NRadio_C2000Ultra` 与 `NRadio_AK68-798`，两款当前均为“即将支持、暂未适配”：不属于上表的当前支持范围，总脚本不会识别或放行，请等待正式适配公告。
+支持页已预告 `NRadio_C2000Ultra` 与 `NRadio_N5000`，两款当前均为“即将支持、暂未适配”：不属于上表的当前支持范围，总脚本不会识别或放行，请等待正式适配公告。
 
 标准 OpenWrt 不适用。脚本不是应用商店安装包，也不是固件升级包。
 
@@ -57,6 +58,17 @@ sh ssh-nradio-plugin-installer.sh
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、C5800-688 智能频段管理 |
 
+## V2.9.5 更新
+
+- `SCRIPT_VERSION` 更新为 `V2.9.5`，发布日期 `2026-08-13`。
+- 修复应用商店 V3 共享接入链，避免 OpenClash 及其他插件在 LuCI、图标和应用商店接入阶段因旧模板锚点误判而停止。
+- OpenClash 安装依赖与 NRadio 定制固件实际能力对齐，移除无法从 21.02.7 feed 安装且不属于官方 IPK 依赖的 `kmod-inet-diag`、`kmod-nft-tproxy`。
+- 智能频段、奇游、雷神、MosDNS、DDNS-GO 和 ttyd 撤除固定 MD5/SHA256 安装门禁；继续保留 shell 语法、压缩包可读、IPK 存在和二进制可运行等实际可用性检查。
+- 撤除应用商店事务目录、通用 `.bak`、OpenClash 自定义规则、5G 聚合、WebSSH 和 Docker 的持久备份写入；应用商店美化与原厂还原直接执行。
+- 支持页同步 `V2.9.5 / 2026-08-13`，预告机型更新为 `NRadio_N5000`，并完成手机首屏五等分导航、双按钮和双列版本面板适配。
+- 安全准则收紧为仅限 NROS 2.x；明确本项目是 SSH 脚本，不是应用商店安装包，禁止从应用商店安装。
+- README、CHANGELOG、CHECKSUMS 和 GitHub Actions 检查规则已同步；正式发布内容由 `main` 的 Repository checks 验证。
+
 ## V2.8.5 更新
 
 - `SCRIPT_VERSION` 更新为 `V2.8.5`，发布日期 `2026-08-10`。
@@ -65,7 +77,7 @@ sh ssh-nradio-plugin-installer.sh
 - 智能频段策略改为联网健康优先：移动/广电 N28/N41 链路健康时只记录，不再因频段变化频繁 CFUN；IPv4 连续失败后先软恢复，CFUN 仅作带冷却和次数限制的最终手段。
 - `5 > 1` 统一体检加入智能频段脚本权限、语法、内嵌 SHA256、cron 唯一性、准确任务行和只读状态检查。
 - 支持页升级为 V2.8.5：增加单一总脚本和智能频段状态摘要、历史版本折叠、复制失败提示、键盘焦点、阅读进度与移动端适配。
-- 2026-08-11 支持页新增 `NRadio_C2000Ultra`、`NRadio_AK68-798` 两款“即将支持、暂未适配”预告卡片；未把两款机型加入总脚本识别或功能放行。
+- 2026-08-11 支持页新增 `NRadio_C2000Ultra` 与后续更名为 `NRadio_N5000` 的“即将支持、暂未适配”预告卡片；未把两款机型加入总脚本识别或功能放行。
 - 总脚本、网页和仓库资料已同步至 GitHub `main`，并纳入 `v2.8.5` 正式发布。
 
 ## V2.8.0 更新
@@ -172,6 +184,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.9.5`：应用商店 V3 共享接入修复、OpenClash 定制固件依赖收口、固定安装哈希与持久备份撤除、支持页手机适配。
 - `V2.8.5`：智能频段 v5 内嵌总脚本、`5 > 8` 中文管理、联网健康优先策略与支持页交互优化。
 - `V2.8.0`：状态文件注入防护、TLS 校验恢复、opkg 失败阻断，并完成 C5800-688 统一体检。
 - `V2.7.5`：FanControl ROM 文件完全免写、OpenClash 新 LuCI 兼容保留、C5800-688 智能频段 v3 现场验证。
@@ -206,9 +219,9 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.8.5 当前正式版及唯一发布脚本，已内嵌智能频段 v5 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.9.5 正式版总脚本，已内嵌智能频段 v5 |
 | `00-current/nradio-smart-band.sh` | 智能频段 v5 开发校验源；不是运行或发布依赖 |
-| `40-server-web/mayebano-support/index.html` | 公网支持页入口，当前为 V2.8.5 展示页 |
+| `40-server-web/mayebano-support/index.html` | V2.9.5 正式支持页入口 |
 | `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -242,8 +255,8 @@ bash -n 00-current/ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  68bdf853dfd5effdf313c81cc16780d206f27b871404f60e03f1ce1708596877
-Bytes   2012065
+SHA256  f4f02c7aac9f2b9cf03cdeee0acc1cc35c19a8c08cfb71153fc210d74f5ab3a6
+Bytes   2087139
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

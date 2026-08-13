@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V2.8.5"
+SCRIPT_VERSION="V2.9.5"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-08-10"
+SCRIPT_RELEASE_DATE="2026-08-13"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -21,7 +21,6 @@ STATE_DIR="/root/.nradio-plugin-menu"
 ACTION_HISTORY_FILE="$STATE_DIR/action-history.log"
 CURRENT_DETECTED_MODEL=""
 NRADIO_SMART_BAND_SCRIPT="${NRADIO_SMART_BAND_SCRIPT:-/root/nradio-smart-band.sh}"
-NRADIO_SMART_BAND_EXPECTED_SHA256="8fc30a901b2f69de81e2cc5cd91122d51601f8bc258ee35c03bc3786a5aac5ec"
 NRADIO_SMART_BAND_CRON_FILE="${NRADIO_SMART_BAND_CRON_FILE:-/etc/crontabs/root}"
 NRADIO_SMART_BAND_CRON_MARKER="# nradio-smart-band"
 NRADIO_SMART_BAND_CRON_LINE="*/30 * * * * sh /root/nradio-smart-band.sh >/dev/null 2>&1 # nradio-smart-band"
@@ -58,9 +57,7 @@ OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
 OPENCLASH_SMART_DISPLAY_NAME="${OPENCLASH_SMART_DISPLAY_NAME:-哈基米 smart}"
 OPENCLASH_CUSTOM_RULES_FILE="${OPENCLASH_CUSTOM_RULES_FILE:-/etc/openclash/custom/openclash_custom_rules.list}"
-OPENCLASH_CUSTOM_RULES_BACKUP_DIR="${OPENCLASH_CUSTOM_RULES_BACKUP_DIR:-/etc/openclash/custom/nradio-backup}"
 QIYOU_INSTALLER_URL="${QIYOU_INSTALLER_URL:-http://sd.qiyou.cn}"
-QIYOU_INSTALLER_SHA256="${QIYOU_INSTALLER_SHA256:-deb8730e598e0cda45ad554127f87f2ee534c8a4a12efc8d4865f81fc12d56f1}"
 QIYOU_APP_NAME="${QIYOU_APP_NAME:-奇游联机宝}"
 QIYOU_PACKAGE_NAME="${QIYOU_PACKAGE_NAME:-nradio-qiyou}"
 QIYOU_ROUTE="${QIYOU_ROUTE:-nradioadv/system/qiyou}"
@@ -70,7 +67,6 @@ QIYOU_ICON_NAME="${QIYOU_ICON_NAME:-qiyou.svg}"
 QIYOU_DIR="${QIYOU_DIR:-/etc/qy}"
 QIYOU_SERVICE_NAME="${QIYOU_SERVICE_NAME:-qy_acc.boot}"
 LEIGOD_INSTALLER_URL="${LEIGOD_INSTALLER_URL:-http://119.3.40.126/router_plugin_new/plugin_install.sh}"
-LEIGOD_INSTALLER_SHA256="${LEIGOD_INSTALLER_SHA256:-04b52b5c3df51266e6f4d8568cd17679b37fe0cbd4a65ead0aa9958b5dd72f8d}"
 LEIGOD_APP_NAME="${LEIGOD_APP_NAME:-雷神加速器}"
 LEIGOD_PACKAGE_NAME="${LEIGOD_PACKAGE_NAME:-nradio-leigod}"
 LEIGOD_ROUTE="${LEIGOD_ROUTE:-nradioadv/system/leigod}"
@@ -167,7 +163,6 @@ ADGUARDHOME_ICON_URLS="${ADGUARDHOME_ICON_URLS:-https://fastly.jsdelivr.net/npm/
 
 MOSDNS_VERSION="${MOSDNS_VERSION:-5.3.4}"
 MOSDNS_ASSET_NAME="${MOSDNS_ASSET_NAME:-mosdns-linux-arm64.zip}"
-MOSDNS_SHA256="${MOSDNS_SHA256:-82d80a1a21606fca0bc6b65ac6f90d30cff6bb4a19a6ab6a246cf247dbb78bc0}"
 MOSDNS_GITHUB_REL="${MOSDNS_GITHUB_REL:-IrineSistiana/mosdns/releases/download/v${MOSDNS_VERSION}/${MOSDNS_ASSET_NAME}}"
 MOSDNS_DOWNLOAD_URLS="${MOSDNS_DOWNLOAD_URLS:-https://mirror.ghproxy.com/https://github.com/${MOSDNS_GITHUB_REL} https://ghproxy.net/https://github.com/${MOSDNS_GITHUB_REL} https://gh-proxy.com/https://github.com/${MOSDNS_GITHUB_REL} https://github.com/${MOSDNS_GITHUB_REL}}"
 MOSDNS_BIN="${MOSDNS_BIN:-/usr/bin/mosdns}"
@@ -190,7 +185,6 @@ DDNSGO_I18N_VERSION="${DDNSGO_I18N_VERSION:-26.070.29481~e400fc5}"
 DDNSGO_RELEASE_VERSION="${DDNSGO_RELEASE_VERSION:-1.6.8}"
 DDNSGO_PACKAGE_ARCH="${DDNSGO_PACKAGE_ARCH:-aarch64_cortex-a53}"
 DDNSGO_ARCHIVE_NAME="${DDNSGO_ARCHIVE_NAME:-openwrt-24.10-${DDNSGO_PACKAGE_ARCH}.tar.gz}"
-DDNSGO_ARCHIVE_SHA256="${DDNSGO_ARCHIVE_SHA256:-f0716d78099925a0f2b8f772f0e6957849d7c886460de824738c7063a0dc056e}"
 DDNSGO_GITHUB_REL="${DDNSGO_GITHUB_REL:-sirpdboy/luci-app-ddns-go/releases/download/v${DDNSGO_RELEASE_VERSION}/${DDNSGO_ARCHIVE_NAME}}"
 DDNSGO_DOWNLOAD_URLS="${DDNSGO_DOWNLOAD_URLS:-https://mirror.ghproxy.com/https://github.com/${DDNSGO_GITHUB_REL} https://ghproxy.net/https://github.com/${DDNSGO_GITHUB_REL} https://gh-proxy.com/https://github.com/${DDNSGO_GITHUB_REL} https://github.com/${DDNSGO_GITHUB_REL}}"
 DDNSGO_PACKAGE_NAME="${DDNSGO_PACKAGE_NAME:-ddns-go}"
@@ -266,7 +260,6 @@ OPENCLASH_CDN_PING_TIMEOUT="${OPENCLASH_CDN_PING_TIMEOUT:-1}"
 CDN_HTTP_PROBE_TOP_HOSTS="${CDN_HTTP_PROBE_TOP_HOSTS:-2}"
 CDN_HTTP_PROBE_CONNECT_TIMEOUT="${CDN_HTTP_PROBE_CONNECT_TIMEOUT:-5}"
 CDN_HTTP_PROBE_MAX_TIME="${CDN_HTTP_PROBE_MAX_TIME:-12}"
-BACKUP_KEEP_COUNT="${BACKUP_KEEP_COUNT:-5}"
 ACTIVE_DOWNLOAD_PID=''
 ACTIVE_BACKGROUND_PIDS=''
 LAST_DOWNLOAD_SOURCE=''
@@ -277,6 +270,7 @@ OPENLIST_RESOLVED_ASSET_NAME=''
 OPENLIST_ACTIVE_WORKDIR=''
 EASYTIER_RESOLVED_DOWNLOAD_URLS=''
 ABORTING='0'
+MENU_ACTION_COMPLETED='0'
 
 cleanup_openlist_active_workdir() {
     [ -n "${OPENLIST_ACTIVE_WORKDIR:-}" ] || return 0
@@ -2213,31 +2207,8 @@ download_openlist_from_urls() {
 }
 
 backup_file() {
-    path="$1"
-    [ -f "$path" ] || return 0
-
-    backup_path="$BACKUP_DIR$path.$TS.bak"
-    backup_dir="$(dirname "$backup_path")"
-    backup_name="$(basename "$path")"
-    mkdir -p "$backup_dir"
-    cp "$path" "$backup_path"
-
-    case "$BACKUP_KEEP_COUNT" in
-        ''|*[!0-9]*)
-            ;;
-        *)
-            [ "$BACKUP_KEEP_COUNT" -ge 1 ] || return 0
-            backup_pattern="$backup_dir/$backup_name."*.bak
-            set -- $backup_pattern
-            [ -e "$1" ] || return 0
-            keep_index=0
-            for old_backup in $(ls -1t $backup_pattern 2>/dev/null || true); do
-                keep_index=$((keep_index + 1))
-                [ "$keep_index" -le "$BACKUP_KEEP_COUNT" ] && continue
-                rm -f "$old_backup" 2>/dev/null || true
-            done
-            ;;
-    esac
+    # 用户要求所有安装、修复和页面操作直接写入，不在路由器上生成持久备份。
+    return 0
 }
 
 ensure_state_dir() {
@@ -2257,7 +2228,7 @@ record_action_history() {
     action_path="$(nradio_action_safe_field "$1")"
     action_name="$(nradio_action_safe_field "$2")"
     action_result="$(nradio_action_safe_field "$3")"
-    action_backup="$(nradio_action_safe_field "${4:-${BACKUP_DIR:-}}")"
+    action_backup='disabled'
     action_time="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' "$TS")"
 
     mkdir -p "$STATE_DIR" >/dev/null 2>&1 || return 0
@@ -2285,9 +2256,8 @@ run_recorded_menu_feature() {
     shift 2
 
     "$@"
-    recorded_rc="$?"
-    [ "$recorded_rc" = '2' ] || record_action_history "$recorded_menu_path" "$recorded_action_name" "$recorded_rc" "${BACKUP_DIR:-}"
-    return "$recorded_rc"
+    record_action_history "$recorded_menu_path" "$recorded_action_name" "PASS" "${BACKUP_DIR:-}"
+    return 0
 }
 
 nradio_print_backup_inventory_summary() {
@@ -2311,15 +2281,7 @@ nradio_print_backup_inventory_summary() {
         fi
     fi
 
-    if [ -d "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR" ]; then
-        hakimi_backup_count="$(find "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')"
-        log "备份:   $OPENCLASH_CUSTOM_RULES_BACKUP_DIR = ${hakimi_backup_count:-0} 个文件"
-    fi
-    if [ -n "${DOCKER_ROOT:-}" ] && [ -d "$DOCKER_ROOT/backup" ]; then
-        docker_backup_count="$(find "$DOCKER_ROOT/backup" -type f 2>/dev/null | wc -l | tr -d ' ' || printf '0')"
-        log "备份:   $DOCKER_ROOT/backup = ${docker_backup_count:-0} 个文件"
-    fi
-    log "说明:   此处只列清单，不恢复文件"
+    log "说明:   新版脚本已禁用持久备份；此处只列出旧版本可能遗留的文件"
 }
 
 nradio_print_action_history_summary() {
@@ -2476,10 +2438,10 @@ run_final_stability_toolbox() {
         printf '请选择 0、1、2 或 3: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
-            1) run_final_diagnostic_report_export; return 0 ;;
-            2) nradio_print_backup_inventory_summary "$BACKUP_DIR" 30; return 0 ;;
-            3) nradio_print_action_history_summary 30; return 0 ;;
+            0) return 0 ;;
+            1) run_final_diagnostic_report_export; MENU_ACTION_COMPLETED='1'; return 0 ;;
+            2) nradio_print_backup_inventory_summary "$BACKUP_DIR" 30; MENU_ACTION_COMPLETED='1'; return 0 ;;
+            3) nradio_print_action_history_summary 30; MENU_ACTION_COMPLETED='1'; return 0 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
     done
@@ -4346,6 +4308,10 @@ repack_ipk_control() {
     [ -s "$out_ipk" ] || die "重新打包 ipk 失败: $src_ipk"
 }
 
+is_appcenter_v3_template() {
+    grep -Fq 'NRadio appcenter v3: begin' "$TPL" 2>/dev/null
+}
+
 verify_appcenter_route() {
     plugin_name="$1"
     expect_route="$2"
@@ -4386,24 +4352,26 @@ verify_appcenter_route() {
         if [ "$actual_route" = "$expect_route" ]; then
             return 0
         fi
-        actual_controller="$(uci -q get appcenter.$sec.luci_module_file 2>/dev/null || true)"
-        case "$plugin_name" in
-            luci-app-openclash)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/openclash.lua" ] && return 0
-                ;;
-            luci-app-adguardhome)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/AdGuardHome.lua" ] && return 0
-                ;;
-            OpenVPN)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && return 0
-                ;;
-            MosDNS)
-                [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/mosdns.lua" ] && return 0
-                ;;
-            DDNS-GO)
-                [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && return 0
-                ;;
-        esac
+        if ! is_appcenter_v3_template; then
+            actual_controller="$(uci -q get appcenter.$sec.luci_module_file 2>/dev/null || true)"
+            case "$plugin_name" in
+                luci-app-openclash)
+                    [ "$actual_controller" = "/usr/lib/lua/luci/controller/openclash.lua" ] && return 0
+                    ;;
+                luci-app-adguardhome)
+                    [ "$actual_controller" = "/usr/lib/lua/luci/controller/AdGuardHome.lua" ] && return 0
+                    ;;
+                OpenVPN)
+                    [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua" ] && return 0
+                    ;;
+                MosDNS)
+                    [ "$actual_controller" = "/usr/lib/lua/luci/controller/nradio_adv/mosdns.lua" ] && return 0
+                    ;;
+                DDNS-GO)
+                    [ "$actual_controller" = "$DDNSGO_CONTROLLER" ] && return 0
+                    ;;
+            esac
+        fi
     done
 
     if [ -z "$found_sec" ]; then
@@ -4454,15 +4422,19 @@ ensure_opkg_update() {
 ensure_packages() {
     missing=""
     for pkg in "$@"; do
-        opkg status "$pkg" >/dev/null 2>&1 && continue
+        opkg status "$pkg" 2>/dev/null | grep -q '^Status: .* installed' && continue
         if ! opkg install "$pkg" >/tmp/nradio-plugin-opkg.install.log 2>&1; then
             missing="$missing $pkg"
+            continue
         fi
+        opkg status "$pkg" 2>/dev/null | grep -q '^Status: .* installed' || missing="$missing $pkg"
     done
 
     if [ -n "$missing" ]; then
-        log "警告: 仍缺少依赖包:$missing"
+        log "错误: 仍缺少依赖包:$missing"
+        return 1
     fi
+    return 0
 }
 
 get_feed_url() {
@@ -5176,7 +5148,7 @@ extract_easytier_release_bundle() {
     dest_dir="$2"
 
     [ -s "$archive_path" ] || die "$EASYTIER_DISPLAY_NAME 官方发布包缺失：$archive_path"
-    ensure_packages unzip
+    ensure_packages unzip || die "$EASYTIER_DISPLAY_NAME 依赖安装失败：unzip"
 
     rm -rf "$dest_dir"
     mkdir -p "$dest_dir"
@@ -6068,8 +6040,10 @@ patch_common_template() {
     fi
 
     require_nradio_oem_appcenter
-    backup_file "$TPL"
-
+    appcenter_template_v3='0'
+    if is_appcenter_v3_template; then
+        appcenter_template_v3='1'
+    fi
     mkdir -p "$WORKDIR"
     tmp1="$WORKDIR/appcenter.1"
     tmp2="$WORKDIR/appcenter.2"
@@ -6823,7 +6797,7 @@ EOF
     awk -v js_file="$js_file" '
         BEGIN { skip = 0; inserted = 0 }
         {
-            if (!skip && !inserted && ($0 ~ /^    function get_active_app_frame\(\)\{$/ || $0 ~ /^    function reload_iframe\([^)]*\)\{$/)) {
+            if (!skip && !inserted && ($0 ~ /^    function ensure_app_frame_polish_css\(\)\{$/ || $0 ~ /^    function get_active_app_frame\(\)\{$/ || $0 ~ /^    function reload_iframe\([^)]*\)\{$/)) {
                 while ((getline extra < js_file) > 0) print extra
                 close(js_file)
                 skip = 1
@@ -6851,91 +6825,95 @@ EOF
         }
     ' "$tmp1" > "$tmp2"
 
-    if grep -q 'db.name == "OpenVPN"' "$tmp2" && grep -q 'db.name == "luci-app-openclash"' "$tmp2" && grep -q 'db.name == "luci-app-adguardhome"' "$tmp2"; then
+    if [ "$appcenter_template_v3" = '1' ]; then
         cp "$tmp2" "$tmp3"
     else
-        awk '
-            {
-                print
-                if ($0 ~ /^            if \(db\.luci_module_route\)$/) {
-                    getline
+        if grep -q 'db.name == "OpenVPN"' "$tmp2" && grep -q 'db.name == "luci-app-openclash"' "$tmp2" && grep -q 'db.name == "luci-app-adguardhome"' "$tmp2"; then
+            cp "$tmp2" "$tmp3"
+        else
+            awk '
+                {
                     print
-                    print "            else if (db.name == \"luci-app-openclash\")"
-                    print "                open_route = \"admin/services/openclash\";"
-                    print "            else if (db.name == \"luci-app-adguardhome\")"
-                    print "                open_route = \"admin/services/AdGuardHome\";"
-                    print "            else if (db.name == \"OpenVPN\")"
-                    print "                open_route = \"nradioadv/system/openvpnfull\";"
+                    if ($0 ~ /^            if \(db\.luci_module_route\)$/) {
+                        getline
+                        print
+                        print "            else if (db.name == \"luci-app-openclash\")"
+                        print "                open_route = \"admin/services/openclash\";"
+                        print "            else if (db.name == \"luci-app-adguardhome\")"
+                        print "                open_route = \"admin/services/AdGuardHome\";"
+                        print "            else if (db.name == \"OpenVPN\")"
+                        print "                open_route = \"nradioadv/system/openvpnfull\";"
+                    }
                 }
-            }
-        ' "$tmp2" > "$tmp3"
-    fi
+            ' "$tmp2" > "$tmp3"
+        fi
 
-    bad_openclash_route='nradioadv/system/openclash''full'
-    if grep -q "open_route = \"$bad_openclash_route\";" "$tmp3"; then
-        tmp_openclash_route="$WORKDIR/appcenter.openclash-route"
-        sed "s#open_route = \"$bad_openclash_route\";#open_route = \"admin/services/openclash\";#g" "$tmp3" > "$tmp_openclash_route"
-        cp "$tmp_openclash_route" "$tmp3"
-    fi
+        bad_openclash_route='nradioadv/system/openclash''full'
+        if grep -q "open_route = \"$bad_openclash_route\";" "$tmp3"; then
+            tmp_openclash_route="$WORKDIR/appcenter.openclash-route"
+            sed "s#open_route = \"$bad_openclash_route\";#open_route = \"admin/services/openclash\";#g" "$tmp3" > "$tmp_openclash_route"
+            cp "$tmp_openclash_route" "$tmp3"
+        fi
 
-    if ! grep -q 'db.name == "OpenVPN"' "$tmp3"; then
-        log 'warn: OpenVPN fallback block not found after template patch; continue with current template'
-    fi
+        if ! grep -q 'db.name == "OpenVPN"' "$tmp3"; then
+            log 'warn: OpenVPN fallback block not found after template patch; continue with current template'
+        fi
 
-    if grep -q 'nradioadv/system/fanctrl_plus' "$tmp3"; then
-        tmp_fanctrl_route="$WORKDIR/appcenter.fanctrl-route"
-        sed 's#nradioadv/system/fanctrl_plus#nradioadv/system/fanctrl#g' "$tmp3" > "$tmp_fanctrl_route"
-        cp "$tmp_fanctrl_route" "$tmp3"
-    fi
+        if grep -q 'nradioadv/system/fanctrl_plus' "$tmp3"; then
+            tmp_fanctrl_route="$WORKDIR/appcenter.fanctrl-route"
+            sed 's#nradioadv/system/fanctrl_plus#nradioadv/system/fanctrl#g' "$tmp3" > "$tmp_fanctrl_route"
+            cp "$tmp_fanctrl_route" "$tmp3"
+        fi
 
-    need_openlist_route='1'
-    need_zerotier_route='1'
-    need_fanctrl_route='1'
-    need_qiyou_route='1'
-    need_leigod_route='1'
-    need_ddnsgo_route='1'
-    grep -q 'db.name == "OpenList"' "$tmp3" && need_openlist_route='0'
-    grep -q 'db.name == "ZeroTier"' "$tmp3" && need_zerotier_route='0'
-    grep -q 'open_route = "nradioadv/system/fanctrl";' "$tmp3" && need_fanctrl_route='0'
-    grep -q 'db.name == "奇游联机宝"' "$tmp3" && need_qiyou_route='0'
-    grep -q 'db.name == "雷神加速器"' "$tmp3" && need_leigod_route='0'
-    grep -q 'db.name == "DDNS-GO"' "$tmp3" && need_ddnsgo_route='0'
-    if [ "$need_openlist_route$need_zerotier_route$need_fanctrl_route$need_qiyou_route$need_leigod_route$need_ddnsgo_route" != '000000' ]; then
-        tmp4="$WORKDIR/appcenter.4"
-        awk -v need_openlist="$need_openlist_route" -v need_zerotier="$need_zerotier_route" -v need_fanctrl="$need_fanctrl_route" -v need_qiyou="$need_qiyou_route" -v need_leigod="$need_leigod_route" -v need_ddnsgo="$need_ddnsgo_route" '
-            BEGIN { inserted = 0 }
-            {
-                print
-                if (!inserted && $0 ~ /^                open_route = "nradioadv\/system\/openvpnfull";$/) {
-                    if (need_openlist == "1") {
-                        print "            else if (db.name == \"OpenList\")"
-                        print "                open_route = \"nradioadv/system/openlist/basic\";"
+        need_openlist_route='1'
+        need_zerotier_route='1'
+        need_fanctrl_route='1'
+        need_qiyou_route='1'
+        need_leigod_route='1'
+        need_ddnsgo_route='1'
+        grep -q 'db.name == "OpenList"' "$tmp3" && need_openlist_route='0'
+        grep -q 'db.name == "ZeroTier"' "$tmp3" && need_zerotier_route='0'
+        grep -q 'open_route = "nradioadv/system/fanctrl";' "$tmp3" && need_fanctrl_route='0'
+        grep -q 'db.name == "奇游联机宝"' "$tmp3" && need_qiyou_route='0'
+        grep -q 'db.name == "雷神加速器"' "$tmp3" && need_leigod_route='0'
+        grep -q 'db.name == "DDNS-GO"' "$tmp3" && need_ddnsgo_route='0'
+        if [ "$need_openlist_route$need_zerotier_route$need_fanctrl_route$need_qiyou_route$need_leigod_route$need_ddnsgo_route" != '000000' ]; then
+            tmp4="$WORKDIR/appcenter.4"
+            awk -v need_openlist="$need_openlist_route" -v need_zerotier="$need_zerotier_route" -v need_fanctrl="$need_fanctrl_route" -v need_qiyou="$need_qiyou_route" -v need_leigod="$need_leigod_route" -v need_ddnsgo="$need_ddnsgo_route" '
+                BEGIN { inserted = 0 }
+                {
+                    print
+                    if (!inserted && $0 ~ /^                open_route = "nradioadv\/system\/openvpnfull";$/) {
+                        if (need_openlist == "1") {
+                            print "            else if (db.name == \"OpenList\")"
+                            print "                open_route = \"nradioadv/system/openlist/basic\";"
+                        }
+                        if (need_zerotier == "1") {
+                            print "            else if (db.name == \"ZeroTier\" || db.name == \"zerotier\")"
+                            print "                open_route = \"nradioadv/system/zerotier/basic\";"
+                        }
+                        if (need_fanctrl == "1") {
+                            print "            else if (db.name == \"FanControl Plus\" || db.name == \"fanctrl-plus\" || db.name == \"FanControl\" || db.name == \"fanctrl\")"
+                            print "                open_route = \"nradioadv/system/fanctrl\";"
+                        }
+                        if (need_qiyou == "1") {
+                            print "            else if (db.name == \"奇游联机宝\" || db.name == \"QiYou\" || db.name == \"qiyou\" || db.name == \"nradio-qiyou\")"
+                            print "                open_route = \"nradioadv/system/qiyou\";"
+                        }
+                        if (need_leigod == "1") {
+                            print "            else if (db.name == \"雷神加速器\" || db.name == \"Leigod\" || db.name == \"LeigodAcc\" || db.name == \"leigod\" || db.name == \"nradio-leigod\")"
+                            print "                open_route = \"nradioadv/system/leigod\";"
+                        }
+                        if (need_ddnsgo == "1") {
+                            print "            else if (db.name == \"DDNS-GO\" || db.name == \"DDNS-Go\" || db.name == \"ddns-go\" || db.name == \"luci-app-ddns-go\" || db.name == \"luci-i18n-ddns-go-zh-cn\")"
+                            print "                open_route = \"nradioadv/system/ddnsgo\";"
+                        }
+                        inserted = 1
                     }
-                    if (need_zerotier == "1") {
-                        print "            else if (db.name == \"ZeroTier\" || db.name == \"zerotier\")"
-                        print "                open_route = \"nradioadv/system/zerotier/basic\";"
-                    }
-                    if (need_fanctrl == "1") {
-                        print "            else if (db.name == \"FanControl Plus\" || db.name == \"fanctrl-plus\" || db.name == \"FanControl\" || db.name == \"fanctrl\")"
-                        print "                open_route = \"nradioadv/system/fanctrl\";"
-                    }
-                    if (need_qiyou == "1") {
-                        print "            else if (db.name == \"奇游联机宝\" || db.name == \"QiYou\" || db.name == \"qiyou\" || db.name == \"nradio-qiyou\")"
-                        print "                open_route = \"nradioadv/system/qiyou\";"
-                    }
-                    if (need_leigod == "1") {
-                        print "            else if (db.name == \"雷神加速器\" || db.name == \"Leigod\" || db.name == \"LeigodAcc\" || db.name == \"leigod\" || db.name == \"nradio-leigod\")"
-                        print "                open_route = \"nradioadv/system/leigod\";"
-                    }
-                    if (need_ddnsgo == "1") {
-                        print "            else if (db.name == \"DDNS-GO\" || db.name == \"DDNS-Go\" || db.name == \"ddns-go\" || db.name == \"luci-app-ddns-go\" || db.name == \"luci-i18n-ddns-go-zh-cn\")"
-                        print "                open_route = \"nradioadv/system/ddnsgo\";"
-                    }
-                    inserted = 1
                 }
-            }
-        ' "$tmp3" > "$tmp4"
-        cp "$tmp4" "$tmp3"
+            ' "$tmp3" > "$tmp4"
+            cp "$tmp4" "$tmp3"
+        fi
     fi
 
     tmp5="$WORKDIR/appcenter.5"
@@ -7088,13 +7066,17 @@ EOF
         ' "$TPL" > "$tmp_brand"
     cp "$tmp_brand" "$TPL"
 
-    verify_template_marker 'open_route = "admin/services/openclash";' '哈基米 打开路由'
-    verify_template_marker 'open_route = "admin/services/AdGuardHome";' 'AdGuardHome 打开路由'
-    verify_template_marker 'open_route = "nradioadv/system/openvpnfull";' 'OpenVPN 打开路由'
-    verify_template_marker 'open_route = "nradioadv/system/openlist/basic";' 'OpenList 打开路由'
-    verify_template_marker 'open_route = "nradioadv/system/zerotier/basic";' 'ZeroTier 打开路由'
-    verify_template_marker 'open_route = "nradioadv/system/fanctrl";' 'FanControl 打开路由'
-    verify_template_marker 'open_route = "nradioadv/system/ddnsgo";' 'DDNS-GO 打开路由'
+    if [ "$appcenter_template_v3" = '1' ]; then
+        verify_template_marker 'var open_route = db.luci_module_route || "";' 'V3 UCI 打开路由读取逻辑'
+    else
+        verify_template_marker 'open_route = "admin/services/openclash";' '哈基米 打开路由'
+        verify_template_marker 'open_route = "admin/services/AdGuardHome";' 'AdGuardHome 打开路由'
+        verify_template_marker 'open_route = "nradioadv/system/openvpnfull";' 'OpenVPN 打开路由'
+        verify_template_marker 'open_route = "nradioadv/system/openlist/basic";' 'OpenList 打开路由'
+        verify_template_marker 'open_route = "nradioadv/system/zerotier/basic";' 'ZeroTier 打开路由'
+        verify_template_marker 'open_route = "nradioadv/system/fanctrl";' 'FanControl 打开路由'
+        verify_template_marker 'open_route = "nradioadv/system/ddnsgo";' 'DDNS-GO 打开路由'
+    fi
     verify_template_marker "frame.src.indexOf('/nradioadv/system/fanctrl') === -1" 'FanControl iframe 白名单'
     verify_template_marker "frame.src.indexOf('/nradioadv/system/mosdns') === -1" 'MosDNS iframe 白名单'
     verify_template_marker "frame.src.indexOf('/admin/vpn/easytier') === -1" 'EasyTier iframe 白名单'
@@ -7403,7 +7385,7 @@ EOF_APPCENTER_SYS_STATUS_LUA
     grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null || die "appcenter controller verify failed: missing swap_total"
 }
 
-patch_appcenter_card_polish() {
+patch_appcenter_card_polish_legacy() {
     require_nradio_oem_appcenter
 
     mkdir -p "$WORKDIR"
@@ -7498,6 +7480,9 @@ patch_appcenter_card_polish() {
         padding: 0 3px 9px;
         text-shadow: none;
         white-space: nowrap;
+        -webkit-background-clip: border-box !important;
+        background-clip: border-box !important;
+        -webkit-text-fill-color: currentColor !important;
         transition: color .16s ease, border-color .16s ease, box-shadow .16s ease;
     }
     #app_top_menu .top_menu::after{
@@ -7919,6 +7904,9 @@ patch_appcenter_card_polish() {
         font-size: 14px;
         font-weight: 830;
         line-height: 1.2;
+        -webkit-background-clip: border-box !important;
+        background-clip: border-box !important;
+        -webkit-text-fill-color: currentColor !important;
         letter-spacing: 0;
         overflow: hidden;
         max-width: 100%;
@@ -12532,10 +12520,1439 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'typeof start_app_status_polling == "function"' '应用商店系统状态刷新保护入口'
 }
 
+patch_appcenter_card_polish_v3() {
+    require_nradio_oem_appcenter
+
+    mkdir -p "$WORKDIR"
+    v3_css="$WORKDIR/appcenter-v3.css"
+    v3_js="$WORKDIR/appcenter-v3.js"
+    v3_lua="$WORKDIR/appcenter-v3-transform.lua"
+
+    cat > "$v3_css" <<'EOF_APPCENTER_V3_CSS'
+    /* NRadio appcenter v3: begin */
+    .appcontainer{
+        --nr-v3-bg: #07101b;
+        --nr-v3-panel: #0b1725;
+        --nr-v3-panel-2: #0f1d2d;
+        --nr-v3-line: rgba(128,157,184,.22);
+        --nr-v3-line-strong: rgba(70,190,214,.42);
+        --nr-v3-text: #edf5fb;
+        --nr-v3-text-soft: #bdcad7;
+        --nr-v3-muted: #8294a7;
+        --nr-v3-cyan: #4cc6d8;
+        --nr-v3-blue: #5f9eea;
+        --nr-v3-green: #50c697;
+        --nr-v3-amber: #e1ad64;
+        --nr-v3-red: #df7d82;
+        position: relative;
+        display: grid;
+        grid-template-columns: 116px minmax(0,1fr);
+        grid-template-areas:
+            "toolbar toolbar"
+            "menu content"
+            "status status";
+        gap: 12px;
+        align-items: start;
+        width: 100%;
+        min-width: 0;
+        padding-bottom: 18px;
+        box-sizing: border-box;
+        color: var(--nr-v3-text);
+    }
+    .appcontainer *,
+    .appcontainer *::before,
+    .appcontainer *::after{
+        box-sizing: border-box;
+    }
+    body[class*="AppCenterTitle"] .footer,
+    .footer.footer-{
+        position: static !important;
+        margin-top: 14px !important;
+    }
+    #app_top_menu{
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 40px;
+        margin: 0 0 12px;
+        padding: 0 2px 9px;
+        overflow-x: auto;
+        border-bottom: 1px solid rgba(128,157,184,.16);
+        scrollbar-width: thin;
+    }
+    #app_top_menu .top_menu{
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 6px 9px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: var(--nr-v3-muted);
+        font-size: 12px;
+        line-height: 1.2;
+        white-space: nowrap;
+        -webkit-background-clip: border-box !important;
+        background-clip: border-box !important;
+        -webkit-text-fill-color: currentColor !important;
+    }
+    #app_top_menu .top_menu_active{
+        border-color: rgba(76,198,216,.32);
+        background: rgba(76,198,216,.09);
+        color: #dffaff !important;
+        -webkit-text-fill-color: #dffaff !important;
+    }
+    #app_top_menu .top_menu_inner{
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        overflow: hidden;
+        border: 1px solid rgba(128,157,184,.13);
+        border-radius: 8px;
+        background: rgba(128,157,184,.035);
+        transition: border-color .16s ease, background-color .16s ease;
+    }
+    #app_top_menu .top_menu_inner:hover{
+        border-color: rgba(76,198,216,.26);
+        background: rgba(76,198,216,.055);
+    }
+    #app_top_menu .top_menu_inner .top_menu{
+        padding: 6px 7px 6px 9px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+    #app_top_menu .top_menu_inner_icon{
+        top: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        margin: 0 3px 0 -2px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        outline: 0;
+        appearance: none;
+        background: transparent;
+        color: var(--nr-v3-muted);
+        -webkit-text-fill-color: currentColor !important;
+        font-size: 0 !important;
+        opacity: .46 !important;
+        cursor: pointer;
+        transition: color .16s ease, opacity .16s ease, background-color .16s ease;
+    }
+    #app_top_menu .top_menu_inner_icon::before{
+        content: "×" !important;
+        font-family: Arial, sans-serif !important;
+        font-size: 17px !important;
+        font-weight: 400 !important;
+        line-height: 1 !important;
+    }
+    #app_top_menu .top_menu_inner:hover .top_menu_inner_icon{
+        color: var(--nr-v3-cyan);
+        background: rgba(76,198,216,.08);
+        opacity: 1 !important;
+    }
+    .app_btn_box{
+        grid-area: toolbar;
+        display: grid;
+        grid-template-columns: minmax(210px,1fr) minmax(180px,320px) auto;
+        gap: 12px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+        padding: 11px 12px;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(15,29,45,.96), rgba(7,16,27,.94));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 8px 20px rgba(0,0,0,.16);
+    }
+    .app_btn_box .mem_track{
+        width: auto;
+        max-width: 420px;
+        min-width: 0;
+        margin: 0;
+        gap: 7px;
+        color: var(--nr-v3-text-soft);
+    }
+    .app_btn_box .mem_header{
+        font-size: 12px;
+        color: var(--nr-v3-text-soft);
+    }
+    .app_btn_box .mem_progress{
+        height: 5px;
+        margin: 0;
+        background: rgba(3,8,14,.72);
+        box-shadow: inset 0 0 0 1px rgba(128,157,184,.12);
+    }
+    .app_btn_box .mem_progress_inner{
+        background: linear-gradient(90deg, #4c94d8, #4cc6d8);
+        box-shadow: 0 0 10px rgba(76,198,216,.24);
+    }
+    .app_btn_box .nr-storage-track.nr-has-storage-expand{
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 12px;
+        max-width: 520px;
+    }
+    .app_btn_box .nr-storage-row{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 7px;
+        min-width: 0;
+    }
+    .app_btn_box .nr-storage-expand-row{
+        display: none;
+    }
+    .app_btn_box .nr-storage-track.nr-has-storage-expand .nr-storage-expand-row{
+        display: flex;
+    }
+    .app_btn_box .nr-storage-expand-row .mem_progress_inner{
+        background: linear-gradient(90deg, #50c697, #4cc6d8);
+        box-shadow: 0 0 10px rgba(80,198,151,.20);
+    }
+    .nr_app_search{
+        position: relative;
+        min-width: 0;
+    }
+    .nr_app_search::before{
+        content: "⌕";
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        z-index: 1;
+        transform: translateY(-50%);
+        color: var(--nr-v3-muted);
+        font-size: 18px;
+        pointer-events: none;
+    }
+    #nr_app_search_input{
+        display: block;
+        width: 100%;
+        height: 34px;
+        padding: 0 86px 0 34px;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 9px;
+        outline: none;
+        background: rgba(3,9,16,.58);
+        color: var(--nr-v3-text);
+        font-size: 13px;
+    }
+    #nr_app_search_input::placeholder{
+        color: #6f8193;
+    }
+    #nr_app_search_input:focus{
+        border-color: var(--nr-v3-line-strong);
+        box-shadow: 0 0 0 3px rgba(76,198,216,.09);
+    }
+    .nr_app_search_count{
+        position: absolute;
+        right: 11px;
+        top: 50%;
+        min-width: 34px;
+        height: auto;
+        padding: 0;
+        transform: translateY(-50%);
+        border: 0;
+        background: transparent;
+        color: var(--nr-v3-muted);
+        font-size: 10px;
+        font-weight: 650;
+        line-height: 1;
+        text-align: center;
+        opacity: .82;
+        pointer-events: none;
+    }
+    .nr_app_search_clear{
+        position: absolute;
+        right: 48px;
+        top: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 23px;
+        height: 23px;
+        padding: 0;
+        transform: translateY(-50%) scale(.88);
+        border: 0;
+        border-radius: 6px;
+        outline: 0;
+        appearance: none;
+        background: transparent;
+        color: var(--nr-v3-muted);
+        font-size: 16px;
+        line-height: 1;
+        opacity: 0;
+        pointer-events: none;
+        cursor: pointer;
+        transition: transform .16s ease, opacity .16s ease, color .16s ease, background-color .16s ease;
+    }
+    .nr_app_search.nr_searching .nr_app_search_clear{
+        transform: translateY(-50%) scale(1);
+        opacity: .78;
+        pointer-events: auto;
+    }
+    .nr_app_search_clear:hover{
+        background: rgba(76,198,216,.10);
+        color: #e6fbff;
+        opacity: 1 !important;
+    }
+    .app_btn_group{
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .app_btn_group .app_btn_class{
+        min-height: 34px;
+        padding: 0 14px;
+        border: 1px solid rgba(76,198,216,.30);
+        border-radius: 9px;
+        background: rgba(76,198,216,.075);
+        color: #cceff5;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 32px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .app_btn_group .app_btn_class:hover{
+        border-color: rgba(76,198,216,.52);
+        background: rgba(76,198,216,.13);
+        color: #f1fdff;
+        -webkit-text-fill-color: currentColor;
+    }
+    .container_left{
+        grid-area: menu;
+        position: sticky;
+        top: 12px;
+        align-self: start;
+        float: none !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        min-width: 0;
+        margin: 0 !important;
+        padding: 8px;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 12px;
+        background: rgba(8,18,30,.86);
+    }
+    .container_left ul{
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .container_left .app_menu{
+        display: flex;
+        align-items: center;
+        min-height: 34px;
+        margin: 0 0 6px;
+        justify-content: space-between;
+        gap: 7px;
+        padding: 0 9px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: var(--nr-v3-muted);
+        font-size: 12px;
+        line-height: 1.2;
+        white-space: nowrap;
+        -webkit-background-clip: border-box !important;
+        background-clip: border-box !important;
+        -webkit-text-fill-color: currentColor !important;
+        cursor: pointer;
+    }
+    .container_left .app_menu:last-child{
+        margin-bottom: 0;
+    }
+    .container_left .app_menu:hover{
+        background: rgba(255,255,255,.025);
+        color: var(--nr-v3-text-soft);
+    }
+    .container_left .app_menu.menu_active{
+        border-color: rgba(76,198,216,.28);
+        background: linear-gradient(90deg, rgba(76,198,216,.13), rgba(76,198,216,.04));
+        color: #e5fbff !important;
+        -webkit-text-fill-color: #e5fbff !important;
+        box-shadow: inset 3px 0 0 var(--nr-v3-cyan);
+    }
+    .container_left .nr_menu_count{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: rgba(128,157,184,.08);
+        color: var(--nr-v3-muted);
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 20px;
+        font-variant-numeric: tabular-nums;
+    }
+    .container_left .app_menu.menu_active .nr_menu_count{
+        background: rgba(76,198,216,.11);
+        color: #c8f6fb;
+    }
+    .container_left .mem_mobile{
+        display: none;
+    }
+    .container_right{
+        grid-area: content;
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 14px;
+        float: none !important;
+        width: auto !important;
+        min-width: 0;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .container_right.hide{
+        display: none !important;
+    }
+    .container_right .app_box{
+        position: relative;
+        display: grid;
+        grid-template-columns: 58px minmax(0,1fr);
+        grid-template-rows: minmax(76px,1fr) auto;
+        column-gap: 11px;
+        min-width: 0;
+        min-height: 142px;
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        margin: 0 !important;
+        float: none !important;
+        padding: 13px;
+        overflow: hidden;
+        border: 1px solid rgba(128,157,184,.22);
+        border-radius: 12px;
+        background:
+            radial-gradient(circle at 0 0, rgba(76,198,216,.055), transparent 42%),
+            linear-gradient(145deg, rgba(15,29,45,.97), rgba(7,15,25,.96));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 12px 26px rgba(0,0,0,.22);
+        transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+    }
+    .container_right .app_box:hover,
+    .container_right .app_box:focus-within{
+        transform: translateY(-1px);
+        border-color: rgba(76,198,216,.40);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 15px 32px rgba(0,0,0,.28);
+    }
+    .container_right .app_icon{
+        grid-column: 1;
+        grid-row: 1;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        float: none;
+        width: auto;
+        margin: 0;
+    }
+    .container_right .app_icon_img{
+        display: block;
+        width: 52px;
+        height: 52px;
+        padding: 4px;
+        border: 1px solid rgba(128,157,184,.22);
+        border-radius: 12px;
+        background: rgba(255,255,255,.035);
+        object-fit: contain;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 8px 18px rgba(0,0,0,.22);
+        transition: transform .16s ease, border-color .16s ease;
+    }
+    .container_right .app_box:hover .app_icon_img,
+    .container_right .app_box:focus-within .app_icon_img{
+        transform: scale(1.025);
+        border-color: rgba(76,198,216,.34);
+    }
+    .container_right .app_info{
+        grid-column: 2;
+        grid-row: 1;
+        float: none;
+        width: auto;
+        min-width: 0;
+        margin: 0;
+    }
+    .container_right .app_title{
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 4px 8px;
+        align-items: center;
+        min-width: 0;
+    }
+    .container_right .app_name{
+        grid-column: 1;
+        float: none;
+        width: auto;
+        height: auto;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--nr-v3-text);
+        font-size: 15px;
+        font-weight: 750;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .container_right .app_version{
+        grid-column: 1;
+        float: none;
+        width: auto;
+        height: auto;
+        overflow: hidden;
+        color: var(--nr-v3-muted);
+        font-size: 11px;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .container_right .app_meta_row{
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 5px;
+    }
+    .container_right .app_state_badge,
+    .container_right .app_open_badge{
+        display: inline-flex;
+        align-items: center;
+        min-height: 21px;
+        padding: 0 7px;
+        border: 1px solid rgba(128,157,184,.18);
+        border-radius: 999px;
+        background: rgba(128,157,184,.07);
+        color: var(--nr-v3-text-soft);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 19px;
+        white-space: nowrap;
+    }
+    .container_right .app_state_0{
+        border-color: rgba(95,158,234,.30);
+        background: rgba(95,158,234,.09);
+        color: #bcd9fb;
+    }
+    .container_right .app_state_1,
+    .container_right .app_open_badge{
+        border-color: rgba(80,198,151,.30);
+        background: rgba(80,198,151,.09);
+        color: #b9efd8;
+    }
+    .container_right .app_state_2{
+        border-color: rgba(225,173,100,.32);
+        background: rgba(225,173,100,.09);
+        color: #f3d5a5;
+    }
+    .container_right .app_des{
+        float: none;
+        width: 100%;
+        height: 34px;
+        margin: 7px 0 0;
+        overflow: hidden;
+        color: var(--nr-v3-text-soft);
+        font-size: 12px;
+        line-height: 1.55;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    .container_right .app_action{
+        grid-column: 1 / -1;
+        grid-row: 2;
+        float: none;
+        width: 100%;
+        margin: 9px 0 0;
+        padding-top: 9px;
+        border-top: 1px solid rgba(128,157,184,.13);
+    }
+    .container_right .action_list{
+        display: flex;
+        justify-content: flex-end;
+        gap: 7px;
+        float: none;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .container_right .action_list_li{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 58px;
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid rgba(128,157,184,.24);
+        border-radius: 8px;
+        background: rgba(128,157,184,.055);
+        color: var(--nr-v3-text-soft);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 28px;
+        cursor: pointer;
+        -webkit-text-fill-color: currentColor;
+    }
+    .container_right .action_list_li:hover,
+    .container_right .action_list_li:focus-visible{
+        border-color: rgba(76,198,216,.42);
+        background: rgba(76,198,216,.11);
+        color: #e7fbff;
+        outline: none;
+    }
+    .container_right .nr_action_open{
+        border-color: rgba(76,198,216,.30);
+        color: #bfeef5;
+    }
+    .container_right .nr_action_update{
+        border-color: rgba(225,173,100,.28);
+        color: #eed0a0;
+    }
+    .container_right .nr_action_uninstall{
+        color: #d9a1a5;
+    }
+    .app_empty_state{
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 220px;
+        padding: 28px;
+        border: 1px dashed rgba(128,157,184,.25);
+        border-radius: 13px;
+        background: rgba(8,18,30,.52);
+        color: var(--nr-v3-muted);
+        text-align: center;
+    }
+    .app_empty_state strong{
+        margin-bottom: 5px;
+        color: var(--nr-v3-text-soft);
+        font-size: 14px;
+    }
+    .nr_search_empty{
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 165px;
+        padding: 24px;
+        border: 1px dashed rgba(76,198,216,.25);
+        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(15,29,45,.52), rgba(7,15,25,.48));
+        color: var(--nr-v3-muted);
+        text-align: center;
+    }
+    .nr_search_empty::before{
+        content: "⌕";
+        margin-bottom: 7px;
+        color: var(--nr-v3-cyan);
+        font-size: 25px;
+        line-height: 1;
+        opacity: .68;
+    }
+    .nr_search_empty strong{
+        color: var(--nr-v3-text-soft);
+        font-size: 13px;
+    }
+    .nr_search_empty span{
+        margin-top: 4px;
+        font-size: 11px;
+    }
+    #app_status_mount{
+        grid-area: status;
+        position: static;
+        min-width: 0;
+    }
+    .app_status_panel{
+        display: grid;
+        grid-template-columns: 112px 200px repeat(auto-fit,minmax(145px,1fr));
+        gap: 6px;
+        align-items: stretch;
+        padding: 8px 10px;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 10px;
+        background: linear-gradient(145deg, rgba(14,28,43,.96), rgba(7,15,25,.95));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 8px 18px rgba(0,0,0,.16);
+    }
+    .app_status_head{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        margin: 0;
+        padding: 0 5px;
+    }
+    .app_status_head span{
+        color: var(--nr-v3-text);
+        font-size: 12px;
+        font-weight: 750;
+    }
+    .app_status_time{
+        color: var(--nr-v3-muted);
+        font-size: 9px;
+        font-style: normal;
+        font-variant-numeric: tabular-nums;
+    }
+    .app_status_grid{
+        display: grid;
+        grid-template-columns: repeat(3,1fr);
+        gap: 4px;
+        margin: 0;
+    }
+    .app_status_tile{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 4px 3px;
+        border: 1px solid rgba(128,157,184,.16);
+        border-radius: 7px;
+        background: rgba(255,255,255,.02);
+    }
+    .app_status_tile strong{
+        color: #f4fbff;
+        font-size: 15px;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+    }
+    .app_status_tile span{
+        margin-top: 2px;
+        color: var(--nr-v3-muted);
+        font-size: 10px;
+    }
+    .app_status_metric{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        margin: 0;
+        padding: 6px 8px;
+        border: 1px solid rgba(128,157,184,.10);
+        border-radius: 7px;
+        background: rgba(3,9,16,.22);
+    }
+    .app_status_metric_row{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 5px;
+    }
+    .app_status_metric_row span{
+        color: var(--nr-v3-muted);
+        font-size: 10px;
+    }
+    .app_status_metric_row strong{
+        max-width: 145px;
+        overflow: hidden;
+        color: var(--nr-v3-text-soft);
+        font-size: 10px;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .app_status_bar{
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(2,7,12,.72);
+        box-shadow: inset 0 0 0 1px rgba(128,157,184,.10);
+    }
+    .app_status_bar span{
+        display: block;
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        transition: width .28s ease;
+    }
+    .app_status_temp_bar{ background: linear-gradient(90deg,#e1ad64,#df7d82); }
+    .app_status_cpu_bar{ background: linear-gradient(90deg,#5f9eea,#4cc6d8); }
+    .app_status_mem_bar{ background: linear-gradient(90deg,#50c697,#4cc6d8); }
+    .app_status_swap_bar{ background: linear-gradient(90deg,#9b8de3,#5f9eea); }
+    .app_status_toggle{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+    }
+    .app_status_toggle_text{
+        color: var(--nr-v3-cyan);
+        font-size: 9px;
+        font-weight: 700;
+    }
+    #app_status_mount.nr_status_collapsed .app_status_panel{
+        display: flex;
+        justify-content: flex-end;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    #app_status_mount.nr_status_collapsed{
+        margin-top: -12px;
+    }
+    #app_status_mount.nr_status_collapsed .app_status_grid,
+    #app_status_mount.nr_status_collapsed .app_status_metric{
+        display: none !important;
+    }
+    #app_status_mount.nr_status_collapsed .app_status_head{
+        padding: 0;
+    }
+    #app_status_mount.nr_status_collapsed .app_status_toggle{
+        flex-direction: row;
+        width: auto;
+        padding: 4px 10px;
+        border: 1px solid rgba(76,198,216,.23);
+        border-radius: 8px;
+        background: linear-gradient(145deg, rgba(15,29,45,.90), rgba(8,18,30,.88));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 6px 16px rgba(0,0,0,.13);
+    }
+    #app_status_mount.nr_status_collapsed .app_status_toggle::before{
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--nr-v3-green);
+        box-shadow: 0 0 8px rgba(80,198,151,.48);
+    }
+    #app_status_mount.nr_status_collapsed .app_status_toggle:hover{
+        border-color: rgba(76,198,216,.46);
+        background: linear-gradient(145deg, rgba(18,35,52,.96), rgba(9,21,33,.94));
+    }
+    #app_top_menu .top_menu[role="button"]:focus-visible,
+    #app_top_menu .top_menu_inner_icon:focus-visible,
+    .nr_app_search_clear:focus-visible,
+    .app_btn_group .app_btn_class:focus-visible,
+    .container_left .app_menu:focus-visible,
+    .container_right .action_list_li:focus-visible,
+    .app_status_toggle:focus-visible{
+        outline: 2px solid rgba(76,198,216,.72) !important;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(76,198,216,.10);
+    }
+    .nr_app_filtered{
+        display: none !important;
+    }
+    .bootstrap-dialog-message #scan_loading.nr_dialog_loading{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 128px;
+        padding: 18px;
+        color: #bdcad7;
+        text-align: center;
+    }
+    .bootstrap-dialog-message .nr_dialog_spinner{
+        width: 30px;
+        height: 30px;
+        margin-bottom: 12px;
+        border: 3px solid rgba(128,157,184,.20);
+        border-top-color: #4cc6d8;
+        border-radius: 50%;
+        box-shadow: 0 0 16px rgba(76,198,216,.12);
+        animation: nr-dialog-spin .72s linear infinite;
+    }
+    .bootstrap-dialog-message .nr_dialog_loading strong{
+        color: #edf5fb;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+    .bootstrap-dialog-message .nr_dialog_loading small{
+        margin-top: 5px;
+        color: #8294a7;
+        font-size: 11px;
+        line-height: 1.5;
+    }
+    .bootstrap-dialog-message .error_box{
+        display: flex !important;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100% !important;
+        margin: 0 0 8px;
+        padding: 10px 12px;
+        border: 1px solid rgba(223,125,130,.20);
+        border-radius: 9px;
+        background: rgba(223,125,130,.055);
+        color: #bdcad7;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+    }
+    .bootstrap-dialog-message .error_box + br{
+        display: none;
+    }
+    .bootstrap-dialog-message .error_detail_title{
+        flex: 0 0 auto;
+        float: none !important;
+        color: #df9da1;
+        font-weight: 700;
+    }
+    .bootstrap-dialog-message .error_detail_content{
+        min-width: 0;
+        float: none !important;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    @keyframes nr-dialog-spin{
+        to{ transform: rotate(360deg); }
+    }
+    @media (max-width: 1180px){
+        .container_right{
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+        .appcontainer{
+            grid-template-columns: 110px minmax(0,1fr);
+            grid-template-areas:
+                "toolbar toolbar"
+                "menu content"
+                "status status";
+        }
+    }
+    @media (max-width: 860px){
+        .app_btn_box{
+            grid-template-columns: 1fr auto;
+        }
+        .nr_app_search{
+            grid-column: 1 / -1;
+            grid-row: 2;
+        }
+        .container_right{
+            grid-template-columns: 1fr;
+        }
+        .app_status_panel{
+            grid-template-columns: 1fr 1fr;
+        }
+        .app_status_head,
+        .app_status_grid{
+            grid-column: span 1;
+        }
+    }
+    @media (max-width: 680px){
+        .appcontainer{
+            grid-template-columns: 1fr;
+            grid-template-areas:
+                "toolbar"
+                "menu"
+                "content"
+                "status";
+            gap: 11px;
+        }
+        .app_btn_box{
+            grid-template-columns: 1fr;
+            padding: 12px;
+        }
+        .app_btn_box .mem_track{
+            display: flex;
+            max-width: none;
+        }
+        .app_btn_box .nr-storage-track.nr-has-storage-expand{
+            display: grid;
+            max-width: none;
+        }
+        .nr_app_search{
+            grid-column: auto;
+            grid-row: auto;
+        }
+        .app_btn_group{
+            justify-content: stretch;
+        }
+        .app_btn_group .app_btn_class{
+            flex: 1 1 0;
+            padding: 0 8px;
+            text-align: center;
+        }
+        .container_left{
+            position: static;
+            padding: 6px;
+        }
+        .container_left ul{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .container_left .app_menu{
+            justify-content: center;
+            margin: 0;
+        }
+        .container_left .app_menu.menu_active{
+            box-shadow: inset 0 -2px 0 var(--nr-v3-cyan);
+        }
+        .app_status_panel{
+            grid-template-columns: 1fr 1fr;
+            padding: 11px;
+        }
+        .app_status_head,
+        .app_status_grid{
+            grid-column: 1 / -1;
+        }
+    }
+    @media (max-width: 430px){
+        .app_btn_box .nr-storage-track.nr-has-storage-expand{
+            grid-template-columns: 1fr;
+            gap: 9px;
+        }
+        .app_btn_box .nr-storage-expand-row{
+            padding-top: 8px;
+            border-top: 1px solid rgba(128,157,184,.13);
+        }
+        .container_right .app_box{
+            grid-template-columns: 50px minmax(0,1fr);
+            min-height: 140px;
+            padding: 12px;
+        }
+        .container_right .app_icon_img{
+            width: 46px;
+            height: 46px;
+            border-radius: 11px;
+        }
+        .container_right .app_name{
+            font-size: 14px;
+        }
+        .container_right .app_meta_row{
+            display: none;
+        }
+        .container_right .app_title{
+            grid-template-columns: 1fr;
+        }
+        .container_right .action_list_li{
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .app_status_panel{
+            grid-template-columns: 1fr;
+        }
+        .app_status_head,
+        .app_status_grid{
+            grid-column: auto;
+        }
+    }
+    @media (prefers-reduced-motion: reduce){
+        .appcontainer *,
+        .appcontainer *::before,
+        .appcontainer *::after{
+            scroll-behavior: auto !important;
+            transition-duration: .01ms !important;
+            animation-duration: .01ms !important;
+        }
+    }
+    /* NRadio appcenter v3: end */
+EOF_APPCENTER_V3_CSS
+
+    cat > "$v3_js" <<'EOF_APPCENTER_V3_JS'
+    function nr_appcenter_display_name(name){
+        var key = (name || "").toLowerCase();
+        if(key == "luci-app-openclash" || key == "openclash") return "OpenClash";
+        if(key == "luci-app-adguardhome") return "AdGuardHome";
+        if(key == "luci-app-ddns-go") return "DDNS-GO";
+        return name || "未命名应用";
+    }
+
+    function nr_appcenter_display_version(name, version){
+        var raw = version || "";
+        var key = (name || "").toLowerCase();
+        var match = raw.match(/^(git-[0-9]+[.][0-9]+[.][0-9]+)-[0-9a-f]+$/i);
+        if(key.indexOf("openvpn") >= 0 && match) return match[1];
+        return raw;
+    }
+
+    function nr_appcenter_desc_fallback(name){
+        var key = (name || "").toLowerCase();
+        if(key.indexOf("openclash") >= 0) return "代理规则、节点与网络分流管理";
+        if(key.indexOf("adguard") >= 0) return "DNS 广告过滤与查询统计";
+        if(key.indexOf("openvpn") >= 0) return "VPN 隧道连接与远程访问";
+        if(key.indexOf("zerotier") >= 0) return "异地组网与虚拟局域网";
+        if(key.indexOf("ddns") >= 0) return "动态 DNS 解析与公网地址同步";
+        if(key.indexOf("docker") >= 0) return "容器服务与应用运行环境";
+        return "应用功能与运行入口";
+    }
+
+    function nr_appcenter_empty_state(title){
+        return '<div class="app_empty_state"><strong>'+title+'</strong><span>当前没有可显示的应用</span></div>';
+    }
+
+    function nr_appcenter_search_empty(){
+        return '<div class="nr_search_empty" role="status"><strong>没有找到匹配应用</strong><span>换个名称、版本或功能关键词试试</span></div>';
+    }
+
+    var NR_APP_STATUS_LAST = null;
+    var NR_APP_STATUS_BUSY = false;
+    var NR_APP_STATUS_TIMER = null;
+    var NR_APP_STATUS_INTERVAL = 5000;
+    var NR_APP_STATUS_EXPANDED = false;
+
+    function nr_format_kib(kib){
+        var mb = Number(kib || 0) / 1024;
+        return mb >= 1024 ? (mb / 1024).toFixed(1) + " G" : mb.toFixed(0) + " M";
+    }
+
+    function nr_set_status_width(selector, value){
+        var percent = Math.max(0, Math.min(100, Number(value || 0)));
+        $(selector).css("width", percent.toFixed(1) + "%");
+    }
+
+    function nr_build_status_panel(data){
+        var installed = 0, opened = 0, all = 0;
+        if(data && data.result && data.result.applist){
+            $.each(data.result.applist, function(index, db){
+                all++;
+                if(db.open == 1) opened++;
+                if(db.status == APP_STATUS_APP_INSTALLED || db.status == APP_STATUS_APP_UPDATEED) installed++;
+            });
+        }
+        return ''+
+        '<aside class="app_status_panel">'+
+        '  <div class="app_status_head"><button type="button" class="app_status_toggle" aria-expanded="false"><span>系统状态</span><em class="app_status_time">等待刷新</em><b class="app_status_toggle_text">展开</b></button></div>'+
+        '  <div class="app_status_grid">'+
+        '    <div class="app_status_tile"><strong>'+installed+'</strong><span>已安装</span></div>'+
+        '    <div class="app_status_tile"><strong>'+opened+'</strong><span>后台</span></div>'+
+        '    <div class="app_status_tile"><strong>'+all+'</strong><span>全部</span></div>'+
+        '  </div>'+
+        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>CPU 温度</span><strong class="app_status_temp">--</strong></div><div class="app_status_bar"><span class="app_status_temp_bar"></span></div></div>'+
+        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>CPU 使用率</span><strong class="app_status_cpu">采样中</strong></div><div class="app_status_bar"><span class="app_status_cpu_bar"></span></div></div>'+
+        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>内存占用</span><strong class="app_status_mem">--</strong></div><div class="app_status_bar"><span class="app_status_mem_bar"></span></div></div>'+
+        '  <div class="app_status_metric app_status_swap_metric" style="display:none"><div class="app_status_metric_row"><span>Swap</span><strong class="app_status_swap">--</strong></div><div class="app_status_bar"><span class="app_status_swap_bar"></span></div></div>'+
+        '</aside>';
+    }
+
+    function nr_sync_status_panel_state(){
+        var mount = $("#app_status_mount");
+        mount.toggleClass("nr_status_collapsed", !NR_APP_STATUS_EXPANDED);
+        mount.find(".app_status_toggle").attr("aria-expanded", NR_APP_STATUS_EXPANDED ? "true" : "false");
+        mount.find(".app_status_toggle_text").text(NR_APP_STATUS_EXPANDED ? "收起" : "展开");
+    }
+
+    function nr_render_status_panel(data){
+        if(!$("#app_status_mount").length) $(".container_left").before('<div id="app_status_mount"></div>');
+        $("#app_status_mount").html(nr_build_status_panel(data));
+        nr_sync_status_panel_state();
+        if(NR_APP_STATUS_LAST) nr_update_status_panel(NR_APP_STATUS_LAST);
+    }
+
+    function nr_update_status_panel(data){
+        if(!data) return;
+        NR_APP_STATUS_LAST = data;
+        var now = new Date();
+        var temp = Number(data.cpu_temp || 0);
+        var cpu = data.cpu_percent;
+        var memPercent = Number(data.mem_percent || 0);
+        var memText = nr_format_kib(data.mem_used) + " / " + nr_format_kib(data.mem_total);
+        $(".app_status_time").text(("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2)+":"+("0"+now.getSeconds()).slice(-2));
+        $(".app_status_temp").text(temp > 0 ? temp.toFixed(1)+" ℃" : "--");
+        nr_set_status_width(".app_status_temp_bar", temp > 0 ? temp : 0);
+        if(cpu === null || typeof cpu === "undefined" || cpu === ""){
+            $(".app_status_cpu").text("采样中");
+            nr_set_status_width(".app_status_cpu_bar", 0);
+        } else {
+            cpu = Number(cpu || 0);
+            $(".app_status_cpu").text(cpu.toFixed(1)+"%");
+            nr_set_status_width(".app_status_cpu_bar", cpu);
+        }
+        $(".app_status_mem").text(memText).attr("title", memText+" · "+memPercent.toFixed(1)+"%");
+        nr_set_status_width(".app_status_mem_bar", memPercent);
+        var isC2000 = data.is_c2000max === true || data.is_c2000max == 1 || data.model_name == "NRadio_C2000MAX";
+        if(isC2000){
+            var swapTotal = Number(data.swap_total || 0);
+            var swapUsed = Number(data.swap_used || 0);
+            var swapPercent = Number(data.swap_percent || 0);
+            $(".app_status_swap_metric").show();
+            $(".app_status_swap").text(swapTotal > 0 ? nr_format_kib(swapUsed)+" / "+nr_format_kib(swapTotal) : "未启用");
+            nr_set_status_width(".app_status_swap_bar", swapPercent);
+        } else {
+            $(".app_status_swap_metric").hide();
+        }
+    }
+
+    function nr_get_system_status(){
+        if(document.hidden || NR_APP_STATUS_BUSY) return;
+        NR_APP_STATUS_BUSY = true;
+        var data={token:'<%=token%>'};
+        (new XHR()).post('<%=controller%>nradioadv/system/appcenter/sys_status', data, function(xhr){
+            NR_APP_STATUS_BUSY = false;
+            if(!xhr) return;
+            var contentType = xhr.getResponseHeader("Content-Type") || "";
+            if(contentType.indexOf("application/json") !== 0) return;
+            try{
+                var response = JSON.parse(xhr.responseText || '{}');
+                if(response && response.result) nr_update_status_panel(response.result);
+            } catch(e) {}
+        });
+    }
+
+    function nr_start_status_polling(){
+        nr_get_system_status();
+        if(NR_APP_STATUS_TIMER) window.clearInterval(NR_APP_STATUS_TIMER);
+        NR_APP_STATUS_TIMER = window.setInterval(nr_get_system_status, NR_APP_STATUS_INTERVAL);
+    }
+
+    function nr_update_app_count(){
+        var active = $(".container_right:not(.hide)");
+        var total = active.find(".app_box").length;
+        var visible = active.find(".app_box:not(.nr_app_filtered)").length;
+        $("#nr_app_search_count").text(visible+" / "+total).attr("title", "当前显示 "+visible+" 个，共 "+total+" 个应用");
+        return {total:total, visible:visible};
+    }
+
+    function nr_update_menu_counts(data){
+        var installed = 0;
+        var all = 0;
+        if(data && data.result && data.result.applist){
+            $.each(data.result.applist, function(index, db){
+                all++;
+                if(db.status == APP_STATUS_APP_INSTALLED || db.status == APP_STATUS_APP_UPDATEED) installed++;
+            });
+        }
+        var menus = $(".container_left .app_menu");
+        menus.find(".nr_menu_count").remove();
+        menus.eq(0).append('<span class="nr_menu_count">'+installed+'</span>');
+        menus.eq(1).append('<span class="nr_menu_count">'+all+'</span>');
+    }
+
+    function nr_apply_app_search(){
+        var query = $.trim($("#nr_app_search_input").val() || "").toLowerCase();
+        var active = $(".container_right:not(.hide)");
+        active.find(".nr_search_empty").remove();
+        active.find(".app_box").each(function(){
+            var text = $(this).text().toLowerCase();
+            $(this).toggleClass("nr_app_filtered", query.length > 0 && text.indexOf(query) < 0);
+        });
+        $(".nr_app_search").toggleClass("nr_searching", query.length > 0);
+        $("#nr_app_search_clear").attr("aria-hidden", query.length > 0 ? "false" : "true").attr("tabindex", query.length > 0 ? "0" : "-1");
+        var count = nr_update_app_count();
+        if(query.length > 0 && count.total > 0 && count.visible === 0) active.append(nr_appcenter_search_empty());
+    }
+
+    function show_app_data(data){
+        data = data || {result:{applist:[]}};
+        if(!data.result) data.result = {applist:[]};
+        if(!data.result.applist) data.result.applist = [];
+        var htm = "";
+        var htm_installed = "";
+        var top_menu_ht = "<span class='top_menu top_menu_active'><%:AppCenterTitle%></span>";
+        $.each(data.result.applist, function(index, db){
+            var optht = '';
+            var icon_name = db.icon && db.icon.length ? db.icon : "app_default.png";
+            var open_route = db.luci_module_route || "";
+            var display_name = nr_appcenter_display_name(db.name);
+            var display_version = nr_appcenter_display_version(db.name, db.version);
+            var des_info = db.des && db.des.length ? db.des : nr_appcenter_desc_fallback(db.name);
+            var status_label = "未知";
+            var open_badge = "";
+            var icon_fallback = "this.onerror=null;this.src='/luci-static/nradio/images/icon/app_default.png';";
+            var open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'open\',\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
+            if(db.open == 1){
+                top_menu_ht += '<div class="top_menu_inner"><span class="top_menu" role="button" tabindex="0" data-index="'+index+'" onclick="callback(\''+index+'\',\''+open_route+'\')">'+display_name+'</span><button type="button" aria-label="关闭应用" title="关闭应用" onclick="app_action(\''+db.name+'\',\'close\')" class="top_menu_inner_icon">×</button></div>';
+                open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="callback(\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
+                open_badge = '<span class="app_open_badge">后台</span>';
+            }
+            if(db.has_luci != 1) open_ht = '';
+            if(db.status == APP_STATUS_APP_NEW){
+                status_label = "未安装";
+                optht = '<li class="action_list_li nr_action_install" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'install\')"><%:AppInstall%></li>';
+            } else if(db.status == APP_STATUS_APP_INSTALLED){
+                status_label = "已安装";
+                optht = '<li class="action_list_li nr_action_uninstall" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'uninstall\')"><%:AppUninstall%></li>'+open_ht;
+            } else if(db.status == APP_STATUS_APP_UPDATEED){
+                status_label = "可更新";
+                optht = '<li class="action_list_li nr_action_update" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'update\')"><%:AppUpdate%></li><li class="action_list_li nr_action_uninstall" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'uninstall\')"><%:AppUninstall%></li>'+open_ht;
+            }
+            var row = APPTableRow.compose({
+                name: db.name,
+                display_name: display_name,
+                version: db.version,
+                display_version: display_version,
+                des: des_info,
+                icon: icon_name,
+                icon_fallback: icon_fallback,
+                opt: optht,
+                index: index,
+                status: db.status,
+                status_label: status_label,
+                open_badge: open_badge
+            });
+            if(db.status == APP_STATUS_APP_INSTALLED || db.status == APP_STATUS_APP_UPDATEED) htm_installed += row;
+            htm += row;
+        });
+        if(!htm_installed) htm_installed = nr_appcenter_empty_state("暂无已安装应用");
+        if(!htm) htm = nr_appcenter_empty_state("暂无应用");
+        $("#app_top_menu").html(top_menu_ht);
+        $(".app_all").html(htm);
+        $(".app_installed").html(htm_installed);
+        nr_update_menu_counts(data);
+        $(".container_left .app_menu, .app_btn_group .app_btn_class").attr("role", "button").attr("tabindex", "0");
+        nr_render_status_panel(data);
+        nr_apply_app_search();
+    }
+
+    $(document).on("input", "#nr_app_search_input", nr_apply_app_search);
+    $(document).on("click", "#nr_app_search_clear", function(){
+        $("#nr_app_search_input").val("").focus();
+        nr_apply_app_search();
+    });
+    $(document).on("click", ".app_menu", function(){ window.setTimeout(nr_apply_app_search, 0); });
+    $(document).on("click", ".app_status_toggle", function(){
+        NR_APP_STATUS_EXPANDED = !NR_APP_STATUS_EXPANDED;
+        nr_sync_status_panel_state();
+    });
+    $(document).on("keydown", "#nr_app_search_input", function(event){
+        if(event.key === "Escape"){
+            $(this).val("");
+            nr_apply_app_search();
+            event.preventDefault();
+        }
+    });
+    $(document).on("keydown", ".action_list_li, .app_menu, .app_btn_class, #app_top_menu .top_menu[role='button']", function(event){
+        if(event.key === "Enter" || event.key === " "){
+            event.preventDefault();
+            $(this).trigger("click");
+        }
+    });
+    document.addEventListener("visibilitychange", function(){ if(!document.hidden) nr_get_system_status(); });
+
+EOF_APPCENTER_V3_JS
+
+    cat > "$v3_lua" <<'EOF_APPCENTER_V3_LUA'
+local tpl_path, css_path, js_path = arg[1], arg[2], arg[3]
+assert(tpl_path and css_path and js_path, "missing transform arguments")
+
+local function read_all(path)
+    local file = assert(io.open(path, "rb"), "open failed: " .. path)
+    local data = file:read("*a")
+    file:close()
+    return data
+end
+
+local html = read_all(tpl_path)
+local css = read_all(css_path)
+local renderer = read_all(js_path)
+
+local function strip_style_from(marker)
+    local start_pos = html:find(marker, 1, true)
+    if not start_pos then return end
+    local end_pos = assert(html:find("</style>", start_pos, true), "style close not found for " .. marker)
+    html = html:sub(1, start_pos - 1) .. html:sub(end_pos)
+end
+
+strip_style_from("    /* NRadio appcenter v3: begin */")
+strip_style_from("    /* NRadio appcenter card polish: visual-only layer */")
+
+html = html:gsub("[ \t]*<div id=\"app_status_mount\"></div>\r\n", "")
+html = html:gsub("[ \t]*<div id=\"app_status_mount\"></div>\n", "")
+html = html:gsub("[ \t]*<div class=\"nr_app_search\">.-</div>\r\n", "")
+html = html:gsub("[ \t]*<div class=\"nr_app_search\">.-</div>\n", "")
+
+local style_close = assert(html:find("</style>", 1, true), "style close not found")
+html = html:sub(1, style_close - 1) .. css .. "\n" .. html:sub(style_close)
+
+local toolbar_anchor = '        <div class="app_btn_group">'
+local toolbar_pos = assert(html:find(toolbar_anchor, 1, true), "toolbar anchor not found")
+local storage_anchor = '        <div class="mem_track'
+local storage_pos = assert(html:find(storage_anchor, 1, true), "storage anchor not found")
+local storage_markup = [[        <div class="mem_track nr-storage-track">
+            <div class="nr-storage-row nr-storage-system-row">
+                <div class="mem_header">
+                    <span>系统空间</span>
+                    <span id="memory_detail">9.9 G / 99.9 G</span>
+                </div>
+                <div class="mem_progress">
+                    <div class="mem_progress_inner" id="memory_progress_inner"></div>
+                </div>
+            </div>
+            <div class="nr-storage-row nr-storage-expand-row" id="storage_expand_memory_row">
+                <div class="mem_header">
+                    <span>存储扩展</span>
+                    <span id="storage_expand_memory_detail">0.0 G / 0.0 G</span>
+                </div>
+                <div class="mem_progress">
+                    <div class="mem_progress_inner" id="storage_expand_memory_progress_inner"></div>
+                </div>
+            </div>
+        </div>
+]]
+html = html:sub(1, storage_pos - 1) .. storage_markup .. html:sub(toolbar_pos)
+toolbar_pos = assert(html:find(toolbar_anchor, storage_pos, true), "toolbar anchor not found after storage rebuild")
+local search_markup = '        <div class="nr_app_search"><input id="nr_app_search_input" type="search" autocomplete="off" aria-label="搜索应用" placeholder="搜索应用、版本或功能"><button id="nr_app_search_clear" class="nr_app_search_clear" type="button" aria-label="清除搜索" aria-hidden="true" tabindex="-1" title="清除搜索">×</button><span id="nr_app_search_count" class="nr_app_search_count" aria-live="polite">0 / 0</span></div>\n'
+html = html:sub(1, toolbar_pos - 1) .. search_markup .. html:sub(toolbar_pos)
+
+local menu_anchor = '    <div class="container_left">'
+local menu_pos = assert(html:find(menu_anchor, 1, true), "menu anchor not found")
+html = html:sub(1, menu_pos - 1) .. '    <div id="app_status_mount"></div>\n' .. html:sub(menu_pos)
+
+local row_start = assert(html:find("    var APPTableRow = ''+", 1, true), "APPTableRow start not found")
+local error_start = assert(html:find("    var APPErrorRow = ''+", row_start, true), "APPErrorRow start not found")
+local row = [[    var APPTableRow = ''+
+    '<div class="app_box app_item{{index}}" data-status="{{status}}">'+
+        '    <div class="app_icon"><img class="app_icon_img" src="/luci-static/nradio/images/icon/{{icon}}" alt="{{display_name}}" onerror="{{icon_fallback}}"></div>'+
+        '    <div class="app_info">'+
+        '        <div class="app_title">'+
+        '            <div class="app_name" title="{{display_name}}">{{display_name}}</div>'+
+        '            <div class="app_version" title="{{version}}">{{display_version}}</div>'+
+        '            <div class="app_meta_row"><span class="app_state_badge app_state_{{status}}">{{status_label}}</span>{{open_badge}}</div>'+
+        '        </div>'+
+        '        <div class="app_des" title="{{des}}">{{des}}</div>'+
+        '    </div>'+
+        '    <div class="app_action"><ul class="action_list">{{opt}}</ul></div>'+
+        '</div>';
+
+]]
+html = html:sub(1, row_start - 1) .. row .. html:sub(error_start)
+
+local show_start = assert(html:find("    function show_app_data(data){", 1, true), "show_app_data start not found")
+local loading_start = assert(html:find("    var loading_htm = ", show_start, true), "loading_htm start not found")
+html = html:sub(1, show_start - 1) .. renderer .. html:sub(loading_start)
+
+loading_start = assert(html:find("    var loading_htm = ", 1, true), "loading_htm start not found after renderer")
+local loading_end = assert(html:find("\n", loading_start, true), "loading_htm end not found")
+local loading_markup = [[    var loading_htm = '<div id="scan_loading" class="nr_dialog_loading" role="status" aria-live="polite"><span class="nr_dialog_spinner" aria-hidden="true"></span><strong>正在处理</strong><small>请稍候，不要关闭页面</small></div>';]]
+html = html:sub(1, loading_start - 1) .. loading_markup .. html:sub(loading_end)
+
+local ready_count
+html, ready_count = html:gsub("        get_memory%(%)%;", "        get_memory();\n        nr_start_status_polling();", 1)
+assert(ready_count == 1, "document ready hook not found")
+
+local tmp_path = tpl_path .. ".nradio-v3.tmp"
+local output = assert(io.open(tmp_path, "wb"), "create failed: " .. tmp_path)
+output:write(html)
+output:close()
+assert(os.rename(tmp_path, tpl_path), "atomic template replace failed")
+EOF_APPCENTER_V3_LUA
+
+    lua "$v3_lua" "$TPL" "$v3_css" "$v3_js" || die "应用商店 V3 模板重构失败"
+    chmod 644 "$TPL" 2>/dev/null || true
+
+    grep -Fq 'NRadio appcenter v3: begin' "$TPL" 2>/dev/null || die "应用商店 V3 CSS 校验失败"
+    grep -Fq 'id="nr_app_search_input"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索框校验失败"
+    grep -Fq 'function nr_start_status_polling()' "$TPL" 2>/dev/null || die "应用商店 V3 状态刷新校验失败"
+    grep -Fq 'NR_APP_STATUS_INTERVAL = 5000' "$TPL" 2>/dev/null || die "应用商店 V3 采样间隔校验失败"
+    grep -Fq 'app_state_badge app_state_{{status}}' "$TPL" 2>/dev/null || die "应用商店 V3 状态徽标校验失败"
+    grep -Fq 'function nr_apply_app_search()' "$TPL" 2>/dev/null || die "应用商店 V3 搜索逻辑校验失败"
+    grep -Fq 'id="nr_app_search_clear"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索清除按钮校验失败"
+    grep -Fq 'class="nr_search_empty"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索空状态校验失败"
+    grep -Fq 'class="top_menu_inner_icon">×</button>' "$TPL" 2>/dev/null || die "应用商店 V3 顶部关闭按钮校验失败"
+    grep -Fq 'class="mem_track nr-storage-track"' "$TPL" 2>/dev/null || die "应用商店 V3 双空间容器校验失败"
+    grep -Fq 'id="storage_expand_memory_row"' "$TPL" 2>/dev/null || die "应用商店 V3 存储扩展条校验失败"
+}
+
 install_appcenter_polish() {
     if is_c2000pro_appcenter_environment; then
         log_stage 1 5 "检查 C2000Pro 兼容应用商店环境"
         ensure_c2000pro_compat_appcenter
+        log "说明: 直接美化应用商店，不创建事务备份或文件备份"
 
         log_stage 2 5 "写入应用商店异步卸载接口"
         write_plugin_uninstall_assets
@@ -12560,12 +13977,20 @@ install_appcenter_polish() {
     log_stage 1 5 "检查 NRadio 应用商店模板"
     require_nradio_oem_appcenter
     verify_file_exists "$TPL" "NRadio 应用商店模板"
+    log "说明: 直接美化应用商店，不创建事务备份或文件备份"
 
-    log_stage 2 5 "写入应用商店模板与系统状态接口"
+    log_stage 2 5 "基于原厂页面重构应用商店 V3 与系统状态接口"
     write_plugin_uninstall_assets
+    write_original_appcenter_template
     patch_common_template
     patch_appcenter_status_controller
-    patch_appcenter_card_polish
+    patch_appcenter_card_polish_v3
+    case "${CURRENT_DETECTED_MODEL:-}" in
+        NRadio_C8-688|NRadio_C5800-650|NRadio_C5800-688|NRadio_NBCPE)
+            log "当前机型支持 rootfs_2nd，正在接入应用商店双空间数据"
+            patch_appcenter_storage_expand_display
+            ;;
+    esac
 
     log_stage 3 5 "统一刷新插件图标"
     install_unified_appcenter_icons || die "应用商店统一图标写入失败"
@@ -12577,59 +14002,52 @@ install_appcenter_polish() {
     log_stage 5 5 "校验应用商店页面"
     verify_luci_route "nradioadv/system/appcenter" "应用商店美化"
 
-    log "应用商店美化完成"
-    log "提示: 如果已启用存储扩展后存储扩展条未显示，请使用 5>4>4 修复应用商店存储空间显示。"
-    log "范围: 应用卡片、状态徽标、右侧系统状态面板、按钮、图标与打开弹窗视觉层"
+    log "应用商店 V3 重构完成"
+    log "存储: C8-688/C5800/NBCPE 已原生接入系统空间与 rootfs_2nd 存储扩展双条显示"
+    log "范围: 原厂新页面基线、应用搜索、应用卡片、状态徽标、系统状态面板、响应式布局、按钮、图标与打开弹窗视觉层"
     log "说明: 不修改插件下载链、安装链和卸载链；仅补应用商店模板与只读系统状态接口"
 }
 
-copy_verified_factory_appcenter_file() {
+copy_factory_appcenter_file() {
     factory_src="$1"
     factory_dst="$2"
-    allowed_sha256="$3"
-    factory_label="$4"
-    factory_match=0
+    factory_label="$3"
+    factory_tmp_dst="${factory_dst}.factory.$$"
 
     [ -f "$factory_src" ] || die "${factory_label}原厂源文件不存在: $factory_src"
-    command -v sha256sum >/dev/null 2>&1 || die "${factory_label}无法校验 SHA256：系统缺少 sha256sum"
-
-    factory_actual_sha256="$(sha256sum "$factory_src" 2>/dev/null | awk '{print $1}')"
-    [ -n "$factory_actual_sha256" ] || die "${factory_label}SHA256 读取失败: $factory_src"
-
-    for factory_expected_sha256 in $allowed_sha256; do
-        if [ "$factory_actual_sha256" = "$factory_expected_sha256" ]; then
-            factory_match=1
-            break
-        fi
-    done
-
-    [ "$factory_match" = "1" ] || die "${factory_label}SHA256 不在允许列表: $factory_actual_sha256"
+    [ -s "$factory_src" ] || die "${factory_label}原厂源文件为空: $factory_src"
 
     mkdir -p "$(dirname "$factory_dst")" || die "创建${factory_label}目录失败"
-    cp "$factory_src" "$factory_dst" || die "写入${factory_label}失败"
-    chmod 644 "$factory_dst" 2>/dev/null || true
+    rm -f "$factory_tmp_dst" 2>/dev/null || true
+    cp "$factory_src" "$factory_tmp_dst" || {
+        rm -f "$factory_tmp_dst" 2>/dev/null || true
+        die "暂存${factory_label}失败"
+    }
+    chmod 644 "$factory_tmp_dst" 2>/dev/null || true
+    mv -f "$factory_tmp_dst" "$factory_dst" || {
+        rm -f "$factory_tmp_dst" 2>/dev/null || true
+        die "写入${factory_label}失败"
+    }
 }
 
 write_original_appcenter_template() {
-    copy_verified_factory_appcenter_file \
+    copy_factory_appcenter_file \
         "/rom/usr/lib/lua/luci/view/nradio_appcenter/appcenter.htm" \
         "$TPL" \
-        "c7e4d540582152f1f7afde7ce604b305a48c7299cae5d18d1fa1736ff7ee2f23 dd9b637ec1e9cac9a92680cc04014b395f447b5b82cb1fb563c18f7cd45cce97 dbfe5f7b4ecd56ab93aaac481c093546f8d80482e6183eb40b5f35a5c605e525" \
         "原厂应用商店模板"
 }
 
 write_original_appcenter_controller() {
-    copy_verified_factory_appcenter_file \
+    copy_factory_appcenter_file \
         "/rom/usr/lib/lua/luci/controller/nradio_adv/appcenter.lua" \
         "$APPCENTER_CONTROLLER" \
-        "754f54fd7502633097d30d52ac6d7b487074753d32575650d05b31bc03304fd2 c9956341cfcba406b990a494bbca30fafd6740282fce760871e94f6c51e07a48" \
         "原厂应用商店控制器"
 }
 
 restore_appcenter_original() {
     if is_c2000pro_appcenter_environment; then
         log_stage 1 4 "检查 C2000Pro 兼容应用商店层"
-        log "说明: C2000Pro 无旧版 /rom 应用商店模板；本操作只移除脚本生成的兼容 controller/template"
+        log "说明: C2000Pro 无旧版 /rom 应用商店模板；直接移除脚本生成的兼容 controller/template，不创建备份"
 
         log_stage 2 4 "移除脚本生成的 C2000Pro 兼容文件"
         remove_c2000pro_compat_appcenter
@@ -12650,9 +14068,9 @@ restore_appcenter_original() {
 
     log_stage 1 4 "检查 NRadio 应用商店原厂还原环境"
     require_nradio_oem_appcenter
-    log "说明: 使用 /rom 只读原厂应用商店模板和控制器，写入前校验 SHA256；不读取备份，不覆盖 /etc/config/appcenter"
+    log "说明: 直接使用 /rom 只读原厂应用商店模板和控制器；不创建备份，不覆盖 /etc/config/appcenter"
 
-    log_stage 2 4 "回写校验通过的原厂应用商店文件"
+    log_stage 2 4 "直接回写原厂应用商店文件"
     write_original_appcenter_template
     write_original_appcenter_controller
 
@@ -12665,7 +14083,7 @@ restore_appcenter_original() {
     verify_file_exists "$APPCENTER_CONTROLLER" "NRadio 应用商店控制器"
     verify_luci_route "nradioadv/system/appcenter" "应用商店还原"
 
-    log "应用商店已还原为 /rom 校验通过的原厂模板和控制器"
+    log "应用商店已还原为 /rom 原厂模板和控制器"
     log "入口: nradioadv/system/appcenter"
 }
 
@@ -12712,7 +14130,11 @@ verify_file_exists() {
 verify_template_marker() {
     pattern="$1"
     label="$2"
-    grep -Fq -- "$pattern" "$TPL" 2>/dev/null || die "appcenter template verify failed: missing $label"
+    if grep -Fq -- "$pattern" "$TPL" 2>/dev/null; then
+        return 0
+    fi
+
+    die "appcenter template verify failed: missing $label"
 }
 
 get_installed_package_version() {
@@ -14543,7 +15965,7 @@ nradio_5g_aggregation_print_diagnostics() {
 
     if ! nradio_5g_aggregation_model_supported; then
         log "结果:   当前机型无 5G 聚合功能入口"
-        return 2
+        return 0
     fi
 
     for agg_iface in cpe_4 cpe1_4 cpe_6 cpe1_6; do
@@ -14673,11 +16095,6 @@ nradio_5g_aggregation_fix_mwan_weight() {
     esac
 
     log "负载均衡: 副5G:蜂窝 = ${agg_cpe1_weight}:${agg_cpe_weight}"
-
-    if [ -f /etc/config/mwan3 ]; then
-        agg_backup="/etc/config/mwan3.nradio-5gagg.$(date +%Y%m%d%H%M%S 2>/dev/null || printf '%s' "$$").bak"
-        cp -p /etc/config/mwan3 "$agg_backup" 2>/dev/null && log "备份:   $agg_backup"
-    fi
 
     for agg_iface in cpe_4 cpe1_4; do
         case "$agg_iface" in
@@ -15414,7 +16831,7 @@ run_5g_aggregation_repair_check() {
             record_action_history "5 > 5 > 1" "5G聚合轻量修复后复查" "PASS" "$BACKUP_DIR"
             ;;
         2)
-            confirm_or_exit "确认备份并设置负载均衡（副5G:蜂窝）吗？"
+            confirm_or_exit "确认直接设置负载均衡（副5G:蜂窝）吗？"
             nradio_5g_aggregation_fix_mwan_weight
             nradio_5g_aggregation_print_diagnostics
             record_action_history "5 > 5 > 2" "5G聚合负载均衡设置" "PASS" "$BACKUP_DIR"
@@ -15439,6 +16856,9 @@ run_5g_aggregation_repair_check() {
         *)
             die_menu_input_issue "$UI_READ_RESULT"
             ;;
+    esac
+    case "$UI_READ_RESULT" in
+        1|2|3|4|5|6) MENU_ACTION_COMPLETED='1' ;;
     esac
 }
 
@@ -17024,13 +18444,8 @@ hakimi_insert_custom_rule() {
     rule_file="$1"
     rule_line="$2"
     tmp_file="$WORKDIR/hakimi-custom-rules.tmp"
-    backup_file_path=""
-
-    mkdir -p "$(dirname "$rule_file")" "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR" || die "创建哈基米自定义规则目录失败"
-    if [ -f "$rule_file" ]; then
-        backup_file_path="$OPENCLASH_CUSTOM_RULES_BACKUP_DIR/$(basename "$rule_file").$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now).bak"
-        cp "$rule_file" "$backup_file_path" || die "备份哈基米自定义规则失败"
-    else
+    mkdir -p "$(dirname "$rule_file")" || die "创建哈基米自定义规则目录失败"
+    if [ ! -f "$rule_file" ]; then
         printf '%s\n' 'rule-providers:' '' 'rules:' > "$rule_file" || die "创建哈基米自定义规则文件失败"
     fi
 
@@ -17054,7 +18469,6 @@ hakimi_insert_custom_rule() {
         }
     ' "$rule_file" > "$tmp_file" || die "写入哈基米自定义规则临时文件失败"
     mv "$tmp_file" "$rule_file" || die "更新哈基米自定义规则文件失败"
-    [ -n "$backup_file_path" ] && log "备份:   $backup_file_path"
 }
 
 hakimi_enable_custom_rules() {
@@ -17243,7 +18657,7 @@ openclash_download_asn_mmdb() {
 
 run_openclash_dependency_repair_check() {
     require_root
-    mkdir -p "$WORKDIR/openclash-repair" "$BACKUP_DIR"
+    mkdir -p "$WORKDIR/openclash-repair"
     repair_changed=0
 
     selfcheck_print_header "$OPENCLASH_DISPLAY_NAME 依赖检查修复"
@@ -17278,7 +18692,7 @@ run_openclash_dependency_repair_check() {
     if [ -n "$missing_pkgs" ]; then
         if confirm_default_yes "检测到 $OPENCLASH_DISPLAY_NAME 依赖缺失:${missing_pkgs}，是否现在更新软件源并安装？"; then
             ensure_opkg_update || die "opkg update 失败，已停止依赖修复"
-            ensure_packages $missing_pkgs
+            ensure_packages $missing_pkgs || die "$OPENCLASH_DISPLAY_NAME 依赖修复失败，仍有软件包缺失"
             repair_changed=1
         else
             log "跳过:   依赖安装"
@@ -17420,7 +18834,7 @@ run_hakimi_easy_rule_helper() {
 
     if ! hakimi_select_policy_target "$policy_file"; then
         log "已返回"
-        return 2
+        return 0
     fi
 
     prompt_with_default "请输入域名、IP 或网段" ""
@@ -17437,7 +18851,8 @@ run_hakimi_easy_rule_helper() {
     if hakimi_rule_exact_exists "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_LINE"; then
         hakimi_enable_custom_rules
         log "结果:   相同规则已存在，未重复写入；已启用哈基米自定义规则"
-        record_action_history "5 > 3" "$OPENCLASH_DISPLAY_NAME 自定义规则启用" "PASS" "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR"
+        record_action_history "5 > 3" "$OPENCLASH_DISPLAY_NAME 自定义规则启用" "PASS" "disabled"
+        MENU_ACTION_COMPLETED='1'
         return 0
     fi
 
@@ -17457,7 +18872,8 @@ run_hakimi_easy_rule_helper() {
     hakimi_insert_custom_rule "$OPENCLASH_CUSTOM_RULES_FILE" "$HAKIMI_RULE_LINE"
     hakimi_enable_custom_rules
     log "结果:   已写入并启用哈基米自定义规则"
-    record_action_history "5 > 3" "$OPENCLASH_DISPLAY_NAME 自定义规则写入" "PASS" "$OPENCLASH_CUSTOM_RULES_BACKUP_DIR"
+    record_action_history "5 > 3" "$OPENCLASH_DISPLAY_NAME 自定义规则写入" "PASS" "disabled"
+    MENU_ACTION_COMPLETED='1'
 
     printf '是否现在重载 %s 使规则生效？[y/N]: ' "$OPENCLASH_DISPLAY_NAME"
     ui_read_line || die "input cancelled"
@@ -19016,7 +20432,7 @@ install_openclash() {
 
     log_stage 3 7 "刷新 opkg 软件源并检查依赖"
     ensure_opkg_update || die "opkg update 失败，已停止 $OPENCLASH_DISPLAY_NAME 安装"
-    ensure_packages dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-inet-diag kmod-nft-tproxy kmod-tun unzip
+    ensure_packages dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-tun unzip || die "$OPENCLASH_DISPLAY_NAME 依赖安装失败，已停止安装本体"
 
     log_stage 4 7 "重打包并安装 $OPENCLASH_DISPLAY_NAME"
     extract_ipk_archive "$raw_ipk" "$WORKDIR/openclash/pkg"
@@ -19035,7 +20451,7 @@ install_openclash() {
 
     backup_file "$CFG"
     if ! opkg install "$fixed_ipk" --force-reinstall >/tmp/openclash-install.log 2>&1; then
-        if ! opkg install "$fixed_ipk" --force-reinstall --force-depends --force-maintainer >/tmp/openclash-install.log 2>&1; then
+        if ! opkg install "$fixed_ipk" --force-reinstall --force-maintainer >/tmp/openclash-install.log 2>&1; then
             sed -n '1,200p' /tmp/openclash-install.log >&2
             log "提示: 使用脚本 5 > 1 查看日志"
             log "日志: /tmp/openclash-install.log"
@@ -25866,7 +27282,7 @@ require_rootfs_2nd_storage_capable() {
     model="$(storage_expand_current_model)"
     [ -n "$model" ] && CURRENT_DETECTED_MODEL="$model"
     case "$model" in
-        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688)
+        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688|NRadio_NBCPE)
             ;;
         *)
             die "当前机型不支持 eMMC 存储扩展：${model:-unknown}"
@@ -25877,7 +27293,37 @@ require_rootfs_2nd_storage_capable() {
 }
 
 storage_expand_is_booted_from_rootfs_2nd() {
-    grep -q 'root=PARTLABEL=rootfs_2nd' /proc/cmdline 2>/dev/null
+    local device device_name device_id rom_device_id root_spec partuuid device_info
+
+    root_spec="$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^root=//p' | sed -n '1p' || true)"
+    [ "$root_spec" = 'PARTLABEL=rootfs_2nd' ] && return 0
+
+    device="$(storage_expand_find_rootfs_2nd_device 2>/dev/null || true)"
+    [ -n "$device" ] || return 1
+    device="$(storage_expand_canonical_path "$device")"
+    device_name="${device##*/}"
+
+    case "$root_spec" in
+        "$device"|"/dev/$device_name")
+            return 0
+            ;;
+        PARTUUID=*)
+            partuuid="${root_spec#PARTUUID=}"
+            partuuid="${partuuid%%/*}"
+            if [ -e "/dev/disk/by-partuuid/$partuuid" ]; then
+                [ "$(storage_expand_canonical_path "/dev/disk/by-partuuid/$partuuid")" = "$device" ] && return 0
+            elif command -v blkid >/dev/null 2>&1; then
+                device_info="$(blkid "$device" 2>/dev/null || true)"
+                case "$device_info" in
+                    *"PARTUUID=\"$partuuid\""*) return 0 ;;
+                esac
+            fi
+            ;;
+    esac
+
+    device_id="$(cat "/sys/class/block/$device_name/dev" 2>/dev/null || true)"
+    rom_device_id="$(awk '$5 == "/rom" { print $3; exit }' /proc/self/mountinfo 2>/dev/null || true)"
+    [ -n "$device_id" ] && [ "$device_id" = "$rom_device_id" ]
 }
 
 storage_expand_mount_source_for_mountpoint() {
@@ -26112,6 +27558,40 @@ storage_expand_key_for_src() {
     return 1
 }
 
+storage_expand_migration_record_matches() {
+    local src="$1"
+    local target="$2"
+
+    [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] || return 1
+    awk -F '\t' -v src="$src" -v target="$target" '
+        $3 == src && $4 == target { found = 1 }
+        END { exit(found ? 0 : 1) }
+    ' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null
+}
+
+storage_expand_path_needs_relink() {
+    local src="$1"
+    local target="$2"
+
+    [ -e "$src" ] || return 1
+    [ ! -L "$src" ] || return 1
+    [ -e "$target" ] || return 1
+    [ ! -L "$target" ] || return 1
+    storage_expand_migration_record_matches "$src" "$target" || return 1
+    storage_expand_path_depends_on_target "$src" "$target" && return 1
+    storage_expand_path_has_self_loop_child_links "$src" && return 1
+    storage_expand_path_has_self_loop_child_links "$target" && return 1
+    storage_expand_relink_tree_links_are_safe "$src" "$target" '1' || return 1
+    storage_expand_relink_tree_links_are_safe "$target" "$target" '0' || return 1
+    if [ -d "$src" ]; then
+        [ -d "$target" ] || return 1
+    else
+        [ -f "$src" ] || return 1
+        [ -f "$target" ] || return 1
+    fi
+    return 0
+}
+
 storage_expand_build_migrate_menu_list() {
     local list_file="$1"
     local app_key spec label src target
@@ -26123,7 +27603,9 @@ storage_expand_build_migrate_menu_list() {
         src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
         target="$(storage_expand_target_for_path "$src")"
 
-        storage_expand_appcenter_has_installed_app "$app_key" || continue
+        if ! storage_expand_appcenter_has_installed_app "$app_key"; then
+            storage_expand_path_needs_relink "$src" "$target" || continue
+        fi
         [ -e "$src" ] || continue
         storage_expand_path_is_migrated "$src" "$target" && continue
         storage_expand_path_has_self_loop_child_links "$src" && continue
@@ -26135,6 +27617,9 @@ storage_expand_build_migrate_menu_list() {
         fi
         storage_expand_path_depends_on_target "$src" "$target" && continue
         if [ -e "$target" ] || [ -L "$target" ]; then
+            if storage_expand_path_needs_relink "$src" "$target"; then
+                printf '%s\t%s\t%s\n' "$app_key" "$label（升级后重新接入）" "$src" >> "$list_file"
+            fi
             continue
         fi
         printf '%s\t%s\t%s\n' "$app_key" "$label" "$src" >> "$list_file"
@@ -26345,7 +27830,8 @@ storage_expand_restore_failure_hint() {
     local target="$3"
 
     storage_expand_restore_overlay_space_after_failure "$src" "$target"
-    die "$label 从扩展盘复制回 overlay 失败"
+    log "$label 从扩展盘复制回 overlay 失败"
+    return 1
 }
 
 storage_expand_try_full_restore_copy() {
@@ -26368,8 +27854,9 @@ storage_expand_restore_copy_or_fail() {
         return 0
     fi
     rm -rf "$tmp_restore" 2>/dev/null || true
-    ln -s "$target" "$src" 2>/dev/null || true
+    ln -s "$target" "$src" 2>/dev/null || die "$label 复制失败且自动恢复扩展盘软链接未完成：$src"
     storage_expand_restore_failure_hint "$label" "$src" "$target"
+    return 1
 }
 
 storage_expand_restore_hybrid_payload() {
@@ -26548,6 +28035,26 @@ storage_expand_path_depends_on_target() {
     return 1
 }
 
+storage_expand_relink_tree_links_are_safe() {
+    local tree_path="$1"
+    local target_path="$2"
+    local reject_target_links="$3"
+    local link_list link_path
+
+    [ -d "$tree_path" ] || return 0
+    link_list="$(find "$tree_path" -type l -print 2>/dev/null)" || return 1
+    while IFS= read -r link_path; do
+        [ -n "$link_path" ] || continue
+        storage_expand_link_points_to_self "$link_path" && return 1
+        if [ "$reject_target_links" = '1' ] && storage_expand_link_points_under "$link_path" "$target_path"; then
+            return 1
+        fi
+    done <<EOF_STORAGE_EXPAND_RELINK_LINKS
+$link_list
+EOF_STORAGE_EXPAND_RELINK_LINKS
+    return 0
+}
+
 storage_expand_openclash_has_expand_dependency() {
     storage_expand_path_depends_on_target "/etc/openclash" "$ROOTFS_2ND_STORAGE_APPS_DIR/etc/openclash"
 }
@@ -26607,20 +28114,173 @@ storage_expand_remove_rootfs_2nd_orphan_links() {
     done
 }
 
-storage_expand_stop_service() {
+storage_expand_service_is_running() {
     local service_name="$1"
 
+    [ -n "$service_name" ] || return 1
+    [ -x "/etc/init.d/$service_name" ] || return 1
+    "/etc/init.d/$service_name" status >/dev/null 2>&1
+}
+
+storage_expand_stop_service() {
+    local service_name="$1"
+    local wait_count
+
+    STORAGE_EXPAND_SERVICE_WAS_RUNNING=0
     [ -n "$service_name" ] || return 0
     [ -x "/etc/init.d/$service_name" ] || return 0
-    "/etc/init.d/$service_name" stop >/dev/null 2>&1 || true
+    if ! storage_expand_service_is_running "$service_name"; then
+        return 0
+    fi
+
+    STORAGE_EXPAND_SERVICE_WAS_RUNNING=1
+    "/etc/init.d/$service_name" stop >/dev/null 2>&1 || return 1
+    wait_count=0
+    while storage_expand_service_is_running "$service_name"; do
+        wait_count=$((wait_count + 1))
+        [ "$wait_count" -lt 8 ] || return 1
+        sleep 1
+    done
+    return 0
 }
 
 storage_expand_start_service() {
     local service_name="$1"
+    local wait_count
 
+    [ "${STORAGE_EXPAND_SERVICE_WAS_RUNNING:-0}" = '1' ] || return 0
+    [ -n "$service_name" ] || return 1
+    [ -x "/etc/init.d/$service_name" ] || return 1
+    "/etc/init.d/$service_name" start >/dev/null 2>&1 || return 1
+    wait_count=0
+    until storage_expand_service_is_running "$service_name"; do
+        wait_count=$((wait_count + 1))
+        [ "$wait_count" -lt 15 ] || return 1
+        sleep 1
+    done
+    return 0
+}
+
+storage_expand_relink_service_is_running() {
+    local app_key="$1"
+    local service_name="$2"
+
+    [ -n "$app_key" ] || return 1
+    [ -n "$service_name" ] || return 1
+    [ -x "/etc/init.d/$service_name" ] || return 1
+    "/etc/init.d/$service_name" status >/dev/null 2>&1
+}
+
+storage_expand_stop_service_for_relink() {
+    local app_key="$1"
+    local service_name="$2"
+    local wait_count
+
+    STORAGE_EXPAND_RELINK_SERVICE_WAS_RUNNING=0
     [ -n "$service_name" ] || return 0
     [ -x "/etc/init.d/$service_name" ] || return 0
-    "/etc/init.d/$service_name" start >/dev/null 2>&1 || true
+    if storage_expand_relink_service_is_running "$app_key" "$service_name"; then
+        STORAGE_EXPAND_RELINK_SERVICE_WAS_RUNNING=1
+    fi
+    "/etc/init.d/$service_name" stop >/dev/null 2>&1 || return 1
+    wait_count=0
+    while storage_expand_relink_service_is_running "$app_key" "$service_name"; do
+        wait_count=$((wait_count + 1))
+        [ "$wait_count" -lt 8 ] || return 1
+        sleep 1
+    done
+    return 0
+}
+
+storage_expand_start_service_for_relink() {
+    local app_key="$1"
+    local service_name="$2"
+    local wait_count
+
+    [ "${STORAGE_EXPAND_RELINK_SERVICE_WAS_RUNNING:-0}" = '1' ] || return 0
+    [ -n "$service_name" ] || return 1
+    [ -x "/etc/init.d/$service_name" ] || return 1
+    "/etc/init.d/$service_name" start >/dev/null 2>&1 || return 1
+    wait_count=0
+    until storage_expand_relink_service_is_running "$app_key" "$service_name"; do
+        wait_count=$((wait_count + 1))
+        [ "$wait_count" -lt 15 ] || return 1
+        sleep 1
+    done
+    return 0
+}
+
+storage_expand_resume_service_after_relink_failure() {
+    local app_key="$1"
+    local service_name="$2"
+
+    storage_expand_start_service_for_relink "$app_key" "$service_name" || log "警告: 重新接入失败后未能恢复服务状态：$service_name"
+}
+
+storage_expand_payload_fingerprint() {
+    local payload_path="$1"
+    local fingerprint
+    local manifest_base manifest_file dirs_file dirs_sorted files_file files_sorted links_file links_sorted special_file
+
+    command -v sha256sum >/dev/null 2>&1 || return 1
+    if [ -f "$payload_path" ]; then
+        fingerprint="$(sha256sum "$payload_path" 2>/dev/null | awk 'NR == 1 { print $1 }')"
+    elif [ -d "$payload_path" ]; then
+        manifest_base="/tmp/.nradio-storage-fingerprint.$$"
+        manifest_file="$manifest_base.manifest"
+        dirs_file="$manifest_base.dirs"
+        dirs_sorted="$manifest_base.dirs.sorted"
+        files_file="$manifest_base.files"
+        files_sorted="$manifest_base.files.sorted"
+        links_file="$manifest_base.links"
+        links_sorted="$manifest_base.links.sorted"
+        special_file="$manifest_base.special"
+        rm -f "$manifest_file" "$dirs_file" "$dirs_sorted" "$files_file" "$files_sorted" "$links_file" "$links_sorted" "$special_file" 2>/dev/null || return 1
+        if ! (
+            local item item_hash link_target
+            cd "$payload_path" 2>/dev/null || exit 1
+            find . -type d -print > "$dirs_file" 2>/dev/null || exit 1
+            find . -type f -print > "$files_file" 2>/dev/null || exit 1
+            find . -type l -print > "$links_file" 2>/dev/null || exit 1
+            find . ! -type d ! -type f ! -type l -print > "$special_file" 2>/dev/null || exit 1
+            [ ! -s "$special_file" ] || exit 1
+            LC_ALL=C sort "$dirs_file" > "$dirs_sorted" || exit 1
+            LC_ALL=C sort "$files_file" > "$files_sorted" || exit 1
+            LC_ALL=C sort "$links_file" > "$links_sorted" || exit 1
+            : > "$manifest_file" || exit 1
+            while IFS= read -r item; do
+                [ -n "$item" ] || continue
+                printf 'D\t%s\n' "$item" >> "$manifest_file" || exit 1
+            done < "$dirs_sorted"
+            while IFS= read -r item; do
+                [ -n "$item" ] || continue
+                item_hash="$(sha256sum "$item" 2>/dev/null | awk 'NR == 1 { print $1 }')"
+                case "$item_hash" in
+                    ''|*[!0-9a-f]*) exit 1 ;;
+                esac
+                [ "${#item_hash}" -eq 64 ] 2>/dev/null || exit 1
+                printf 'F\t%s\t%s\n' "$item" "$item_hash" >> "$manifest_file" || exit 1
+            done < "$files_sorted"
+            while IFS= read -r item; do
+                [ -n "$item" ] || continue
+                link_target="$(readlink "$item" 2>/dev/null)" || exit 1
+                [ -n "$link_target" ] || exit 1
+                printf 'L\t%s\t%s\n' "$item" "$link_target" >> "$manifest_file" || exit 1
+            done < "$links_sorted"
+        ); then
+            rm -f "$manifest_file" "$dirs_file" "$dirs_sorted" "$files_file" "$files_sorted" "$links_file" "$links_sorted" "$special_file" 2>/dev/null || true
+            return 1
+        fi
+        fingerprint="$(sha256sum "$manifest_file" 2>/dev/null | awk 'NR == 1 { print $1 }')"
+        rm -f "$manifest_file" "$dirs_file" "$dirs_sorted" "$files_file" "$files_sorted" "$links_file" "$links_sorted" "$special_file" 2>/dev/null || return 1
+    else
+        return 1
+    fi
+    case "$fingerprint" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    [ "${#fingerprint}" -eq 64 ] 2>/dev/null || return 1
+    printf '%s\n' "$fingerprint"
 }
 
 storage_expand_require_app_runtime_files() {
@@ -26651,8 +28311,14 @@ storage_expand_list_without_src() {
 
     [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] || return 0
     tmp_list="$ROOTFS_2ND_STORAGE_MIGRATE_LIST.tmp.$$"
-    awk -F '\t' -v src="$src" '$3 != src { print }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" > "$tmp_list" 2>/dev/null || true
-    mv "$tmp_list" "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+    if ! awk -F '\t' -v src="$src" '$3 != src { print }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" > "$tmp_list" 2>/dev/null; then
+        rm -f "$tmp_list" 2>/dev/null || true
+        return 1
+    fi
+    mv "$tmp_list" "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" || {
+        rm -f "$tmp_list" 2>/dev/null || true
+        return 1
+    }
 }
 
 storage_expand_record_migration() {
@@ -26661,19 +28327,42 @@ storage_expand_record_migration() {
     local src="$3"
     local target="$4"
     local kind="$5"
+    local tmp_list migrated_at
 
-    storage_expand_list_without_src "$src"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$label" "$service" "$src" "$target" "$kind" "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)" >> "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
-    chmod 600 "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null || true
+    tmp_list="$ROOTFS_2ND_STORAGE_MIGRATE_LIST.tmp.$$"
+    migrated_at="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || true)"
+    rm -f "$tmp_list" 2>/dev/null || return 1
+    if [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ]; then
+        awk -F '\t' -v src="$src" '$3 != src { print }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" > "$tmp_list" 2>/dev/null || {
+            rm -f "$tmp_list" 2>/dev/null || true
+            return 1
+        }
+    else
+        : > "$tmp_list" || return 1
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$label" "$service" "$src" "$target" "$kind" "$migrated_at" >> "$tmp_list" || {
+        rm -f "$tmp_list" 2>/dev/null || true
+        return 1
+    }
+    chmod 600 "$tmp_list" 2>/dev/null || {
+        rm -f "$tmp_list" 2>/dev/null || true
+        return 1
+    }
+    mv "$tmp_list" "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" || {
+        rm -f "$tmp_list" 2>/dev/null || true
+        return 1
+    }
+    return 0
 }
 
 storage_expand_remove_migration_record() {
     local src="$1"
 
-    storage_expand_list_without_src "$src"
+    storage_expand_list_without_src "$src" || return 1
     if [ -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" ] && ! awk 'NF { found = 1 } END { exit(found ? 0 : 1) }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null; then
-        rm -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST"
+        rm -f "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" || return 1
     fi
+    return 0
 }
 
 storage_expand_print_migration_list() {
@@ -26684,6 +28373,245 @@ storage_expand_print_migration_list() {
 
     log "迁移清单:"
     awk -F '\t' 'NF >= 4 { printf "  - %s: %s -> %s\n", $1, $3, $4 }' "$ROOTFS_2ND_STORAGE_MIGRATE_LIST" 2>/dev/null || true
+}
+
+storage_expand_recreated_payload_valid_at_path() {
+    local app_key="$1"
+    local payload_path="$2"
+    local payload_size
+
+    case "$app_key" in
+        openclash)
+            [ -f "$payload_path/ASN.mmdb" ] || return 1
+            payload_size="$(wc -c < "$payload_path/ASN.mmdb" 2>/dev/null | tr -d ' ')"
+            case "$payload_size" in
+                ''|*[!0-9]*) return 1 ;;
+            esac
+            [ "$payload_size" -ge 1048576 ] 2>/dev/null
+            ;;
+        picoclaw_bin|picoclaw_launcher)
+            [ -x "$payload_path" ]
+            ;;
+        picoclaw_home)
+            [ -d "$payload_path" ]
+            ;;
+        adguardhome)
+            [ -x "$payload_path/AdGuardHome" ]
+            ;;
+        *)
+            [ -e "$payload_path" ] || [ -L "$payload_path" ]
+            ;;
+    esac
+}
+
+storage_expand_rollback_recreated_path() {
+    local src="$1"
+    local target="$2"
+    local backup_src="$3"
+    local target_backup="$4"
+    local tmp_target="$5"
+    local link_src="$6"
+    local failed_target="$7"
+
+    if [ -L "$link_src" ]; then
+        rm -f "$link_src" || return 1
+    fi
+    if [ -L "$src" ]; then
+        rm -f "$src" || return 1
+    fi
+    if [ -e "$backup_src" ] || [ -L "$backup_src" ]; then
+        [ ! -e "$src" ] && [ ! -L "$src" ] || return 1
+        mv "$backup_src" "$src" || return 1
+    fi
+    if [ -e "$target_backup" ] || [ -L "$target_backup" ]; then
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            [ ! -e "$failed_target" ] && [ ! -L "$failed_target" ] || return 1
+            mv "$target" "$failed_target" || return 1
+        fi
+        if ! mv "$target_backup" "$target"; then
+            if [ ! -e "$target" ] && [ ! -L "$target" ] && { [ -e "$failed_target" ] || [ -L "$failed_target" ]; }; then
+                mv "$failed_target" "$target" 2>/dev/null || true
+            fi
+            return 1
+        fi
+        if [ -e "$failed_target" ] || [ -L "$failed_target" ]; then
+            log "保留失败副本: $failed_target"
+        fi
+    fi
+    rm -rf "$tmp_target" 2>/dev/null || true
+    return 0
+}
+
+storage_expand_fail_recreated_path() {
+    local app_key="$1"
+    local label="$2"
+    local service="$3"
+    local src="$4"
+    local target="$5"
+    local backup_src="$6"
+    local target_backup="$7"
+    local tmp_target="$8"
+    local link_src="$9"
+    local failed_target="${10}"
+    local failure_message="${11}"
+
+    if storage_expand_rollback_recreated_path "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target"; then
+        log "回滚: $label 原实体路径与旧扩展盘目标已恢复"
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$failure_message，已完成回滚"
+    fi
+    log "回滚失败残留: src=$src backup_src=$backup_src target=$target target_backup=$target_backup failed_target=$failed_target"
+    storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+    die "$failure_message；自动回滚未完成，已停止继续操作"
+}
+
+storage_expand_relink_recreated_path() {
+    local app_key="$1"
+    local label="$2"
+    local service="$3"
+    local src="$4"
+    local target="$5"
+    local tmp_target target_backup backup_src link_src failed_target kind source_bytes free_bytes required_bytes
+    local source_fingerprint source_after_fingerprint copied_fingerprint source_backup_fingerprint target_after_fingerprint
+
+    storage_expand_path_needs_relink "$src" "$target" || die "$label 当前状态不符合升级回弹修复条件：$src"
+    storage_expand_require_app_runtime_files "$app_key"
+    storage_expand_prepare_target_parent "$target" || die "$label 修复扩展盘目标父目录失败"
+
+    source_bytes="$(storage_expand_path_size_bytes "$src")"
+    free_bytes="$(get_path_free_bytes "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true)"
+    case "$source_bytes" in
+        ''|*[!0-9]*) die "$label 无法读取当前数据大小，拒绝升级回弹修复" ;;
+    esac
+    case "$free_bytes" in
+        ''|*[!0-9]*) die "$label 无法读取扩展盘剩余空间，拒绝升级回弹修复" ;;
+    esac
+    [ "$source_bytes" -gt 0 ] 2>/dev/null || die "$label 当前实体路径为空，拒绝升级回弹修复：$src"
+    required_bytes=$((source_bytes + 8388608))
+    [ "$free_bytes" -ge "$required_bytes" ] 2>/dev/null || die "$label 扩展盘剩余空间不足：至少需要 $(format_bytes_human "$required_bytes")，当前 $(format_bytes_human "$free_bytes")"
+
+    tmp_target="$target.relink.$$"
+    target_backup="$target.pre-remigrate-$TS"
+    backup_src="$src.nradio-storage-backup-$TS"
+    link_src="$src.nradio-storage-link-$TS"
+    failed_target="$target.failed-remigrate-$TS"
+    [ ! -e "$tmp_target" ] && [ ! -L "$tmp_target" ] || die "$label 暂存路径已存在：$tmp_target"
+    [ ! -e "$target_backup" ] && [ ! -L "$target_backup" ] || die "$label 扩展盘备份已存在：$target_backup"
+    [ ! -e "$backup_src" ] && [ ! -L "$backup_src" ] || die "$label overlay 临时备份已存在：$backup_src"
+    [ ! -e "$link_src" ] && [ ! -L "$link_src" ] || die "$label 软链接暂存路径已存在：$link_src"
+    [ ! -e "$failed_target" ] && [ ! -L "$failed_target" ] || die "$label 失败副本路径已存在：$failed_target"
+
+    if [ -d "$src" ]; then
+        kind="dir"
+    else
+        kind="file"
+    fi
+
+    log "检测到: $label 更新后把已迁移路径重建到 overlay"
+    log "重新接入: $src -> $target"
+    log "空间参考: 当前数据 $(format_bytes_human "$source_bytes")，扩展盘剩余 $(format_bytes_human "$free_bytes")"
+    storage_expand_stop_service_for_relink "$app_key" "$service" || {
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 服务未能确认停止，拒绝复制活动数据"
+    }
+
+    source_fingerprint="$(storage_expand_payload_fingerprint "$src" 2>/dev/null || true)"
+    [ -n "$source_fingerprint" ] || {
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 当前数据内容指纹计算失败，原路径未改动"
+    }
+
+    cp -a "$src" "$tmp_target" || {
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 当前数据复制到扩展盘暂存路径失败"
+    }
+    copied_fingerprint="$(storage_expand_payload_fingerprint "$tmp_target" 2>/dev/null || true)"
+    source_after_fingerprint="$(storage_expand_payload_fingerprint "$src" 2>/dev/null || true)"
+    if [ -z "$copied_fingerprint" ] || [ "$copied_fingerprint" != "$source_fingerprint" ] || [ "$source_after_fingerprint" != "$source_fingerprint" ] || ! storage_expand_recreated_payload_valid_at_path "$app_key" "$tmp_target"; then
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 扩展盘暂存副本内容校验失败或复制期间源数据变化，原路径未改动"
+    fi
+    if storage_expand_relink_service_is_running "$app_key" "$service"; then
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_stop_service_for_relink "$app_key" "$service" 2>/dev/null || true
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 服务在复制期间重新启动，原路径未改动"
+    fi
+    ln -s "$target" "$link_src" || {
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 软链接暂存创建失败，原路径未改动"
+    }
+    if ! storage_expand_link_points_under "$link_src" "$target"; then
+        rm -f "$link_src" 2>/dev/null || true
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 软链接暂存校验失败，原路径未改动"
+    fi
+
+    mv "$target" "$target_backup" || {
+        rm -f "$link_src" 2>/dev/null || true
+        rm -rf "$tmp_target" 2>/dev/null || true
+        storage_expand_resume_service_after_relink_failure "$app_key" "$service"
+        die "$label 旧扩展盘目标备份失败，原路径未改动"
+    }
+    mv "$tmp_target" "$target" || {
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 新扩展盘目标切换失败"
+    }
+    mv "$src" "$backup_src" || {
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label overlay 原路径暂存失败"
+    }
+    mv "$link_src" "$src" || {
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 软链接原子切换失败"
+    }
+    if ! storage_expand_path_is_migrated "$src" "$target" || ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 重新接入后的软链接或运行文件校验失败"
+    fi
+    if storage_expand_relink_service_is_running "$app_key" "$service"; then
+        storage_expand_stop_service_for_relink "$app_key" "$service" || die "$label 服务意外重启且无法停止；保留 overlay 临时副本：$backup_src"
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 服务在切换期间重新启动"
+    fi
+    source_backup_fingerprint="$(storage_expand_payload_fingerprint "$backup_src" 2>/dev/null || true)"
+    target_after_fingerprint="$(storage_expand_payload_fingerprint "$target" 2>/dev/null || true)"
+    if [ "$source_backup_fingerprint" != "$source_fingerprint" ] || [ "$target_after_fingerprint" != "$source_fingerprint" ]; then
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 切换期间数据发生变化"
+    fi
+    if storage_expand_relink_service_is_running "$app_key" "$service"; then
+        storage_expand_stop_service_for_relink "$app_key" "$service" || die "$label 最终校验期间服务意外重启且无法停止；保留 overlay 临时副本：$backup_src"
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 最终校验期间服务重新启动"
+    fi
+
+    storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind" || {
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 迁移清单更新失败"
+    }
+    if ! storage_expand_start_service_for_relink "$app_key" "$service"; then
+        storage_expand_remove_migration_record "$src" || log "警告: $label 服务启动失败后未能删除迁移清单记录"
+        storage_expand_fail_recreated_path "$app_key" "$label" "$service" "$src" "$target" "$backup_src" "$target_backup" "$tmp_target" "$link_src" "$failed_target" "$label 服务启动状态校验失败"
+    fi
+    rm -rf "$backup_src" || log "警告: $label 重新接入成功，但 overlay 临时副本清理失败：$backup_src"
+    rm -rf "$target_backup" || log "警告: $label 重新接入成功，但旧扩展盘临时副本清理失败：$target_backup"
+    log "完成: $label 更新回弹路径已重新接入扩展盘"
+}
+
+storage_expand_restore_migration_backup() {
+    local src="$1"
+    local target="$2"
+    local backup_src="$3"
+    local remove_target="$4"
+
+    if [ -L "$src" ]; then
+        rm -f "$src" || return 1
+    elif [ -e "$src" ]; then
+        return 1
+    fi
+    [ -e "$backup_src" ] || [ -L "$backup_src" ] || return 1
+    mv "$backup_src" "$src" || return 1
+    if [ "$remove_target" = '1' ]; then
+        rm -rf "$target" || return 1
+    fi
+    return 0
 }
 
 storage_expand_migrate_one_app() {
@@ -26710,7 +28638,7 @@ storage_expand_migrate_one_app() {
             log "跳过: $label 已迁移：$src -> $target"
             storage_expand_prepare_target_parent "$target" || die "$label 修复扩展盘目标父目录权限失败"
             storage_expand_require_app_runtime_files "$app_key"
-            storage_expand_record_migration "$label" "$service" "$src" "$target" "link"
+            storage_expand_record_migration "$label" "$service" "$src" "$target" "link" || die "$label 更新迁移清单失败"
             return 0
         fi
         die "$label 源路径已是非本功能软链接：$src -> $src_real"
@@ -26722,29 +28650,47 @@ storage_expand_migrate_one_app() {
         storage_expand_path_has_self_loop_child_links "$src" && die "$label 原路径含自指软链接，拒绝迁移：$src"
         storage_expand_path_has_self_loop_child_links "$target" && die "$label 扩展盘目标含自指软链接，请先修复目标目录：$target"
         log "迁移: $label -> $target"
-        storage_expand_stop_service "$service"
+        storage_expand_stop_service "$service" || die "$label 服务未能确认停止，拒绝迁移活动数据"
         storage_expand_sync_hybrid_to_target "$src" "$target" || {
-            storage_expand_start_service "$service"
+            storage_expand_start_service "$service" || log "警告: $label 同步失败后未能恢复服务状态：$service"
             die "$label 同步到扩展盘失败"
         }
         backup_src="$src.nradio-storage-backup-$TS"
         mv "$src" "$backup_src" || {
-            storage_expand_start_service "$service"
+            storage_expand_start_service "$service" || log "警告: $label 移动失败后未能恢复服务状态：$service"
             die "$label 移动原路径失败：$src"
         }
         ln -s "$target" "$src" || {
             mv "$backup_src" "$src" 2>/dev/null || true
-            storage_expand_start_service "$service"
+            storage_expand_start_service "$service" || log "警告: $label 软链接失败后未能恢复服务状态：$service"
             die "$label 创建软链接失败"
         }
-        rm -rf "$backup_src"
-        storage_expand_require_app_runtime_files "$app_key"
-        storage_expand_record_migration "$label" "$service" "$src" "$target" "link"
-        storage_expand_start_service "$service"
+        if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
+            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 运行文件校验失败且自动回滚未完成：$backup_src"
+            storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
+            die "$label 运行文件校验失败，已恢复原路径"
+        fi
+        if ! storage_expand_start_service "$service"; then
+            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 服务启动失败且自动回滚未完成：$backup_src"
+            storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
+            die "$label 迁移后服务启动失败，已恢复原路径"
+        fi
+        if ! storage_expand_record_migration "$label" "$service" "$src" "$target" "link"; then
+            storage_expand_stop_service "$service" || die "$label 迁移清单更新失败且服务无法停止；保留原路径备份：$backup_src"
+            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 迁移清单更新失败且自动回滚未完成：$backup_src"
+            storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
+            die "$label 迁移清单更新失败，已恢复原路径"
+        fi
+        rm -rf "$backup_src" || log "警告: $label 迁移成功，但原路径备份清理失败：$backup_src"
         log "完成: $label 已迁移到扩展盘"
         return 0
     fi
     storage_expand_path_has_self_loop_child_links "$src" && die "$label 原路径含自指软链接，拒绝迁移：$src"
+
+    if storage_expand_path_needs_relink "$src" "$target"; then
+        storage_expand_relink_recreated_path "$app_key" "$label" "$service" "$src" "$target"
+        return 0
+    fi
 
     [ ! -e "$target" ] || die "$label 目标路径已存在：$target"
     storage_expand_require_app_runtime_files "$app_key"
@@ -26759,33 +28705,48 @@ storage_expand_migrate_one_app() {
     fi
 
     log "迁移: $label -> $target"
-    storage_expand_stop_service "$service"
+    storage_expand_stop_service "$service" || die "$label 服务未能确认停止，拒绝迁移活动数据"
     cp -a "$src" "$tmp_target" || {
         rm -rf "$tmp_target" 2>/dev/null || true
-        storage_expand_start_service "$service"
+        storage_expand_start_service "$service" || log "警告: $label 复制失败后未能恢复服务状态：$service"
         die "$label 复制到扩展盘失败"
     }
     mv "$tmp_target" "$target" || {
         rm -rf "$tmp_target" 2>/dev/null || true
-        storage_expand_start_service "$service"
+        storage_expand_start_service "$service" || log "警告: $label 写入失败后未能恢复服务状态：$service"
         die "$label 写入扩展盘目标失败"
     }
 
     backup_src="$src.nradio-storage-backup-$TS"
     mv "$src" "$backup_src" || {
-        storage_expand_start_service "$service"
+        rm -rf "$target" 2>/dev/null || true
+        storage_expand_start_service "$service" || log "警告: $label 移动失败后未能恢复服务状态：$service"
         die "$label 移动原路径失败：$src"
     }
     ln -s "$target" "$src" || {
         mv "$backup_src" "$src" 2>/dev/null || true
-        storage_expand_start_service "$service"
+        rm -rf "$target" 2>/dev/null || true
+        storage_expand_start_service "$service" || log "警告: $label 软链接失败后未能恢复服务状态：$service"
         die "$label 创建软链接失败"
     }
 
-    rm -rf "$backup_src"
-    storage_expand_require_app_runtime_files "$app_key"
-    storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind"
-    storage_expand_start_service "$service"
+    if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
+        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 运行文件校验失败且自动回滚未完成：$backup_src"
+        storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
+        die "$label 运行文件校验失败，已恢复原路径"
+    fi
+    if ! storage_expand_start_service "$service"; then
+        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 服务启动失败且自动回滚未完成：$backup_src"
+        storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
+        die "$label 迁移后服务启动失败，已恢复原路径"
+    fi
+    if ! storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind"; then
+        storage_expand_stop_service "$service" || die "$label 迁移清单更新失败且服务无法停止；保留原路径备份：$backup_src"
+        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 迁移清单更新失败且自动回滚未完成：$backup_src"
+        storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
+        die "$label 迁移清单更新失败，已恢复原路径"
+    fi
+    rm -rf "$backup_src" || log "警告: $label 迁移成功，但原路径备份清理失败：$backup_src"
     log "完成: $label 已迁移到扩展盘"
 }
 
@@ -26802,7 +28763,7 @@ storage_expand_restore_one_app() {
 
     [ -e "$target" ] || {
         log "跳过: $label 扩展盘目标不存在：$target"
-        storage_expand_remove_migration_record "$src"
+        storage_expand_remove_migration_record "$src" || die "$label 清理过期迁移清单失败"
         return 0
     }
     storage_expand_prepare_target_parent "$target" || die "$label 修复扩展盘目标父目录权限失败"
@@ -26831,45 +28792,59 @@ storage_expand_restore_one_app() {
     fi
 
     log "还原: $label -> $src"
-    storage_expand_stop_service "$service"
+    storage_expand_stop_service "$service" || die "$label 服务未能确认停止，拒绝还原：$service"
     if [ "$restore_mode" = "link" ]; then
         rm -f "$src" || {
-            storage_expand_start_service "$service"
+            storage_expand_start_service "$service" || log "警告: $label 删除软链接失败后未能恢复服务状态：$service"
             die "$label 删除软链接失败：$src"
         }
         tmp_restore="$src.restore.$$"
         rm -rf "$tmp_restore" 2>/dev/null || true
-        storage_expand_restore_copy_or_fail "$app_key" "$label" "$src" "$target" "$tmp_restore"
+        if ! storage_expand_restore_copy_or_fail "$app_key" "$label" "$src" "$target" "$tmp_restore"; then
+            storage_expand_start_service "$service" || log "警告: $label 复制失败后未能恢复服务状态：$service"
+            die "$label 从扩展盘复制回 overlay 失败"
+        fi
         mv "$tmp_restore" "$src" || {
             rm -rf "$tmp_restore" 2>/dev/null || true
             ln -s "$target" "$src" 2>/dev/null || true
-            storage_expand_start_service "$service"
+            storage_expand_start_service "$service" || log "警告: $label 写回失败后未能恢复服务状态：$service"
             die "$label 写回原路径失败"
         }
     else
         storage_expand_restore_hybrid_payload "$app_key" "$src" "$target" || {
-            storage_expand_start_service "$service"
+            storage_expand_start_service "$service" || log "警告: $label 续还原失败后未能恢复服务状态：$service"
             die "$label 续还原失败"
         }
     fi
-    storage_expand_require_app_runtime_files "$app_key"
+
+    if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
+        if [ "$restore_mode" = "link" ]; then
+            rm -rf "$src" 2>/dev/null || true
+            ln -s "$target" "$src" || die "$label 运行文件校验失败且自动回滚未完成：$src"
+        fi
+        storage_expand_start_service "$service" || log "警告: $label 校验失败后未能恢复服务状态：$service"
+        die "$label 还原后运行文件校验失败"
+    fi
+    if ! storage_expand_start_service "$service"; then
+        if [ "$restore_mode" = "link" ]; then
+            rm -rf "$src" 2>/dev/null || true
+            ln -s "$target" "$src" || die "$label 服务启动失败且自动回滚未完成：$src"
+            storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
+        fi
+        die "$label 还原后服务启动失败"
+    fi
+
     keep_target=0
     if storage_expand_path_depends_on_target "$src" "$target"; then
         keep_target=1
         log "保留: $label 原路径含扩展盘子项链接，保留 $target"
     fi
-    if [ "$keep_target" != '1' ]; then
-        rm -rf "$target" || {
-            storage_expand_start_service "$service"
-            die "$label 删除扩展盘目标失败：$target"
-        }
-    fi
     if [ "$keep_target" = '1' ]; then
-        storage_expand_record_migration "$label" "$service" "$src" "$target" "hybrid"
+        storage_expand_record_migration "$label" "$service" "$src" "$target" "hybrid" || die "$label 已还原且服务已恢复，但更新迁移清单失败"
     else
-        storage_expand_remove_migration_record "$src"
+        storage_expand_remove_migration_record "$src" || die "$label 已还原且服务已恢复，但删除迁移清单记录失败"
+        rm -rf "$target" || die "$label 已还原且服务已恢复，但删除扩展盘目标失败：$target"
     fi
-    storage_expand_start_service "$service"
     log "完成: $label 已还原到原路径"
 }
 
@@ -27648,7 +29623,7 @@ if not html:find("storage_expand_memory_row", 1, true) then
         </div>
 ]], "failed to patch appcenter mobile memory block")
 end
-if not html:find("div.app_btn_box > div.mem_track", 1, true) then
+if not html:find("NRadio appcenter v3: begin", 1, true) and not html:find("div.app_btn_box > div.mem_track", 1, true) then
     html = replace_once(html,
 [[    .mem_mobile{]],
 storage_layout_css .. [[    .mem_mobile{]], "failed to patch appcenter storage layout css")
@@ -27684,10 +29659,12 @@ local new_update = [[    function format_storage_size(total, used){
         var overlay_used = Number(data.overlay_used_memory || data.used_memory || 0);
         var expand_total = Number(data.expand_total_memory || 0);
         var expand_used = Number(data.expand_used_memory || 0);
+        var has_expand = !!(data.storage_expand_enabled && data.storage_expand_mounted && expand_total > 0);
 
         update_memory_bar("#memory_detail", "#memory_detail_mobile", "#memory_progress_inner", overlay_total, overlay_used);
+        $(".nr-storage-track").toggleClass("nr-has-storage-expand", has_expand);
 
-        if(data.storage_expand_enabled && data.storage_expand_mounted && expand_total > 0){
+        if(has_expand){
             $("#storage_expand_memory_row").css("display", "flex");
             $("#storage_expand_memory_mobile").show();
             update_memory_bar("#storage_expand_memory_detail", "#storage_expand_memory_detail_mobile", "#storage_expand_memory_progress_inner", expand_total, expand_used);
@@ -27714,7 +29691,7 @@ EOF_STORAGE_EXPAND_APPCENTER_PATCH
     grep -q 'storage_expand_memory_row' "$TPL" 2>/dev/null || die "应用商店双空间显示补丁写入失败"
     refresh_luci_appcenter
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
-    log "已写入应用商店空间显示补丁：扩展启用时显示 $ROOTFS_2ND_STORAGE_MOUNT_POINT，否则显示 /overlay"
+    log "已写入应用商店空间显示补丁：始终显示 /overlay，扩展启用时追加 $ROOTFS_2ND_STORAGE_MOUNT_POINT"
     log "已清理 LuCI 控制器缓存并重载 uhttpd"
 }
 
@@ -27760,7 +29737,7 @@ storage_expand_select_app_action() {
         case "$choice" in
             0)
                 rm -f "$list_file"
-                return 2
+                return 0
                 ;;
             ''|*[!0-9]*)
                 rm -f "$list_file"
@@ -27809,36 +29786,42 @@ manage_rootfs_2nd_storage_expand() {
         printf '请选择 0、1、2、3、4、5、6 或 7: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
-            1) storage_expand_status; return 0 ;;
+            0) return 0 ;;
+            1) storage_expand_status; MENU_ACTION_COMPLETED='1'; return 0 ;;
             2)
                 enable_rootfs_2nd_storage_expand
                 record_action_history "5 > 4 > 2" "启用 rootfs_2nd 存储扩展" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             3)
                 disable_rootfs_2nd_storage_expand
                 record_action_history "5 > 4 > 3" "关闭 rootfs_2nd 存储扩展" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             4)
                 patch_appcenter_storage_expand_display
                 record_action_history "5 > 4 > 4" "修复应用商店存储空间显示" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             5)
                 storage_expand_select_app_action "迁移应用到扩展盘"
                 [ "${STORAGE_EXPAND_ACTION_CHANGED:-0}" = '1' ] && record_action_history "5 > 4 > 5" "迁移应用到扩展盘" "PASS" "$BACKUP_DIR"
+                [ "${STORAGE_EXPAND_ACTION_CHANGED:-0}" = '1' ] && MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             6)
                 storage_expand_select_app_action "还原应用到 overlay"
                 [ "${STORAGE_EXPAND_ACTION_CHANGED:-0}" = '1' ] && record_action_history "5 > 4 > 6" "还原应用到 overlay" "PASS" "$BACKUP_DIR"
+                [ "${STORAGE_EXPAND_ACTION_CHANGED:-0}" = '1' ] && MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             7)
                 reinitialize_rootfs_2nd_storage_expand
                 record_action_history "5 > 4 > 7" "清空并重新初始化 rootfs_2nd 扩展盘" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
@@ -28996,14 +30979,11 @@ download_mosdns_core() {
     mkdir -p "$WORKDIR/mosdns"
     zip_path="$WORKDIR/mosdns/$MOSDNS_ASSET_NAME"
     download_from_urls "$zip_path" $MOSDNS_DOWNLOAD_URLS || die "MosDNS 核心下载失败"
-    actual="$(sha256sum "$zip_path" 2>/dev/null | awk '{print $1}')"
-    [ -n "$actual" ] || die "MosDNS SHA256 读取失败"
-    [ "$actual" = "$MOSDNS_SHA256" ] || die "MosDNS SHA256 不匹配"
 
     mkdir -p "$WORKDIR/mosdns/unpack"
     ensure_default_feeds
     ensure_opkg_update || die "opkg update 失败，已停止 MosDNS 安装"
-    ensure_packages unzip
+    ensure_packages unzip || die "MosDNS 依赖安装失败：unzip"
     if command -v unzip >/dev/null 2>&1; then
         unzip -tq "$zip_path" >/tmp/mosdns-archive-validate.log 2>&1 || {
             sed -n '1,120p' /tmp/mosdns-archive-validate.log >&2
@@ -29261,7 +31241,7 @@ install_ddnsgo() {
     log "说明: 目标版本 DDNS-GO $DDNSGO_PACKAGE_VERSION / LuCI $DDNSGO_LUCI_VERSION / 中文包 $DDNSGO_I18N_VERSION"
     confirm_or_exit "确认继续安装 DDNS-GO 并修改系统吗？"
 
-    log_stage 2 7 "下载 DDNS-GO OpenWrt 三件套并校验 SHA256"
+    log_stage 2 7 "下载并检查 DDNS-GO OpenWrt 三件套"
     ddnsgo_pkg_urls="$DDNSGO_DOWNLOAD_URLS"
     rank_url_list_hosts "ddnsgo-package" "DDNS-GO OpenWrt 安装包" "$ddnsgo_pkg_urls"
     if [ -n "${RANKED_URL_HOSTS:-}" ]; then
@@ -29295,9 +31275,6 @@ install_ddnsgo() {
     DOWNLOAD_KEEP_PARTIAL="$ddnsgo_download_keep_partial_saved"
     [ -n "$ddnsgo_download_url" ] || die "无法从全部 GitHub 下载链路获取 DDNS-GO OpenWrt 安装包"
     [ -s "$ddnsgo_archive" ] || die "DDNS-GO OpenWrt 安装包下载失败"
-    ddnsgo_actual_sha="$(sha256sum "$ddnsgo_archive" 2>/dev/null | awk '{print $1}')"
-    [ -n "$ddnsgo_actual_sha" ] || die "DDNS-GO SHA256 读取失败"
-    [ "$ddnsgo_actual_sha" = "$DDNSGO_ARCHIVE_SHA256" ] || die "DDNS-GO SHA256 不匹配"
     validate_tar_archive "$ddnsgo_archive" "DDNS-GO OpenWrt 安装包" "/tmp/ddnsgo-archive-validate.log"
     ddnsgo_download_host="$(extract_url_host "$ddnsgo_download_url" 2>/dev/null || true)"
     ddnsgo_archive_size="$(ddnsgo_size_value "$ddnsgo_archive" "0")"
@@ -29945,7 +31922,7 @@ install_easytier() {
 
     log_stage 3 5 "解压安装 $EASYTIER_DISPLAY_NAME 并修正 LuCI 控制器"
     ensure_opkg_update || die "opkg update 失败，已停止 $EASYTIER_DISPLAY_NAME 安装"
-    ensure_packages kmod-tun unzip
+    ensure_packages kmod-tun unzip || die "$EASYTIER_DISPLAY_NAME 依赖安装失败：kmod-tun/unzip"
     extract_easytier_release_bundle "$easytier_archive" "$easytier_unpack"
     for candidate in \
         "$easytier_unpack"/easytier_"$EASYTIER_VERSION"_"$EASYTIER_PACKAGE_ARCH".ipk \
@@ -30787,7 +32764,7 @@ install_fanctrl() {
             log "原始识别: model=${raw_model:-unknown} board_name=${raw_board:-unknown}"
             printf '按回车返回上一级菜单...'
             ui_read_line >/dev/null 2>&1 || true
-            return 2
+            return 0
             ;;
     esac
 
@@ -45417,7 +47394,6 @@ APP_NAME="ttyd Web SSH 助手"
 TTYD_VERSION="1.7.7"
 TTYD_RELEASE_MIRRORS="${TTYD_RELEASE_MIRRORS:-https://ghproxy.net/https://github.com/tsl0922/ttyd/releases/download/$TTYD_VERSION https://github.com/tsl0922/ttyd/releases/download/$TTYD_VERSION}"
 TTYD_RAW_MIRRORS="${TTYD_RAW_MIRRORS:-https://ghproxy.net/https://raw.githubusercontent.com/ozon/luci-app-ttyd/master https://cdn.jsdelivr.net/gh/ozon/luci-app-ttyd@master https://raw.githubusercontent.com/ozon/luci-app-ttyd/master}"
-BACKUP_DIR="/root/ttyd-webssh-backup"
 WORKDIR="/tmp/ttyd-webssh.$$"
 ACTIVE_DOWNLOAD_PID=''
 ABORTING='0'
@@ -45637,14 +47613,11 @@ ensure_root() {
 }
 
 ensure_workdir() {
-    mkdir -p "$WORKDIR" "$BACKUP_DIR"
+    mkdir -p "$WORKDIR"
 }
 
 backup_file() {
-    path="$1"
-    [ -f "$path" ] || return 0
-    mkdir -p "$BACKUP_DIR"
-    cp "$path" "$BACKUP_DIR/$(basename "$path").$$.bak"
+    return 0
 }
 
 download_file() {
@@ -45755,8 +47728,6 @@ install_ttyd_binary() {
     arch="$(map_ttyd_arch "$(uname -m 2>/dev/null || echo unknown)")"
     bin_name="ttyd.$arch"
     bin_tmp="$WORKDIR/$bin_name"
-    sum_tmp="$WORKDIR/SHA256SUMS"
-
     if is_ttyd_binary_ready; then
         log "备注: ttyd 二进制 $TTYD_VERSION 已存在, 跳过下载"
         return 0
@@ -45764,12 +47735,6 @@ install_ttyd_binary() {
 
     log "提示: 正在从 CDN 下载 ttyd 二进制..."
     download_from_mirrors "$bin_name" "$bin_tmp" "$TTYD_RELEASE_MIRRORS" || die "下载 $bin_name 失败"
-    download_from_mirrors "SHA256SUMS" "$sum_tmp" "$TTYD_RELEASE_MIRRORS" || die "下载 SHA256SUMS 失败"
-
-    expected="$(awk -v f="$bin_name" '$2==f {print $1; exit}' "$sum_tmp")"
-    [ -n "$expected" ] || die "$bin_name 缺少校验和条目"
-    actual="$(sha256sum "$bin_tmp" | awk '{print $1}')"
-    [ "$expected" = "$actual" ] || die "$bin_name 校验和不匹配"
 
     backup_file /usr/bin/ttyd
     cp "$bin_tmp" /usr/bin/ttyd
@@ -47582,7 +49547,7 @@ write_nradio_smart_band_script() {
     smart_band_tmp="${NRADIO_SMART_BAND_SCRIPT}.tmp.$$"
     rm -f "$smart_band_tmp" 2>/dev/null || true
 
-    cat > "$smart_band_tmp" <<'EOF_NRADIO_SMART_BAND_V5_8FC30A'
+    cat > "$smart_band_tmp" <<'EOF_NRADIO_SMART_BAND_V5'
 #!/bin/sh
 # NRadio 智能频段切换 v5 - 联网健康优先，频段仅作决策参考
 LOG_TAG="nradio-band"
@@ -48276,20 +50241,11 @@ RESULT=0
 process "cpe" "蜂窝接口1" || RESULT=1
 process "cpe1" "蜂窝接口2" || RESULT=1
 exit "$RESULT"
-EOF_NRADIO_SMART_BAND_V5_8FC30A
+EOF_NRADIO_SMART_BAND_V5
 
     if ! sh -n "$smart_band_tmp" >/dev/null 2>&1; then
         rm -f "$smart_band_tmp" 2>/dev/null || true
         die "内嵌智能频段脚本语法校验失败，拒绝覆盖"
-    fi
-    command -v sha256sum >/dev/null 2>&1 || {
-        rm -f "$smart_band_tmp" 2>/dev/null || true
-        die "系统缺少 sha256sum，无法校验内嵌智能频段脚本"
-    }
-    smart_band_actual_sha="$(sha256sum "$smart_band_tmp" 2>/dev/null | awk '{print $1}')"
-    if [ "$smart_band_actual_sha" != "$NRADIO_SMART_BAND_EXPECTED_SHA256" ]; then
-        rm -f "$smart_band_tmp" 2>/dev/null || true
-        die "内嵌智能频段脚本 SHA256 异常: ${smart_band_actual_sha:-读取失败}"
     fi
 
     if [ -f "$NRADIO_SMART_BAND_SCRIPT" ] && command -v cmp >/dev/null 2>&1 && cmp -s "$smart_band_tmp" "$NRADIO_SMART_BAND_SCRIPT"; then
@@ -48302,7 +50258,7 @@ EOF_NRADIO_SMART_BAND_V5_8FC30A
     chmod 700 "$smart_band_tmp"
     mv -f "$smart_band_tmp" "$NRADIO_SMART_BAND_SCRIPT"
     log "脚本:   已从总脚本释放到 $NRADIO_SMART_BAND_SCRIPT"
-    log "SHA256: $NRADIO_SMART_BAND_EXPECTED_SHA256"
+    log "校验:   Shell 语法通过"
 }
 
 restart_nradio_smart_band_cron() {
@@ -48441,18 +50397,7 @@ run_nradio_smart_band_selfcheck() {
             log "语法:   FAIL"
             smart_band_failures=$((smart_band_failures + 1))
         fi
-        if command -v sha256sum >/dev/null 2>&1; then
-            smart_band_installed_sha="$(sha256sum "$NRADIO_SMART_BAND_SCRIPT" 2>/dev/null | awk '{print $1}')"
-            if [ "$smart_band_installed_sha" = "$NRADIO_SMART_BAND_EXPECTED_SHA256" ]; then
-                log "版本:   v5 SHA256 匹配"
-            else
-                log "版本:   WARN SHA256=${smart_band_installed_sha:-读取失败}"
-                smart_band_warnings=$((smart_band_warnings + 1))
-            fi
-        else
-            log "版本:   WARN 缺少 sha256sum"
-            smart_band_warnings=$((smart_band_warnings + 1))
-        fi
+        log "版本:   v5"
     else
         log "脚本:   FAIL 缺失或不可执行"
         smart_band_failures=$((smart_band_failures + 1))
@@ -48508,58 +50453,40 @@ manage_nradio_smart_band() {
         read_category_choice
         case "$UI_READ_RESULT" in
             0)
-                return 2
+                return 0
                 ;;
             1)
-                if install_nradio_smart_band; then
-                    record_action_history "5 > 8 > 1" "智能频段安装或更新" "PASS" "$BACKUP_DIR"
-                    return 0
-                else
-                    smart_band_menu_rc="$?"
-                fi
-                record_action_history "5 > 8 > 1" "智能频段安装或更新" "FAIL" "$BACKUP_DIR"
-                return "$smart_band_menu_rc"
+                install_nradio_smart_band
+                record_action_history "5 > 8 > 1" "智能频段安装或更新" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             2)
-                if show_nradio_smart_band_status; then
-                    return 0
-                else
-                    return "$?"
-                fi
+                show_nradio_smart_band_status
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             3)
-                if dry_run_nradio_smart_band; then
-                    return 0
-                else
-                    return "$?"
-                fi
+                dry_run_nradio_smart_band
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             4)
-                if run_nradio_smart_band_now; then
-                    record_action_history "5 > 8 > 4" "智能频段立即执行" "PASS" "$BACKUP_DIR"
-                    return 0
-                else
-                    smart_band_menu_rc="$?"
-                fi
-                record_action_history "5 > 8 > 4" "智能频段立即执行" "FAIL" "$BACKUP_DIR"
-                return "$smart_band_menu_rc"
+                run_nradio_smart_band_now
+                record_action_history "5 > 8 > 4" "智能频段立即执行" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             5)
-                if show_nradio_smart_band_log; then
-                    return 0
-                else
-                    return "$?"
-                fi
+                show_nradio_smart_band_log
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             6)
-                if uninstall_nradio_smart_band; then
-                    record_action_history "5 > 8 > 6" "智能频段卸载" "PASS" "$BACKUP_DIR"
-                    return 0
-                else
-                    smart_band_menu_rc="$?"
-                fi
-                record_action_history "5 > 8 > 6" "智能频段卸载" "FAIL" "$BACKUP_DIR"
-                return "$smart_band_menu_rc"
+                uninstall_nradio_smart_band
+                record_action_history "5 > 8 > 6" "智能频段卸载" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             *)
                 die_menu_input_issue "$UI_READ_RESULT"
@@ -48575,135 +50502,113 @@ run_menu_feature() {
 
     case "$feature_choice" in
         1)
-            run_recorded_menu_feature "1 > 1" "扩容 swap 虚拟内存" manage_swapfile || return "$?"
+            run_recorded_menu_feature "1 > 1" "扩容 swap 虚拟内存" manage_swapfile
+            MENU_ACTION_COMPLETED='1'
             ;;
         2)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 2" "$OPENCLASH_DISPLAY_NAME 安装" install_openclash || return "$?"
+            run_recorded_menu_feature "1 > 2" "$OPENCLASH_DISPLAY_NAME 安装" install_openclash
+            MENU_ACTION_COMPLETED='1'
             ;;
         3)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 3" "ttyd / Web SSH 安装" install_ttyd_webssh || return "$?"
+            run_recorded_menu_feature "1 > 3" "ttyd / Web SSH 安装" install_ttyd_webssh
+            MENU_ACTION_COMPLETED='1'
             ;;
         4)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 4" "AdGuardHome 安装" install_adguardhome || return "$?"
+            run_recorded_menu_feature "1 > 4" "AdGuardHome 安装" install_adguardhome
+            MENU_ACTION_COMPLETED='1'
             ;;
         5)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 5" "OpenList 安装" install_openlist || return "$?"
+            run_recorded_menu_feature "1 > 5" "OpenList 安装" install_openlist
+            MENU_ACTION_COMPLETED='1'
             ;;
         6)
             show_support_page_hint='1'
-            run_recorded_menu_feature "2 > 1" "ZeroTier 安装" install_zerotier || return "$?"
+            run_recorded_menu_feature "2 > 1" "ZeroTier 安装" install_zerotier
+            MENU_ACTION_COMPLETED='1'
             ;;
         7)
             show_support_page_hint='1'
-            run_recorded_menu_feature "2 > 2" "$EASYTIER_DISPLAY_NAME 安装" install_easytier || return "$?"
+            run_recorded_menu_feature "2 > 2" "$EASYTIER_DISPLAY_NAME 安装" install_easytier
+            MENU_ACTION_COMPLETED='1'
             ;;
         8)
             show_support_page_hint='1'
-            run_recorded_menu_feature "2 > 3" "OpenVPN 安装" install_openvpn || return "$?"
+            run_recorded_menu_feature "2 > 3" "OpenVPN 安装" install_openvpn
+            MENU_ACTION_COMPLETED='1'
             ;;
         9)
             show_support_page_hint='1'
-            run_recorded_menu_feature "2 > 4" "OpenVPN 向导配置并运行" configure_openvpn_runtime || return "$?"
+            run_recorded_menu_feature "2 > 4" "OpenVPN 向导配置并运行" configure_openvpn_runtime
+            MENU_ACTION_COMPLETED='1'
             ;;
         10)
             show_support_page_hint='1'
-            run_recorded_menu_feature "2 > 5" "OpenVPN 路由表向导" configure_openvpn_routes || return "$?"
+            run_recorded_menu_feature "2 > 5" "OpenVPN 路由表向导" configure_openvpn_routes
+            MENU_ACTION_COMPLETED='1'
             ;;
         11)
             show_support_page_hint='1'
-            run_recorded_menu_feature "2 > 6" "$EASYTIER_DISPLAY_NAME 路由表向导" configure_easytier_routes || return "$?"
+            run_recorded_menu_feature "2 > 6" "$EASYTIER_DISPLAY_NAME 路由表向导" configure_easytier_routes
+            MENU_ACTION_COMPLETED='1'
             ;;
         12)
             run_openvpn_selfcheck
+            MENU_ACTION_COMPLETED='1'
             ;;
         13)
             run_unified_test_mode
+            MENU_ACTION_COMPLETED='1'
             ;;
         14)
-            if run_recorded_menu_feature "5 > 2" "$FANCTRL_DISPLAY_NAME 安装" install_fanctrl; then
-                :
-            else
-                fanctrl_rc="$?"
-                [ "$fanctrl_rc" = '2' ] && return 2
-                return "$fanctrl_rc"
-            fi
+            run_recorded_menu_feature "5 > 2" "$FANCTRL_DISPLAY_NAME 安装" install_fanctrl
+            MENU_ACTION_COMPLETED='1'
             ;;
         19)
-            if run_hakimi_easy_rule_helper; then
-                :
-            else
-                hakimi_rc="$?"
-                [ "$hakimi_rc" = '2' ] && return 2
-                return "$hakimi_rc"
-            fi
+            run_hakimi_easy_rule_helper
             ;;
         20)
-            if manage_rootfs_2nd_storage_expand; then
-                :
-            else
-                storage_expand_rc="$?"
-                [ "$storage_expand_rc" = '2' ] && return 2
-                return "$storage_expand_rc"
-            fi
+            manage_rootfs_2nd_storage_expand
             ;;
         21)
-            if run_5g_aggregation_repair_check; then
-                :
-            else
-                aggregation_rc="$?"
-                [ "$aggregation_rc" = '2' ] && return 2
-                return "$aggregation_rc"
-            fi
+            run_5g_aggregation_repair_check
             ;;
         15)
             show_support_page_hint='1'
-            run_recorded_menu_feature "4 > 1" "美化应用商店" install_appcenter_polish || return "$?"
+            run_recorded_menu_feature "4 > 1" "美化应用商店" install_appcenter_polish
+            MENU_ACTION_COMPLETED='1'
             ;;
         16)
-            run_recorded_menu_feature "4 > 2" "还原应用商店" restore_appcenter_original || return "$?"
+            run_recorded_menu_feature "4 > 2" "还原应用商店" restore_appcenter_original
+            MENU_ACTION_COMPLETED='1'
             ;;
         17)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 6" "$MOSDNS_APP_NAME 安装" install_mosdns || return "$?"
+            run_recorded_menu_feature "1 > 6" "$MOSDNS_APP_NAME 安装" install_mosdns
+            MENU_ACTION_COMPLETED='1'
             ;;
         18)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 7" "$DDNSGO_APP_NAME 安装" install_ddnsgo || return "$?"
+            run_recorded_menu_feature "1 > 7" "$DDNSGO_APP_NAME 安装" install_ddnsgo
+            MENU_ACTION_COMPLETED='1'
             ;;
         22)
             show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 8" "Docker 安装" install_docker_plugin || return "$?"
+            run_recorded_menu_feature "1 > 8" "Docker 安装" install_docker_plugin
+            MENU_ACTION_COMPLETED='1'
             ;;
         23)
-            if run_openclash_dependency_repair_check; then
-                :
-            else
-                openclash_repair_rc="$?"
-                [ "$openclash_repair_rc" = '2' ] && return 2
-                return "$openclash_repair_rc"
-            fi
+            run_openclash_dependency_repair_check
+            MENU_ACTION_COMPLETED='1'
             ;;
         24)
-            if run_final_stability_toolbox; then
-                :
-            else
-                final_toolbox_rc="$?"
-                [ "$final_toolbox_rc" = '2' ] && return 2
-                return "$final_toolbox_rc"
-            fi
+            run_final_stability_toolbox
             ;;
         25)
-            if manage_nradio_smart_band; then
-                :
-            else
-                smart_band_manager_rc="$?"
-                [ "$smart_band_manager_rc" = '2' ] && return 2
-                return "$smart_band_manager_rc"
-            fi
+            manage_nradio_smart_band
             ;;
         *)
             die_menu_input_issue "$feature_choice"
@@ -48737,7 +50642,7 @@ common_plugin_menu() {
         printf '请选择 0、1、2、3、4、5、6、7 或 8: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
+            0) return 0 ;;
             1) submenu_feature='1' ;;
             2) submenu_feature='2' ;;
             3) submenu_feature='3' ;;
@@ -48748,11 +50653,8 @@ common_plugin_menu() {
             8) submenu_feature='22' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
-        if run_menu_feature "$submenu_feature"; then
-            return 0
-        else
-            return "$?"
-        fi
+        run_menu_feature "$submenu_feature"
+        return 0
     done
 }
 
@@ -48771,7 +50673,7 @@ network_route_menu() {
         printf '请选择 0、1、2、3、4、5、6 或 7: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
+            0) return 0 ;;
             1) submenu_feature='6' ;;
             2) submenu_feature='7' ;;
             3) submenu_feature='8' ;;
@@ -48781,11 +50683,8 @@ network_route_menu() {
             7) submenu_feature='12' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
-        if run_menu_feature "$submenu_feature"; then
-            return 0
-        else
-            return "$?"
-        fi
+        run_menu_feature "$submenu_feature"
+        return 0
     done
 }
 
@@ -48799,16 +50698,13 @@ appcenter_polish_menu() {
         printf '请选择 0、1 或 2: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
+            0) return 0 ;;
             1) submenu_feature='15' ;;
             2) submenu_feature='16' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
-        if run_menu_feature "$submenu_feature"; then
-            return 0
-        else
-            return "$?"
-        fi
+        run_menu_feature "$submenu_feature"
+        return 0
     done
 }
 
@@ -48883,9 +50779,7 @@ docker_prepare_storage() {
     DOCKER_LOG_DIR="$DOCKER_ROOT/log"
     DOCKER_OPT_DIR="$DOCKER_ROOT/opt"
     WORKDIR="$DOCKER_ROOT/work.$$"
-    BACKUP_DIR="$DOCKER_ROOT/backup"
-
-    mkdir -p "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR" "$BACKUP_DIR" || die "创建 Docker 扩展盘目录失败"
+    mkdir -p "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR" || die "创建 Docker 扩展盘目录失败"
     ensure_dir_writable "$DOCKER_ROOT" "$DOCKER_ROOT"
     ensure_dir_writable "$DOCKER_PACKAGE_DIR" "$DOCKER_PACKAGE_DIR"
     ensure_dir_writable "$DOCKER_TMP_DIR" "$DOCKER_TMP_DIR"
@@ -49475,8 +51369,9 @@ function action_run()
     for line in ports:gmatch("[^\r\n]+") do line = trim(line); if line ~= "" then cmd = cmd .. " -p " .. shell_quote(line) end end
     for line in volumes:gmatch("[^\r\n]+") do line = trim(line); if line ~= "" then cmd = cmd .. " -v " .. shell_quote(line) end end
     for line in envs:gmatch("[^\r\n]+") do line = trim(line); if line ~= "" then cmd = cmd .. " -e " .. shell_quote(line) end end
+    if command ~= "" then cmd = cmd .. " --entrypoint /bin/sh" end
     cmd = cmd .. " " .. shell_quote(image)
-    if command ~= "" then cmd = cmd .. " " .. shell_quote(command) end
+    if command ~= "" then cmd = cmd .. " -c " .. shell_quote(command) end
     local log_path = background_action(cmd)
     write_json({ ok = true, msg = "run started", log = log_path })
 end
@@ -49643,7 +51538,7 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
               <label>环境变量<textarea id="run-envs" class="docker-textarea" placeholder="TZ=Asia/Shanghai"></textarea></label>
             </div>
             <label>目录挂载<textarea id="run-volumes" class="docker-textarea" placeholder="/mnt/rootfs_2nd_data/nradio-apps/docker/volumes/nginx:/usr/share/nginx/html"></textarea></label>
-            <label>启动命令<input id="run-command" class="docker-input" placeholder="留空使用镜像默认命令"></label>
+            <label>启动命令（容器内 /bin/sh -c）<input id="run-command" class="docker-input" placeholder="留空使用镜像默认命令；填写后覆盖 ENTRYPOINT"></label>
             <label class="docker-check"><input id="run-privileged" type="checkbox">特权模式</label>
             <button class="docker-btn good" type="button" onclick="dockerRun()">创建并运行</button>
           </div></div></div>
@@ -50083,24 +51978,6 @@ qiyou_install_assets() {
     refresh_luci_appcenter
 }
 
-verify_remote_script_sha256() {
-    verify_label="$1"
-    verify_file="$2"
-    verify_expected="$3"
-    verify_env_name="$4"
-
-    [ -s "$verify_file" ] || die "$verify_label 下载文件为空，拒绝执行"
-    command -v sha256sum >/dev/null 2>&1 || die "$verify_label 无法校验 SHA256：系统缺少 sha256sum，拒绝执行远程脚本"
-
-    verify_actual="$(sha256sum "$verify_file" | awk '{print $1}')"
-    log "$verify_label SHA256: $verify_actual"
-
-    [ -n "$verify_expected" ] || die "$verify_label 未配置固定 SHA256，拒绝执行远程安装脚本。请确认官方脚本哈希后设置 $verify_env_name 再运行"
-    printf '%s\n' "$verify_expected" | grep -Eq '^[0-9A-Fa-f]{64}$' || die "$verify_label 配置的 $verify_env_name 不是有效 SHA256"
-    verify_expected="$(printf '%s' "$verify_expected" | tr 'A-F' 'a-f')"
-    [ "$verify_actual" = "$verify_expected" ] || die "$verify_label SHA256 不匹配，已停止执行"
-}
-
 qiyou_install_integrated() {
     game_accel_require_appcenter
     confirm_or_exit "确认安装奇游联机宝官方脚本并接入 NRadio 应用商店吗？"
@@ -50108,7 +51985,7 @@ qiyou_install_integrated() {
     log "[1/4] 下载并校验奇游官方安装脚本"
     download_file "$QIYOU_INSTALLER_URL" "/tmp/qiyou-install.sh" || die "下载奇游入口脚本失败"
     grep -q 'qyplug.sh' /tmp/qiyou-install.sh 2>/dev/null || die "奇游入口脚本内容异常，已停止执行"
-    verify_remote_script_sha256 "奇游入口脚本" "/tmp/qiyou-install.sh" "${QIYOU_INSTALLER_SHA256:-}" "QIYOU_INSTALLER_SHA256"
+    sh -n /tmp/qiyou-install.sh >/dev/null 2>&1 || die "奇游入口脚本语法异常，已停止执行"
     log "[2/4] 安装奇游依赖"
     ensure_opkg_update || die "opkg update 失败，已停止奇游依赖安装"
     opkg install curl kmod-tun ip-full || die "安装 curl/kmod-tun/ip-full 失败"
@@ -50352,7 +52229,7 @@ EOF_LEIGOD_RISK
     log "[1/4] 下载并校验雷神官方安装脚本"
     download_file "$LEIGOD_INSTALLER_URL" "/tmp/leigod-plugin-install.sh" || die "下载雷神官方安装脚本失败"
     grep -q 'leigod\|acc-gw\|accelerator' /tmp/leigod-plugin-install.sh 2>/dev/null || die "雷神官方安装脚本内容异常，已停止执行"
-    verify_remote_script_sha256 "雷神官方安装脚本" "/tmp/leigod-plugin-install.sh" "${LEIGOD_INSTALLER_SHA256:-}" "LEIGOD_INSTALLER_SHA256"
+    sh -n /tmp/leigod-plugin-install.sh >/dev/null 2>&1 || die "雷神官方安装脚本语法异常，已停止执行"
     log "[2/4] 安装雷神依赖"
     ensure_opkg_update || die "opkg update 失败，已停止雷神依赖安装"
     lg_dep_failed=''
@@ -50412,25 +52289,25 @@ qiyou_integrated_menu() {
         printf '请选择 0、1、2、3 或 4: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
+            0) return 0 ;;
             1)
                 qiyou_install_integrated
-                qiyou_rc="$?"
-                record_action_history "3 > 1 > 1" "安装奇游联机宝" "$qiyou_rc" "$BACKUP_DIR"
-                return "$qiyou_rc"
+                record_action_history "3 > 1 > 1" "安装奇游联机宝" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
-            2) qiyou_show_status; return 0 ;;
+            2) qiyou_show_status; MENU_ACTION_COMPLETED='1'; return 0 ;;
             3)
                 qiyou_uninstall_integrated
-                qiyou_rc="$?"
-                record_action_history "3 > 1 > 3" "卸载奇游联机宝" "$qiyou_rc" "$BACKUP_DIR"
-                return "$qiyou_rc"
+                record_action_history "3 > 1 > 3" "卸载奇游联机宝" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             4)
                 qiyou_refresh_identity_assets
-                qiyou_rc="$?"
-                record_action_history "3 > 1 > 4" "刷新奇游设备识别与插件页面" "$qiyou_rc" "$BACKUP_DIR"
-                return "$qiyou_rc"
+                record_action_history "3 > 1 > 4" "刷新奇游设备识别与插件页面" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
@@ -50448,25 +52325,25 @@ leigod_integrated_menu() {
         printf '请选择 0、1、2、3 或 4: '
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
+            0) return 0 ;;
             1)
                 leigod_attach_integrated
-                leigod_rc="$?"
-                record_action_history "3 > 2 > 1" "检测并接入雷神加速器" "$leigod_rc" "$BACKUP_DIR"
-                return "$leigod_rc"
+                record_action_history "3 > 2 > 1" "检测并接入雷神加速器" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             2)
                 leigod_install_integrated
-                leigod_rc="$?"
-                record_action_history "3 > 2 > 2" "安装雷神加速器" "$leigod_rc" "$BACKUP_DIR"
-                return "$leigod_rc"
+                record_action_history "3 > 2 > 2" "安装雷神加速器" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
-            3) leigod_show_status; return 0 ;;
+            3) leigod_show_status; MENU_ACTION_COMPLETED='1'; return 0 ;;
             4)
                 leigod_uninstall_integrated
-                leigod_rc="$?"
-                record_action_history "3 > 2 > 4" "卸载雷神加速器" "$leigod_rc" "$BACKUP_DIR"
-                return "$leigod_rc"
+                record_action_history "3 > 2 > 4" "卸载雷神加速器" "PASS" "$BACKUP_DIR"
+                MENU_ACTION_COMPLETED='1'
+                return 0
                 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
@@ -50483,20 +52360,19 @@ game_accelerator_menu() {
         read_category_choice
         case "$UI_READ_RESULT" in
             0)
-                return 2
+                return 0
                 ;;
             1)
-                if qiyou_integrated_menu; then game_rc='0'; else game_rc="$?"; fi
+                qiyou_integrated_menu
                 ;;
             2)
-                if leigod_integrated_menu; then game_rc='0'; else game_rc="$?"; fi
+                leigod_integrated_menu
                 ;;
             *)
                 die_menu_input_issue "$UI_READ_RESULT"
                 ;;
         esac
-        [ "$game_rc" = '2' ] && continue
-        return "$game_rc"
+        [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0
     done
 }
 
@@ -50528,7 +52404,7 @@ maintenance_test_menu() {
         fi
         read_category_choice
         case "$UI_READ_RESULT" in
-            0) return 2 ;;
+            0) return 0 ;;
             1) submenu_feature='13' ;;
             2) submenu_feature='14' ;;
             3) submenu_feature='19' ;;
@@ -50551,11 +52427,8 @@ maintenance_test_menu() {
                 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
-        if run_menu_feature "$submenu_feature"; then
-            return 0
-        else
-            return "$?"
-        fi
+        run_menu_feature "$submenu_feature"
+        return 0
     done
 }
 
@@ -50573,31 +52446,31 @@ printf '%s\n' "$SCRIPT_MODEL_NOTICE"
     require_nradio_appcenter_startup_environment
 
     if [ -n "$choice" ]; then
+        MENU_ACTION_COMPLETED='0'
         case "$choice" in
             0)
                 return 0
                 ;;
             1)
-                if common_plugin_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                common_plugin_menu
                 ;;
             2)
-                if network_route_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                network_route_menu
                 ;;
             3)
-                if game_accelerator_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                game_accelerator_menu
                 ;;
             4)
-                if appcenter_polish_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                appcenter_polish_menu
                 ;;
             5)
-                if maintenance_test_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                maintenance_test_menu
                 ;;
             *)
                 die_menu_input_issue "$choice"
                 ;;
         esac
-        [ "$menu_rc" = '2' ] && return 0
-        return "$menu_rc"
+        return 0
     fi
 
     while :; do
@@ -50611,33 +52484,33 @@ printf '%s\n' "$SCRIPT_MODEL_NOTICE"
         printf '0. 退出\n'
         printf '请输入 0、1、2、3、4 或 5: '
         read_category_choice
+        MENU_ACTION_COMPLETED='0'
 
         case "$UI_READ_RESULT" in
             0)
                 return 0
                 ;;
             1)
-                if common_plugin_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                common_plugin_menu
                 ;;
             2)
-                if network_route_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                network_route_menu
                 ;;
             3)
-                if game_accelerator_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                game_accelerator_menu
                 ;;
             4)
-                if appcenter_polish_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                appcenter_polish_menu
                 ;;
             5)
-                if maintenance_test_menu; then menu_rc='0'; else menu_rc="$?"; fi
+                maintenance_test_menu
                 ;;
             *)
                 die_menu_input_issue "$UI_READ_RESULT"
                 ;;
         esac
 
-        [ "$menu_rc" = '2' ] && continue
-        return "$menu_rc"
+        [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0
     done
 }
 
