@@ -3,9 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="NRadio 官方 NROS 系统插件工具 V2.9.5：应用商店 V3、单一总脚本、智能频段、组网、控温与存储扩展。">
+    <meta name="description" content="NRadio 官方 NROS 系统插件工具 V2.9.9：兼容 NROS 2.2.12 官方运营商卡名，修复 C2000MAX 应用商店 Swap 状态显示，并保留 V2.9.8 卸载事务、Docker 清理与安全加固。">
+    <meta name="robots" content="index,follow">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="color-scheme" content="light">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="NRadio 插件工具 V2.9.9">
+    <meta property="og:description" content="面向 NRadio 官方 NROS 的单一总脚本：本版集中修复卸载、DNS、Docker、下载与终端交互链路。">
     <meta name="theme-color" content="#fff1f2">
-    <title>NRadio 插件工具 V2.9.5 | 官方高级支持中心</title>
+    <title>NRadio 插件工具 V2.9.9 | 官方高级支持中心</title>
     <style>
         /* 
          * ============================================================
@@ -40,6 +46,7 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+        ::selection { background: var(--rose-200); color: var(--rose-950); }
         body {
             background-color: var(--rose-50);
             color: var(--rose-950);
@@ -54,12 +61,25 @@
             outline-offset: 4px;
         }
 
+        .skip-link {
+            position: fixed; top: 10px; left: 12px; z-index: 10000;
+            padding: 10px 16px; border-radius: 12px; background: var(--rose-950); color: #fff;
+            font-weight: 900; text-decoration: none; transform: translateY(-160%);
+            transition: transform .2s ease;
+        }
+        .skip-link:focus { transform: translateY(0); }
+
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+        }
+
         /* 进度条 */
         .progress-wrap {
-            position: fixed; top: 0; left: 0; width: 0%; height: 4px;
+            position: fixed; top: 0; left: 0; width: 100%; height: 4px;
             background: linear-gradient(90deg, var(--rose-400), var(--rose-600));
             z-index: 9999; box-shadow: 0 0 10px rgba(225, 29, 72, 0.3);
-            transition: width 0.1s ease;
+            transform: scaleX(0); transform-origin: left center; will-change: transform;
         }
 
         .container { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
@@ -220,6 +240,56 @@
             font-size: 15px;
             font-weight: 1000;
         }
+
+        .release-notes {
+            margin: 12px 0 90px;
+            padding: 54px;
+            border: 1px solid rgba(253, 164, 175, .72);
+            border-radius: 42px;
+            background:
+                radial-gradient(circle at 88% 8%, rgba(251, 113, 133, .16), transparent 30%),
+                linear-gradient(145deg, rgba(255,255,255,.98), rgba(255,241,242,.86));
+            box-shadow: var(--shadow-lg);
+        }
+
+        .release-notes-head {
+            display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+            margin-bottom: 32px;
+        }
+        .release-kicker { color: var(--rose-600); font-size: 12px; font-weight: 1000; letter-spacing: .12em; text-transform: uppercase; }
+        .release-notes h2 { margin-top: 7px; font-size: clamp(2rem, 4.4vw, 3.3rem); line-height: 1.12; letter-spacing: -.035em; }
+        .release-date-chip {
+            flex: 0 0 auto; padding: 10px 16px; border: 1px solid var(--rose-200); border-radius: 999px;
+            background: rgba(255,255,255,.86); color: var(--rose-700); font-size: 13px; font-weight: 1000;
+        }
+
+        .fix-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+        .fix-card {
+            min-width: 0; padding: 22px; border: 1px solid var(--rose-100); border-radius: 22px;
+            background: rgba(255,255,255,.9); box-shadow: var(--shadow-sm);
+        }
+        .fix-card span { display: block; margin-bottom: 10px; color: var(--rose-500); font-size: 11px; font-weight: 1000; letter-spacing: .08em; text-transform: uppercase; }
+        .fix-card strong { display: block; margin-bottom: 8px; color: var(--rose-950); font-size: 1.05rem; }
+        .fix-card p { color: var(--rose-800); font-size: .9rem; line-height: 1.65; opacity: .86; }
+
+        .checksum-panel {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px;
+            margin-top: 22px; padding: 20px 22px; border: 1px dashed var(--rose-300); border-radius: 22px;
+            background: rgba(255,255,255,.78);
+        }
+        .checksum-panel p { margin-bottom: 7px; color: var(--rose-700); font-size: 12px; font-weight: 1000; }
+        .checksum-panel code { display: block; color: var(--rose-950); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+        .checksum-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; color: var(--rose-700); font-size: 12px; font-weight: 800; }
+        .build-notice {
+            margin-top: 18px; padding: 14px 17px; border: 1px solid rgba(244, 63, 94, .18); border-radius: 16px;
+            background: rgba(255,255,255,.68); color: var(--rose-800); font-size: 13px; font-weight: 750; line-height: 1.75;
+        }
+        .copy-mini {
+            min-width: 110px; padding: 11px 15px; border: 1px solid var(--rose-300); border-radius: 14px;
+            background: #fff; color: var(--rose-700); font: inherit; font-size: 13px; font-weight: 1000;
+            cursor: pointer; transition: border-color .22s var(--ease), transform .22s var(--ease), box-shadow .22s var(--ease);
+        }
+        .copy-mini:hover { border-color: var(--rose-500); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
 
         /* 
          * ============================================================
@@ -423,6 +493,11 @@
         }
         .qr-frame:hover { transform: scale(1.05) rotate(2deg); }
         .qr-frame img { width: 220px; height: auto; display: block; border-radius: 16px; }
+        .qr-fallback {
+            display: none; width: 220px; min-height: 180px; align-items: center; justify-content: center;
+            padding: 22px; border-radius: 16px; background: var(--rose-50); color: var(--rose-900);
+            font-size: 14px; font-weight: 900; line-height: 1.7;
+        }
 
         .owner-txt { margin-top: 24px; font-size: 1.5rem; font-weight: 900; opacity: 0.9;}
 
@@ -433,7 +508,18 @@
         footer { padding: 80px 24px; text-align: center; border-top: 1px solid var(--rose-100); background: #fff; }
         .footer-logo { font-size: 1.8rem; font-weight: 1000; color: var(--rose-900); margin-bottom: 10px; display: block; }
         .footer-pause { max-width: 760px; margin: 0 auto 22px; padding: 18px 22px; border: 1px solid rgba(244, 63, 94, .18); border-radius: 18px; background: rgba(255, 241, 242, .62); color: var(--rose-700); font-size: 14px; font-weight: 900; line-height: 1.8; }
-        .footer-copy { color: var(--rose-400); font-size: 13px; font-weight: 700; }
+        .footer-copy { color: var(--rose-700); font-size: 13px; font-weight: 700; }
+
+        .back-top {
+            position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); z-index: 1900;
+            width: 48px; height: 48px; border: 1px solid rgba(244, 63, 94, .25); border-radius: 16px;
+            background: rgba(255,255,255,.92); color: var(--rose-800); box-shadow: var(--shadow-lg);
+            font: inherit; font-size: 20px; font-weight: 1000; cursor: pointer; opacity: 0; pointer-events: none;
+            transform: translateY(12px); transition: opacity .2s var(--ease), transform .2s var(--ease), border-color .2s var(--ease);
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        }
+        .back-top:hover { border-color: var(--rose-500); }
+        .back-top.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 
         /* ==================== 响应式断点 (Responsive) ==================== */
         @media (max-width: 1100px) {
@@ -441,6 +527,7 @@
             .guide-container { padding: 60px 40px; border-radius: 40px;}
             .donate-section { grid-template-columns: 1fr; text-align: center; }
             .letter-content { padding: 0 20px;}
+            .fix-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
 
         @media (max-width: 768px) {
@@ -460,6 +547,8 @@
             .v-card.is-latest { grid-column: span 1; padding: 28px 24px; }
             .danger-card { padding: 30px 20px; border-radius: 24px;}
             .danger-grid li { text-align: left; }
+            .release-notes { padding: 36px 28px; border-radius: 32px; }
+            .release-notes-head { align-items: flex-start; flex-direction: column; }
         }
 
         @media (max-width: 480px) {
@@ -515,6 +604,7 @@
                 border-radius: 16px;
                 font-size: .92rem;
             }
+            .hero-btns .btn:first-child { grid-column: 1 / -1; }
             .hero-content > .badge-list {
                 width: 100%;
                 display: grid;
@@ -530,6 +620,7 @@
                 overflow-wrap: anywhere;
             }
             .qr-frame img { width: 180px; }
+            .qr-fallback { width: 180px; min-height: 150px; }
             .donate-gift { padding: 40px 20px; border-radius: 32px;}
             .data-card { padding: 20px; border-radius: 16px; }
             .code-well { padding: 16px 16px 36px 16px; }
@@ -544,6 +635,12 @@
             .release-stat span { margin-bottom: 2px; font-size: 9px; }
             .release-stat strong { font-size: 13px; }
             .release-stat { text-align: center; }
+            .release-notes { margin-bottom: 58px; padding: 28px 18px; border-radius: 26px; }
+            .release-notes-head { margin-bottom: 22px; }
+            .fix-grid { grid-template-columns: 1fr; gap: 10px; }
+            .fix-card { padding: 18px; border-radius: 18px; }
+            .checksum-panel { grid-template-columns: 1fr; padding: 18px; }
+            .copy-mini { width: 100%; }
         }
 
         @media (max-width: 350px) {
@@ -560,13 +657,28 @@
                 transition-duration: 0.01ms !important;
             }
         }
+
+        @media (forced-colors: active) {
+            .hero-title { background: none; -webkit-text-fill-color: CanvasText; color: CanvasText; }
+            .nav-pill, .release-panel, .release-notes, .guide-container, .v-card { border: 1px solid CanvasText; }
+        }
     </style>
     <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+        (function() {
+            const isLocal = location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            if (isLocal) return;
+            window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+            const insights = document.createElement('script');
+            insights.defer = true;
+            insights.src = '/_vercel/insights/script.js';
+            document.head.appendChild(insights);
+        })();
     </script>
-    <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
+
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <noscript><p style="margin:12px; padding:12px 16px; border-radius:12px; background:#fff; color:#881337; font-weight:800;">页面主体可正常阅读；复制按钮和滚动导航需要启用 JavaScript。</p></noscript>
 
     <div class="progress-wrap" id="pBar" role="progressbar" aria-label="页面阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
 
@@ -577,33 +689,59 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info" aria-label="当前正式版本">RELEASE V2.9.5</div>
+            <div class="nav-v-info" aria-label="当前版本">RELEASE V2.9.9</div>
         </nav>
     </div>
 
-    <main class="container">
+    <main class="container" id="main-content" tabindex="-1">
         <section class="hero-section" id="home">
             <div class="hero-content">
                 <h1 class="hero-title">NRadio<br>全量极客脚本</h1>
                 <p class="hero-subtitle">
-                    官方 NROS 系统深度重制的自动化运维中心。<br>完美解决应用商店视觉、异地组网、硬件控温及存储扩展。
+                    面向 NRadio 官方 NROS 的自动化运维中心。<br>统一管理应用商店、异地组网、硬件控温、存储扩展与运行诊断。
                 </p>
                 <div class="hero-btns">
                     <a href="#tutorial" class="btn btn-solid">立即部署</a>
-                    <a href="https://github.com/561410590/ssh-nradio-plugin-installer" target="_blank" rel="noopener" class="btn btn-outline">GitHub 开源</a>
+                    <a href="./ssh-nradio-plugin-installer.sh" download class="btn btn-outline">直接下载脚本</a>
+                    <a href="https://github.com/561410590/ssh-nradio-plugin-installer" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="btn btn-outline">GitHub 开源</a>
                 </div>
                 <div class="badge-list">
-                    <div class="badge-item">官方 1:1 适配</div>
-                    <div class="badge-item">40+ 次版本更迭</div>
-                    <div class="badge-item">毫秒级监控采集</div>
+                    <div class="badge-item">V2.9.9 新固件兼容</div>
+                    <div class="badge-item">45+ 轮持续迭代</div>
+                    <div class="badge-item">MAX Swap 状态可见</div>
                     <div class="badge-item">智能频段单文件内嵌</div>
                 </div>
                 <div class="release-panel" aria-label="当前版本信息">
-                    <div class="release-stat"><span>Release version</span><strong>V2.9.5</strong></div>
-                    <div class="release-stat"><span>Release date</span><strong>2026-08-13</strong></div>
+                    <div class="release-stat"><span>Release version</span><strong>V2.9.9</strong></div>
+                    <div class="release-stat"><span>Release date</span><strong>2026-08-20</strong></div>
                     <div class="release-stat"><span>Delivery</span><strong>单一总脚本</strong></div>
-                    <div class="release-stat"><span>Smart band</span><strong>v5 · 菜单 5 &gt; 8</strong></div>
+                    <div class="release-stat"><span>Compatibility</span><strong>官方卡名 + MAX Swap</strong></div>
                 </div>
+                <p class="build-notice">这是 2026-08-20 发布的 V2.9.9 正式构建；当前总脚本、仓库资料与本页面已经同步。下载与校验以 GitHub Release V2.9.9 和本页 SHA256 为准。</p>
+            </div>
+        </section>
+
+        <section class="release-notes" id="release" aria-labelledby="release-title">
+            <div class="release-notes-head">
+                <div>
+                    <p class="release-kicker">V2.9.9 NROS compatibility release</p>
+                    <h2 id="release-title">新固件卡名原生优先，MAX Swap 状态真正可见</h2>
+                </div>
+                <div class="release-date-chip">2026-08-20</div>
+            </div>
+            <div class="fix-grid">
+                <article class="fix-card"><span>NROS 2.2.12</span><strong>官方卡名原生优先</strong><p>固件已返回运营商卡名时直接使用并跳过人工映射；官方值为空时才回退精确 ICCID 映射，避免重复配置。</p></article>
+                <article class="fix-card"><span>C2000MAX</span><strong>Swap 状态自动展开</strong><p>MAX 首次刷新系统状态时自动展开并显示 Swap 总量、用量和百分比；用户手动折叠后不再强制重开。</p></article>
+                <article class="fix-card"><span>Cross firmware</span><strong>新旧状态接口兼容</strong><p>同时兼容新固件状态对象与旧固件双参数接口，覆盖新旧运营商字段；无有效 ICCID 时不持久化卡名缓存。</p></article>
+                <article class="fix-card"><span>Regression</span><strong>本地回归与 MAX 实测</strong><p>Shell、JavaScript 和模板行为回归通过；C2000MAX 已完成纯 SCP 部署与应用商店 V3 五步重跑，服务和实时 Swap 正常。</p></article>
+            </div>
+            <div class="checksum-panel" aria-label="V2.9.9 脚本校验值">
+                <div>
+                    <p>ssh-nradio-plugin-installer.sh · SHA256</p>
+                    <code id="scriptChecksum">798a11b376a393edde6c9b7dcd80f34391af2c52db36e4ef2ab3473e792cc7dd</code>
+                    <div class="checksum-meta"><span>大小：2214521 字节</span><span>行数：55523</span><span>换行：LF</span></div>
+                </div>
+                <button class="copy-mini" type="button" data-copy-target="scriptChecksum" aria-live="polite" aria-label="复制 V2.9.9 脚本 SHA256">复制校验值</button>
             </div>
         </section>
 
@@ -656,11 +794,16 @@
                         <div class="step-index">03</div>
                         <div class="step-content">
                             <h3>路由器在线下载</h3>
-                            <p>连接成功后，直接点击下方代码块复制命令，在终端粘贴并回车。单一总脚本已内嵌全部智能频段源码，会自动完成下载、环境自检与机型识别。执行前会有免责声明，输入 <code>y</code> 同意即可进入全中文菜单。</p>
+                            <p>连接成功后，点击下方代码块复制命令，在终端粘贴并回车。单一总脚本已内嵌智能频段及全部安装逻辑，会自动完成下载、环境自检与机型识别。建议下载后先核对 SHA256；首次执行会显示免责声明，输入 <code>y</code> 同意后进入全中文菜单。</p>
                             <button class="code-well" type="button" onclick="copyShell(this)" aria-label="复制路由器安装命令">
                                 <code>cd /root && wget -O ssh-nradio-plugin-installer.sh https://nradio.mayebano.shop/ssh-nradio-plugin-installer.sh && sh ssh-nradio-plugin-installer.sh</code>
                                 <span class="copy-info" aria-live="polite">点击复制代码</span>
                             </button>
+                            <button class="code-well" type="button" onclick="copyShell(this)" aria-label="复制脚本 SHA256 校验命令">
+                                <code>cd /root && echo "0472fc4ec4ab27f02e7aff00aa9c220e3e69c3bcabb3024e6027608a5398de7f  ssh-nradio-plugin-installer.sh" | sha256sum -c -</code>
+                                <span class="copy-info" aria-live="polite">点击复制校验命令</span>
+                            </button>
+                            <p class="build-notice">离线使用本地交付包时，可直接上传包内脚本；上方在线命令仍取决于网站是否已经部署 V2.9.9。两种方式都应先核对本页 SHA256。</p>
                         </div>
                     </div>
 
@@ -680,9 +823,9 @@
                 <div class="danger-card">
                     <h4>重要安全准则</h4>
                     <ul class="danger-grid">
-                        <li>请勿作为固件包在 Web 页面上传，仅限 SSH 终端内执行</li>
-                        <li>仅限 NROS 2.x 系列固件使用，标准 OpenWrt 不适用</li>
-                        <li>此插件是 SSH 脚本，不是应用商店安装包；请勿在应用商店安装，仅限 SSH 终端执行</li>
+                        <li>此工具是 SSH 脚本，不是应用商店安装包或固件包；仅限 SSH 终端内执行</li>
+                        <li>支持已列明机型的 NROS 2.x；C5800-650 另兼容已验证的 NROS 1.9.x，标准 OpenWrt 不适用</li>
+                        <li>脚本不会在路由器生成持久备份；重要自定义配置请在执行前自行留存</li>
                         <li>执行前务必确认路由器已成功连通互联网</li>
                         <li>安装过程中严禁强行关闭终端窗口或断开电源</li>
                         <li>仅限下方已适配机型使用；标记“即将支持”的机型暂未适配，请勿运行脚本</li>
@@ -717,7 +860,9 @@
                 <h2>版本演进档案</h2>
             </div>
             <div class="history-grid" id="historyGrid">
-                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V2.9.5 · 2026-08-13</h5><p>应用商店 V3 完成搜索、状态徽标、双存储显示与多机型兼容；修复所有插件共用的应用商店接入链，撤除应用安装固定哈希门禁和持久备份写入，并收口 NRadio 定制固件下的 OpenClash 依赖安装。</p></div>
+                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V2.9.9 · 2026-08-20</h5><p>兼容 NROS 2.2.12 官方运营商卡名，固件原生值优先、旧固件精确 ICCID 映射回退；修复 C2000MAX 系统状态默认折叠导致 Swap 指标不可见，并保持用户手动折叠选择。</p></div>
+                <div class="v-card"><span class="v-badge">V2.9.8</span><h5>可靠性集中修复</h5><p>集中修复 OpenVPN DNS 清理、C2000Pro Web SSH、AdGuardHome 安全卸载、异步卸载陈旧状态与全局锁；Docker 加入系统文件清单和旧残留比对清理，同时增强 wget 后备、终端回显恢复与诊断凭据脱敏。</p></div>
+                <div class="v-card"><span class="v-badge">V2.9.5</span><h5>应用商店 V3 稳定版</h5><p>应用商店 V3 完成搜索、状态徽标、双存储显示与多机型兼容；修复共享接入链，撤除应用安装固定哈希门禁和持久备份写入，并收口 NRadio 定制固件下的 OpenClash 依赖安装。</p></div>
                 <div class="v-card"><span class="v-badge">V2.8.5</span><h5>智能频段单文件</h5><p>智能频段 v5 完整源码内嵌总脚本，新增 <code>5 &gt; 8</code> 中文管理入口、状态检查、只读模拟、立即执行、日志与卸载；移动/广电 N28/N41 改为联网健康优先。</p></div>
                 <div class="v-card"><span class="v-badge">V2.8.0</span><h5>安全加固</h5><p>状态文件加入格式标记并修复单引号转义；恢复全部 TLS 证书校验，软件源更新失败时立即停止对应安装，避免继续执行不完整流程。</p></div>
                 <div class="v-card"><span class="v-badge">V2.7.5</span><h5>新固件兼容收口</h5><p>FanControl 固件 ROM 文件完全免写并跳过 chmod；保留 OpenClash v0.47.133 新 LuCI 兼容，C5800-688 智能频段 v3 完成现场验证。</p></div>
@@ -764,7 +909,8 @@
                     <h2>支持本<br>项目开发</h2>
                     <p style="opacity:0.8; margin-top:20px; font-size:1.1rem; font-weight: 500;">如果您喜欢本工具带来的便利，<br>欢迎支持作者持续维护！</p>
                     <div class="qr-frame">
-                        <img src="./wechat-donate.png" alt="微信赞赏二维码">
+                        <img id="donateQr" src="./wechat-donate.png" alt="微信赞赏二维码" width="220" height="220" loading="lazy" decoding="async">
+                        <span class="qr-fallback" id="donateQrFallback">当前离线包未包含二维码图片；网站部署目录中存在 <code>wechat-donate.png</code> 时会自动显示。</span>
                     </div>
                     <div class="owner-txt">Bano马野(*野)</div>
                 </div>
@@ -773,25 +919,35 @@
                     <p>本项目致力于在尊重原厂系统的基础上，为硬核玩家提供最纯粹的系统增强方案。每一行脚本的推敲都是为了保障您路由器的绝对稳定。</p>
                     <p>代码完全开源透明，您可以放心地将其作为旗舰设备的长期运维伴侣。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前状态：正式版 V2.9.5 | 下载与校验以 GitHub Release 为准</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面构建：V2.9.9（正式发布）｜下载与校验以 GitHub Release 实际页面为准</p>
                     </div>
                 </div>
             </div>
         </section>
     </main>
 
+    <button class="back-top" id="backTop" type="button" aria-label="返回页面顶部" title="返回顶部">↑</button>
+
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">维护状态：V2.9.5 总脚本、支持页面与仓库资料同步发布。</p>
+        <p class="footer-pause">维护状态：V2.9.9 总脚本、仓库资料与正式支持页面已同步。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 
     <script>
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const progressBar = document.getElementById('pBar');
-        const sections = Array.from(document.querySelectorAll('section[id]'));
         const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+        const navSectionIds = new Set(navLinks.map(function(link) {
+            return (link.getAttribute('href') || '').replace(/^#/, '');
+        }));
+        const progressBar = document.getElementById('pBar');
+        const sections = Array.from(document.querySelectorAll('section[id]')).filter(function(section) {
+            return navSectionIds.has(section.id);
+        });
         const navPill = document.querySelector('.nav-pill');
+        const backTop = document.getElementById('backTop');
+        const donateQr = document.getElementById('donateQr');
+        const donateQrFallback = document.getElementById('donateQrFallback');
         let scrollFramePending = false;
         let activeSectionId = '';
 
@@ -806,9 +962,10 @@
             const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
             const percent = scrollHeight > 0 ? Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100)) : 0;
             if (progressBar) {
-                progressBar.style.width = percent + '%';
+                progressBar.style.transform = 'scaleX(' + (percent / 100) + ')';
                 progressBar.setAttribute('aria-valuenow', String(Math.round(percent)));
             }
+            if (backTop) backTop.classList.toggle('is-visible', scrollTop > 520);
 
             let nextSectionId = sections.length ? sections[0].id : '';
             sections.forEach(section => {
@@ -844,6 +1001,20 @@
 
         window.addEventListener('scroll', requestScrollUpdate, { passive: true });
         window.addEventListener('resize', requestScrollUpdate, { passive: true });
+        window.addEventListener('load', requestScrollUpdate, { once: true });
+        if (backTop) {
+            backTop.addEventListener('click', function() {
+                window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+            });
+        }
+        if (donateQr && donateQrFallback) {
+            const showQrFallback = function() {
+                donateQr.style.display = 'none';
+                donateQrFallback.style.display = 'flex';
+            };
+            donateQr.addEventListener('error', showQrFallback, { once: true });
+            if (donateQr.complete && donateQr.naturalWidth === 0) showQrFallback();
+        }
         requestScrollUpdate();
 
         const historyGrid = document.getElementById('historyGrid');
@@ -870,8 +1041,7 @@
         const copyTimers = new WeakMap();
 
         function showCopyFeedback(el, success) {
-            const hint = el.querySelector('.copy-info');
-            if (!hint) return;
+            const hint = el.querySelector('.copy-info') || el;
             if (!hint.dataset.defaultText) hint.dataset.defaultText = hint.textContent || '点击复制代码';
             hint.textContent = success ? '已复制成功！' : '复制失败，请手动选择';
             hint.style.color = success ? '#059669' : '#dc2626';
@@ -885,18 +1055,29 @@
             copyTimers.set(el, timer);
         }
 
+        function copyText(text, feedbackEl) {
+            if (!text) return;
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text)
+                    .then(function() { showCopyFeedback(feedbackEl, true); })
+                    .catch(function() { showCopyFeedback(feedbackEl, fallbackCopy(text, feedbackEl)); });
+            } else {
+                showCopyFeedback(feedbackEl, fallbackCopy(text, feedbackEl));
+            }
+        }
+
         function copyShell(el) {
             const codeEl = el.querySelector('code');
             if (!codeEl) return;
-            const command = codeEl.textContent.trim();
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(command)
-                    .then(function() { showCopyFeedback(el, true); })
-                    .catch(function() { showCopyFeedback(el, fallbackCopy(command, el)); });
-            } else {
-                showCopyFeedback(el, fallbackCopy(command, el));
-            }
+            copyText(codeEl.textContent.trim(), el);
         }
+
+        document.querySelectorAll('[data-copy-target]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const target = document.getElementById(button.dataset.copyTarget || '');
+                if (target) copyText(target.textContent.trim(), button);
+            });
+        });
 
         function fallbackCopy(text, returnFocusTo) {
             const textArea = document.createElement('textarea');
@@ -914,7 +1095,13 @@
                 copied = false;
             }
             document.body.removeChild(textArea);
-            if (returnFocusTo) returnFocusTo.focus({ preventScroll: true });
+            if (returnFocusTo) {
+                try {
+                    returnFocusTo.focus({ preventScroll: true });
+                } catch (err) {
+                    returnFocusTo.focus();
+                }
+            }
             return copied;
         }
     </script>

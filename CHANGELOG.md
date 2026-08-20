@@ -1,6 +1,23 @@
 # Changelog
 
-## V2.9.5 - 2026-08-13（本地开发）
+## V2.9.9 - 2026-08-20（正式发布）
+
+- `SCRIPT_VERSION` 更新为 `V2.9.9`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-20`。
+- 运营商与卡名兼容层升级为 `20260820-4`：NROS 2.2.12 固件原生 `sim_name` 优先，官方值为空时才回退精确 ICCID 映射；无有效 ICCID 时不跨页面持久化缓存。
+- 同时兼容新固件 `format_isp_info(cpeinfo)` 状态对象与旧固件 `format_isp_info(simIsp, isp)` 双参数接口，覆盖新旧运营商字段和双卡显示。
+- C2000MAX 应用商店 V3 首次收到 MAX 状态时自动展开系统状态并显示 Swap；用户手动折叠后，后续刷新不强制重开；非 MAX 默认行为不变。
+- C2000MAX 已完成纯 SCP 上传和 `4 > 1` 应用商店 V3 五步重跑，`appcenter`、`uhttpd` 与实时 Swap 数据正常。
+- 支持页、README、CHANGELOG、CHECKSUMS 和 Repository checks 同步到 V2.9.9；Repository checks 成功后发布同版本 tag 和 GitHub Release。
+
+## V2.9.8 - 2026-08-17（本地构建）
+
+- 补齐 OpenVPN DNS 清理与 C2000Pro Web SSH 变量，生成的通用卸载助手改为自包含事务链。
+- 网页卸载控制器和卸载助手共用全局锁，并记录状态、退出码、日志、PID 与开始时间；异常退出和超时任务可自动收口。
+- Docker 安装新增系统文件清单和校验算法；卸载只删除仍属于脚本且未被用户修改、未被其他软件包接管的文件，旧残留使用扩展盘原件安全比对。
+- 下载链兼容 BusyBox/GNU wget 并自动回退 `uclient-fetch`；隐藏输入在正常退出和中断时恢复回显，诊断脱敏覆盖 URL、Header、JSON 和更多凭据字段。
+- 智能频段当前运行代码为总脚本内嵌 v7；独立 `nradio-smart-band.sh` 不属于运行或公开发布依赖。
+
+## V2.9.5 - 2026-08-13（正式发布）
 
 - `SCRIPT_VERSION` 更新为 `V2.9.5`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-13`。
 - 修复应用商店 V3 共享接入链：V3 模板按 UCI `luci_module_route` 校验，旧版原厂模板继续使用 fallback 注入，避免 OpenClash 及其他插件在应用商店接入阶段误报缺少打开路由。

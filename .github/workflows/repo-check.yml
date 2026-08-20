@@ -25,10 +25,17 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V2.9.5 script state
+      - name: Verify V2.9.9 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V2.9.5"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-08-13"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V2.9.9"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-08-20"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260820-4"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NR_APP_STATUS_AUTO_EXPANDED = true' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '<span>Swap 虚拟内存</span>' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'docker_payload_manifest.v1' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '/var/run/nradio-plugin-assistant.lock' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^cleanup_openvpn_dnsmasq_domain_rules()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'uclient-fetch 后备下载' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^write_nradio_smart_band_script()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^manage_nradio_smart_band()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^run_nradio_smart_band_selfcheck()' 00-current/ssh-nradio-plugin-installer.sh
@@ -58,9 +65,7 @@ jobs:
           grep -q '/.picoclaw' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'initDebugLogAdapter' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-debug-empty-hint' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'if \[ -f "/rom$FANCTRL_CONTROLLER" \]' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'if \[ ! -f "/rom$FANCTRL_CONTROLLER" \]' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'Keep firmware-provided LuCI files entirely ROM-backed' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'Overlay the limited ROM controller so the dashboard can read the full runtime state' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C2000Pro' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^is_appcenter_v3_template()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '直接美化应用商店，不创建事务备份或文件备份' 00-current/ssh-nradio-plugin-installer.sh
@@ -86,11 +91,11 @@ jobs:
           sh -n 00-current/ssh-nradio-plugin-installer.sh
           bash -n 00-current/ssh-nradio-plugin-installer.sh
 
-      - name: Verify embedded smart band v5
+      - name: Verify embedded smart band v7
         run: |
-          test "$(grep -c 'EOF_NRADIO_SMART_BAND_V5' 00-current/ssh-nradio-plugin-installer.sh)" -eq 2
+          test "$(grep -c 'EOF_NRADIO_SMART_BAND_V7' 00-current/ssh-nradio-plugin-installer.sh)" -eq 2
           awk '
-            index($0, "EOF_NRADIO_SMART_BAND_V5") {
+            index($0, "EOF_NRADIO_SMART_BAND_V7") {
               if (capture) exit
               capture = 1
               next
@@ -98,25 +103,28 @@ jobs:
             capture { print }
           ' 00-current/ssh-nradio-plugin-installer.sh > /tmp/nradio-smart-band.sh
           test -s /tmp/nradio-smart-band.sh
-          grep -q '智能频段切换 v5' /tmp/nradio-smart-band.sh
+          grep -q '智能频段切换 v7' /tmp/nradio-smart-band.sh
           grep -q 'HEALTH_FAILURE_LIMIT=3' /tmp/nradio-smart-band.sh
           grep -q 'COOLDOWN=43200' /tmp/nradio-smart-band.sh
           grep -q 'RETRY_WINDOW=86400' /tmp/nradio-smart-band.sh
+          grep -q 'PREFERENCE_CONFIRM_SAMPLES=2' /tmp/nradio-smart-band.sh
+          grep -q 'PREFERENCE_MAX_DAILY=2' /tmp/nradio-smart-band.sh
           grep -q 'IPv4健康，保持不切换' /tmp/nradio-smart-band.sh
           grep -q 'process "cpe" "蜂窝接口1"' /tmp/nradio-smart-band.sh
           grep -q 'process "cpe1" "蜂窝接口2"' /tmp/nradio-smart-band.sh
           sh -n /tmp/nradio-smart-band.sh
-          if test -f 00-current/nradio-smart-band.sh; then
-            cmp -s /tmp/nradio-smart-band.sh 00-current/nradio-smart-band.sh
-          fi
 
       - name: Verify support page state
         run: |
-          grep -q '<title>NRadio 插件工具 V2.9.5 | 官方高级支持中心</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'RELEASE V2.9.5' 40-server-web/mayebano-support/index.html
-          grep -q 'V2.9.5 · 2026-08-13' 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件工具 V2.9.9 | 官方高级支持中心</title>' 40-server-web/mayebano-support/index.html
+          grep -q 'RELEASE V2.9.9' 40-server-web/mayebano-support/index.html
+          grep -q 'V2.9.9 · 2026-08-20' 40-server-web/mayebano-support/index.html
+          grep -q 'GitHub Release V2.9.9' 40-server-web/mayebano-support/index.html
+          grep -q '官方卡名原生优先' 40-server-web/mayebano-support/index.html
+          grep -q 'Swap 状态自动展开' 40-server-web/mayebano-support/index.html
           grep -q '单一总脚本' 40-server-web/mayebano-support/index.html
-          grep -q 'v5 · 菜单 5 &gt; 8' 40-server-web/mayebano-support/index.html
+          grep -q '智能频段单文件内嵌' 40-server-web/mayebano-support/index.html
+          grep -q '5 &gt; 8' 40-server-web/mayebano-support/index.html
           grep -q 'role="progressbar"' 40-server-web/mayebano-support/index.html
           grep -q 'aria-current="page"' 40-server-web/mayebano-support/index.html
           grep -q 'history-toggle' 40-server-web/mayebano-support/index.html
@@ -131,8 +139,8 @@ jobs:
           test "$(grep -c '即将支持 · 暂未适配' 40-server-web/mayebano-support/index.html)" -eq 2
           ! grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'NRadio_N5000' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '仅限 NROS 2.x 系列固件使用，标准 OpenWrt 不适用' 40-server-web/mayebano-support/index.html
-          grep -q '此插件是 SSH 脚本，不是应用商店安装包' 40-server-web/mayebano-support/index.html
+          grep -q 'C5800-650 另兼容已验证的 NROS 1.9.x，标准 OpenWrt 不适用' 40-server-web/mayebano-support/index.html
+          grep -q '此工具是 SSH 脚本，不是应用商店安装包或固件包' 40-server-web/mayebano-support/index.html
           ! grep -q 'NROS 1.9 / 2.x' 40-server-web/mayebano-support/index.html
           grep -q 'grid-template-columns: repeat(5, minmax(0, 1fr));' 40-server-web/mayebano-support/index.html
           grep -q '.hero-btns .btn' 40-server-web/mayebano-support/index.html
@@ -144,7 +152,7 @@ jobs:
           grep -q 'V2.6.0' 40-server-web/mayebano-support/index.html
           grep -q 'V2.5.0' 40-server-web/mayebano-support/index.html
           grep -q 'PicoClaw / 鲲鹏小龙虾' 40-server-web/mayebano-support/index.html
-          grep -q '下载与校验以 GitHub Release 为准' 40-server-web/mayebano-support/index.html
+          grep -q '以 GitHub Release 实际页面为准' 40-server-web/mayebano-support/index.html
           ! grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html
           grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
           grep -q '拦截保护' 40-server-web/mayebano-support/index.html
@@ -160,7 +168,7 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'Generated from local UTF-8 file contents on 2026-08-13' CHECKSUMS.txt
+          grep -q 'Generated from local UTF-8 file contents on 2026-08-20' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt
           records=0
           main_seen=0
@@ -188,9 +196,12 @@ jobs:
 
       - name: Verify repository docs
         run: |
-          grep -q '当前正式版本：`V2.9.5`' README.md
-          grep -q '当前公网正式版本：`V2.9.5`' README.md
+          grep -q '当前正式版本：`V2.9.9`' README.md
+          grep -q '当前公网正式版本：`V2.9.9`' README.md
           grep -q 'Repository checks 是正式发布门禁' README.md
+          grep -q '## V2.9.9 更新' README.md
+          grep -q '## V2.9.9 - 2026-08-20' CHANGELOG.md
+          grep -q '## V2.9.8 - 2026-08-17' CHANGELOG.md
           grep -q '## V2.9.5 更新' README.md
           grep -q '## V2.9.5 - 2026-08-13' CHANGELOG.md
           grep -q 'NRadio_N5000' README.md

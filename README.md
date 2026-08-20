@@ -2,15 +2,15 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前正式版本：`V2.9.5`（2026-08-13）
-- 当前公网正式版本：`V2.9.5`，下载与校验以 GitHub Releases 页面为准
-- 当前状态：`V2.9.5` 单一总脚本、支持页和仓库资料同步发布；Repository checks 是正式发布门禁。
+- 当前正式版本：`V2.9.9`（2026-08-20）
+- 当前公网正式版本：`V2.9.9`，下载与校验以 GitHub Releases 页面为准
+- 当前状态：`V2.9.9` 单一总脚本、支持页和仓库资料同步发布；Repository checks 是正式发布门禁。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-`V2.9.5` 已完成脚本、支持页、仓库资料与检查规则同步，并通过 GitHub `main` 工作流后创建同版本 tag 和 Release。
+`V2.9.9` 正式发布内容已完成脚本、支持页、仓库资料与检查规则同步；发布流程要求 GitHub `main` 的 Repository checks 成功后，才创建同版本 tag 和 Release。
 
 ## 适用设备
 
@@ -57,6 +57,23 @@ sh ssh-nradio-plugin-installer.sh
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、原厂还原 |
 | 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、C5800-688 智能频段管理 |
+
+## V2.9.9 更新
+
+- `SCRIPT_VERSION` 更新为 `V2.9.9`，发布日期 `2026-08-20`。
+- 兼容 NROS 2.2.12 官方运营商卡名：固件原生 `sim_name` 优先，官方值为空时才回退精确 ICCID 映射；无有效 ICCID 时不跨页面持久化卡名缓存。
+- 同时兼容新固件状态对象与旧固件双参数 `format_isp_info()`，覆盖新旧运营商字段和双卡显示。
+- 修复 C2000MAX 应用商店系统状态默认折叠导致 Swap 指标不可见：首次收到 MAX 状态自动展开，用户手动折叠后不再强制重开。
+- C2000MAX 已完成纯 SCP 上传和 `4 > 1` 应用商店 V3 五步重跑；`appcenter`、`uhttpd` 与实时 Swap 状态正常。
+- 支持页、README、CHANGELOG、CHECKSUMS 和 Repository checks 已同步到 V2.9.9 正式发布口径；Release 资产只包含单一总脚本与校验清单。
+
+## V2.9.8 更新
+
+- 补齐 OpenVPN DNS 清理与 C2000Pro Web SSH 变量，生成的通用卸载助手改为自包含事务链。
+- 网页卸载任务加入 PID、退出码、日志、全局锁和超时恢复，避免陈旧 `running` 阻塞后续操作。
+- Docker 安装与卸载加入系统文件清单、校验算法和旧残留安全比对；用户改过或被其他软件包接管的文件不删除。
+- 下载链兼容 BusyBox/GNU wget 并回退 `uclient-fetch`；隐藏输入在中断时恢复回显，诊断脱敏覆盖更多凭据格式。
+- 智能频段当前运行代码以内嵌 v7 为准；独立 `nradio-smart-band.sh` 不属于运行或公开发布依赖。
 
 ## V2.9.5 更新
 
@@ -184,6 +201,8 @@ sh ssh-nradio-plugin-installer.sh
 
 ## 版本记录
 
+- `V2.9.9`：NROS 2.2.12 官方卡名原生优先、旧固件 ICCID 回退、C2000MAX Swap 状态自动展开。
+- `V2.9.8`：卸载事务与全局锁、Docker 文件清单、wget 后备、终端回显恢复和诊断脱敏收口。
 - `V2.9.5`：应用商店 V3 共享接入修复、OpenClash 定制固件依赖收口、固定安装哈希与持久备份撤除、支持页手机适配。
 - `V2.8.5`：智能频段 v5 内嵌总脚本、`5 > 8` 中文管理、联网健康优先策略与支持页交互优化。
 - `V2.8.0`：状态文件注入防护、TLS 校验恢复、opkg 失败阻断，并完成 C5800-688 统一体检。
@@ -219,9 +238,9 @@ sh ssh-nradio-plugin-installer.sh
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V2.9.5 正式版总脚本，已内嵌智能频段 v5 |
-| `00-current/nradio-smart-band.sh` | 智能频段 v5 开发校验源；不是运行或发布依赖 |
-| `40-server-web/mayebano-support/index.html` | V2.9.5 正式支持页入口 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V2.9.9 正式版总脚本，已内嵌智能频段 v7 |
+| `00-current/nradio-smart-band.sh` | 历史独立开发校验源；当前运行代码以总脚本内嵌 v7 为准，不是运行或发布依赖 |
+| `40-server-web/mayebano-support/index.html` | V2.9.9 正式支持页入口 |
 | `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -248,15 +267,15 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 bash -n 00-current/ssh-nradio-plugin-installer.sh
 ```
 
-`CHECKSUMS.txt` 记录当前公开文件内容；独立 `nradio-smart-band.sh` 仅作为开发校验源，不进入公开文件清单。发布 GitHub Release 或更新公网前，需要重新计算并核对总脚本、支持页和 `vercel.json` 的 hash 与大小。
+`CHECKSUMS.txt` 记录当前正式发布文件内容；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布 GitHub Release 或更新公网前，需要重新计算并核对总脚本、支持页和 `vercel.json` 的 hash 与大小。
 
 ## 脚本校验
 
 当前脚本：
 
 ```text
-SHA256  f4f02c7aac9f2b9cf03cdeee0acc1cc35c19a8c08cfb71153fc210d74f5ab3a6
-Bytes   2087139
+SHA256  798a11b376a393edde6c9b7dcd80f34391af2c52db36e4ef2ab3473e792cc7dd
+Bytes   2214521
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
