@@ -3,7 +3,7 @@
 Generated from local file contents on 2026-08-29.
 
 ```text
-d2103d9d4ce2d2a77bb4b8c81f949402e15821e83177845fe1bf37aa01c2f9ac  2605408  00-current/ssh-nradio-plugin-installer.sh
+e746cbd0c79705cb316d65d8f690f170ac0eed98a814f8b3f7a72434aa1943f9  2603776  00-current/ssh-nradio-plugin-installer.sh
 9ee13011c28dcba8c302a8dfc174d99d6151f0b7a9986fb2a956cf39825d6e5a    63216  40-server-web/mayebano-support/index.html
 13485656cc0f72664db1fb0a82dc645d30e745c6d0158067e15a67f63f46565c     4319  40-server-web/mayebano-support/nradio-ssh-manager.ipk
 096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0    36616  40-server-web/mayebano-support/ai_studio_code.html

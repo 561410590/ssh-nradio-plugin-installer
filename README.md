@@ -296,8 +296,8 @@ bash -n 00-current/ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  d2103d9d4ce2d2a77bb4b8c81f949402e15821e83177845fe1bf37aa01c2f9ac
-Bytes   2605408
+SHA256  e746cbd0c79705cb316d65d8f690f170ac0eed98a814f8b3f7a72434aa1943f9
+Bytes   2603776
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

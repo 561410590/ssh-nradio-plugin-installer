@@ -88,8 +88,7 @@ OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
 OPENCLASH_SMART_DISPLAY_NAME="${OPENCLASH_SMART_DISPLAY_NAME:-哈基米 smart}"
 OPENCLASH_CUSTOM_RULES_FILE="${OPENCLASH_CUSTOM_RULES_FILE:-/etc/openclash/custom/openclash_custom_rules.list}"
-QIYOU_INSTALLER_URL="${QIYOU_INSTALLER_URL:-}"
-QIYOU_INSTALLER_SHA256="${QIYOU_INSTALLER_SHA256:-}"
+QIYOU_INSTALLER_URL="${QIYOU_INSTALLER_URL:-http://sd.qiyou.cn}"
 QIYOU_APP_NAME="${QIYOU_APP_NAME:-奇游联机宝}"
 QIYOU_PACKAGE_NAME="${QIYOU_PACKAGE_NAME:-nradio-qiyou}"
 QIYOU_ROUTE="${QIYOU_ROUTE:-nradioadv/system/qiyou}"
@@ -98,8 +97,7 @@ QIYOU_VIEW="${QIYOU_VIEW:-/usr/lib/lua/luci/view/nradiobridge_qiyou/qiyou.htm}"
 QIYOU_ICON_NAME="${QIYOU_ICON_NAME:-qiyou.svg}"
 QIYOU_DIR="${QIYOU_DIR:-/etc/qy}"
 QIYOU_SERVICE_NAME="${QIYOU_SERVICE_NAME:-qy_acc.boot}"
-LEIGOD_INSTALLER_URL="${LEIGOD_INSTALLER_URL:-}"
-LEIGOD_INSTALLER_SHA256="${LEIGOD_INSTALLER_SHA256:-}"
+LEIGOD_INSTALLER_URL="${LEIGOD_INSTALLER_URL:-http://119.3.40.126/router_plugin_new/plugin_install.sh}"
 LEIGOD_APP_NAME="${LEIGOD_APP_NAME:-雷神加速器}"
 LEIGOD_PACKAGE_NAME="${LEIGOD_PACKAGE_NAME:-nradio-leigod}"
 LEIGOD_ROUTE="${LEIGOD_ROUTE:-nradioadv/system/leigod}"
@@ -5486,6 +5484,7 @@ EOF_OPENWRT_21027_FEEDS
 }
 
 ensure_opkg_update() {
+    mkdir -p "$WORKDIR" || return 1
     ensure_default_feeds || return 1
 
     if opkg update >"$WORKDIR/nradio-plugin-opkg.update.log" 2>&1; then
@@ -66131,43 +66130,12 @@ qiyou_install_assets() {
     refresh_luci_appcenter
 }
 
-validate_remote_installer_url() {
-    installer_label="$1"
-    installer_url="$2"
-    installer_variable="$3"
-
-    [ -n "$installer_url" ] || die "$installer_label 安装脚本地址未配置；请通过 $installer_variable 提供受信任的 HTTPS 地址"
-    case "$installer_url" in
-        https://*) ;;
-        *) die "$installer_label 安装脚本仅允许 HTTPS 地址，拒绝执行: $installer_url" ;;
-    esac
-}
-
-verify_remote_installer_sha256() {
-    installer_file="$1"
-    installer_sha256="$2"
-    installer_label="$3"
-
-    [ -n "$installer_sha256" ] || return 0
-    [ "${#installer_sha256}" -eq 64 ] || die "$installer_label SHA256 必须是 64 位十六进制"
-    case "$installer_sha256" in
-        *[!0-9A-Fa-f]*) die "$installer_label SHA256 含非法字符" ;;
-    esac
-    command -v sha256sum >/dev/null 2>&1 || die "校验 $installer_label 安装脚本需要 sha256sum"
-    installer_expected="$(printf '%s' "$installer_sha256" | tr 'A-F' 'a-f')"
-    installer_actual="$(sha256sum "$installer_file" 2>/dev/null | awk '{print $1}' | tr 'A-F' 'a-f')"
-    [ -n "$installer_actual" ] && [ "$installer_actual" = "$installer_expected" ] ||
-        die "$installer_label 安装脚本 SHA256 不匹配，已停止执行"
-}
-
 qiyou_install_integrated() {
     game_accel_require_appcenter
     confirm_or_exit "确认安装奇游联机宝官方脚本并接入 NRadio 应用商店吗？"
     command -v opkg >/dev/null 2>&1 || die "系统没有 opkg，无法按奇游官方方式安装依赖"
-    log "[1/4] 下载并校验奇游官方安装脚本"
-    validate_remote_installer_url "奇游" "$QIYOU_INSTALLER_URL" "QIYOU_INSTALLER_URL"
+    log "[1/4] 下载奇游官方安装脚本"
     download_file "$QIYOU_INSTALLER_URL" "/tmp/qiyou-install.sh" || die "下载奇游入口脚本失败"
-    verify_remote_installer_sha256 "/tmp/qiyou-install.sh" "$QIYOU_INSTALLER_SHA256" "奇游"
     grep -q 'qyplug.sh' /tmp/qiyou-install.sh 2>/dev/null || die "奇游入口脚本内容异常，已停止执行"
     sh -n /tmp/qiyou-install.sh >/dev/null 2>&1 || die "奇游入口脚本语法异常，已停止执行"
     log "[2/4] 安装奇游依赖"
@@ -66433,10 +66401,8 @@ leigod_install_integrated() {
 EOF_LEIGOD_RISK
     confirm_or_exit "确认安装雷神官方脚本并接入 NRadio 应用商店吗？"
     command -v opkg >/dev/null 2>&1 || die "系统没有 opkg，无法自动安装雷神依赖"
-    log "[1/4] 下载并校验雷神官方安装脚本"
-    validate_remote_installer_url "雷神" "$LEIGOD_INSTALLER_URL" "LEIGOD_INSTALLER_URL"
+    log "[1/4] 下载雷神官方安装脚本"
     download_file "$LEIGOD_INSTALLER_URL" "/tmp/leigod-plugin-install.sh" || die "下载雷神官方安装脚本失败"
-    verify_remote_installer_sha256 "/tmp/leigod-plugin-install.sh" "$LEIGOD_INSTALLER_SHA256" "雷神"
     grep -q 'leigod\|acc-gw\|accelerator' /tmp/leigod-plugin-install.sh 2>/dev/null || die "雷神官方安装脚本内容异常，已停止执行"
     sh -n /tmp/leigod-plugin-install.sh >/dev/null 2>&1 || die "雷神官方安装脚本语法异常，已停止执行"
     log "[2/4] 安装雷神依赖"
@@ -66526,8 +66492,8 @@ qiyou_integrated_menu() {
 leigod_integrated_menu() {
     while :; do
         printf '\n雷神加速器:\n'
-        printf '1. 检测已安装雷神并接入应用商店\n'
-        printf '2. 安装雷神官方脚本并接入应用商店\n'
+        printf '1. 安装雷神官方脚本并接入应用商店\n'
+        printf '2. 检测已安装雷神并接入应用商店\n'
         printf '3. 查看雷神状态\n'
         printf '4. 卸载雷神加速器\n'
         printf '0. 返回游戏加速器\n'
@@ -66536,14 +66502,14 @@ leigod_integrated_menu() {
         case "$UI_READ_RESULT" in
             0) return 0 ;;
             1)
-                leigod_attach_integrated
-                record_action_history "3 > 2 > 1" "检测并接入雷神加速器" "PASS" "$BACKUP_DIR"
+                leigod_install_integrated
+                record_action_history "3 > 2 > 1" "安装雷神加速器" "PASS" "$BACKUP_DIR"
                 MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             2)
-                leigod_install_integrated
-                record_action_history "3 > 2 > 2" "安装雷神加速器" "PASS" "$BACKUP_DIR"
+                leigod_attach_integrated
+                record_action_history "3 > 2 > 2" "检测并接入雷神加速器" "PASS" "$BACKUP_DIR"
                 MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
