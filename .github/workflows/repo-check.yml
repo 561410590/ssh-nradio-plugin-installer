@@ -29,11 +29,11 @@ jobs:
       - name: Verify V3.0.0 script state
         run: |
           grep -q 'SCRIPT_VERSION="V3.0.0"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-08-29"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-08-30"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_HOME_TEMP_VERSION="20260827-3"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRADIO_CPEOPT_VERSION="20260828-3"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRADIO_CPEOPT_VERSION="20260829-2"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C8-788' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HC-WT9302' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HCMT7987-NAND' 00-current/ssh-nradio-plugin-installer.sh
@@ -43,8 +43,8 @@ jobs:
           grep -q 'appcenter-open-mobile-style' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio AI runtime compatibility v3' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "'map,firmware,cache'" 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '^install_nradio_cpe_connection_optimization()' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '5G 连接优化安装或更新（全部 NROS）' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^install_nradio_cpe_connection_monitoring()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '5G 连接监听（仅限 5800 系列）' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^install_openwrt_luci_8080()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'OpenWrt 原版 LuCI（8080）安装或更新' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'SIM 状态已变化或无法确认' 00-current/ssh-nradio-plugin-installer.sh
@@ -63,9 +63,12 @@ jobs:
           grep -q '^state_file_is_v2()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "NRADIO_STATE_FORMAT='2'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'opkg update 失败，已停止' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'curl -k' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q -- '--insecure' 00-current/ssh-nradio-plugin-installer.sh
-          ! grep -q 'wget --no-check-certificate' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'curl -kfL --retry 3' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'wget --no-check-certificate -q' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'uclient-fetch --no-check-certificate -q' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "uci -q set ttyd.default.credential='0'" 00-current/ssh-nradio-plugin-installer.sh
+          ! grep -q 'procd_append_param command --credential' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-openclash-fallback' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'nr-openclash-wide-css' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'window.top.location.href = "/cgi-bin/luci/admin/services/openclash/client";' 00-current/ssh-nradio-plugin-installer.sh
@@ -175,17 +178,19 @@ jobs:
           sh -n /tmp/nradio-cpeopt/etc/cpetools/huawei.sh
           grep -q '/var/log/nradio-cpe-dial.log' /tmp/nradio-cpeopt/usr/bin/cpetools.sh
           grep -q '/var/log/nradio-cpe-dial.log' /tmp/nradio-cpeopt/usr/bin/cpesel.sh
-          grep -q 'version = "20260828-3"' /tmp/nradio-cpeopt/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua
-          grep -q 'data-nradio-cpeopt="20260828-3"' /tmp/nradio-cpeopt/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm
+          grep -q 'version = "20260829-2"' /tmp/nradio-cpeopt/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua
+          grep -q 'data-nradio-cpeopt="20260829-2"' /tmp/nradio-cpeopt/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm
           grep -q '<svg' /tmp/nradio-cpeopt/www/luci-static/nradio/images/icon/cpeopt.svg
-          ! grep -q 'HC-WT9126' /tmp/nradio-cpeopt/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua
+          grep -q 'HC-WT9120' /tmp/nradio-cpeopt/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua
+          grep -q 'HC-WT9126' /tmp/nradio-cpeopt/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua
 
       - name: Verify support page state
         run: |
           grep -q '<title>NRadio 插件脚本 V3.0.0 | 支持页</title>' 40-server-web/mayebano-support/index.html
           grep -q 'aria-label="当前版本">V3.0.0' 40-server-web/mayebano-support/index.html
-          grep -q 'V3.0.0 / 2026-08-29' 40-server-web/mayebano-support/index.html
-          grep -q '全机型 5G 连接优化' 40-server-web/mayebano-support/index.html
+          grep -q 'V3.0.0 / 2026-08-30' 40-server-web/mayebano-support/index.html
+          grep -q '5800 系列 5G 连接监听' 40-server-web/mayebano-support/index.html
+          grep -q 'TTYD / Web SSH 免登录' 40-server-web/mayebano-support/index.html
           grep -q '智能频段 v7' 40-server-web/mayebano-support/index.html
           grep -q 'OpenWrt LuCI 8080' 40-server-web/mayebano-support/index.html
           grep -q 'href="/ssh-nradio-plugin-installer.sh"' 40-server-web/mayebano-support/index.html
@@ -247,7 +252,7 @@ jobs:
       - name: Verify checksum record
         run: |
           grep -q 'NRadio V3.0.0 release checksums' CHECKSUMS.txt
-          grep -q 'Generated from local file contents on 2026-08-29' CHECKSUMS.txt
+          grep -q 'Generated from local file contents on 2026-08-30' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt
           records=0
           main_seen=0
@@ -282,6 +287,7 @@ jobs:
           grep -q '当前公网正式版本：`V3.0.0`' README.md
           grep -q '## V3.0.0 更新' README.md
           grep -q '## V3.0.0 - 2026-08-29' CHANGELOG.md
+          grep -q '## V3.0.0 - 2026-08-30' CHANGELOG.md
           grep -q 'NRadio_C8-788' README.md
           grep -q 'NRadio_C8-788' CHANGELOG.md
           grep -q 'nradio-ssh-manager.ipk' README.md

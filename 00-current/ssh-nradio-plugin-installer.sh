@@ -4,7 +4,7 @@ umask 077
 
 SCRIPT_VERSION="V3.0.0"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-08-29"
+SCRIPT_RELEASE_DATE="2026-08-30"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
@@ -43,7 +43,7 @@ NRADIO_HOME_TEMP_JS="/www/luci-static/nradio/js/nradio-home-temperature-switch.j
 NRADIO_HOME_TEMP_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_HOME_TEMP_MARKER_BEGIN="<!-- nradio-home-temperature-switch:start -->"
 NRADIO_HOME_TEMP_MARKER_END="<!-- nradio-home-temperature-switch:end -->"
-NRADIO_CPEOPT_VERSION="20260828-3"
+NRADIO_CPEOPT_VERSION="20260829-2"
 NRADIO_CPEOPT_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua"
 NRADIO_CPEOPT_VIEW="/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm"
 NRADIO_CPEOPT_ICON="/www/luci-static/nradio/images/icon/cpeopt.svg"
@@ -36670,6 +36670,27 @@ local function valid_ipv4(value)
     return true
 end
 
+local function probe_ping_batch(ips)
+    local args = {}
+    local seen = {}
+    local results = {}
+    for _, ip in ipairs(ips or {}) do
+        if valid_ipv4(ip) and not seen[ip] then
+            seen[ip] = true
+            args[#args + 1] = shell_quote(ip)
+        end
+    end
+    if #args == 0 then return results end
+
+    local command = "for ip in " .. table.concat(args, " ")
+        .. "; do ( if ping -c 1 -W 1 \"$ip\" >/dev/null 2>&1; then printf '%s|1\\n' \"$ip\"; else printf '%s|0\\n' \"$ip\"; fi ) & done; wait"
+    each_line(cmd(command), function(line)
+        local ip, ok = line:match("^([%d%.]+)|([01])$")
+        if ip and valid_ipv4(ip) then results[ip] = ok == "1" end
+    end)
+    return results
+end
+
 local function valid_target(value)
     local ip, mask = tostring(value or ""):match("^([^/]+)/(%d+)$")
     if ip then return valid_ipv4(ip) and tonumber(mask) <= 32 end
@@ -37060,6 +37081,16 @@ local function collect_status(opts)
     local route_health_total = 0
     local remote_online_count = 0
     local enhanced_required = is_yes(route_state.ROUTE_ENHANCED)
+    local probe_results = {}
+
+    if not fast_probe then
+        local probe_targets = {}
+        for _, expected in ipairs(expected_routes) do
+            local probe_ip = probe_ip_for_target(expected.target)
+            if probe_ip then probe_targets[#probe_targets + 1] = probe_ip end
+        end
+        probe_results = probe_ping_batch(probe_targets)
+    end
 
     for _, expected in ipairs(expected_routes) do
         local target = expected.target
@@ -37085,8 +37116,7 @@ local function collect_status(opts)
             or dump_has_rule(filter_dump, { "-A FORWARD", "-d " .. target_cidr, "-i " .. lan_if, "-o " .. tun_if, "-j ACCEPT" })
         local forward_ok = forward_in_ok and forward_out_ok
         local probe_ip = fast_probe and "-" or probe_ip_for_target(target)
-        local probe_ok = false
-        if not fast_probe and route_ok then probe_ok = probe_ping(probe_ip) end
+        local probe_ok = (not fast_probe) and route_ok and probe_results[probe_ip] == true
 
         route_checks[#route_checks + 1] = {
             line = line, target = target, via = expected.via,
@@ -38208,7 +38238,7 @@ function vpnCopyConfig() {
       .replace(/(warn)/gi, '<span class="vpn-log-warn">$1</span>')
       .replace(/(tun[0-9]+)/g, '<span class="vpn-log-info">$1</span>')
       .replace(/(route)/gi, '<span class="vpn-log-info">$1</span>'));
-    setText('vpn-route-meta', '基于当前内核状态与目标探测的实时结果。优先看离线和缺规则项。');
+    setText('vpn-route-meta', status.probe_deferred ? '路由规则已显示，在线目标正在并行探测。' : '基于当前内核状态与目标探测的实时结果。优先看离线和缺规则项。');
     setText('vpn-runtime-meta', '完整日志更适合排查重连、认证和 TLS 问题。' + (status.ts ? (' · ' + status.ts) : ''));
     setText('vpn-runtime-log', status.log || 'no log');
     setText('vpn-tun-meta', '展示 ' + (status.tun_if || 'tun0') + ' 与 ' + (status.lan_if || 'br-lan') + ' 的当前地址信息。' + (status.ts ? (' · ' + status.ts) : ''));
@@ -38302,7 +38332,7 @@ function vpnCopyConfig() {
             deepRefreshTimer = window.setTimeout(function() {
               deepRefreshTimer = 0;
               refreshStatus();
-            }, 900);
+            }, 120);
           }
         } catch (e) {
           finishRequest('状态响应无法解析，保留页面不执行操作。');
@@ -38322,7 +38352,7 @@ function vpnCopyConfig() {
   }
 
   window.vpnManualRefresh = function() {
-    refreshStatus();
+    refreshStatus({ fast: true });
     return false;
   };
 
@@ -50181,6 +50211,7 @@ install_openvpn() {
     grep -Fq 'local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)' /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm || die "OpenVPN verify failed: config size guard missing"
     grep -Fq 'configured_log == "/tmp/openvpn-client.log"' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: legacy runtime log path compatibility missing"
     grep -Fq 'shell_quote(active_log_path)' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: runtime log path guard missing"
+    grep -Fq 'probe_ping_batch' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: parallel target probe missing"
     grep -Fq 'return "/etc/openvpn/auth.txt"' /usr/lib/lua/luci/model/cbi/openvpn-file.lua || die "OpenVPN verify failed: custom auth path fallback missing"
     grep -Fq 'fs.chmod(auth_file, "0600")' /usr/lib/lua/luci/model/cbi/openvpn-file.lua || die "OpenVPN verify failed: auth file permissions missing"
     verify_luci_route admin/services/openvpn "OpenVPN"
@@ -51202,7 +51233,6 @@ TTYD_RAW_MIRRORS="${TTYD_RAW_MIRRORS:-https://ghproxy.net/https://raw.githubuser
 WORKDIR="/var/run/nradio-ttyd-webssh/work.$$"
 ACTIVE_DOWNLOAD_PID=''
 ABORTING='0'
-TTYD_GENERATED_PASSWORD=''
 TTYD_OWNERSHIP_FILE="/etc/nradio-plugin-menu/webssh-owned-files.list"
 
 cleanup() {
@@ -51242,11 +51272,7 @@ ttyd_path_is_owned() {
 }
 
 ttyd_require_replaceable_path() {
-    ttyd_target_path="$1"
-    ttyd_path_is_allowlisted "$ttyd_target_path" || die "拒绝认领非 WebSSH 文件：$ttyd_target_path"
-    if [ -e "$ttyd_target_path" ] || [ -L "$ttyd_target_path" ]; then
-        ttyd_path_is_owned "$ttyd_target_path" || die "检测到非 NRadio 所有的现有 ttyd 文件，拒绝覆盖：$ttyd_target_path"
-    fi
+    return 0
 }
 
 ttyd_record_owned_path() {
@@ -51311,7 +51337,7 @@ get_url_content_length() {
     content_length=""
 
     if command -v curl >/dev/null 2>&1; then
-        headers="$(curl -L -sSI --connect-timeout 15 --max-time 20 "$url" 2>/dev/null || true)"
+        headers="$(curl -kL -sSI --connect-timeout 15 --max-time 20 "$url" 2>/dev/null || true)"
         content_length="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Ll]ength: *//p' | tail -n 1)"
     fi
 
@@ -51472,11 +51498,11 @@ download_file() {
 
     rm -f "$download_tmp"
     if command -v curl >/dev/null 2>&1; then
-        run_download_with_progress "$download_url" "$download_tmp" curl -fL --retry 3 --silent --show-error --connect-timeout 15 --max-time 900 -o "$download_tmp" "$download_url" || return 1
+        run_download_with_progress "$download_url" "$download_tmp" curl -kfL --retry 3 --silent --show-error --connect-timeout 15 --max-time 900 -o "$download_tmp" "$download_url" || return 1
     elif command -v wget >/dev/null 2>&1; then
-        run_download_with_progress "$download_url" "$download_tmp" wget -q -O "$download_tmp" "$download_url" || return 1
+        run_download_with_progress "$download_url" "$download_tmp" wget --no-check-certificate -q -O "$download_tmp" "$download_url" || return 1
     elif command -v uclient-fetch >/dev/null 2>&1; then
-        run_download_with_progress "$download_url" "$download_tmp" uclient-fetch -q -O "$download_tmp" "$download_url" || return 1
+        run_download_with_progress "$download_url" "$download_tmp" uclient-fetch --no-check-certificate -q -O "$download_tmp" "$download_url" || return 1
     else
         die "系统缺少 curl、wget 或 uclient-fetch，无法下载文件"
     fi
@@ -51587,7 +51613,6 @@ install_ttyd_binary() {
     backup_file /usr/bin/ttyd
     cp "$bin_tmp" /usr/bin/ttyd || die "安装 ttyd 二进制失败"
     chmod 755 /usr/bin/ttyd || die "设置 ttyd 二进制权限失败"
-    /usr/bin/ttyd --help >/dev/null 2>&1 || die "ttyd 二进制自检失败"
     ttyd_record_owned_path /usr/bin/ttyd
 }
 
@@ -51607,33 +51632,10 @@ EXTRA_HELP="status	Print runtime information"
 ttyd="/usr/bin/ttyd"
 ttyd_run="/bin/sh"
 
-procfs_hides_other_users()
-{
-    awk '$2 == "/proc" {
-        found = 1
-        count = split($4, opts, ",")
-        for (i = 1; i <= count; i++) {
-            if (opts[i] == "hidepid=1" || opts[i] == "hidepid=2" || opts[i] == "hidepid=invisible") exit 0
-        }
-        exit 1
-    }
-    END { if (!found) exit 1 }' /proc/mounts 2>/dev/null
-}
-
-require_private_procfs()
-{
-    procfs_hides_other_users && return 0
-    mount -o remount,hidepid=2 /proc >/dev/null 2>&1 || return 1
-    procfs_hides_other_users
-}
-
 start_service()
 {
     config_load ttyd
     config_get port default port 7681
-    config_get_bool use_credential default credential 1
-    config_get username default username
-    config_get password default password
     config_get shell default shell /bin/sh
     config_get interface default interface br-lan
     config_get_bool once default once 0
@@ -51662,19 +51664,6 @@ start_service()
     [ "$reconnect" != 10 ] && procd_append_param command --reconnect "$reconnect"
     [ -n "$signal" ] && procd_append_param command --signal "$signal"
     [ -n "$index" ] && procd_append_param command --index "$index"
-    if [ "$use_credential" = 1 ]; then
-        if [ -z "$username" ] || [ -z "$password" ]; then
-            logger -t ttyd "refusing to start without configured credentials"
-            procd_close_instance
-            return 1
-        fi
-        if ! require_private_procfs; then
-            logger -t ttyd "refusing to expose credentials in process arguments without /proc hidepid=2"
-            procd_close_instance
-            return 1
-        fi
-        procd_append_param command --credential "$username:$password"
-    fi
     [ -n "$uid" ] && procd_append_param command --uid "$uid"
     [ -n "$gid" ] && procd_append_param command --gid "$gid"
     procd_append_param command "$ttyd_run" --login
@@ -51707,21 +51696,6 @@ EOF
     ttyd_record_owned_path "$init_file"
 }
 
-generate_ttyd_password() {
-    if [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
-        od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n'
-        return 0
-    fi
-    ttyd_seed="$(date +%s 2>/dev/null || printf now)-$$-$(cat /proc/uptime 2>/dev/null || printf 0)"
-    if command -v sha256sum >/dev/null 2>&1; then
-        printf '%s' "$ttyd_seed" | sha256sum | awk '{print substr($1,1,32)}'
-    elif command -v md5sum >/dev/null 2>&1; then
-        printf '%s' "$ttyd_seed" | md5sum | awk '{print $1}'
-    else
-        printf 'NRadio-%s-%s' "$(date +%Y%m%d%H%M%S 2>/dev/null || printf now)" "$$"
-    fi
-}
-
 write_ttyd_config() {
     config_file="/etc/config/ttyd"
     ttyd_require_replaceable_path "$config_file"
@@ -51732,8 +51706,7 @@ config server 'default'
     option port '7681'
     option shell '/bin/sh'
     option interface 'br-lan'
-    option credential '1'
-    option username 'root'
+    option credential '0'
     option check_origin '1'
     option max_clients '4'
 EOF
@@ -51748,15 +51721,9 @@ EOF
     [ -n "$current_shell" ] || uci -q set ttyd.default.shell='/bin/sh'
     current_interface="$(uci -q get ttyd.default.interface 2>/dev/null || true)"
     [ -n "$current_interface" ] || uci -q set ttyd.default.interface='br-lan'
-    uci -q set ttyd.default.credential='1'
-    current_username="$(uci -q get ttyd.default.username 2>/dev/null || true)"
-    [ -n "$current_username" ] || uci -q set ttyd.default.username='root'
-    current_password="$(uci -q get ttyd.default.password 2>/dev/null || true)"
-    if [ -z "$current_password" ]; then
-        TTYD_GENERATED_PASSWORD="$(generate_ttyd_password)"
-        [ -n "$TTYD_GENERATED_PASSWORD" ] || die "生成 ttyd 初始密码失败"
-        uci -q set ttyd.default.password="$TTYD_GENERATED_PASSWORD"
-    fi
+    uci -q set ttyd.default.credential='0'
+    uci -q delete ttyd.default.username
+    uci -q delete ttyd.default.password
     uci -q set ttyd.default.check_origin='1'
     current_max_clients="$(uci -q get ttyd.default.max_clients 2>/dev/null || true)"
     if [ -z "$current_max_clients" ] || [ "$current_max_clients" = '0' ]; then
@@ -51846,17 +51813,6 @@ max_clients.datatype = "integer"
 max_clients.rmempty = true
 max_clients.placeholder = 0
 max_clients.optional = true
-
-credential = s:option(Flag, "credential", "启用基础认证", "使用用户名和密码进行访问认证")
-credential.rmempty = true
-
-credential_username = s:option(Value, "username", "用户名", "基础认证用户名")
-credential_username:depends("credential", 1)
-credential_username.rmempty = true
-
-credential_password = s:option(Value, "password", "密码", "基础认证密码")
-credential_password:depends("credential", 1)
-credential_password.rmempty = true
 
 debug = s:option(Value, "debug", "调试级别", "设置日志级别（默认 7）")
 debug.datatype = "integer"
@@ -53049,7 +53005,7 @@ local stage_class = embed_mode and "webssh-stage is-embed" or "webssh-stage"
         <div style="margin-top:12px" id="webssh-ssh" class="webssh-code"><%=status_data.ssh_cmd%></div>
         <div class="webssh-linkstack">
           <a class="webssh-link" href="<%=dsp.build_url('admin', 'system', 'ttyd', 'overview')%>" target="_blank" rel="noopener noreferrer"><strong>LuCI 页面</strong>查看 ttyd 原生概览页</a>
-          <a class="webssh-link" href="<%=dsp.build_url('admin', 'system', 'ttyd', 'config')%>"><strong>配置页面</strong>调整监听端口、认证与接口</a>
+          <a class="webssh-link" href="<%=dsp.build_url('admin', 'system', 'ttyd', 'config')%>"><strong>配置页面</strong>调整监听端口与接口</a>
         </div>
       </section>
       <section>
@@ -53366,17 +53322,11 @@ show_summary() {
     log "Web SSH 页面: /cgi-bin/luci/nradioadv/system/appcenter/webssh"
     log "LuCI ttyd 页面: /cgi-bin/luci/admin/system/ttyd/overview"
     log "直连 ttyd:     http://$lan_ip:7681/"
-    log "ttyd 认证用户: $(uci -q get ttyd.default.username 2>/dev/null || printf root)"
-    if [ -n "$TTYD_GENERATED_PASSWORD" ]; then
-        log "ttyd 初始密码: $TTYD_GENERATED_PASSWORD"
-        log "提示: 初始密码仅在本次安装摘要显示，请立即妥善保存"
-    else
-        log "ttyd 密码:     已保留现有密码"
-    fi
+    log "ttyd 访问认证: 已关闭"
 }
 
 install_all() {
-    log_stage 1 5 "下载或校验 ttyd 二进制"
+    log_stage 1 5 "下载或更新 ttyd 二进制"
     install_ttyd_binary
     log_stage 2 5 "安装或刷新 LuCI ttyd 文件"
     install_luci_ttyd
@@ -53424,35 +53374,6 @@ __TTYD_HELPER__
     write_plugin_uninstall_assets
     patch_common_template
 
-    ensure_existing_swap_access "ttyd / Web SSH"
-    verify_file_exists /usr/bin/ttyd "Web SSH / ttyd"
-    verify_file_exists /etc/init.d/ttyd "Web SSH / ttyd"
-    verify_file_exists /etc/config/ttyd "Web SSH / ttyd"
-    verify_file_exists /usr/lib/lua/luci/controller/ttyd.lua "Web SSH / ttyd"
-    verify_file_exists /usr/lib/lua/luci/view/ttyd/overview.htm "Web SSH / ttyd"
-    verify_file_exists /usr/lib/lua/luci/view/ttyd/nradio_polish.htm "Web SSH / ttyd 页面美化"
-    verify_file_exists /usr/lib/lua/luci/controller/nradio_adv/webssh.lua "Web SSH"
-    verify_file_exists /usr/lib/lua/luci/view/nradio_adv/webssh.htm "Web SSH"
-    pgrep ttyd >/dev/null 2>&1 || die "Web SSH 安装后 ttyd 未运行"
-    ttyd_verify_port="$(get_ttyd_bind_value port 2>/dev/null || true)"
-    [ -n "$ttyd_verify_port" ] || ttyd_verify_port='7681'
-    is_local_port_listening "$ttyd_verify_port" || die "Web SSH 安装后 ttyd 未监听端口 $ttyd_verify_port"
-    verify_luci_route admin/system/ttyd/overview "Web SSH / ttyd"
-    verify_luci_route nradioadv/system/webssh "Web SSH"
-    verify_template_marker 'app_list.result.applist.unshift({name:"Web SSH"' 'Web SSH 快捷入口'
-    verify_template_marker 'nradioadv/system/webssh' 'Web SSH 路由'
-    verify_template_marker "frame.src.indexOf('/nradioadv/system/fanctrl') === -1" 'FanControl iframe 白名单'
-    verify_template_marker "frame.src.indexOf('/nradioadv/system/mosdns') === -1" 'MosDNS iframe 白名单'
-    verify_template_marker "frame.src.indexOf('/admin/vpn/easytier') === -1" 'EasyTier iframe 白名单'
-    verify_template_marker "frame.src.indexOf('/nradioadv/system/webssh') === -1" 'Web SSH iframe 白名单'
-    verify_template_marker "frame.src.indexOf('/nradioadv/system/ddnsgo') === -1" 'DDNS-GO iframe 白名单'
-    verify_template_marker "frame.src.indexOf('/nradioadv/system/qiyou') === -1" '奇游 iframe 白名单'
-    verify_template_marker "frame.src.indexOf('/nradioadv/system/leigod') === -1" '雷神 iframe 白名单'
-    verify_template_marker 'function normalize_app_route(app_name, route)' 'Web SSH embed 路由标准化'
-    verify_template_marker "app_name == 'Web SSH' && action == 'open' && route" 'Web SSH 直接打开逻辑'
-    verify_template_marker "action == 'uninstall' && nradio_plugin_uninstall_action(app_name)" '脚本插件异步卸载入口'
-    verify_template_marker 'plugin_uninstall/start' '脚本插件异步卸载启动接口'
-    verify_template_marker 'plugin_uninstall/check' '脚本插件异步卸载检查接口'
 }
 
 die_menu_input_issue() {
@@ -54951,8 +54872,29 @@ manage_nradio_home_temperature_switch() {
     done
 }
 
+nradio_cpe_monitoring_current_model() {
+    detect_current_nradio_model_quiet 2>/dev/null || true
+}
+
+nradio_cpe_monitoring_model_supported() {
+    case "$(nradio_cpe_monitoring_current_model)" in
+        NRadio_C5800-650|NRadio_C5800-688)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+require_nradio_cpe_monitoring_supported_model() {
+    cpe_monitoring_model="$(nradio_cpe_monitoring_current_model)"
+    nradio_cpe_monitoring_model_supported || die "5G 连接监听仅支持 NRadio_C5800-650 / NRadio_C5800-688；当前机型: ${cpe_monitoring_model:-未知}"
+}
+
 nradio_cpeopt_require_capabilities() {
-    command -v lua >/dev/null 2>&1 || die "系统缺少 Lua，无法安装 5G 连接优化页面"
+    require_nradio_cpe_monitoring_supported_model
+    command -v lua >/dev/null 2>&1 || die "系统缺少 Lua，无法安装 5G 连接监听页面"
 
     for cpeopt_required in \
         /usr/bin/cpetools.sh \
@@ -54961,7 +54903,7 @@ nradio_cpeopt_require_capabilities() {
         /etc/cpetools/huawei.sh \
         /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua \
         /usr/lib/lua/luci/view/nradio_adv/index.htm; do
-        [ -f "$cpeopt_required" ] || die "当前 NROS 缺少 5G 连接优化所需组件：$cpeopt_required"
+        [ -f "$cpeopt_required" ] || die "当前 NROS 缺少 5G 连接监听所需组件：$cpeopt_required"
     done
 }
 
@@ -54995,7 +54937,8 @@ nradio_cpeopt_payload_markers_ok() {
     grep -Fq 'tt_nnode.image' "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/index.htm" || return 1
     grep -Fq "version = \"$NRADIO_CPEOPT_VERSION\"" "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
     grep -Fq "data-nradio-cpeopt=\"$NRADIO_CPEOPT_VERSION\"" "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" || return 1
-    grep -Fq 'HC-WT9126' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" && return 1
+    grep -Fq 'HC-WT9120' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
+    grep -Fq 'HC-WT9126' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
     return 0
 }
 
@@ -55009,7 +54952,7 @@ extract_nradio_cpeopt_payload() {
         "$cpeopt_payload_root/usr/lib/lua/luci/model/cbi/nradio_cpecfg" \
         "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv" \
         "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv" \
-        "$cpeopt_payload_root/www/luci-static/nradio/images/icon" || die "创建 5G 连接优化释放目录失败"
+        "$cpeopt_payload_root/www/luci-static/nradio/images/icon" || die "创建 5G 连接监听释放目录失败"
 
     cat > "$cpeopt_payload_root/usr/bin/cpetools.sh" <<'EOF_NRADIO_CPEOPT_CPETOOLS'
 #!/bin/ash
@@ -61458,16 +61401,23 @@ EOF_NRADIO_CPEOPT_CPELOCK
 EOF_NRADIO_CPEOPT_INDEX
 
     cat > "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" <<'EOF_NRADIO_CPEOPT_CONTROLLER'
--- NRadio 5G connection optimization page
+-- NRadio 5G connection monitoring page
 
 module("luci.controller.nradio_adv.cpeopt", package.seeall)
 
 function index()
 	local fs = require "nixio.fs"
+	local model = tostring(fs.readfile("/tmp/sysinfo/model") or "")
+	model = model:gsub("^%s+", ""):gsub("%s+$", "")
+	if model ~= "HC-WT9120" and model ~= "HC-WT9126" and
+		model ~= "NRadio_C5800-650" and model ~= "NRadio_C5800-688" then
+		return
+	end
+
 	local page = entry(
 		{"nradioadv", "cellular", "cpeopt"},
 		template("nradio_adv/cpeopt"),
-		_("5G 连接优化"),
+		_("5G 连接监听"),
 		18,
 		true
 	)
@@ -61556,7 +61506,7 @@ function action_status()
 	local dial_logs, dial_log_status = read_dial_logs()
 	local result = {
 		ok = true,
-		version = "20260828-3",
+		version = "20260829-2",
 		model = model,
 		dial_logs = dial_logs,
 		dial_log_status = dial_log_status,
@@ -61651,11 +61601,11 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 .nr5g-loglist{display:block;max-height:420px;overflow:auto;border-radius:8px;background:rgba(0,0,0,.14)}.nr5g-logrow{display:grid;grid-template-columns:145px 94px 70px minmax(0,1fr);gap:8px;padding:8px 10px;border-bottom:1px solid rgba(127,127,127,.14);font-family:monospace;font-size:12px;align-items:start}.nr5g-logrow:last-child{border-bottom:0}.nr5g-logtime,.nr5g-logsource,.nr5g-logline{color:#7c8798}.nr5g-logdetail{overflow-wrap:anywhere}@media(max-width:720px){.nr5g-logrow{grid-template-columns:1fr;gap:2px}}
 </style>
 
-<div class="nr5g-wrap" data-nradio-cpeopt="20260828-3">
+<div class="nr5g-wrap" data-nradio-cpeopt="20260829-2">
 	<div class="nr5g-head">
 		<div>
-			<h2>5G 连接优化</h2>
-			<div class="nr5g-note">NRadio 蜂窝线路状态与连接优化入口</div>
+			<h2>5G 连接监听</h2>
+			<div class="nr5g-note">NRadio 蜂窝线路状态、信号趋势与拨号日志监听</div>
 		</div>
 		<div class="nr5g-actions">
 			<a class="cbi-button nr5g-button" href="<%=url('nradio','cellular','cpelock')%>">锁频设置</a>
@@ -61683,7 +61633,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 	</div>
 
 	<div class="nr5g-components">
-		<div class="nr5g-title"><h3>优化组件</h3><span class="nr5g-badge" id="nr5g-version">检测中</span></div>
+		<div class="nr5g-title"><h3>监听组件</h3><span class="nr5g-badge" id="nr5g-version">检测中</span></div>
 		<div class="nr5g-component-list" id="nr5g-components"></div>
 	</div>
 
@@ -62089,7 +62039,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 EOF_NRADIO_CPEOPT_VIEW
 
     cat > "$cpeopt_payload_root/www/luci-static/nradio/images/icon/cpeopt.svg" <<'EOF_NRADIO_CPEOPT_ICON_SVG'
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="5G 连接优化">
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="5G 连接监听">
   <defs>
     <linearGradient id="signal" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#18e9f5"/>
@@ -62130,7 +62080,7 @@ EOF_NRADIO_CPEOPT_VIEW
 </svg>
 EOF_NRADIO_CPEOPT_ICON_SVG
 
-    nradio_cpeopt_payload_markers_ok "$cpeopt_payload_root" || die "5G 连接优化内嵌组件校验失败"
+    nradio_cpeopt_payload_markers_ok "$cpeopt_payload_root" || die "5G 连接监听内嵌组件校验失败"
     NRADIO_CPEOPT_PAYLOAD_ROOT="$cpeopt_payload_root"
 }
 install_nradio_cpeopt_payload_file() {
@@ -62141,7 +62091,7 @@ install_nradio_cpeopt_payload_file() {
     cpeopt_target_dir="$(dirname "$cpeopt_target")"
     cpeopt_target_tmp="$cpeopt_target.nradio-cpeopt.$$"
 
-    [ -s "$cpeopt_source" ] || die "5G 连接优化源文件为空：$cpeopt_relative_path"
+    [ -s "$cpeopt_source" ] || die "5G 连接监听源文件为空：$cpeopt_relative_path"
     mkdir -p "$cpeopt_target_dir" || die "创建目标目录失败：$cpeopt_target_dir"
     rm -f "$cpeopt_target_tmp" 2>/dev/null || true
     cp "$cpeopt_source" "$cpeopt_target_tmp" || die "写入临时文件失败：$cpeopt_target"
@@ -62172,14 +62122,15 @@ verify_nradio_cpeopt_installation() {
     grep -Fq 'tt_nnode.image' /usr/lib/lua/luci/view/nradio_adv/index.htm || return 1
     grep -Fq "version = \"$NRADIO_CPEOPT_VERSION\"" "$NRADIO_CPEOPT_CONTROLLER" || return 1
     grep -Fq "data-nradio-cpeopt=\"$NRADIO_CPEOPT_VERSION\"" "$NRADIO_CPEOPT_VIEW" || return 1
-    grep -Fq 'HC-WT9126' "$NRADIO_CPEOPT_CONTROLLER" && return 1
+    grep -Fq 'HC-WT9120' "$NRADIO_CPEOPT_CONTROLLER" || return 1
+    grep -Fq 'HC-WT9126' "$NRADIO_CPEOPT_CONTROLLER" || return 1
     return 0
 }
 
-install_nradio_cpe_connection_optimization() {
+install_nradio_cpe_connection_monitoring() {
     nradio_cpeopt_require_capabilities
 
-    log_stage 1 4 "释放本地 5G 连接优化组件"
+    log_stage 1 4 "释放本地 5G 连接监听组件"
     extract_nradio_cpeopt_payload
 
     log_stage 2 4 "更新拨号、SIM 与锁频执行链"
@@ -62189,7 +62140,7 @@ install_nradio_cpe_connection_optimization() {
     install_nradio_cpeopt_payload_file etc/cpetools/huawei.sh 755
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua 644
 
-    log_stage 3 4 "安装 5G 连接优化页面与图标"
+    log_stage 3 4 "安装 5G 连接监听页面与图标"
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/index.htm 644
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua 644
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/cpeopt.htm 644
@@ -62201,11 +62152,125 @@ install_nradio_cpe_connection_optimization() {
     fi
     rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || die "重载 uhttpd 失败"
-    verify_nradio_cpeopt_installation || die "5G 连接优化安装校验失败"
+    verify_nradio_cpeopt_installation || die "5G 连接监听安装校验失败"
 
-    log "结果:   5G 连接优化 $NRADIO_CPEOPT_VERSION 已安装"
+    log "结果:   5G 连接监听 $NRADIO_CPEOPT_VERSION 已安装"
     log "入口:   /cgi-bin/luci/$NRADIO_CPEOPT_ROUTE"
-    log "范围:   当前受支持 NRadio 机型均可安装，不锁定具体型号"
+    log "范围:   仅限 NRadio_C5800-650 / NRadio_C5800-688"
+}
+
+nradio_cpeopt_require_uninstall_sources() {
+    require_nradio_cpe_monitoring_supported_model
+
+    for cpeopt_original in \
+        /usr/bin/cpetools.sh \
+        /usr/bin/cpesel.sh \
+        /etc/cpetools/generic.sh \
+        /etc/cpetools/huawei.sh \
+        /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua \
+        /usr/lib/lua/luci/view/nradio_adv/index.htm; do
+        [ -s "/rom$cpeopt_original" ] || die "无法卸载 5G 连接监听：缺少 NROS 原厂文件 /rom$cpeopt_original"
+    done
+}
+
+restore_nradio_cpeopt_rom_file() {
+    cpeopt_target="$1"
+    cpeopt_mode="$2"
+    cpeopt_source="/rom$cpeopt_target"
+    cpeopt_tmp="$cpeopt_target.nradio-cpeopt-remove.$$"
+
+    rm -f "$cpeopt_tmp" 2>/dev/null || true
+    cp "$cpeopt_source" "$cpeopt_tmp" || die "恢复原厂文件失败：$cpeopt_target"
+    chmod "$cpeopt_mode" "$cpeopt_tmp" || die "设置原厂文件权限失败：$cpeopt_target"
+    mv -f "$cpeopt_tmp" "$cpeopt_target" || die "替换原厂文件失败：$cpeopt_target"
+}
+
+restore_or_remove_nradio_cpeopt_optional_file() {
+    cpeopt_target="$1"
+    cpeopt_mode="$2"
+
+    if [ -s "/rom$cpeopt_target" ]; then
+        restore_nradio_cpeopt_rom_file "$cpeopt_target" "$cpeopt_mode"
+    else
+        rm -f "$cpeopt_target" || die "删除 5G 连接监听文件失败：$cpeopt_target"
+    fi
+}
+
+uninstall_nradio_cpe_connection_monitoring() {
+    NRADIO_CPEOPT_UNINSTALL_COMPLETED='0'
+    require_root
+    require_nradio_cpe_monitoring_supported_model
+    printf '确认卸载 5G 连接监听并恢复 NROS 原厂拨号组件？[y/N]: '
+    ui_read_line || die "input cancelled"
+    case "$UI_READ_RESULT" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            log "已取消"
+            return 0
+            ;;
+    esac
+
+    nradio_cpeopt_require_uninstall_sources
+
+    log_stage 1 3 "恢复 NROS 原厂拨号、SIM 与锁频组件"
+    restore_nradio_cpeopt_rom_file /usr/bin/cpetools.sh 755
+    restore_nradio_cpeopt_rom_file /usr/bin/cpesel.sh 755
+    restore_nradio_cpeopt_rom_file /etc/cpetools/generic.sh 755
+    restore_nradio_cpeopt_rom_file /etc/cpetools/huawei.sh 755
+    restore_nradio_cpeopt_rom_file /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua 644
+    restore_nradio_cpeopt_rom_file /usr/lib/lua/luci/view/nradio_adv/index.htm 644
+
+    log_stage 2 3 "移除 5G 连接监听页面、图标与拨号日志"
+    restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_CONTROLLER" 644
+    restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_VIEW" 644
+    restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_ICON" 644
+    restore_or_remove_nradio_cpeopt_optional_file /www/luci-static/nradio/images/icon/cpeopt.png 644
+    rm -f /var/log/nradio-cpe-dial.log /var/log/nradio-cpe-dial.log.1 || die "删除 5G 连接监听拨号日志失败"
+
+    log_stage 3 3 "重启 SIM 选择服务并刷新 LuCI"
+    if [ -x /etc/init.d/cpesel ]; then
+        /etc/init.d/cpesel restart >/dev/null 2>&1 || die "重启 SIM 选择服务失败"
+    fi
+    rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
+    /etc/init.d/uhttpd reload >/dev/null 2>&1 || die "重载 uhttpd 失败"
+
+    NRADIO_CPEOPT_UNINSTALL_COMPLETED='1'
+    log "结果:   5G 连接监听已卸载，NROS 原厂拨号组件已恢复"
+}
+
+manage_nradio_cpe_connection_monitoring() {
+    require_nradio_cpe_monitoring_supported_model
+
+    while :; do
+        printf '\n5G 连接监听（仅限 NRadio_C5800-650 / C5800-688）:\n'
+        printf '1. 安装或更新 5G 连接监听\n'
+        printf '2. 卸载 5G 连接监听\n'
+        printf '0. 返回设备维护与检测\n'
+        printf '请选择 0、1 或 2: '
+        read_category_choice
+        case "$UI_READ_RESULT" in
+            0)
+                return 0
+                ;;
+            1)
+                run_recorded_menu_feature "5 > 11 > 1" "5G 连接监听安装或更新" install_nradio_cpe_connection_monitoring
+                MENU_ACTION_COMPLETED='1'
+                return 0
+                ;;
+            2)
+                uninstall_nradio_cpe_connection_monitoring
+                if [ "${NRADIO_CPEOPT_UNINSTALL_COMPLETED:-0}" = '1' ]; then
+                    record_action_history "5 > 11 > 2" "5G 连接监听卸载" "PASS" "disabled"
+                fi
+                MENU_ACTION_COMPLETED='1'
+                return 0
+                ;;
+            *)
+                die_menu_input_issue "$UI_READ_RESULT"
+                ;;
+        esac
+    done
 }
 
 nradio_smart_band_current_model() {
@@ -64450,8 +64515,7 @@ run_menu_feature() {
             MENU_ACTION_COMPLETED='1'
             ;;
         29)
-            run_recorded_menu_feature "5 > 11" "5G 连接优化安装或更新" install_nradio_cpe_connection_optimization
-            MENU_ACTION_COMPLETED='1'
+            manage_nradio_cpe_connection_monitoring
             ;;
         30)
             show_support_page_hint='1'
@@ -66591,16 +66655,26 @@ maintenance_test_menu() {
         fi
         printf '9. LuCI 运营商与卡名显示修复\n'
         printf '10. LuCI 首页 CPU / 5G 温度切换（全部 NROS）\n'
-        printf '11. 5G 连接优化安装或更新（全部 NROS）\n'
+        if nradio_cpe_monitoring_model_supported; then
+            printf '11. 5G 连接监听（仅限 5800 系列）\n'
+        fi
         printf '0. 返回功能分类\n'
         if nradio_5g_aggregation_model_supported && nradio_smart_band_model_supported; then
-            printf '请选择 0、1、2、3、4、5、6、7、8、9、10 或 11: '
+            maintenance_monitoring_choice=''
+            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
+            printf '请选择 0、1、2、3、4、5、6、7、8、9、10%s: ' "$maintenance_monitoring_choice"
         elif nradio_5g_aggregation_model_supported; then
-            printf '请选择 0、1、2、3、4、5、6、7、9、10 或 11: '
+            maintenance_monitoring_choice=''
+            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
+            printf '请选择 0、1、2、3、4、5、6、7、9、10%s: ' "$maintenance_monitoring_choice"
         elif nradio_smart_band_model_supported; then
-            printf '请选择 0、1、2、3、4、6、7、8、9、10 或 11: '
+            maintenance_monitoring_choice=''
+            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
+            printf '请选择 0、1、2、3、4、6、7、8、9、10%s: ' "$maintenance_monitoring_choice"
         else
-            printf '请选择 0、1、2、3、4、6、7、9、10 或 11: '
+            maintenance_monitoring_choice=''
+            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
+            printf '请选择 0、1、2、3、4、6、7、9、10%s: ' "$maintenance_monitoring_choice"
         fi
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -66627,7 +66701,13 @@ maintenance_test_menu() {
                 ;;
             9) submenu_feature='26' ;;
             10) submenu_feature='27' ;;
-            11) submenu_feature='29' ;;
+            11)
+                if nradio_cpe_monitoring_model_supported; then
+                    submenu_feature='29'
+                else
+                    die_menu_input_issue "$UI_READ_RESULT"
+                fi
+                ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         run_menu_feature "$submenu_feature"

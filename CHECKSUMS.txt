@@ -1,10 +1,10 @@
 # NRadio V3.0.0 release checksums
 
-Generated from local file contents on 2026-08-29.
+Generated from local file contents on 2026-08-30.
 
 ```text
-e746cbd0c79705cb316d65d8f690f170ac0eed98a814f8b3f7a72434aa1943f9  2603776  00-current/ssh-nradio-plugin-installer.sh
-9ee13011c28dcba8c302a8dfc174d99d6151f0b7a9986fb2a956cf39825d6e5a    63216  40-server-web/mayebano-support/index.html
+9b709f1541245222809e7d0730dbccb1844e9cfee6d19878bdc7aa7e580ec98e  2605525  00-current/ssh-nradio-plugin-installer.sh
+0358171f284c469fbb2762003168b3033990c90c597a5d1c4750657776cbce68    63453  40-server-web/mayebano-support/index.html
 13485656cc0f72664db1fb0a82dc645d30e745c6d0158067e15a67f63f46565c     4319  40-server-web/mayebano-support/nradio-ssh-manager.ipk
 096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0    36616  40-server-web/mayebano-support/ai_studio_code.html
 6781ac3294bd0aab8d591601c626487125596ed86e8827d03996e419843fcb98     698  vercel.json

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="NRadio 官方 NROS SSH 插件脚本 V3.0.0，支持 C8-788、MT5700 WebUI、5G 连接优化、OpenWrt LuCI 8080 和智能频段 v7。">
+    <meta name="description" content="NRadio 官方 NROS SSH 插件脚本 V3.0.0，支持 C8-788、MT5700 WebUI、5800 系列 5G 连接监听、OpenWrt LuCI 8080 和智能频段 v7。">
     <meta name="robots" content="index,follow">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="color-scheme" content="light">
@@ -706,33 +706,34 @@
                     <a href="https://github.com/561410590/ssh-nradio-plugin-installer" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="btn btn-outline">GitHub 开源</a>
                 </div>
                 <div class="badge-list">
-                    <div class="badge-item">V3.0.0 / 2026-08-29</div>
+                    <div class="badge-item">V3.0.0 / 2026-08-30</div>
                     <div class="badge-item">MT5700 WebUI V3.0.0</div>
-                    <div class="badge-item">5G 连接优化</div>
+                    <div class="badge-item">5G 连接监听</div>
                     <div class="badge-item">智能频段 v7</div>
                     <div class="badge-item">C8-788 小存储版</div>
                 </div>
                 <div class="release-panel" aria-label="当前版本信息">
                     <div class="release-stat"><span>Release version</span><strong>V3.0.0</strong></div>
-                    <div class="release-stat"><span>Build date</span><strong>2026-08-29</strong></div>
+                    <div class="release-stat"><span>Build date</span><strong>2026-08-30</strong></div>
                     <div class="release-stat"><span>Delivery</span><strong>单一总脚本</strong></div>
                     <div class="release-stat"><span>Compatibility</span><strong>8 款 NRadio 机型</strong></div>
                 </div>
-                <p class="build-notice">当前版本 V3.0.0，发布日期 2026-08-29。下载与校验以 GitHub Release 页面为准。</p>
+                <p class="build-notice">当前本地构建 V3.0.0 / 2026-08-30。公开正式 Release 仍为 2026-08-29，下载与校验以 GitHub Release 页面为准。</p>
             </div>
         </section>
 
         <section class="release-notes" id="release" aria-labelledby="release-title">
             <div class="release-notes-head">
                 <div>
-                    <p class="release-kicker">V3.0.0 · 正式发布 2026-08-29</p>
+                    <p class="release-kicker">V3.0.0 · 本地构建 2026-08-30</p>
                     <h2 id="release-title">C8-788、5G 连接和页面更新</h2>
                 </div>
-                <div class="release-date-chip">2026-08-29</div>
+                <div class="release-date-chip">2026-08-30</div>
             </div>
             <div class="fix-grid">
                 <article class="fix-card"><span>1 &gt; 9</span><strong>MT5700 WebUI V3.0.0</strong><p>安装 semi-tcpweb V3.0.0。应用商店可以打开和卸载，入口跳转到 <code>/5700/</code>，不安装标准 LuCI 菜单包。</p></article>
-                <article class="fix-card"><span>5 &gt; 11</span><strong>全机型 5G 连接优化</strong><p>修复拨号、SIM 切换和锁频执行问题；安装后重启 cpesel，使拨号日志立即生成，并区分日志缺失、读取失败和空日志。</p></article>
+                <article class="fix-card"><span>5 &gt; 11</span><strong>5800 系列 5G 连接监听</strong><p>仅向 C5800-650 / C5800-688 开放，记录拨号、SIM、信号和线路变化，并提供原厂恢复式卸载。</p></article>
+                <article class="fix-card"><span>1 &gt; 3</span><strong>TTYD / Web SSH 免登录</strong><p>允许过期证书环境下载，直接接管旧 ttyd 配置；默认关闭 Basic Auth，打开应用商店终端不再要求用户名和密码。</p></article>
                 <article class="fix-card"><span>5 &gt; 8</span><strong>智能频段 v7 修复</strong><p>读取频段前后核对当前 SIM；补回运行目录和进程启动时间函数，恢复定时任务、状态文件及运行日志。</p></article>
                 <article class="fix-card"><span>4 &gt; 3</span><strong>OpenWrt LuCI 8080</strong><p>使用独立目录和独立 uhttpd 端口；安装 Bootstrap 后最终锁回 NRadio 默认主题，避免 80 端口主界面被改成 OpenWrt 主题。</p></article>
                 <article class="fix-card"><span>NEW</span><strong>NRadio_C8-788</strong><p>识别 HC-WT9302 / HCMT7987-NAND；开放 OpenClash、奇游/雷神、应用商店维护、统一体检、首页温度和风扇控制。</p></article>
@@ -794,7 +795,7 @@
                         <div class="step-index">03</div>
                         <div class="step-content">
                             <h3>路由器在线下载</h3>
-                            <p>连接成功后，复制下面的命令，在终端粘贴并回车。总脚本包含 MT5700 WebUI、智能频段、5G 连接优化和其他安装菜单；首次执行会显示免责声明，输入 <code>y</code> 后进入中文菜单。</p>
+                            <p>连接成功后，复制下面的命令，在终端粘贴并回车。总脚本包含 MT5700 WebUI、智能频段、5800 系列 5G 连接监听和其他安装菜单；首次执行会显示免责声明，输入 <code>y</code> 后进入中文菜单。</p>
                             <button class="code-well" type="button" onclick="copyShell(this)" aria-label="复制路由器安装命令">
                                 <code>cd /root && wget -O ssh-nradio-plugin-installer.sh https://nradio.mayebano.shop/ssh-nradio-plugin-installer.sh && sh ssh-nradio-plugin-installer.sh</code>
                                 <span class="copy-info" aria-live="polite">点击复制代码</span>
@@ -847,7 +848,7 @@
                 <h2>版本演进档案</h2>
             </div>
             <div class="history-grid" id="historyGrid">
-                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.0.0 · 2026-08-29</h5><p>加入 C8-788、MT5700 WebUI V3.0.0、5G 连接优化、OpenWrt LuCI 8080 和智能频段 v7；修复拨号日志、NRadio 默认主题和智能频段运行函数。</p></div>
+                <div class="v-card is-latest"><span class="v-badge">LOCAL</span><h5>V3.0.0 · 2026-08-30</h5><p>TTYD / Web SSH 改为免登录并取消相关失败式校验；5G 功能改为仅限 5800 系列的连接监听。</p></div>
                 <div class="v-card"><span class="v-badge">V2.9.9</span><h5>2026-08-20 · 当前公开正式版</h5><p>兼容 NROS 2.2.12 官方运营商卡名，固件原生值优先、旧固件精确 ICCID 映射回退；修复 C2000MAX 系统状态默认折叠导致 Swap 指标不可见。</p></div>
                 <div class="v-card"><span class="v-badge">V2.9.8</span><h5>可靠性集中修复</h5><p>集中修复 OpenVPN DNS 清理、C2000Pro Web SSH、AdGuardHome 安全卸载、异步卸载陈旧状态与全局锁；Docker 加入系统文件清单和旧残留比对清理，同时增强 wget 后备、终端回显恢复与诊断凭据脱敏。</p></div>
                 <div class="v-card"><span class="v-badge">V2.9.5</span><h5>应用商店 V3 稳定版</h5><p>应用商店 V3 增加搜索、状态徽标、双存储显示与多机型兼容；修复共享接入，移除应用安装固定哈希检查和持久备份写入，并修复 NRadio 定制固件的 OpenClash 依赖安装。</p></div>

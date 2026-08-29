@@ -1,5 +1,12 @@
 # Changelog
 
+## V3.0.0 - 2026-08-30（本地构建）
+
+- TTYD / Web SSH 下载对过期证书环境使用 curl `-k`、wget/uclient-fetch `--no-check-certificate`，删除旧 ttyd 文件所有权拦截和安装尾部失败式校验。
+- TTYD / Web SSH 默认免登录：固定 `credential=0`，删除随机密码、用户名密码配置及 `--credential` 启动参数。
+- `5 > 11` 更新为仅限 `NRadio_C5800-650 / C5800-688` 的“5G 连接监听”，提供安装或更新与原厂恢复式卸载。
+- 本地脚本、支持页、README、CHANGELOG、CHECKSUMS 与 Repository checks 同步到 `V3.0.0 / 2026-08-30`；公开正式 Release 仍为 2026-08-29。
+
 ## V3.0.0 - 2026-08-29（正式发布）
 
 - `SCRIPT_VERSION` 更新为 `V3.0.0`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-29`。

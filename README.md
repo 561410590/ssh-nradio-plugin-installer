@@ -2,7 +2,7 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V3.0.0`（2026-08-29）
+- 当前版本：`V3.0.0`（2026-08-30 本地构建）
 - 当前公网正式版本：`V3.0.0`，下载与校验以 GitHub Releases 页面为准
 - 当前状态：`V3.0.0` 总脚本、支持页、仓库资料和 Repository checks 已同步。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
@@ -59,22 +59,22 @@ sh ssh-nradio-plugin-installer.sh
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、手机保存按钮兼容、原厂还原、OpenWrt LuCI 8080 |
-| 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、智能频段 v7、首页 CPU/5G 温度、全机型 5G 连接优化 |
+| 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、智能频段 v7、首页 CPU/5G 温度、5800 系列 5G 连接监听 |
 
 ## V3.0.0 更新
 
-- `SCRIPT_VERSION` 更新为 `V3.0.0`，发布日期 `2026-08-29`。
+- `SCRIPT_VERSION` 保持 `V3.0.0`，当前本地构建日期为 `2026-08-30`；公开正式 Release 日期仍为 `2026-08-29`。
 - 新增 `NRadio_C8-788`：识别 `HC-WT9302 / HCMT7987-NAND`，按 128 MB NAND 小容量配置开放 OpenClash、奇游/雷神、应用商店维护、统一体检、首页温度和风扇控制。
 - 新增 `1 > 9 MT5700 WebUI V3.0.0`：安装 `semi-tcpweb` V3.0.0；NRadio 应用商店可打开和卸载，入口跳转 `/5700/`，不安装上游标准 LuCI 菜单包。
-- 新增 `5 > 11 5G 连接优化安装或更新（全部 NROS）`：记录拨号与 SIM 切换日志，修复锁频执行、频段参数、SIM 互斥和失败传播，并加入蜂窝状态页面。
-- 修复 5G 连接优化安装后旧 `cpesel` 进程未重启导致拨号日志不生成，并区分日志缺失、读取失败和空日志状态。
+- `5 > 11` 调整为仅限 `NRadio_C5800-650 / C5800-688` 的“5G 连接监听”，提供安装或更新与原厂恢复式卸载。
+- TTYD / Web SSH 下载允许过期证书环境，移除旧 ttyd 文件所有权拦截和安装尾部失败式校验；访问默认免登录，不再生成或传递 Basic Auth 用户名密码。
 - 新增 `4 > 3 OpenWrt 原版 LuCI（8080）`，使用独立目录和独立 uhttpd 监听，不替换 NRadio 80 端口界面。
 - 修复 8080 安装链改走 NRadio 主站默认主题的问题；安装结束再次恢复 `/luci-static/nradio`。
 - 首页温度、主副 5G 显示、运营商与卡名链继续独立维护；智能频段 v7 在读频段前后核对当前 SIM，SIM 未知或切换中时停止控制。
 - 修复智能频段 v7 运行文件缺少 `process_starttime()` 和 `ensure_runtime_dir()` 的问题。
 - 兼容 NROS 2.2.12 应用商店手机保存按钮与固件接口差异；保留固件已有功能，只补缺少的接口。
 - 支持页加入 C8-788 SSH 管理 IPK 下载和应用商店安装说明；总脚本下载仍指向 `00-current/ssh-nradio-plugin-installer.sh`。
-- README、CHANGELOG、CHECKSUMS 和 Repository checks 已同步到 V3.0.0 / 2026-08-29。
+- README、CHANGELOG、CHECKSUMS 和 Repository checks 已同步到 V3.0.0 / 2026-08-30 本地构建。
 
 ## V2.9.9 更新
 
@@ -296,8 +296,8 @@ bash -n 00-current/ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  e746cbd0c79705cb316d65d8f690f170ac0eed98a814f8b3f7a72434aa1943f9
-Bytes   2603776
+SHA256  9b709f1541245222809e7d0730dbccb1844e9cfee6d19878bdc7aa7e580ec98e
+Bytes   2605525
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 
