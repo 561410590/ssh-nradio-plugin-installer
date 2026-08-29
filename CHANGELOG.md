@@ -1,5 +1,20 @@
 # Changelog
 
+## V3.0.0 - 2026-08-29（正式发布）
+
+- `SCRIPT_VERSION` 更新为 `V3.0.0`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-29`。
+- 新增 `NRadio_C8-788`：识别 `HC-WT9302 / HCMT7987-NAND`，按小容量 NAND 受限配置开放 OpenClash、奇游/雷神、应用商店维护、统一体检、首页温度和风扇控制。
+- 新增 `1 > 9 MT5700 WebUI V3.0.0`，安装 `semi-tcpweb` V3.0.0；NRadio 应用商店可打开和卸载，入口跳转 `/5700/`，不安装上游标准 LuCI 菜单包。
+- 新增 `5 > 11 5G 连接优化安装或更新（全部 NROS）`，包含拨号与 SIM 日志、锁频执行修复、频段参数校验、SIM 切换互斥、蜂窝状态和基站切换时间线。
+- 修复 5G 连接优化安装后未重启 `cpesel` 导致拨号日志不生成；页面区分日志缺失、读取失败和空日志状态。
+- 新增 `4 > 3 OpenWrt 原版 LuCI（8080）`；首页 CPU/5G 温度、双 5G 显示、运营商与卡名修复继续使用独立菜单和文件。
+- 修复 8080 安装链改变 NRadio 主站默认主题；安装结束恢复 `/luci-static/nradio`。
+- 智能频段升级为 v7，读取频段前后核对当前 SIM；SIM 未知或切换中时拒绝执行频段控制。
+- 修复智能频段 v7 运行文件缺少 `process_starttime()` 和 `ensure_runtime_dir()`。
+- 兼容 NROS 2.2.12 应用商店手机保存按钮和固件接口差异，只补固件缺少的接口。
+- 支持页加入 C8-788 SSH 管理 IPK 下载，明确必须在 NRadio 应用商店本地安装，不能使用隐藏链接开启 SSH。
+- README、CHANGELOG、CHECKSUMS 与 Repository checks 已同步到 V3.0.0 / 2026-08-29；正式发布资产包含总脚本、C8-788 SSH 管理 IPK 和校验清单。
+
 ## V2.9.9 - 2026-08-20（正式发布）
 
 - `SCRIPT_VERSION` 更新为 `V2.9.9`，`SCRIPT_RELEASE_DATE` 更新为 `2026-08-20`。

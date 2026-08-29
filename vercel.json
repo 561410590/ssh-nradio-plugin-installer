@@ -11,6 +11,10 @@
     {
       "source": "/ssh-nradio-plugin-installer.sh",
       "destination": "/00-current/ssh-nradio-plugin-installer.sh"
+    },
+    {
+      "source": "/nradio-ssh-manager.ipk",
+      "destination": "/40-server-web/mayebano-support/nradio-ssh-manager.ipk"
     }
   ],
   "headers": [
