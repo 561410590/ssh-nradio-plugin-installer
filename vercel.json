@@ -15,6 +15,14 @@
     {
       "source": "/nradio-ssh-manager.ipk",
       "destination": "/40-server-web/mayebano-support/nradio-ssh-manager.ipk"
+    },
+    {
+      "source": "/nradio-mesh.ipk",
+      "destination": "/40-server-web/mayebano-support/nradio-mesh.ipk"
+    },
+    {
+      "source": "/nradio-qos-pro.ipk",
+      "destination": "/40-server-web/mayebano-support/nradio-qos-pro.ipk"
     }
   ],
   "headers": [

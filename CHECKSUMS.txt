@@ -4,8 +4,10 @@ Generated from local file contents on 2026-08-30.
 
 ```text
 9b709f1541245222809e7d0730dbccb1844e9cfee6d19878bdc7aa7e580ec98e  2605525  00-current/ssh-nradio-plugin-installer.sh
-0358171f284c469fbb2762003168b3033990c90c597a5d1c4750657776cbce68    63453  40-server-web/mayebano-support/index.html
+a02bbceeed157a46d871b06520e053969e5ede14021160bb347b8f17d7b4cc80    65803  40-server-web/mayebano-support/index.html
 13485656cc0f72664db1fb0a82dc645d30e745c6d0158067e15a67f63f46565c     4319  40-server-web/mayebano-support/nradio-ssh-manager.ipk
+9234ce091bd2c0217e2b255703f19ec918796321cb0e2625f71c8d52053b0dec    49263  40-server-web/mayebano-support/nradio-mesh.ipk
+2d5543a7688bbefb4975cdc854cd2b9e589eca0f14e01fd4948b1ca6fcfb6dab    21321  40-server-web/mayebano-support/nradio-qos-pro.ipk
 096e5ba5edb548ae7bad38fd9b75880bd566f05c2966d16e9abb010a0ce926c0    36616  40-server-web/mayebano-support/ai_studio_code.html
-6781ac3294bd0aab8d591601c626487125596ed86e8827d03996e419843fcb98     698  vercel.json
+9a4e5e7f7c7ba0bd54bc4e4f7b5748a08719ae77f7b2132d4d930893cf6acc27      944  vercel.json
 ```

@@ -271,6 +271,11 @@
         .fix-card span { display: block; margin-bottom: 10px; color: var(--rose-500); font-size: 11px; font-weight: 1000; letter-spacing: .08em; text-transform: uppercase; }
         .fix-card strong { display: block; margin-bottom: 8px; color: var(--rose-950); font-size: 1.05rem; }
         .fix-card p { color: var(--rose-800); font-size: .9rem; line-height: 1.65; opacity: .86; }
+        .plugin-section .fix-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .plugin-section .fix-card { display: flex; flex-direction: column; }
+        .plugin-section .fix-card p { flex: 1; }
+        .plugin-section code { overflow-wrap: anywhere; }
+        .plugin-download { width: 100%; margin-top: 18px; padding: 12px 18px; border-radius: 14px; font-size: .9rem; }
 
         .checksum-panel {
             display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px;
@@ -549,6 +554,7 @@
             .danger-grid li { text-align: left; }
             .release-notes { padding: 36px 28px; border-radius: 32px; }
             .release-notes-head { align-items: flex-start; flex-direction: column; }
+            .plugin-section .fix-grid { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 480px) {
@@ -560,7 +566,7 @@
             }
             .nav-pill {
                 display: grid;
-                grid-template-columns: repeat(5, minmax(0, 1fr));
+                grid-template-columns: repeat(6, minmax(0, 1fr));
                 gap: 2px;
                 padding: 5px;
                 overflow: hidden;
@@ -685,6 +691,7 @@
     <div class="nav-anchor">
         <nav class="nav-pill" aria-label="页面章节导航">
             <a href="#home" class="nav-link active" aria-current="page">旗舰首页</a>
+            <a href="#plugins" class="nav-link">插件介绍</a>
             <a href="#tutorial" class="nav-link">保姆教程</a>
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">演进历史</a>
@@ -737,6 +744,34 @@
                 <article class="fix-card"><span>5 &gt; 8</span><strong>智能频段 v7 修复</strong><p>读取频段前后核对当前 SIM；补回运行目录和进程启动时间函数，恢复定时任务、状态文件及运行日志。</p></article>
                 <article class="fix-card"><span>4 &gt; 3</span><strong>OpenWrt LuCI 8080</strong><p>使用独立目录和独立 uhttpd 端口；安装 Bootstrap 后最终锁回 NRadio 默认主题，避免 80 端口主界面被改成 OpenWrt 主题。</p></article>
                 <article class="fix-card"><span>NEW</span><strong>NRadio_C8-788</strong><p>识别 HC-WT9302 / HCMT7987-NAND；开放 OpenClash、奇游/雷神、应用商店维护、统一体检、首页温度和风扇控制。</p></article>
+            </div>
+        </section>
+
+        <section class="release-notes plugin-section" id="plugins" aria-labelledby="plugins-title">
+            <div class="release-notes-head">
+                <div>
+                    <h2 id="plugins-title">NROS上开发的插件</h2>
+                </div>
+            </div>
+            <div class="fix-grid">
+                <article class="fix-card">
+                    <span>V1.0.1-1 · SSH</span>
+                    <strong>SSH开启插件</strong>
+                    <p>用于开启或关闭 NROS 的局域网 SSH 访问，在 NROS 官方系统应用商店本地安装。<br><code>NROS官方系统应用商店打开SSH，在应用商店安装.ipk</code></p>
+                    <a href="/nradio-ssh-manager.ipk" download class="btn btn-solid plugin-download">下载 SSH 开启插件</a>
+                </article>
+                <article class="fix-card">
+                    <span>V1.0.12-1 · MESH</span>
+                    <strong>Mesh组网插件</strong>
+                    <p>用于 NRadio 设备 Mesh 组网，提供网络拓扑、控制器发现和 APCLI 漫游管理。<br><code>luci-app-nradio-mesh_1.0.12-1_all.ipk</code></p>
+                    <a href="/nradio-mesh.ipk" download class="btn btn-solid plugin-download">下载 Mesh 组网插件</a>
+                </article>
+                <article class="fix-card">
+                    <span>V1.0.17-1 · QOS</span>
+                    <strong>QoS限速插件</strong>
+                    <p>用于按终端设置上传和下载限速，支持优先级、定时策略和在线终端查看。<br><code>luci-app-nradio-qos-pro_1.0.17-1_all.ipk</code></p>
+                    <a href="/nradio-qos-pro.ipk" download class="btn btn-solid plugin-download">下载 QoS 限速插件</a>
+                </article>
             </div>
         </section>
 

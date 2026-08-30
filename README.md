@@ -261,6 +261,8 @@ sh ssh-nradio-plugin-installer.sh
 | `00-current/nradio-smart-band.sh` | 历史独立开发校验源；当前运行代码以总脚本内嵌 v7 为准，不是运行或发布依赖 |
 | `40-server-web/mayebano-support/index.html` | V3.0.0 本地支持页入口 |
 | `40-server-web/mayebano-support/nradio-ssh-manager.ipk` | C8-788 在 NRadio 应用商店本地安装的 SSH 管理包 |
+| `40-server-web/mayebano-support/nradio-mesh.ipk` | NROS 应用商店本地安装的 Mesh 组网包 |
+| `40-server-web/mayebano-support/nradio-qos-pro.ipk` | NROS 应用商店本地安装的 QoS 限速包 |
 | `40-server-web/mayebano-support/ai_studio_code.html` | 历史支持页源稿，仍保留 V2.2.5 展示口径 |
 | `40-server-web/mayebano-support/wechat-donate.png` | 微信支持图片 |
 | `CHECKSUMS.txt` | 当前公开文件校验 |
@@ -280,6 +282,8 @@ sh ssh-nradio-plugin-installer.sh
 - `00-current/ssh-nradio-plugin-installer.sh`
 - `40-server-web/mayebano-support/index.html`
 - `40-server-web/mayebano-support/nradio-ssh-manager.ipk`
+- `40-server-web/mayebano-support/nradio-mesh.ipk`
+- `40-server-web/mayebano-support/nradio-qos-pro.ipk`
 
 建议本地先跑：
 
@@ -289,7 +293,7 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 bash -n 00-current/ssh-nradio-plugin-installer.sh
 ```
 
-`CHECKSUMS.txt` 记录 V3.0.0 发布文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布 GitHub Release 或更新公网前，需要重新计算并核对总脚本、支持页、SSH 管理 IPK 和 `vercel.json` 的 hash 与大小。
+`CHECKSUMS.txt` 记录 V3.0.0 发布文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布 GitHub Release 或更新公网前，需要重新计算并核对总脚本、支持页、三个插件 IPK 和 `vercel.json` 的 hash 与大小。
 
 ## 脚本校验
 

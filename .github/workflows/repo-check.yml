@@ -16,6 +16,8 @@ jobs:
           test -f 00-current/ssh-nradio-plugin-installer.sh
           test -f 40-server-web/mayebano-support/index.html
           test -f 40-server-web/mayebano-support/nradio-ssh-manager.ipk
+          test -f 40-server-web/mayebano-support/nradio-mesh.ipk
+          test -f 40-server-web/mayebano-support/nradio-qos-pro.ipk
           test -f 40-server-web/mayebano-support/ai_studio_code.html
           test -f 40-server-web/mayebano-support/wechat-donate.png
           test -f vercel.json
@@ -211,6 +213,9 @@ jobs:
           grep -q 'NRadio_C8-788' 40-server-web/mayebano-support/index.html
           grep -q 'HC-WT9302 / HCMT7987-NAND' 40-server-web/mayebano-support/index.html
           grep -q 'href="/nradio-ssh-manager.ipk"' 40-server-web/mayebano-support/index.html
+          grep -q 'NROS上开发的插件' 40-server-web/mayebano-support/index.html
+          grep -q 'href="/nradio-mesh.ipk"' 40-server-web/mayebano-support/index.html
+          grep -q 'href="/nradio-qos-pro.ipk"' 40-server-web/mayebano-support/index.html
           grep -q '不能通过隐藏链接打开 SSH' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio 应用商店中选择本地安装' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C2000Ultra' 40-server-web/mayebano-support/index.html
@@ -221,7 +226,7 @@ jobs:
           ! grep -q 'NRadio_N5000' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'C5800-650 另兼容已验证的 NROS 1.9.x，标准 OpenWrt 不适用' 40-server-web/mayebano-support/index.html
           grep -q '此工具是 SSH 脚本，不是应用商店安装包或固件包' 40-server-web/mayebano-support/index.html
-          grep -q 'grid-template-columns: repeat(5, minmax(0, 1fr));' 40-server-web/mayebano-support/index.html
+          grep -q 'grid-template-columns: repeat(6, minmax(0, 1fr));' 40-server-web/mayebano-support/index.html
           grep -q '.hero-btns .btn' 40-server-web/mayebano-support/index.html
           grep -q 'V2.8.5' 40-server-web/mayebano-support/index.html
           grep -q 'V2.8.0' 40-server-web/mayebano-support/index.html
@@ -245,9 +250,15 @@ jobs:
           grep -q '"/00-current/ssh-nradio-plugin-installer.sh"' vercel.json
           grep -q '"/nradio-ssh-manager.ipk"' vercel.json
           grep -q '"/40-server-web/mayebano-support/nradio-ssh-manager.ipk"' vercel.json
+          grep -q '"/nradio-mesh.ipk"' vercel.json
+          grep -q '"/40-server-web/mayebano-support/nradio-mesh.ipk"' vercel.json
+          grep -q '"/nradio-qos-pro.ipk"' vercel.json
+          grep -q '"/40-server-web/mayebano-support/nradio-qos-pro.ipk"' vercel.json
           ! grep -q 'ssh-nradio-plugin-installer-2.0.0beta.sh' vercel.json
           test ! -e 40-server-web/mayebano-support/ssh-nradio-plugin-installer.sh
           test -s 40-server-web/mayebano-support/nradio-ssh-manager.ipk
+          test -s 40-server-web/mayebano-support/nradio-mesh.ipk
+          test -s 40-server-web/mayebano-support/nradio-qos-pro.ipk
 
       - name: Verify checksum record
         run: |
@@ -258,6 +269,8 @@ jobs:
           main_seen=0
           page_seen=0
           ipk_seen=0
+          mesh_ipk_seen=0
+          qos_ipk_seen=0
           source_seen=0
           vercel_seen=0
           while read -r hash size path; do
@@ -269,15 +282,19 @@ jobs:
               00-current/ssh-nradio-plugin-installer.sh) main_seen=$((main_seen + 1)) ;;
               40-server-web/mayebano-support/index.html) page_seen=$((page_seen + 1)) ;;
               40-server-web/mayebano-support/nradio-ssh-manager.ipk) ipk_seen=$((ipk_seen + 1)) ;;
+              40-server-web/mayebano-support/nradio-mesh.ipk) mesh_ipk_seen=$((mesh_ipk_seen + 1)) ;;
+              40-server-web/mayebano-support/nradio-qos-pro.ipk) qos_ipk_seen=$((qos_ipk_seen + 1)) ;;
               40-server-web/mayebano-support/ai_studio_code.html) source_seen=$((source_seen + 1)) ;;
               vercel.json) vercel_seen=$((vercel_seen + 1)) ;;
               *) exit 1 ;;
             esac
           done < <(grep -E '^[0-9a-f]{64}[[:space:]]+[0-9]+[[:space:]]+' CHECKSUMS.txt)
-          test "$records" -eq 5
+          test "$records" -eq 7
           test "$main_seen" -eq 1
           test "$page_seen" -eq 1
           test "$ipk_seen" -eq 1
+          test "$mesh_ipk_seen" -eq 1
+          test "$qos_ipk_seen" -eq 1
           test "$source_seen" -eq 1
           test "$vercel_seen" -eq 1
 
@@ -291,6 +308,9 @@ jobs:
           grep -q 'NRadio_C8-788' README.md
           grep -q 'NRadio_C8-788' CHANGELOG.md
           grep -q 'nradio-ssh-manager.ipk' README.md
+          grep -q 'nradio-mesh.ipk' README.md
+          grep -q 'nradio-qos-pro.ipk' README.md
+          grep -q '三个 IPK 下载地址' CHANGELOG.md
           grep -q '## V2.9.9 更新' README.md
           grep -q '## V2.9.9 - 2026-08-20' CHANGELOG.md
           grep -q '## V2.9.8 - 2026-08-17' CHANGELOG.md
