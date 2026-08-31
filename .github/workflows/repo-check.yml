@@ -244,6 +244,29 @@ jobs:
           grep -q 'ssh-nradio-plugin-installer.sh' 40-server-web/mayebano-support/index.html
           ! grep -Eq '收口|能力感知|底座|革命|全案|兜底|门禁|闭环|不冒充|未声明|尚未声称|绝对稳定|最纯粹|全链路|功能放行' 40-server-web/mayebano-support/index.html
 
+      - name: Verify QoS 1.0.24 application-store package
+        run: |
+          grep -q 'V1.0.24-1 · QOS' 40-server-web/mayebano-support/index.html
+          grep -q 'luci-app-nradio-qos-pro_1.0.24-1_all.ipk' 40-server-web/mayebano-support/index.html
+          grep -q '## QoS 应用商店插件 1.0.24' README.md
+          grep -q '## NRadio QoS Pro 1.0.24 - 2026-08-31' CHANGELOG.md
+          work="$(mktemp -d)"
+          tar -xzf 40-server-web/mayebano-support/nradio-qos-pro.ipk -C "$work"
+          test "$(cat "$work/debian-binary")" = 2.0
+          mkdir "$work/control" "$work/data"
+          tar -xzf "$work/control.tar.gz" -C "$work/control"
+          tar -xzf "$work/data.tar.gz" -C "$work/data"
+          grep -qx 'Package: luci-app-nradio-qos-pro' "$work/control/control"
+          grep -qx 'Version: 1.0.24-1' "$work/control/control"
+          grep -qx 'Architecture: all' "$work/control/control"
+          grep -qx 'VERSION="1.0.24"' "$work/data/usr/sbin/nradio-qos-pro"
+          grep -q 'parent.version=1.0.24' "$work/data/usr/libexec/nradio-qos-pro-appcenter"
+          grep -q 'child.version=1.0.24' "$work/data/usr/libexec/nradio-qos-pro-appcenter"
+          grep -q 'version = "1.0.24"' "$work/data/usr/lib/lua/luci/controller/nradio_adv/nradio_qos_pro.lua"
+          test -x "$work/data/etc/hotplug.d/openvpn/99-nradio-qos-pro"
+          sh -n "$work/data/usr/sbin/nradio-qos-pro"
+          sh -n "$work/data/etc/hotplug.d/openvpn/99-nradio-qos-pro"
+
       - name: Verify Vercel public routes
         run: |
           grep -q '"/ssh-nradio-plugin-installer.sh"' vercel.json

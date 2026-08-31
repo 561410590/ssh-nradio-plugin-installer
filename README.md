@@ -12,6 +12,14 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
 `V3.0.0` 总脚本、支持页、仓库资料与检查规则使用同一版本。公开 `main`、tag 和 Release 以 GitHub 实际页面为准。
 
+## QoS 应用商店插件 1.0.24
+
+- 当前下载包：`luci-app-nradio-qos-pro_1.0.24-1_all.ipk`；支持页固定入口为 [nradio-qos-pro.ipk](https://nradio.mayebano.shop/nradio-qos-pro.ipk)。在 NRadio 应用商店选择本地安装，配置真实带宽后启用。
+- VPN 与双线路联动：启停、VPN 重连和后台检查同步站点路由的 mwan3 排除集合；失败显示诊断，VPN-only 恢复保留限速队列。
+- C8-788：依据 `HC-WT9302 / HCMT7987-NAND / NROS 2.2.12.n0.c1` 实机输出适配 `eth3` 蜂窝出口及原厂双栈全宽 mark 分类顺序。
+- 合并 IPv6 多地址跟踪、减少队列重建、未保存输入保护和请求超时处理。本地回归与安装包检查通过；实机 VPN 连通性和限速数值需按设备验收。
+- 本节是独立 QoS 插件更新，总脚本版本仍为 `V3.0.0`。
+
 ## 适用设备
 
 支持以下官方 NROS 设备：
