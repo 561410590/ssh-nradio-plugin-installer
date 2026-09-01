@@ -194,7 +194,7 @@ jobs:
 
       - name: Verify support page state
         run: |
-          grep -q '<title>NRadio 插件脚本 V3.0.0 | 支持页</title>' 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件脚本 V3.0.5 | 支持页</title>' 40-server-web/mayebano-support/index.html
           grep -q 'aria-label="当前版本">V3.0.5' 40-server-web/mayebano-support/index.html
           grep -q 'V3.0.5 / 2026-09-01' 40-server-web/mayebano-support/index.html
           grep -q '5G 连接监听' 40-server-web/mayebano-support/index.html
@@ -331,7 +331,7 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'NRadio V3.0.5 repository checksums' CHECKSUMS.txt
+          grep -q 'NRadio V3.0.5 release checksums' CHECKSUMS.txt
           grep -q 'Generated from local file contents on 2026-09-01' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt
           records=0
@@ -373,7 +373,7 @@ jobs:
       - name: Verify repository docs
         run: |
           grep -q '当前版本：`V3.0.5`' README.md
-          grep -q '当前公网正式版本：`V3.0.0`' README.md
+          grep -q '当前公网正式版本：`V3.0.5`' README.md
           grep -q '## V3.0.5 更新' README.md
           grep -q '## V3.0.0 更新' README.md
           grep -q '## V3.0.5 - 2026-09-01' CHANGELOG.md

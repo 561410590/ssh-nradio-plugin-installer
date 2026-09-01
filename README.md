@@ -2,15 +2,15 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V3.0.5`（2026-09-01 本地构建）
-- 当前公网正式版本：`V3.0.0`，下载与校验以 GitHub Releases 页面为准
+- 当前版本：`V3.0.5`（2026-09-01）
+- 当前公网正式版本：`V3.0.5`，下载与校验以 GitHub Releases 页面为准
 - 当前状态：`V3.0.5` 总脚本、支持页、AK68-798 SSH 配置包和 Repository checks 已同步。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-`V3.0.5` 总脚本、支持页、仓库资料与检查规则使用同一版本。公开 `main`、tag 和 Release 以 GitHub 实际页面为准。
+`V3.0.5` 总脚本、支持页、仓库资料与检查规则使用同一版本。正式标签与 Release 为 `v3.0.5`。
 
 ## QoS 应用商店插件 1.0.24
 
