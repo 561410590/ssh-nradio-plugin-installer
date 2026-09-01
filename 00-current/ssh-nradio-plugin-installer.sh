@@ -2,12 +2,12 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.0.0"
+SCRIPT_VERSION="V3.0.5"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-08-30"
+SCRIPT_RELEASE_DATE="2026-09-01"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
-SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro 官方NROS系统"
-SCRIPT_SCOPE_NOTICE="适用于带 NRadio 应用商店的官方固件，并非标准 OpenWrt"
+SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
+SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
 SCRIPT_DISCLAIMER="此脚本为免费分享的非商业项目，禁止任何形式的付费传播或倒卖"
 SCRIPT_SUPPORT_NOTICE="自愿支持仅用于脚本维护与后续更新"
 SUPPORT_PAGE_URL="https://nradio.mayebano.shop/"
@@ -996,6 +996,14 @@ is_current_model_c8_788() {
     [ "$(detect_current_nradio_model_quiet 2>/dev/null || true)" = 'NRadio_C8-788' ]
 }
 
+is_current_model_ak798() {
+    [ "$(detect_current_nradio_model_quiet 2>/dev/null || true)" = 'NRadio_AK68-798' ]
+}
+
+is_ak798_compat_appcenter_file() {
+    [ -f "$1" ] && grep -Fq -e 'NRadio AK68-798 compatibility appcenter layer' -e 'NRadio AK798 compatibility appcenter layer' "$1" 2>/dev/null
+}
+
 is_c2000pro_compat_appcenter_file() {
     target_file="$1"
     [ -f "$target_file" ] || return 1
@@ -1004,6 +1012,15 @@ is_c2000pro_compat_appcenter_file() {
 
 detect_appcenter_environment_profile() {
     profile_model="$(detect_current_nradio_model_quiet 2>/dev/null || true)"
+
+    if [ "$profile_model" = 'NRadio_AK68-798' ]; then
+        if [ -f "$CFG" ] && is_ak798_compat_appcenter_file "$TPL" && is_ak798_compat_appcenter_file "$APPCENTER_CONTROLLER"; then
+            printf '%s\n' 'ak798_compat'
+        else
+            printf '%s\n' 'ak798_base'
+        fi
+        return 0
+    fi
 
     if [ "$profile_model" = 'NRadio_C2000Pro' ]; then
         if [ -f "$CFG" ] && is_c2000pro_compat_appcenter_file "$TPL" && is_c2000pro_compat_appcenter_file "$APPCENTER_CONTROLLER"; then
@@ -1032,7 +1049,7 @@ is_c2000pro_appcenter_environment() {
 
 has_nradio_oem_appcenter() {
     case "$(detect_appcenter_environment_profile 2>/dev/null || true)" in
-        legacy_appcenter|c2000pro_compat)
+        legacy_appcenter|c2000pro_compat|ak798_compat)
             return 0
             ;;
     esac
@@ -1125,6 +1142,9 @@ normalize_nradio_model() {
     combined="$(printf '%s %s %s' "$raw_model" "$raw_board" "$raw_compat" | tr '[:lower:]' '[:upper:]')"
 
     case "$combined" in
+        *HC-WT9194*|*HCMT7987-S256*)
+            printf '%s\n' 'NRadio_AK68-798'
+            ;;
         *HC-WT9108*)
             printf '%s\n' 'NRadio_C8-668'
             ;;
@@ -1367,6 +1387,11 @@ require_supported_nradio_model_environment() {
 log_nradio_oem_environment_hint() {
     appcenter_profile="$(detect_appcenter_environment_profile 2>/dev/null || true)"
     case "$appcenter_profile" in
+        ak798_base|ak798_compat)
+            log "环境检测: AK68-798 16 MiB NOR 轻量模式，应用商店通过 4 > 4 > 1 创建或更新"
+            log "提示: 总脚本建议放在 /tmp；当前开放轻量商店维护与统一体检"
+            return 0
+            ;;
         legacy_appcenter)
             log "环境检测: 已检测到 NRadio 应用商店"
             return 0
@@ -1394,7 +1419,7 @@ log_nradio_oem_environment_hint() {
 require_nradio_appcenter_startup_environment() {
     appcenter_profile="$(detect_appcenter_environment_profile 2>/dev/null || true)"
     case "$appcenter_profile" in
-        legacy_appcenter|c2000pro_compat|c2000pro_base)
+        legacy_appcenter|c2000pro_compat|c2000pro_base|ak798_compat|ak798_base)
             return 0
             ;;
     esac
@@ -1406,6 +1431,10 @@ require_nradio_appcenter_startup_environment() {
 }
 
 require_nradio_oem_appcenter() {
+    if is_current_model_ak798; then
+        ensure_ak798_compat_appcenter
+        return 0
+    fi
     if is_c2000pro_appcenter_environment; then
         ensure_c2000pro_compat_appcenter
         return 0
@@ -1442,7 +1471,14 @@ release_script_lock() {
         LOCK_OWNER='0'
         return 1
     }
-    rm -rf "$LOCK_DIR" >/dev/null 2>&1 || true
+    if [ "$(cat "$LOCK_DIR/pid" 2>/dev/null || true)" = "$$" ] &&
+       lock_pid_matches_owner "$LOCK_DIR" "$$"; then
+        rm -f "$LOCK_DIR/pid" "$LOCK_DIR/starttime"
+        for release_attempt in 1 2 3; do
+            rmdir "$LOCK_DIR" 2>/dev/null && break
+            sleep 1
+        done
+    fi
     LOCK_OWNER='0'
 }
 
@@ -1478,10 +1514,30 @@ lock_pid_matches_owner() {
 }
 
 write_lock_identity() {
-    lock_path="$1"
-    printf '%s\n' "$$" > "$lock_path/pid"
+    local lock_path="$1" current_starttime
     current_starttime="$(process_starttime "$$" 2>/dev/null || true)"
-    [ -n "$current_starttime" ] && printf '%s\n' "$current_starttime" > "$lock_path/starttime"
+    [ -n "$current_starttime" ] || return 1
+    printf '%s\n' "$current_starttime" > "$lock_path/starttime" &&
+        printf '%s\n' "$$" > "$lock_path/pid"
+}
+
+reclaim_initialized_task_lock() {
+    local path="$1" checker="$2" old_pid old_start
+    [ -d "$path" ] && [ ! -L "$path" ] || return 1
+    old_pid="$(cat "$path/pid" 2>/dev/null || true)"
+    old_start="$(cat "$path/starttime" 2>/dev/null || true)"
+    case "$old_pid" in ''|*[!0-9]*) return 1 ;; esac
+    case "$old_start" in ''|*[!0-9]*) return 1 ;; esac
+    mkdir "$path/reap" 2>/dev/null || return 1
+    if [ "$(cat "$path/pid" 2>/dev/null || true)" = "$old_pid" ] &&
+       [ "$(cat "$path/starttime" 2>/dev/null || true)" = "$old_start" ] &&
+       ! "$checker" "$path" "$old_pid"; then
+        rm -f "$path/pid" "$path/starttime" || { rmdir "$path/reap"; return 1; }
+        rmdir "$path/reap" && rmdir "$path"
+        return $?
+    fi
+    rmdir "$path/reap" 2>/dev/null || true
+    return 1
 }
 
 acquire_script_lock() {
@@ -1489,7 +1545,7 @@ acquire_script_lock() {
     mkdir -p "$(dirname "$LOCK_DIR")" >/dev/null 2>&1 || true
 
     if mkdir "$LOCK_DIR" 2>/dev/null; then
-        write_lock_identity "$LOCK_DIR"
+        write_lock_identity "$LOCK_DIR" || die "写入脚本锁身份失败: $LOCK_DIR"
         LOCK_OWNER='1'
         return 0
     fi
@@ -1499,9 +1555,10 @@ acquire_script_lock() {
         die "已有其他 nradio-plugin-assistant 实例正在运行（pid $lock_pid）"
     fi
 
-    rm -rf "$LOCK_DIR" 2>/dev/null || die "清理过期脚本锁失败: $LOCK_DIR"
+    reclaim_initialized_task_lock "$LOCK_DIR" lock_pid_matches_owner ||
+        die "脚本锁正在初始化、回收或身份不完整，请核对后重试: $LOCK_DIR"
     mkdir "$LOCK_DIR" 2>/dev/null || die "获取脚本锁失败: $LOCK_DIR"
-    write_lock_identity "$LOCK_DIR"
+    write_lock_identity "$LOCK_DIR" || die "写入脚本锁身份失败: $LOCK_DIR"
     LOCK_OWNER='1'
     log "提示: 已清除过期的脚本锁"
 }
@@ -1946,22 +2003,22 @@ probe_url_http_ms() {
         return 0
     }
 
-    probe_out="$(curl -L -I -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -fL -I -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null)" || probe_out='000|0'
     probe_code="${probe_out%%|*}"
     probe_time="${probe_out#*|}"
 
-    if [ -n "$probe_time" ] && [ "$probe_code" != "$probe_out" ] && [ "$probe_code" != '000' ]; then
+    if [ -n "$probe_time" ] && [ "$probe_code" -ge 200 ] && [ "$probe_code" -lt 300 ]; then
         probe_ms="$(printf '%s\n' "$probe_time" | awk '($1 ~ /^[0-9.]+$/) { printf "%d\n", ($1 * 1000) + 0.5 }')"
         [ -n "$probe_ms" ] || probe_ms="999999"
         printf '%s\n' "$probe_ms"
         return 0
     fi
 
-    probe_out="$(curl -L -r 0-0 -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -fL -r 0-0 -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_starttransfer}' "$probe_url" 2>/dev/null)" || probe_out='000|0'
     probe_code="${probe_out%%|*}"
     probe_time="${probe_out#*|}"
 
-    if [ -n "$probe_time" ] && [ "$probe_code" != "$probe_out" ] && [ "$probe_code" != '000' ]; then
+    if [ -n "$probe_time" ] && [ "$probe_code" -ge 200 ] && [ "$probe_code" -lt 300 ]; then
         probe_ms="$(printf '%s\n' "$probe_time" | awk '($1 ~ /^[0-9.]+$/) { printf "%d\n", ($1 * 1000) + 0.5 }')"
         [ -n "$probe_ms" ] || probe_ms="999999"
     fi
@@ -1980,13 +2037,13 @@ probe_url_partial_download_ms() {
         return 0
     }
 
-    probe_out="$(curl -L -r "0-$probe_range_end" -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_total}|%{size_download}' "$probe_url" 2>/dev/null || true)"
+    probe_out="$(curl -fL -r "0-$probe_range_end" -o /dev/null -sS --connect-timeout "$CDN_HTTP_PROBE_CONNECT_TIMEOUT" --max-time "$CDN_HTTP_PROBE_MAX_TIME" -w '%{http_code}|%{time_total}|%{size_download}' "$probe_url" 2>/dev/null)" || probe_out='000|0|0'
     probe_code="${probe_out%%|*}"
     probe_rest="${probe_out#*|}"
     probe_time="${probe_rest%%|*}"
     probe_size="${probe_rest##*|}"
 
-    if [ -n "$probe_time" ] && [ "$probe_code" != "$probe_out" ] && [ "$probe_code" != '000' ] && [ "${probe_size:-0}" -ge "$probe_min_bytes" ] 2>/dev/null; then
+    if [ -n "$probe_time" ] && [ "$probe_code" -ge 200 ] && [ "$probe_code" -lt 300 ] && [ "${probe_size:-0}" -ge "$probe_min_bytes" ] 2>/dev/null; then
         probe_ms="$(printf '%s\n' "$probe_time" | awk '($1 ~ /^[0-9.]+$/) { printf "%d\n", ($1 * 1000) + 0.5 }')"
         [ -n "$probe_ms" ] || probe_ms="999999"
     fi
@@ -2451,6 +2508,7 @@ backup_file() {
 }
 
 ensure_state_dir() {
+    [ "${NRADIO_READONLY_SELFTEST:-0}" = '1' ] && return 0
     mkdir -p "$STATE_DIR"
     chmod 700 "$STATE_DIR" 2>/dev/null || true
 }
@@ -2859,7 +2917,7 @@ umask 077
 plugin="${1:-}"
 STATE_DIR="/root/.nradio-plugin-menu"
 WORKDIR="/var/run/nradio-plugin-uninstall/work.$$"
-UNINSTALL_LOG_FILE="$WORKDIR/uninstall-detail.log"
+UNINSTALL_LOG_FILE="${UNINSTALL_LOG_FILE:-$WORKDIR/uninstall-detail.log}"
 OPKG_LOCK_FILE="/var/lock/opkg.lock"
 GLOBAL_LOCK_DIR="/var/run/nradio-plugin-assistant.lock"
 GLOBAL_LOCK_OWNER='0'
@@ -2934,15 +2992,42 @@ uninstall_lock_pid_matches_owner() {
 }
 
 write_uninstall_lock_identity() {
-    lock_path="$1"
-    printf '%s\n' "$$" > "$lock_path/pid"
+    local lock_path="$1" current_starttime
     current_starttime="$(process_starttime "$$" 2>/dev/null || true)"
-    [ -n "$current_starttime" ] && printf '%s\n' "$current_starttime" > "$lock_path/starttime"
+    [ -n "$current_starttime" ] || return 1
+    printf '%s\n' "$current_starttime" > "$lock_path/starttime" &&
+        printf '%s\n' "$$" > "$lock_path/pid"
+}
+
+reclaim_initialized_task_lock() {
+    local path="$1" checker="$2" old_pid old_start
+    [ -d "$path" ] && [ ! -L "$path" ] || return 1
+    old_pid="$(cat "$path/pid" 2>/dev/null || true)"
+    old_start="$(cat "$path/starttime" 2>/dev/null || true)"
+    case "$old_pid" in ''|*[!0-9]*) return 1 ;; esac
+    case "$old_start" in ''|*[!0-9]*) return 1 ;; esac
+    mkdir "$path/reap" 2>/dev/null || return 1
+    if [ "$(cat "$path/pid" 2>/dev/null || true)" = "$old_pid" ] &&
+       [ "$(cat "$path/starttime" 2>/dev/null || true)" = "$old_start" ] &&
+       ! "$checker" "$path" "$old_pid"; then
+        rm -f "$path/pid" "$path/starttime" || { rmdir "$path/reap"; return 1; }
+        rmdir "$path/reap" && rmdir "$path"
+        return $?
+    fi
+    rmdir "$path/reap" 2>/dev/null || true
+    return 1
 }
 
 release_uninstall_global_lock() {
     [ "${GLOBAL_LOCK_OWNER:-0}" = '1' ] || return 0
-    rm -rf "$GLOBAL_LOCK_DIR" >/dev/null 2>&1 || true
+    if [ "$(cat "$GLOBAL_LOCK_DIR/pid" 2>/dev/null || true)" = "$$" ] &&
+       uninstall_lock_pid_matches_owner "$GLOBAL_LOCK_DIR" "$$"; then
+        rm -f "$GLOBAL_LOCK_DIR/pid" "$GLOBAL_LOCK_DIR/starttime"
+        for release_attempt in 1 2 3; do
+            rmdir "$GLOBAL_LOCK_DIR" 2>/dev/null && break
+            sleep 1
+        done
+    fi
     GLOBAL_LOCK_OWNER='0'
 }
 
@@ -2950,7 +3035,7 @@ acquire_uninstall_global_lock() {
     mkdir -p "$(dirname "$GLOBAL_LOCK_DIR")" >/dev/null 2>&1 || true
 
     if mkdir "$GLOBAL_LOCK_DIR" 2>/dev/null; then
-        write_uninstall_lock_identity "$GLOBAL_LOCK_DIR"
+        write_uninstall_lock_identity "$GLOBAL_LOCK_DIR" || die "写入全局任务锁身份失败：$GLOBAL_LOCK_DIR"
         GLOBAL_LOCK_OWNER='1'
         return 0
     fi
@@ -2963,9 +3048,10 @@ acquire_uninstall_global_lock() {
         die "已有安装或卸载任务正在运行（pid $lock_pid）"
     fi
 
-    rm -rf "$GLOBAL_LOCK_DIR" 2>/dev/null || die "清理过期全局锁失败：$GLOBAL_LOCK_DIR"
+    reclaim_initialized_task_lock "$GLOBAL_LOCK_DIR" uninstall_lock_pid_matches_owner ||
+        die "全局锁正在初始化、回收或身份不完整，请核对后重试：$GLOBAL_LOCK_DIR"
     mkdir "$GLOBAL_LOCK_DIR" 2>/dev/null || die "获取全局任务锁失败：$GLOBAL_LOCK_DIR"
-    write_uninstall_lock_identity "$GLOBAL_LOCK_DIR"
+    write_uninstall_lock_identity "$GLOBAL_LOCK_DIR" || die "写入全局任务锁身份失败：$GLOBAL_LOCK_DIR"
     GLOBAL_LOCK_OWNER='1'
     log "提示: 已清除过期的安装/卸载全局锁"
 }
@@ -3055,12 +3141,12 @@ restore_dnsmasq_system_dns_when_adguard_unready() {
         fi
     fi
 
-    dhcp_show="$(uci -q show dhcp 2>/dev/null || true)"
-    if printf '%s\n' "$dhcp_show" | grep -F "dhcp.@dnsmasq[0].server='$adg_dns_server_rule'" >/dev/null 2>&1; then
+    dhcp_show="$(uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null | tr ' ' '\n' || true)"
+    if printf '%s\n' "$dhcp_show" | grep -Fx "$adg_dns_server_rule" >/dev/null 2>&1; then
         adg_restore_needed='1'
         adg_primary_rule_present='1'
     fi
-    if [ "$adg_remove_legacy_dns_server_rule" = '1' ] && printf '%s\n' "$dhcp_show" | grep -F "dhcp.@dnsmasq[0].server='$adg_legacy_dns_server_rule'" >/dev/null 2>&1; then
+    if [ "$adg_remove_legacy_dns_server_rule" = '1' ] && printf '%s\n' "$dhcp_show" | grep -Fx "$adg_legacy_dns_server_rule" >/dev/null 2>&1; then
         adg_restore_needed='1'
         adg_legacy_rule_present='1'
     fi
@@ -3261,7 +3347,7 @@ delete_appcenter_sections() {
 
     [ -n "$field_value" ] || return 0
 
-    uci show appcenter 2>/dev/null | while IFS= read -r line; do
+    uci -X show appcenter 2>/dev/null | while IFS= read -r line; do
         case "$line" in
             "appcenter.@${section_type}"*".${field_name}='${field_value}'"|"appcenter.cfg"*".${field_name}='${field_value}'")
                 sec="${line#appcenter.}"
@@ -3373,19 +3459,13 @@ cleanup_easytier_route_rc_hook() {
 }
 
 remove_dnsmasq_server_rules_for_domain() {
-    domain="$1"
+    local domain="$1"
     [ -n "$domain" ] || return 0
     command -v uci >/dev/null 2>&1 || return 0
     [ -f /etc/config/dhcp ] || return 0
 
-    uci -q show dhcp 2>/dev/null | awk -F"'" -v domain="$domain" '
-        /\.server=/ {
-            value = $2
-            prefix = "/" domain "/"
-            if (index(value, prefix) == 1) {
-                print value
-            }
-        }
+    uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null | tr ' ' '\n' | awk -v domain="$domain" '
+        index($0, "/" domain "/") == 1 { print }
     ' | while IFS= read -r server_rule; do
         [ -n "$server_rule" ] || continue
         uci -q del_list "dhcp.@dnsmasq[0].server=$server_rule" >/dev/null 2>&1 || true
@@ -3799,8 +3879,8 @@ cleanup_openlist() {
     remove_pkg_if_present openlist
     remove_pkg_if_present luci-app-openlist
     remove_pkg_if_present luci-i18n-openlist-zh-cn
-    uci show firewall 2>/dev/null | awk '
-        /^firewall\.@rule\[[0-9]+\]=rule$/ {
+    uci -X show firewall 2>/dev/null | awk '
+        /^firewall\.[^.]+=rule$/ {
             sec=$1
             sub(/^firewall\./, "", sec)
             sub(/=.*/, "", sec)
@@ -4650,7 +4730,7 @@ local function reconcile_task(status_file, rc_file, log_file, pid_file, started_
     return "fail", false
 end
 
-local function start_plugin(plugin)
+local function start_plugin_locked(plugin)
     local status_file, rc_file, log_file, pid_file, started_file = task_paths(plugin)
     local lock_dir = task_lock_path(plugin)
     local helper_test = io.open(HELPER, "r")
@@ -4676,14 +4756,8 @@ local function start_plugin(plugin)
     end
 
     if not os_ok(os.execute("/bin/mkdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")) then
-        status, running = reconcile_task(status_file, rc_file, log_file, pid_file, started_file, lock_dir)
-        if not running then
-            os.execute("/bin/rmdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")
-        end
-        if not os_ok(os.execute("/bin/mkdir " .. shell_quote(lock_dir) .. " >/dev/null 2>&1")) then
-            json_response(CODE_RUNNING, "正在卸载")
-            return
-        end
+        json_response(CODE_RUNNING, "卸载任务正在运行或初始化，请稍后重试")
+        return
     end
 
     status, running = reconcile_task(status_file, rc_file, log_file, pid_file, started_file, lock_dir)
@@ -4728,6 +4802,24 @@ local function start_plugin(plugin)
     json_response(CODE_RUNNING, "正在卸载")
 end
 
+local function with_task_request_lock(plugin, callback)
+    local guard = TASK_DIR .. "/" .. plugin .. ".request-lock"
+    os.execute("/bin/mkdir -p " .. shell_quote(TASK_DIR) .. " >/dev/null 2>&1")
+    if not os_ok(os.execute("/bin/mkdir " .. shell_quote(guard) .. " >/dev/null 2>&1")) then
+        json_response(CODE_RUNNING, "卸载请求正在处理；持续占用时请核对请求锁")
+        return
+    end
+    local ok, err = pcall(callback)
+    os.execute("/bin/rmdir " .. shell_quote(guard) .. " >/dev/null 2>&1")
+    if not ok then
+        json_response(CODE_FAILED, "卸载请求异常", tostring(err))
+    end
+end
+
+local function start_plugin(plugin)
+    with_task_request_lock(plugin, function() start_plugin_locked(plugin) end)
+end
+
 local function start_by_name(name)
     local plugin = plugin_from_name(name)
 
@@ -4744,7 +4836,7 @@ function start_uninstall()
     start_by_name(http.formvalue("name") or http.formvalue("plugin") or "")
 end
 
-function check_uninstall()
+local function check_uninstall_locked()
     local http = require "luci.http"
     local plugin = plugin_from_name(http.formvalue("name") or http.formvalue("plugin") or "")
     local status_file, rc_file, log_file, pid_file, started_file
@@ -4777,6 +4869,16 @@ function check_uninstall()
     else
         json_response(CODE_FAILED, "卸载状态不可用", "未找到有效的卸载任务；可重新发起卸载。")
     end
+end
+
+function check_uninstall()
+    local http = require "luci.http"
+    local plugin = plugin_from_name(http.formvalue("name") or http.formvalue("plugin") or "")
+    if not plugin then
+        json_response(CODE_FAILED, "卸载失败", "未知插件")
+        return
+    end
+    with_task_request_lock(plugin, check_uninstall_locked)
 end
 
 function uninstall_openclash()
@@ -4958,7 +5060,9 @@ load_openvpn_runtime_state() {
     fi
     if [ -f "$RUNTIME_STATE_FILE" ]; then
         if ! state_file_is_v2 "$RUNTIME_STATE_FILE" || ! . "$RUNTIME_STATE_FILE" 2>/dev/null; then
-            rm -f "$RUNTIME_STATE_FILE"
+            if [ "${NRADIO_READONLY_SELFTEST:-0}" != '1' ]; then
+                rm -f "$RUNTIME_STATE_FILE"
+            fi
             clear_openvpn_runtime_state_vars
         fi
     fi
@@ -5058,7 +5162,9 @@ load_openvpn_route_state() {
     clear_openvpn_route_state_vars
     if [ -f "$ROUTE_STATE_FILE" ]; then
         if ! state_file_is_v2 "$ROUTE_STATE_FILE" || ! . "$ROUTE_STATE_FILE" 2>/dev/null; then
-            rm -f "$ROUTE_STATE_FILE"
+            if [ "${NRADIO_READONLY_SELFTEST:-0}" != '1' ]; then
+                rm -f "$ROUTE_STATE_FILE"
+            fi
             clear_openvpn_route_state_vars
         else
             normalize_openvpn_route_state_vars
@@ -5980,7 +6086,7 @@ find_uci_section() {
 cleanup_appcenter_route_entries() {
     target_route="$1"
 
-    uci show appcenter 2>/dev/null | awk -v route="$target_route" '
+    uci -X show appcenter 2>/dev/null | awk -v route="$target_route" '
         /^appcenter\.[^.]+=package_list$/ {
             sec=$0
             sub(/^appcenter\./, "", sec)
@@ -6014,7 +6120,7 @@ delete_appcenter_sections() {
 
     [ -n "$field_value" ] || return 0
 
-    uci show appcenter 2>/dev/null | while IFS= read -r line; do
+    uci -X show appcenter 2>/dev/null | while IFS= read -r line; do
         case "$line" in
             "appcenter.@${section_type}"*".${field_name}='${field_value}'"|"appcenter.cfg"*".${field_name}='${field_value}'")
                 sec="${line#appcenter.}"
@@ -6933,7 +7039,7 @@ write_c2000pro_compat_appcenter_template() {
     <div class="nr-c2000pro-head">
       <div>
         <h2 class="nr-c2000pro-title">NRadio 应用商店</h2>
-        <div class="nr-c2000pro-sub">C2000Pro 兼容商店层，读取 /etc/config/appcenter 插件记录。</div>
+        <div class="nr-c2000pro-sub">C2000Pro 轻量商店，管理已登记插件；不提供原厂软件下载服务。</div>
       </div>
       <div class="nr-c2000pro-status">
         <span class="nr-c2000pro-pill">机型 <span id="nr-model">-</span></span>
@@ -7008,7 +7114,20 @@ function nrEnableFrameScroll(){
         if(d.__nrFrameTouchMove)d.removeEventListener("touchmove",d.__nrFrameTouchMove,moveOptions);
         if(d.__nrFrameTouchEnd){d.removeEventListener("touchend",d.__nrFrameTouchEnd,startOptions);d.removeEventListener("touchcancel",d.__nrFrameTouchEnd,startOptions);}
         d.__nrFrameTouchStart=function(e){if(e.touches&&e.touches.length===1){tracking=true;lastY=e.touches[0].clientY;}};
-        d.__nrFrameTouchMove=function(e){if(!tracking||!e.touches||e.touches.length!==1)return;var y=e.touches[0].clientY;var delta=lastY-y;var target=d.scrollingElement||d.documentElement||d.body;if(Math.abs(delta)<1||!target||target.scrollHeight<=target.clientHeight)return;target.scrollTop+=delta;lastY=y;e.preventDefault();};
+        d.__nrFrameTouchMove=function(e){
+            if(!tracking||!e.touches||e.touches.length!==1)return;
+            var y=e.touches[0].clientY,delta=lastY-y,target=e.target;lastY=y;
+            while(target&&target!==d.body&&target!==d.documentElement){
+                var overflow=d.defaultView.getComputedStyle(target).overflowY;
+                if(/auto|scroll/.test(overflow)&&target.scrollHeight>target.clientHeight&&
+                   (delta<0?target.scrollTop>0:target.scrollTop+target.clientHeight<target.scrollHeight))break;
+                target=target.parentElement;
+            }
+            if(!target||target===d.body||target===d.documentElement)target=d.scrollingElement||d.documentElement||d.body;
+            if(Math.abs(delta)<1||!target||target.scrollHeight<=target.clientHeight)return;
+            var before=target.scrollTop;target.scrollTop+=delta;
+            if(target.scrollTop!==before)e.preventDefault();
+        };
         d.__nrFrameTouchEnd=function(){tracking=false;};
         d.addEventListener("touchstart",d.__nrFrameTouchStart,startOptions);
         d.addEventListener("touchmove",d.__nrFrameTouchMove,moveOptions);
@@ -7018,7 +7137,29 @@ function nrEnableFrameScroll(){
 }
 function nrOpenFrame(name, route){var url=nrRouteUrl(route);var frame=document.getElementById("sub_frame");document.getElementById("nr-frame-title").textContent=name;document.getElementById("nr-frame-open").href=url;frame.onload=nrEnableFrameScroll;frame.src=url;document.getElementById("nr-frame-modal").className="nr-c2000pro-modal is-open";}
 function nrCloseFrame(){document.getElementById("nr-frame-modal").className="nr-c2000pro-modal";document.getElementById("sub_frame").src="about:blank";}
-function nrUninstall(name){if(!confirm("确认卸载 "+name+" 并移除应用商店入口吗？"))return;var x=new XMLHttpRequest();x.open("POST",NR_UNINSTALL_URL,true);x.setRequestHeader("Content-Type","application/x-www-form-urlencoded");x.onreadystatechange=function(){if(x.readyState===4){alert("已提交卸载任务，请稍后刷新。");window.setTimeout(nrReloadApps,1800);}};x.send("token="+encodeURIComponent(NR_TOKEN)+"&name="+encodeURIComponent(name));}
+var NR_UNINSTALL_BUSY = false;
+function nrUninstall(name){
+    if(NR_UNINSTALL_BUSY||!confirm("确认卸载 "+name+" 并移除应用商店入口吗？"))return;
+    NR_UNINSTALL_BUSY=true;
+    function finish(message){NR_UNINSTALL_BUSY=false;alert(message);nrReloadApps();}
+    function request(check){
+        var x=new XMLHttpRequest();
+        x.open("POST",check?NR_UNINSTALL_URL.replace(/\/start$/,"/check"):NR_UNINSTALL_URL,true);
+        x.timeout=30000;
+        x.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+        x.onreadystatechange=function(){
+            if(x.readyState!==4)return;
+            if(x.status<200||x.status>=300){finish("卸载接口失败 HTTP "+x.status);return;}
+            var data;
+            try{data=JSON.parse(x.responseText);}catch(e){finish("卸载接口返回格式异常");return;}
+            var result=data.result||data,code=Number(result.code);
+            if(code===2){window.setTimeout(function(){request(true);},2000);return;}
+            finish(code===0?(result.msg||"卸载完成"):(result.error_detail||result.errro_detail||result.msg||"卸载失败"));
+        };
+        x.send("token="+encodeURIComponent(NR_TOKEN)+"&name="+encodeURIComponent(name));
+    }
+    request(false);
+}
 var NR_APPS = [];
 function nrBindAppButtons(){var opens=document.querySelectorAll("[data-nr-open]");var uninstalls=document.querySelectorAll("[data-nr-uninstall]");for(var i=0;i<opens.length;i++){opens[i].onclick=function(){var app=NR_APPS[Number(this.getAttribute("data-nr-open"))]||{};nrOpenFrame(nrAppName(app),app.luci_module_route||"");};}for(var j=0;j<uninstalls.length;j++){uninstalls[j].onclick=function(){var app=NR_APPS[Number(this.getAttribute("data-nr-uninstall"))]||{};nrUninstall(nrAppName(app));};}}
 function nrRenderApps(resp){var data=resp.result||resp||{};var apps=data.applist||data.apps||[];var grid=document.getElementById("nr-app-grid");var empty=document.getElementById("nr-app-empty");var html=[];NR_APPS=apps;document.getElementById("nr-app-count").textContent=String(apps.length);for(var i=0;i<apps.length;i++){var app=apps[i];var name=nrAppName(app);var route=app.luci_module_route||"";var icon=nrIconUrl(app.icon||"");html.push('<section class="nr-c2000pro-card"><div class="nr-c2000pro-cardtop">'+(icon?'<img class="nr-c2000pro-icon" src="'+nrEsc(icon)+'" onerror="this.style.visibility=&quot;hidden&quot;">':'<div class="nr-c2000pro-icon"></div>')+'<div><div class="nr-c2000pro-name">'+nrEsc(name)+'</div><div class="nr-c2000pro-version">'+nrEsc(app.version||app.pkg_name||"-")+'</div></div></div><div class="nr-c2000pro-route">'+nrEsc(route||"无 LuCI 路由")+'</div><div class="nr-c2000pro-actions">'+(route?'<button class="nr-c2000pro-btn nr-c2000pro-btn-primary" type="button" data-nr-open="'+i+'">打开</button>':'')+'<button class="nr-c2000pro-btn" type="button" data-nr-uninstall="'+i+'">卸载</button></div></section>');}grid.innerHTML=html.join("");empty.style.display=apps.length?"none":"block";nrBindAppButtons();}
@@ -7119,6 +7260,223 @@ remove_c2000pro_compat_appcenter() {
     fi
 
     [ "$removed_any" = '1' ] || log "提示: 未发现脚本生成的 C2000Pro 兼容商店层文件"
+}
+
+ak798_appcenter_file_map() {
+    printf '%s|%s|%s\n' \
+        appcenter "$CFG" 644 \
+        appcenter.lua "$APPCENTER_CONTROLLER" 644 \
+        appcenter.htm "$TPL" 644 \
+        nradio-plugin-uninstall "$PLUGIN_UNINSTALL_HELPER" 755 \
+        plugin_uninstall.lua "$PLUGIN_UNINSTALL_CONTROLLER" 644
+}
+
+write_ak798_compat_appcenter_assets() (
+    stage="$1"
+    source_config="$CFG"
+    mkdir -p "$stage" || exit 1
+    TPL="$stage/appcenter.htm"
+    APPCENTER_CONTROLLER="$stage/appcenter.lua"
+    PLUGIN_UNINSTALL_HELPER="$stage/nradio-plugin-uninstall"
+    PLUGIN_UNINSTALL_CONTROLLER="$stage/plugin_uninstall.lua"
+    write_c2000pro_compat_appcenter_controller || exit 1
+    write_c2000pro_compat_appcenter_template || exit 1
+    write_plugin_uninstall_assets || exit 1
+    if [ -f "$source_config" ]; then
+        cp "$source_config" "$stage/appcenter" || exit 1
+    else
+        : > "$stage/appcenter" || exit 1
+    fi
+
+    lua - "$stage" <<'EOF_AK798_APPCENTER_ADAPT'
+local stage = assert(arg[1])
+local marker = "NRadio AK68-798 compatibility appcenter layer"
+local function read(name)
+    local f = assert(io.open(stage .. "/" .. name, "rb"))
+    local text = f:read("*a")
+    f:close()
+    return text
+end
+local function write(name, text)
+    local f = assert(io.open(stage .. "/" .. name, "wb"))
+    assert(f:write(text))
+    assert(f:close())
+end
+local function replace_once(text, old, new)
+    local first, last = text:find(old, 1, true)
+    assert(first, "AK68-798 adapter missing anchor: " .. old:sub(1, 60))
+    assert(not text:find(old, last + 1, true), "AK68-798 adapter ambiguous anchor")
+    return text:sub(1, first - 1) .. new .. text:sub(last + 1)
+end
+local function replace_function(text, first_name, next_name, body)
+    local first = assert(text:find("function " .. first_name .. "()", 1, true))
+    local last = assert(text:find("function " .. next_name .. "()", first + 1, true))
+    return text:sub(1, first - 1) .. body .. "\n\n" .. text:sub(last)
+end
+local config = read("appcenter")
+if not config:find(marker, 1, true) then
+    config = config .. "\n# " .. marker .. "\n"
+end
+write("appcenter", config)
+
+local controller = read("appcenter.lua"):gsub("NRadio C2000Pro compatibility appcenter layer", marker)
+controller = replace_function(controller, "index", "action_list", [[function index()
+    local page = entry({"nradioadv", "system", "appcenter"}, template("nradio_appcenter/appcenter"), _("AppCenter"), 30, true)
+    page.dependent = false
+    page.show = true
+    page.sysauth = "root"
+    page.sysauth_authenticator = "htmlauth"
+    entry({"nradioadv", "system", "appcenter", "list"}, call("action_list"), nil, nil, true).leaf = true
+    entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory"), nil, nil, true).leaf = true
+    entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status"), nil, nil, true).leaf = true
+end]])
+controller = replace_function(controller, "action_memory", "action_sys_status", [[function action_memory()
+    local stat = require("nixio.fs").statvfs("/overlay")
+    if not stat then
+        json_response({result = {storage_available = false}})
+        return
+    end
+    local block = tonumber(stat.frsize or stat.bsize) or 0
+    local total = math.floor((tonumber(stat.blocks) or 0) * block / 1024)
+    local available = math.floor((tonumber(stat.bavail or stat.bfree) or 0) * block / 1024)
+    json_response({result = {
+        storage_available = block > 0 and total > 0,
+        total_memory = total,
+        used_memory = math.max(0, total - available),
+        available_memory = available,
+        reserve_memory = 256,
+        storage_limited = true
+    }})
+end]])
+write("appcenter.lua", controller)
+
+local uninstall = read("plugin_uninstall.lua")
+uninstall = replace_once(uninstall, "entry(path, call(handler), nil, order)", "entry(path, call(handler), nil, order, true)")
+uninstall = replace_once(uninstall,
+    'page = entry({"nradioadv", "system", "plugin_uninstall"}, firstchild(), nil, 94)',
+    'page = entry({"nradioadv", "system", "plugin_uninstall"}, firstchild(), nil, 94, true)\n    page.sysauth = "root"\n    page.sysauth_authenticator = "htmlauth"')
+write("plugin_uninstall.lua", "-- " .. marker .. "\n" .. uninstall)
+write("nradio-plugin-uninstall", (read("nradio-plugin-uninstall"):gsub("NRadio C2000Pro compatibility appcenter layer", marker)))
+
+local view = read("appcenter.htm"):gsub("NRadio C2000Pro compatibility appcenter layer", marker)
+view = replace_once(view, "C2000Pro 轻量商店，管理已登记插件；不提供原厂软件下载服务。",
+    "AK68-798 轻量商店，管理已登记插件。16 MiB 闪存，安装插件前请核对体积与依赖。")
+view = replace_once(view,
+    '<div class="nr-c2000pro-kv"><span>接口</span><strong>list / memory / sys_status</strong></div>',
+    '<div class="nr-c2000pro-kv"><span>持久空间</span><strong id="nr-overlay">读取中</strong></div><p id="nr-storage-warning" style="font-size:12px;line-height:1.6;color:#92400e">/tmp 是内存空间，重启后丢失；本页面管理已登记插件，不提供原厂软件下载服务。</p>')
+view = replace_once(view, 'nrReloadApps();window.setInterval(function(){nrJson(NR_STATUS_URL,nrRenderStatus);},2000);', [[var NR_MEMORY_URL = "<%=url('nradioadv/system/appcenter/memory')%>";
+function nrFmtStorage(kib){kib=Number(kib);return kib<1024?kib.toFixed(0)+" KiB":(kib/1024).toFixed(2)+" MiB";}
+function nrRenderStorage(resp){
+    var d=resp.result||resp||{},el=document.getElementById("nr-overlay"),warning=document.getElementById("nr-storage-warning");
+    if(d.storage_available!==true){el.textContent="无法读取 /overlay";return;}
+    el.textContent="剩余 "+nrFmtStorage(d.available_memory)+" / "+nrFmtStorage(d.total_memory);
+    warning.textContent=(Number(d.available_memory)<Number(d.reserve_memory)?"剩余空间低于 256 KiB，请先释放空间。":"16 MiB 小闪存：大型插件需要额外存储，安装前须核对体积与依赖。")+" /tmp 是内存，重启后丢失；这里管理已登记插件，不提供原厂软件下载服务。";
+}
+nrReloadApps();nrJson(NR_MEMORY_URL,nrRenderStorage);
+window.setInterval(function(){nrJson(NR_STATUS_URL,nrRenderStatus);nrJson(NR_MEMORY_URL,nrRenderStorage);},5000);]])
+write("appcenter.htm", view)
+assert(loadfile(stage .. "/appcenter.lua"))
+assert(loadfile(stage .. "/plugin_uninstall.lua"))
+EOF_AK798_APPCENTER_ADAPT
+)
+
+ak798_appcenter_check_space() {
+    local stage="$1" total_bytes=0 name target mode size available needed
+    while IFS='|' read -r name target mode; do
+        size="$(wc -c < "$stage/$name")" || return 1
+        total_bytes=$((total_bytes + size))
+    done < "$stage/files.map"
+    available="$(get_mount_available_kib /overlay)" || {
+        log "AK68-798: 无法读取 /overlay 可用空间，已停止安装"
+        return 1
+    }
+    needed=$(((total_bytes + 1023) / 1024 + 256))
+    log "AK68-798 商店文件约 $(((total_bytes + 1023) / 1024)) KiB；额外保留 256 KiB；当前可用 $available KiB"
+    [ "$available" -ge "$needed" ] || {
+        log "AK68-798: 空间不足，至少需要 $needed KiB 可用空间"
+        return 1
+    }
+}
+
+ak798_appcenter_rollback_files() {
+    local stage="$1" name target mode
+    while IFS='|' read -r name target mode; do
+        rm -f "$target.ak798.$$" 2>/dev/null || true
+        if [ -f "$stage/before/$name" ]; then
+            cp -p "$stage/before/$name" "$target" || log "AK68-798: 恢复文件失败，请检查 $target"
+        elif is_ak798_compat_appcenter_file "$target"; then
+            rm -f "$target" || log "AK68-798: 清理未完成文件失败，请检查 $target"
+        fi
+    done < "$stage/files.map"
+}
+
+ak798_appcenter_apply_files() {
+    local stage="$1" name target mode
+    mkdir -p "$stage/before" || return 1
+    while IFS='|' read -r name target mode; do
+        if [ -f "$target" ]; then
+            cp -p "$target" "$stage/before/$name" || return 1
+        fi
+    done < "$stage/files.map"
+    while IFS='|' read -r name target mode; do
+        if ! mkdir -p "$(dirname "$target")" ||
+            ! cp "$stage/$name" "$target.ak798.$$" ||
+            ! chmod "$mode" "$target.ak798.$$" ||
+            ! mv -f "$target.ak798.$$" "$target"; then
+            ak798_appcenter_rollback_files "$stage"
+            return 1
+        fi
+    done < "$stage/files.map"
+}
+
+refresh_ak798_appcenter() {
+    rm -f /tmp/luci-indexcache 2>/dev/null || true
+    rm -f /tmp/luci-modulecache/* 2>/dev/null || true
+    /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+}
+
+ensure_ak798_compat_appcenter() {
+    local stage="$WORKDIR/ak798-appcenter" name target mode tool
+    is_current_model_ak798 || return 1
+    for tool in lua uci ubus curl; do
+        command -v "$tool" >/dev/null 2>&1 || die "AK68-798 缺少运行依赖: $tool"
+    done
+    lua -e 'require("luci.model.uci"); require("luci.jsonc"); require("nixio.fs"); require("luci.template")' || die "AK68-798 Lua 运行库不完整"
+    mkdir -p "$stage" || die "创建 AK68-798 内存工作目录失败"
+    ak798_appcenter_file_map > "$stage/files.map" || die "生成 AK68-798 文件清单失败"
+    while IFS='|' read -r name target mode; do
+        [ ! -L "$target" ] || die "AK68-798 目标为符号链接，请先核对: $target"
+        if [ -e "$target" ] && [ "$name" != appcenter ]; then
+            is_ak798_compat_appcenter_file "$target" || die "AK68-798 已存在其他来源文件，请先核对: $target"
+        fi
+    done < "$stage/files.map"
+    log_stage 1 4 "在内存目录生成 AK68-798 轻量应用商店"
+    write_ak798_compat_appcenter_assets "$stage" || die "生成 AK68-798 应用商店失败"
+    log_stage 2 4 "核对商店文件体积与持久空间"
+    ak798_appcenter_check_space "$stage" || die "AK68-798 商店容量检查未通过"
+    log_stage 3 4 "安装配置、页面与卸载接口"
+    ak798_appcenter_apply_files "$stage" || die "AK68-798 商店文件安装失败"
+    log_stage 4 4 "刷新 LuCI 并核对商店路由"
+    refresh_ak798_appcenter
+    verify_luci_route "nradioadv/system/appcenter" "AK68-798 轻量应用商店"
+    log "AK68-798 轻量应用商店已创建/更新，入口: /cgi-bin/luci/nradioadv/system/appcenter"
+    log "功能: 已登记插件列表、打开、卸载、系统状态、持久空间提示"
+    log "说明: 使用已有 Lua 依赖；插件本体仍需按 AK68-798 容量和硬件逐项适配"
+}
+
+remove_ak798_compat_appcenter() {
+    local map="$WORKDIR/ak798-remove.map" name target mode
+    is_current_model_ak798 || return 1
+    mkdir -p "$WORKDIR" || die "创建 AK68-798 内存工作目录失败"
+    ak798_appcenter_file_map > "$map" || die "生成 AK68-798 文件清单失败"
+    while IFS='|' read -r name target mode; do
+        [ "$name" != appcenter ] || continue
+        if is_ak798_compat_appcenter_file "$target"; then
+            rm -f "$target" || die "移除 AK68-798 商店文件失败: $target"
+        fi
+    done < "$map"
+    refresh_ak798_appcenter
+    log "AK68-798 轻量商店已移除；/etc/config/appcenter 插件记录及插件本体保留"
 }
 
 set_appcenter_entry() {
@@ -8435,14 +8793,23 @@ EOF
                 return;
             current_y = event.touches[0].clientY;
             delta = last_y - current_y;
+            last_y = current_y;
             if(Math.abs(delta) < 1)
                 return;
-            target = scroll_target();
+            target = event.target;
+            while(target && target !== d.body && target !== d.documentElement) {
+                var overflow = d.defaultView.getComputedStyle(target).overflowY;
+                if(/auto|scroll/.test(overflow) && target.scrollHeight > target.clientHeight &&
+                   (delta < 0 ? target.scrollTop > 0 : target.scrollTop + target.clientHeight < target.scrollHeight))
+                    break;
+                target = target.parentElement;
+            }
+            if(!target || target === d.body || target === d.documentElement) target = scroll_target();
             if(!target || target.scrollHeight <= target.clientHeight)
                 return;
+            var before = target.scrollTop;
             target.scrollTop += delta;
-            last_y = current_y;
-            event.preventDefault();
+            if(target.scrollTop !== before) event.preventDefault();
         };
         d.__nradioAppFrameTouchEnd = function(){
             tracking = false;
@@ -8649,7 +9016,7 @@ EOF
             ".container.body-container{padding:0 10px!important;}",
             ".cbi-map,.cbi-section,.table,.table-responsive,form{max-width:none!important;box-sizing:border-box!important;}",
             ".table-responsive{overflow-x:auto!important;}"
-        ].join("\\n")));
+        ].join("\n")));
         d.head.appendChild(style);
     }
     function openclash_content_visible(d){
@@ -16183,11 +16550,23 @@ EOF_APPCENTER_V3_LUA
     grep -Fq 'id="storage_expand_memory_row"' "$TPL" 2>/dev/null || die "应用商店 V3 存储扩展条校验失败"
 }
 
-install_appcenter_polish() {
+lightweight_appcenter_model_supported() {
+    case "$(detect_current_nradio_model_quiet 2>/dev/null || true)" in
+        NRadio_C2000Pro|NRadio_AK68-798) return 0 ;;
+    esac
+    return 1
+}
+
+install_lightweight_appcenter() {
+    lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
+    if is_current_model_ak798; then
+        ensure_ak798_compat_appcenter
+        return 0
+    fi
     if is_c2000pro_appcenter_environment; then
         log_stage 1 5 "检查 C2000Pro 兼容应用商店环境"
         ensure_c2000pro_compat_appcenter
-        log "说明: 直接美化应用商店，不创建事务备份或文件备份"
+        log "说明: 轻量商店管理已登记插件，不提供原厂软件下载服务"
 
         log_stage 2 5 "写入应用商店异步卸载接口"
         write_plugin_uninstall_assets
@@ -16207,6 +16586,13 @@ install_appcenter_polish() {
         log "入口: nradioadv/system/appcenter"
         log "说明: 保留 /etc/config/appcenter 插件记录；不修改原厂 nradio/app.lua 手机 API"
         return 0
+    fi
+    die "未检测到 C2000Pro / AK68-798 轻量应用商店环境"
+}
+
+install_appcenter_polish() {
+    if lightweight_appcenter_model_supported; then
+        die "完整应用商店美化适用于原厂完整商店；C2000Pro / AK68-798 请使用 4 > 4 > 1"
     fi
 
     log_stage 1 5 "检查 NRadio 应用商店模板"
@@ -16288,7 +16674,12 @@ write_original_appcenter_controller() {
         "原厂应用商店控制器"
 }
 
-restore_appcenter_original() {
+remove_lightweight_appcenter() {
+    lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
+    if is_current_model_ak798; then
+        remove_ak798_compat_appcenter
+        return 0
+    fi
     if is_c2000pro_appcenter_environment; then
         log_stage 1 4 "检查 C2000Pro 兼容应用商店层"
         log "说明: C2000Pro 无旧版 /rom 应用商店模板；直接移除脚本生成的兼容 controller/template，不创建备份"
@@ -16309,6 +16700,13 @@ restore_appcenter_original() {
         fi
         log "C2000Pro 兼容应用商店层已移除"
         return 0
+    fi
+    die "未检测到 C2000Pro / AK68-798 轻量应用商店环境"
+}
+
+restore_appcenter_original() {
+    if lightweight_appcenter_model_supported; then
+        die "完整应用商店还原适用于原厂完整商店；C2000Pro / AK68-798 请使用 4 > 4 > 2"
     fi
 
     log_stage 1 4 "检查 NRadio 应用商店原厂还原环境"
@@ -18042,8 +18440,8 @@ unified_ifstatus_summary() {
     [ -n "$ifstatus_text" ] || return 0
     iface_up="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"up":[[:space:]]*\(true\|false\).*/\1/p' | sed -n '1p')"
     iface_pending="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"pending":[[:space:]]*\(true\|false\).*/\1/p' | sed -n '1p')"
-    iface_proto="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"proto":[[:space:]]*"\\([^"]*\\)".*/\1/p' | sed -n '1p')"
-    iface_device="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"device":[[:space:]]*"\\([^"]*\\)".*/\1/p' | sed -n '1p')"
+    iface_proto="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"proto":[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
+    iface_device="$(printf '%s\n' "$ifstatus_text" | sed -n 's/^[[:space:]]*"device":[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
     log "ifstatus: $outlet_iface up=${iface_up:-?} pending=${iface_pending:-?} proto=${iface_proto:-?} device=${iface_device:-?}"
 }
 
@@ -19071,19 +19469,20 @@ nradio_5g_aggregation_ipv6_light_recovery() {
         log "IPv6恢复: 未发现需要重拉的异常 IPv6 接口"
     fi
 
-    agg_ready='0'
+    agg_ready='1'
+    agg_pending_ifaces=''
     for agg_iface in cpe_6 cpe1_6 wan6; do
         if ifstatus "$agg_iface" >/dev/null 2>&1; then
-            if nradio_5g_aggregation_ipv6_wait_iface_ready "$agg_iface" 120 10; then
-                agg_ready='1'
-                break
+            if ! nradio_5g_aggregation_ipv6_wait_iface_ready "$agg_iface" 120 10; then
+                agg_ready='0'
+                agg_pending_ifaces="$agg_pending_ifaces $agg_iface"
             fi
         fi
     done
 
     if [ "$agg_ready" != '1' ]; then
         agg_stuck_changed='0'
-        for agg_iface in cpe_6 cpe1_6 wan6; do
+        for agg_iface in $agg_pending_ifaces; do
             if ifstatus "$agg_iface" >/dev/null 2>&1; then
                 if nradio_5g_aggregation_ipv6_recover_pending_stuck_iface "$agg_iface"; then
                     agg_stuck_changed='1'
@@ -19106,12 +19505,14 @@ nradio_5g_aggregation_ipv6_light_recovery() {
                 nradio_5g_aggregation_restart_mwan || true
             fi
 
-            for agg_iface in cpe_6 cpe1_6 wan6; do
+            agg_ready='1'
+            for agg_iface in $agg_pending_ifaces; do
                 if ifstatus "$agg_iface" >/dev/null 2>&1; then
-                    if nradio_5g_aggregation_ipv6_wait_iface_ready "$agg_iface" 120 10; then
-                        agg_ready='1'
-                        break
+                    if ! nradio_5g_aggregation_ipv6_wait_iface_ready "$agg_iface" 120 10; then
+                        agg_ready='0'
                     fi
+                else
+                    agg_ready='0'
                 fi
             done
         else
@@ -19209,7 +19610,7 @@ run_unified_system_health_summary() {
     selfcheck_print_header "系统体检汇总"
     log "系统:   机型=${detected_model} NROS=${nros_revision:-未知} 架构=${arch_name} kernel=${kernel_name:-未知}"
     log "内存:   total=$(unified_health_kib_display "$mem_total_kib") available=$(unified_health_kib_display "$mem_available_kib") swap_total=$(unified_health_kib_display "$swap_total_kib") swap_free=$(unified_health_kib_display "$swap_free_kib")"
-    swap_lines="$(awk 'NR > 1 { print $1 "(" $3 "K used/" $4 "K free)" }' /proc/swaps 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
+    swap_lines="$(awk 'NR > 1 { print $1 "(" $4 "K used/" ($3 - $4) "K free)" }' /proc/swaps 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' || true)"
     if [ -n "$swap_lines" ]; then
         log "swap:   ${swap_lines:-未启用}"
     else
@@ -20030,6 +20431,7 @@ unified_path_inode_usage() {
             [ "$inode_pct_num" -ge 90 ] 2>/dev/null && unified_runtime_warn "inode:  $path_label = inode 使用率过高 (${inode_pct})"
             ;;
     esac
+    return 0
 }
 
 run_unified_runtime_pressure_check() {
@@ -20520,7 +20922,13 @@ hakimi_build_policy_menu() {
         awk '
             function trim(s) {
                 gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
-                gsub(/^"|"$/, "", s)
+                sq = sprintf("%c", 39)
+                if (substr(s, 1, 1) == sq && substr(s, length(s), 1) == sq) {
+                    s = substr(s, 2, length(s) - 2)
+                    gsub(sq sq, sq, s)
+                } else {
+                    gsub(/^"|"$/, "", s)
+                }
                 return s
             }
             /^proxy-groups:[[:space:]]*$/ { in_pg = 1; next }
@@ -20667,26 +21075,35 @@ hakimi_clean_rule_value() {
 }
 
 hakimi_is_ipv6_cidr_value() {
-    value="$1"
-    case "$value" in
-        *:*) ;;
-        *) return 1 ;;
-    esac
-    printf '%s\n' "$value" | grep -Eq '^[0-9A-Fa-f:.]+(/[0-9]+)?$' || return 1
-    case "$value" in
-        */*)
-            bits="${value#*/}"
-            case "$bits" in
-                ''|*[!0-9]*)
-                    return 1
-                    ;;
-            esac
-            [ "$bits" -ge 0 ] 2>/dev/null && [ "$bits" -le 128 ] 2>/dev/null
-            ;;
-        *)
-            return 0
-            ;;
-    esac
+    awk -v input="$1" '
+        function groups(s, a, n, i) {
+            if (s == "") return 0
+            n = split(s, a, ":")
+            for (i = 1; i <= n; i++)
+                if (a[i] !~ /^[0-9A-Fa-f]+$/ || length(a[i]) > 4) return -100
+            return n
+        }
+        BEGIN {
+            n = split(input, cidr, "/")
+            if (n > 2 || (n == 2 && (cidr[2] !~ /^[0-9]+$/ || cidr[2] + 0 > 128))) exit 1
+            address = cidr[1]
+            if (index(address, ":") == 0) exit 1
+            if (index(address, ".") > 0) {
+                tail = address
+                sub(/^.*:/, "", tail)
+                if (split(tail, octets, /[.]/) != 4) exit 1
+                for (i = 1; i <= 4; i++)
+                    if (octets[i] !~ /^[0-9]+$/ || octets[i] + 0 > 255 ||
+                        (length(octets[i]) > 1 && substr(octets[i], 1, 1) == "0")) exit 1
+                address = substr(address, 1, length(address) - length(tail)) "0:0"
+            }
+            n = split(address, halves, "::")
+            if (n > 2) exit 1
+            left = groups(halves[1])
+            right = (n == 2 ? groups(halves[2]) : 0)
+            if (left < 0 || right < 0) exit 1
+            exit (n == 2 ? left + right < 8 : left == 8) ? 0 : 1
+        }'
 }
 
 hakimi_build_rule_line() {
@@ -21138,6 +21555,7 @@ run_openclash_dependency_repair_check() {
         log "summary: PASS"
         [ "$repair_changed" = '1' ] && record_action_history "5 > 6" "$OPENCLASH_DISPLAY_NAME 依赖检查修复" "PASS" "$BACKUP_DIR"
     fi
+    return 0
 }
 
 run_hakimi_easy_rule_helper() {
@@ -21715,11 +22133,10 @@ read_nameservers_from_dhcp_uci() {
 
     uci -q show dhcp 2>/dev/null | awk -F"'" '
         /\.server=/ {
-            ns = $2
-            if (ns == "" || ns ~ /^\//)
-                next
-            if (ns ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ || ns ~ /^[0-9A-Fa-f:]+$/) {
-                print ns
+            for (i = 2; i <= NF; i += 2) {
+                ns = $i
+                if (ns == "" || ns ~ /^\//) continue
+                if (ns ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ || ns ~ /^[0-9A-Fa-f:]+$/) print ns
             }
         }
     ' | awk '!seen[$0]++'
@@ -21742,19 +22159,13 @@ list_openvpn_managed_dnsmasq_domains() {
 }
 
 remove_dnsmasq_server_rules_for_domain() {
-    domain="$1"
+    local domain="$1"
     [ -n "$domain" ] || return 0
     command -v uci >/dev/null 2>&1 || return 0
     [ -f /etc/config/dhcp ] || return 0
 
-    uci -q show dhcp 2>/dev/null | awk -F"'" -v domain="$domain" '
-        /\.server=/ {
-            value = $2
-            prefix = "/" domain "/"
-            if (index(value, prefix) == 1) {
-                print value
-            }
-        }
+    uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null | tr ' ' '\n' | awk -v domain="$domain" '
+        index($0, "/" domain "/") == 1 { print }
     ' | while IFS= read -r server_rule; do
         [ -n "$server_rule" ] || continue
         uci -q del_list "dhcp.@dnsmasq[0].server=$server_rule" >/dev/null 2>&1 || true
@@ -21803,7 +22214,7 @@ EOF
 }
 
 sync_openvpn_domain_dnsmasq_upstreams() {
-    domain="$1"
+    local domain="$1"
     [ -n "$domain" ] || return 1
     command -v uci >/dev/null 2>&1 || return 1
     [ -f /etc/config/dhcp ] || return 1
@@ -22162,17 +22573,14 @@ validate_client_certificate_if_possible() {
     cert_file="$1"
     command -v openssl >/dev/null 2>&1 || return 0
 
-    cert_subject="$(openssl x509 -noout -subject -in "$cert_file" 2>/dev/null || true)"
-    [ -n "$cert_subject" ] || return 0
-
-    case "$cert_subject" in
-        *Server*|*server*)
-            die "client certificate validate failed: this certificate subject looks like a server certificate ($cert_subject)"
-            ;;
-        *CA*|*Device\ CA*)
-            die "client certificate validate failed: this certificate subject looks like a CA certificate ($cert_subject)"
-            ;;
-    esac
+    cert_purpose="$(openssl x509 -noout -purpose -in "$cert_file" 2>/dev/null)" ||
+        die "client certificate validate failed: certificate cannot be parsed"
+    printf '%s\n' "$cert_purpose" | grep -Eq '^SSL client[[:space:]]*:[[:space:]]*Yes[[:space:]]*$' ||
+        die "client certificate validate failed: certificate is not valid for TLS client authentication"
+    if openssl x509 -noout -text -in "$cert_file" 2>/dev/null | grep -Eq '^[[:space:]]*CA:TRUE'; then
+        die "client certificate validate failed: CA certificate cannot be used as a client identity"
+    fi
+    return 0
 }
 
 validate_client_cert_key_match_if_possible() {
@@ -22351,9 +22759,11 @@ end
 						btn.value = '<%:Switch Failed%>';
 					}
 				}
+			} else {
+				btn.value = '<%:Switch Failed%>';
 			}
+			btn.disabled = false;
 		});
-		btn.disabled = false;
 		return false;
 	}
 
@@ -22372,6 +22782,8 @@ end
 					else {
 						btn.disabled = false;
 					}
+				} else {
+					btn.disabled = false;
 				}
 			});
 		}
@@ -23014,7 +23426,7 @@ end
 for line in f:lines() do
 if line:match("^users:%s*$") then
 in_users = true
-elseif in_users and line:match("^[^%s]") then
+elseif in_users and line:match("^[^%s%-#][^:]*:") then
 break
 elseif in_users then
 local name = line:match("^%s*%-%s*name:%s*(.-)%s*$") or line:match("^%s*name:%s*(.-)%s*$")
@@ -23070,7 +23482,7 @@ local httpport = uci:get("AdGuardHome", "AdGuardHome", "httpport") or "3000"
 local user = uci:get("AdGuardHome", "AdGuardHome", "dashboard_user") or ""
 local pass = uci:get("AdGuardHome", "AdGuardHome", "dashboard_password") or ""
 local dashboard_base
-local cookiefile = sys.exec("mktemp /tmp/adg_dashboard_cookie.XXXXXX 2>/dev/null"):gsub("%s+$", "")
+local cookiefile
 local login_body
 local login_body_file
 local login_cmd
@@ -23082,10 +23494,6 @@ httpport = "3000"
 end
 dashboard_base = "http://127.0.0.1:" .. httpport
 
-if cookiefile == "" then
-return nil, "无法安全创建仪表盘会话文件"
-end
-
 if user == "" then
 user = adg_read_primary_user(configpath)
 end
@@ -23094,6 +23502,10 @@ user = "admin"
 end
 if pass == "" then
 return nil, "未填写仪表盘认证密码"
+end
+cookiefile = sys.exec("mktemp /tmp/adg_dashboard_cookie.XXXXXX 2>/dev/null"):gsub("%s+$", "")
+if cookiefile == "" then
+return nil, "无法安全创建仪表盘会话文件"
 end
 
 login_body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
@@ -23221,34 +23633,34 @@ end
 http.write(data)
 end
 function do_update()
-fs.writefile("/var/run/lucilogpos","0")
 http.prepare_content("application/json")
-http.write('')
-local arg
 local update_script="/usr/share/AdGuardHome/update_core.sh"
-local update_cmd
-if luci.http.formvalue("force") == "1" then
-arg="force"
-else
-arg=""
+if not fs.access(update_script) then
+http.write_json({ok=false, error="核心更新脚本缺失"})
+return
 end
-update_cmd="sh "..adg_shell_quote(update_script)
-if arg ~= "" then
-update_cmd=update_cmd.." "..arg
-end
-update_cmd=update_cmd.." >/var/log/AdGuardHome_update.log 2>&1 &"
 if fs.access("/var/run/update_core") then
-if arg=="force" then
-	local pids=sys.exec("pgrep -f "..adg_shell_quote(update_script).." 2>/dev/null")
-	local pid
-	for pid in pids:gmatch("%d+") do
-		sys.exec("kill "..pid.." 2>/dev/null")
-	end
-	sys.exec(update_cmd)
+http.write_json({ok=false, error="已有核心更新正在运行，请等待完成"})
+return
 end
-else
-sys.exec(update_cmd)
+local base="/var/run/nradio-adg-update"
+local prior_pid=(fs.readfile(base..".pid") or ""):match("^%s*(%d+)%s*$")
+if prior_pid and sys.call("kill -0 "..prior_pid.." 2>/dev/null")==0 then
+http.write_json({ok=true, state="running"})
+return
 end
+fs.unlink(base..".rc")
+fs.unlink(base..".pid")
+if not fs.writefile(base..".started",tostring(os.time())) or not fs.writefile(base..".state","running") then
+http.write_json({ok=false, error="无法写入更新任务状态"})
+return
+end
+local finish="rc=$?; echo \"$rc\" > "..base..".rc; if [ \"$rc\" -eq 0 ]; then echo ok > "..base..".state; else echo fail > "..base..".state; fi; rm -f "..base..".pid"
+local body="echo $$ > "..base..".pid; trap "..adg_shell_quote(finish).." EXIT; trap 'exit 1' HUP INT TERM; sh "..adg_shell_quote(update_script)
+if http.formvalue("force")=="1" then body=body.." force" end
+local rc=sys.call("sh -c "..adg_shell_quote(body).." >/var/log/AdGuardHome_update.log 2>&1 </dev/null &")
+if rc~=0 then fs.writefile(base..".state","fail") end
+http.write_json({ok=rc==0, state=rc==0 and "running" or "fail", error=rc~=0 and "无法启动核心更新" or nil})
 end
 local function adg_safe_logfile(path, allow_missing)
 if type(path) ~= "string" or path == "" or path:sub(1, 1) ~= "/" or path:find("/../", 1, true) or path:match("/%.%.$") then
@@ -23305,6 +23717,18 @@ local pkg_ver=makefile:match("PKG_VERSION%s*:?=%s*([^\r\n]+)") or ""
 pkg_ver=pkg_ver:gsub("^%s+",""):gsub("%s+$","")
 e.luciversion=pkg_ver
 e.coreversion=uci:get("AdGuardHome","AdGuardHome","coreversion") or ""
+local base="/var/run/nradio-adg-update"
+e.state=(fs.readfile(base..".state") or "idle"):gsub("%s+","")
+e.rc=tonumber(fs.readfile(base..".rc") or "")
+e.log=sys.exec("tail -c 8192 /var/log/AdGuardHome_update.log 2>/dev/null") or ""
+if e.state=="running" then
+local pid=(fs.readfile(base..".pid") or ""):match("^%s*(%d+)%s*$")
+local started=tonumber(fs.readfile(base..".started") or "") or 0
+if os.time()-started>10 and (not pid or sys.call("kill -0 "..pid.." 2>/dev/null")~=0) then
+e.state="fail"
+e.error="核心更新进程已退出，未记录完成结果"
+end
+end
 http.prepare_content("application/json")
 http.write_json(e)
 end
@@ -23703,11 +24127,20 @@ function adgEnableTouchScroll(d) {
         if (!tracking || !event.touches || event.touches.length !== 1) return;
         currentY = event.touches[0].clientY;
         delta = lastY - currentY;
-        target = document.scrollingElement || document.documentElement || document.body;
-        if (Math.abs(delta) < 1 || !target || target.scrollHeight <= target.clientHeight) return;
-        target.scrollTop += delta;
         lastY = currentY;
-        event.preventDefault();
+        target = event.target;
+        while (target && target !== d.body && target !== d.documentElement) {
+            var overflow = d.defaultView.getComputedStyle(target).overflowY;
+            if (/auto|scroll/.test(overflow) && target.scrollHeight > target.clientHeight &&
+                (delta < 0 ? target.scrollTop > 0 : target.scrollTop + target.clientHeight < target.scrollHeight)) break;
+            target = target.parentElement;
+        }
+        if (!target || target === d.body || target === d.documentElement)
+            target = document.scrollingElement || document.documentElement || document.body;
+        if (Math.abs(delta) < 1 || !target || target.scrollHeight <= target.clientHeight) return;
+        var before = target.scrollTop;
+        target.scrollTop += delta;
+        if (target.scrollTop !== before) event.preventDefault();
     };
     d.__adgTouchEnd = function() { tracking = false; };
     d.addEventListener('touchstart', d.__adgTouchStart, startOptions);
@@ -24120,21 +24553,44 @@ function adgPollUpdateCheck() {
 		return;
 	}
 	window.adgUpdatePollActive = true;
-	XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[check]])%>', null, function(x) {
-		var updatebtn = document.getElementById("apply_update_button");
-		if (!x || typeof x.responseText === "undefined") {
-			return;
-		}
-		if (x.responseText === "\u0000") {
-			if (updatebtn) {
-				updatebtn.disabled = false;
-				updatebtn.value = "已更新";
-			}
-			window.adgUpdatePollActive = false;
-			return;
-		}
-		adgAppendUpdateLog(x.responseText);
-	});
+    function poll() {
+        XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[check]])%>', {_:Date.now()}, function(x, status) {
+            if (!x || x.status !== 200 || !status || !status.state) {
+                adgFinishUpdate(false, "更新状态读取失败，可重新检查");
+                return;
+            }
+            adgSetUpdateLog((status.log || "") + (status.error ? "\n" + status.error : ""));
+            if (status.state === "running") {
+                window.setTimeout(poll, 3000);
+                return;
+            }
+            adgFinishUpdate(status.state === "ok", status.state === "ok" ? "已更新" : "更新未完成");
+        });
+    }
+    poll();
+}
+
+function adgFinishUpdate(ok, message) {
+    window.adgUpdatePollActive = false;
+    var btn = document.getElementById("apply_update_button");
+    if (btn) { btn.disabled = false; btn.value = message || (ok ? "已更新" : "更新失败"); }
+}
+function adgRequestUpdate(force) {
+    var btn = document.getElementById("apply_update_button");
+    if (window.adgUpdatePollActive || (btn && btn.disabled)) return;
+    if (btn) { btn.disabled = true; btn.value = "检查中..."; }
+    adgSetUpdateLog("");
+    XHR.post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[doupdate]])%>',
+        {token:'<%=require("luci.dispatcher").context.authtoken%>',force:force ? 1 : 0},
+        function(x, data) {
+            if (!x || x.status !== 200 || !data || !data.ok) {
+                var message = data && data.error ? data.error : "更新启动失败";
+                adgSetUpdateLog(message);
+                adgFinishUpdate(false, message);
+                return;
+            }
+            adgPollUpdateCheck();
+        });
 }
 
 function adgInstallUpdatePanelGuard() {
@@ -24162,27 +24618,14 @@ function adgInstallUpdatePanelGuard() {
 	};
 	window.poll_check = adgPollUpdateCheck;
 	window.apply_update = function() {
-		var btn = document.getElementById("apply_update_button");
 		var forcebtn = document.getElementById("apply_forceupdate_button");
-		XHR.post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[doupdate]])%>', { token: '<%=require("luci.dispatcher").context.authtoken%>' }, function() {});
-		if (btn) {
-			btn.disabled = true;
-			btn.value = "检查中...";
-		}
 		if (forcebtn) {
 			forcebtn.style.display = "inline";
 		}
-		adgSetUpdateLog("");
-		adgPollUpdateCheck();
+		adgRequestUpdate(false);
 	};
 	window.apply_forceupdate = function() {
-		var btn = document.getElementById("apply_update_button");
-		XHR.post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[doupdate]])%>', { token: '<%=require("luci.dispatcher").context.authtoken%>', force: 1 }, function() {});
-		if (btn) {
-			btn.disabled = true;
-		}
-		adgSetUpdateLog("");
-		adgPollUpdateCheck();
+		adgRequestUpdate(true);
 	};
 }
 
@@ -27098,6 +27541,11 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		padding-top: 14px !important;
 		padding-bottom: 14px !important;
 	}
+    @media (max-width: 720px) {
+        .cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+    }
 
 	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title {
 		min-height: 44px !important;
@@ -28895,17 +29343,19 @@ normalize_adguard_yaml_defaults() {
             next
         }
 
-        in_users && /^[^[:space:]]/ {
+        in_users && /^[^[:space:]#-][^:]*:/ {
             in_users = 0
         }
 
         in_users && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ {
-            print "  - name: admin"
+            sub(/name:.*/, "name: admin")
+            print
             next
         }
 
         in_users && /^[[:space:]]*name:[[:space:]]*/ {
-            print "    name: admin"
+            sub(/name:.*/, "name: admin")
+            print
             next
         }
 
@@ -28933,7 +29383,7 @@ normalize_adguard_yaml_defaults() {
         }
 
         in_filters {
-            if ($0 ~ /^[^[:space:]][^:]*:[[:space:]]*/) {
+            if ($0 ~ /^[^[:space:]#-][^:]*:[[:space:]]*/) {
                 in_filters = 0
                 print
             }
@@ -29220,12 +29670,12 @@ restore_dnsmasq_system_dns_when_adguard_unready() {
         fi
     fi
 
-    dhcp_show="$(uci -q show dhcp 2>/dev/null || true)"
-    if printf '%s\n' "$dhcp_show" | grep -F "dhcp.@dnsmasq[0].server='$adg_dns_server_rule'" >/dev/null 2>&1; then
+    dhcp_show="$(uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null | tr ' ' '\n' || true)"
+    if printf '%s\n' "$dhcp_show" | grep -Fx "$adg_dns_server_rule" >/dev/null 2>&1; then
         adg_restore_needed='1'
         adg_primary_rule_present='1'
     fi
-    if [ "$adg_remove_legacy_dns_server_rule" = '1' ] && printf '%s\n' "$dhcp_show" | grep -F "dhcp.@dnsmasq[0].server='$adg_legacy_dns_server_rule'" >/dev/null 2>&1; then
+    if [ "$adg_remove_legacy_dns_server_rule" = '1' ] && printf '%s\n' "$dhcp_show" | grep -Fx "$adg_legacy_dns_server_rule" >/dev/null 2>&1; then
         adg_restore_needed='1'
         adg_legacy_rule_present='1'
     fi
@@ -29391,21 +29841,23 @@ ensure_adguard_openclash_dns_chain() {
         if [ "$(uci -q get "dhcp.@dnsmasq[0].noresolv" 2>/dev/null || true)" != '1' ]; then
             adg_dns_chain_changed='1'
         fi
-        if ! uci -q show dhcp 2>/dev/null | grep -F "dhcp.@dnsmasq[0].server='$adg_dns_server_rule'" >/dev/null 2>&1; then
+        if ! uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null | tr ' ' '\n' | grep -Fx "$adg_dns_server_rule" >/dev/null 2>&1; then
             adg_dns_chain_changed='1'
         fi
         if uci -q show dhcp 2>/dev/null | awk -F"'" -v keep="$adg_dns_server_rule" -v legacy="$adg_legacy_dns_server_rule" '
             /^dhcp\.@dnsmasq\[0\]\.server=/ {
-                value = $2
-                if (value != "" && value != keep && value != legacy && index(value, "/") != 1) {
-                    print value
-                    exit
+                for (i = 2; i <= NF; i += 2) {
+                    value = $i
+                    if (value != "" && value != keep && value != legacy && index(value, "/") != 1) {
+                        print value
+                        exit
+                    }
                 }
             }
         ' | grep -q .; then
             adg_dns_chain_changed='1'
         fi
-        if uci -q show dhcp 2>/dev/null | grep -F "dhcp.@dnsmasq[0].server='$adg_legacy_dns_server_rule'" >/dev/null 2>&1; then
+        if uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null | tr ' ' '\n' | grep -Fx "$adg_legacy_dns_server_rule" >/dev/null 2>&1; then
             adg_dns_chain_changed='1'
         fi
 
@@ -29419,9 +29871,9 @@ ensure_adguard_openclash_dns_chain() {
         uci set "dhcp.@dnsmasq[0].noresolv=1" >/dev/null 2>&1 || { restore_adguard_dns_transaction; return 1; }
         stale_dns_server_rules="$(uci -q show dhcp 2>/dev/null | awk -F"'" -v keep="$adg_dns_server_rule" -v legacy="$adg_legacy_dns_server_rule" '
             /^dhcp\.@dnsmasq\[0\]\.server=/ {
-                value = $2
-                if (value != "" && value != keep && value != legacy && index(value, "/") != 1) {
-                    print value
+                for (i = 2; i <= NF; i += 2) {
+                    value = $i
+                    if (value != "" && value != keep && value != legacy && index(value, "/") != 1) print value
                 }
             }
         ')"
@@ -29458,7 +29910,7 @@ read_adguard_primary_user_from_config() {
 
     awk '
         /^users:[[:space:]]*$/ { in_users=1; next }
-        in_users && /^[^[:space:]]/ { exit }
+        in_users && /^[^[:space:]#-][^:]*:/ { exit }
         in_users {
             if ($0 ~ /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/) {
                 sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", $0)
@@ -29722,11 +30174,8 @@ create_or_resize_swapfile_mib() {
     case "$current_bytes" in
         ''|*[!0-9]*) current_bytes=0 ;;
     esac
-    required_bytes=0
+    required_bytes="$target_bytes"
     had_active_swap='0'
-    if [ "$current_bytes" -lt "$target_bytes" ] 2>/dev/null; then
-        required_bytes="$((target_bytes - current_bytes))"
-    fi
 
     ensure_dir_writable /overlay "/overlay"
     ensure_free_space_bytes /overlay "$required_bytes" "/overlay"
@@ -30479,7 +30928,7 @@ storage_expand_copy_restore_payload() {
     local app_key="$1"
     local target_path="$2"
     local tmp_restore="$3"
-    local item name dest_item
+    local item name dest_item runtime_item
 
     if [ ! -d "$target_path" ]; then
         cp -a "$target_path" "$tmp_restore"
@@ -30515,14 +30964,12 @@ storage_expand_copy_restore_payload() {
             log "失败项: ASN.mmdb 未成功还原"
             return 1
         }
-        [ -e "$tmp_restore/GeoIP.dat" ] || {
-            log "失败项: GeoIP.dat 未成功还原"
-            return 1
-        }
-        [ -e "$tmp_restore/core" ] || {
-            log "失败项: core 目录未成功还原"
-            return 1
-        }
+        for runtime_item in GeoIP.dat core; do
+            if [ -e "$target_path/$runtime_item" ] && [ ! -e "$tmp_restore/$runtime_item" ]; then
+                log "失败项: $runtime_item 未成功还原"
+                return 1
+            fi
+        done
     fi
 
     return 0
@@ -32814,8 +33261,8 @@ ensure_firewall_rule() {
     allow_wan="$2"
     firewall_changed='0'
 
-    existing_openlist_rules="$(uci show firewall 2>/dev/null | awk '
-        /^firewall\.@rule\[[0-9]+\]=rule$/ {
+    existing_openlist_rules="$(uci -X show firewall 2>/dev/null | awk '
+        /^firewall\.[^.]+=rule$/ {
             sec=$1
             sub(/^firewall\./, "", sec)
             sub(/=.*/, "", sec)
@@ -32871,6 +33318,46 @@ db_file="$data_dir/data.db"
 bleve_dir="$data_dir/bleve"
 
 if [ -s "$config_json" ]; then
+    lua - "$config_json" <<'EOF_OPENLIST_MERGE'
+local fs = require "nixio.fs"
+local nixio = require "nixio"
+local json = require "luci.jsonc"
+local uci = require("luci.model.uci").cursor()
+local path = arg[1]
+local tmp = path .. ".sync." .. tostring(nixio.getpid())
+local ok, err = pcall(function()
+    local data = assert(json.parse(assert(fs.readfile(path))), "invalid OpenList JSON")
+    assert(type(data) == "table", "OpenList config must be an object")
+    local function setting(key, fallback)
+        local value = uci:get("openlist", "main", key)
+        if value == nil then return fallback end
+        return value
+    end
+    data.scheme = data.scheme or {}
+    data.log = data.log or {}
+    assert(type(data.scheme) == "table" and type(data.log) == "table", "invalid scheme/log object")
+    local port = tonumber(setting("port", "5244"))
+    local ttl = tonumber(setting("token_expires_in", "48"))
+    assert(port and port >= 1 and port <= 65535 and port % 1 == 0, "invalid port")
+    assert(ttl and ttl > 0, "invalid token lifetime")
+    data.scheme.http_port = port
+    data.site_url = setting("site_url", data.site_url or "")
+    data.temp_dir = setting("temp_dir", data.temp_dir)
+    data.token_expires_in = ttl
+    data.log.enable = setting("log", "1") == "1"
+    data.log.name = setting("log_path", data.log.name)
+    local secret = setting("jwt_secret", "")
+    if secret ~= "" then data.jwt_secret = secret end
+    assert(fs.writefile(tmp, assert(json.stringify(data))), "cannot write OpenList JSON")
+    assert(fs.chmod(tmp, "0600"), "cannot protect OpenList JSON")
+    assert(fs.rename(tmp, path), "cannot replace OpenList JSON")
+end)
+if not ok then
+    fs.unlink(tmp)
+    io.stderr:write("OpenList config sync failed: " .. tostring(err) .. "\n")
+    os.exit(1)
+end
+EOF_OPENLIST_MERGE
     chmod 600 "$config_json" 2>/dev/null || true
     if [ "$SKIP_FIREWALL_SYNC" != "1" ]; then
         ensure_firewall_rule "$port" "$allow_wan"
@@ -34014,7 +34501,7 @@ body{background:#0b1220!important;color:#e5edf7!important}.cbi-map{overflow:hidd
 </style>
 <% local u=require"luci.util"; local c=require"luci.model.uci".cursor(); local d=require"luci.dispatcher"; local fs=require"nixio.fs"
    local pid=u.trim(u.exec("pgrep mosdns 2>/dev/null | head -1"):gsub("[^%d]","")); local running=pid~=""
-   local lf="/var/log/mosdns.log"; c:foreach("mosdns","main",function(s)if s.log_file and s.log_file~="" then lf=s.log_file end end)
+   local lf=c:get("mosdns","main","log_file") or "/var/log/mosdns.log"; if lf=="" then lf="/var/log/mosdns.log" end
    local allowed=lf=="/var/log/mosdns.log" or lf:match("^/var/log/mosdns/[%w%._%-%/]+$")
    local st=allowed and not lf:find("/../",1,true) and not lf:find("/./",1,true) and not lf:find("//",1,true) and fs.lstat(lf) or nil
    local logtext="日志为空"
@@ -34606,7 +35093,7 @@ install_openlist() {
         openlist_admin_log="$WORKDIR/openlist-admin.log"
         (
             cd "$OPENLIST_ROOT_DIR" &&
-            ./bin/openlist admin set "$openlist_admin_password"
+            ./bin/openlist admin set "$openlist_admin_password" --data "$openlist_effective_data_dir"
         ) >"$openlist_admin_log" 2>&1 || die "初始化 OpenList 管理员密码失败：$openlist_admin_log"
         openlist_admin_initialized='1'
     else
@@ -34815,8 +35302,12 @@ config zerotier 'sample_config'
 EOF_ZEROTIER_UCI
     fi
 
-    uci -q show zerotier 2>/dev/null | grep -q "=zerotier" || uci -q set zerotier.sample_config=zerotier
-    [ -n "$(uci -q get zerotier.sample_config.enabled 2>/dev/null || true)" ] || uci -q set zerotier.sample_config.enabled='0'
+    zerotier_section="$(uci -q show zerotier 2>/dev/null | sed -n 's/^zerotier\.\([^.=]*\)=zerotier$/\1/p' | sed -n '1p')"
+    if [ -z "$zerotier_section" ]; then
+        zerotier_section='sample_config'
+        uci -q set "zerotier.$zerotier_section=zerotier"
+    fi
+    [ -n "$(uci -q get "zerotier.$zerotier_section.enabled" 2>/dev/null || true)" ] || uci -q set "zerotier.$zerotier_section.enabled=0"
     uci -q commit zerotier >/dev/null 2>&1 || true
 }
 
@@ -35317,6 +35808,8 @@ function action_get_temperature()
     data.pwm = pwm_num > 0 and tostring(pwm_num) or "0"
     data.gpio = (gpio_raw:gsub("%s+", "")) or ""
     data.fan = pwm_to_percent(pwm_num)
+    data.protect_active = (data.enabled == "1" and temp_num >= (tonumber(data.protecttemp) or 85) and data.fan == "100") and "1" or "0"
+    if data.protect_active == "1" then data.mode_label = "过热保护" end
 
     luci.nradio.luci_call_result(data)
 end
@@ -35549,7 +36042,7 @@ body{background:var(--nr-fan-bg)!important;color:var(--nr-fan-text)!important}
     gauge.style.setProperty('--nr-temp-angle',(Math.max(0,Math.min(100,temp))*3.6)+'deg');
     gauge.style.setProperty('--nr-temp-color',color);
     nrFanText('nr-fan-temp',temp>0?(temp+'°C'):'--');
-    nrFanText('nr-fan-speed',enabled?((data.mode==='0'?'关闭':fan+'%')):'已关闭');
+    nrFanText('nr-fan-speed',enabled?(fan>0?fan+'%':'关闭'):'已关闭');
     nrFanText('nr-fan-mode',enabled?(data.mode_label||'Smart 智能温控'):'停止');
     nrFanText('nr-fan-source',data.temp_source_label||'--');
     var schedule=String(data.schedule_enabled||'0')==='1';
@@ -35593,7 +36086,7 @@ EOF_FANCTRL_POLISH
 			var fanLabel = '关闭';
 
 			if (enabled === '1') {
-				if (mode === '0')
+				if (fan === '0')
 					fanLabel = '关闭';
 				else
 					fanLabel = fan + '% / ' + modeLabel;
@@ -36262,7 +36755,12 @@ die() { printf 'ERROR: %s\n' "\$*" >&2; exit 1; }
 command -v easytier-cli >/dev/null 2>&1 || die '未检测到 easytier-cli'
 command -v ip >/dev/null 2>&1 || die '未检测到 ip 命令'
 ip link show "\$ET_ROUTE_LAN_IF" >/dev/null 2>&1 || die "未检测到本地 LAN 接口：\$ET_ROUTE_LAN_IF"
-ip link show "\$ET_ROUTE_TUN_IF" >/dev/null 2>&1 || die "未检测到 EasyTier 隧道接口：\$ET_ROUTE_TUN_IF"
+tun_wait=0
+until ip link show "\$ET_ROUTE_TUN_IF" >/dev/null 2>&1; do
+    [ "\$tun_wait" -lt 60 ] || die "等待 EasyTier 隧道接口超时：\$ET_ROUTE_TUN_IF"
+    sleep 1
+    tun_wait=\$((tun_wait + 1))
+done
 
 parse_peer_virtual_ip() {
     target="\$1"
@@ -48846,12 +49344,6 @@ for _, option in ipairs(basicParams) do
 		end
 
 		function o.remove(self, section)
-			local cfg_val = AbstractValue.cfgvalue(self, section)
-			local txt_val = luci.http.formvalue("cbid."..self.map.config.."."..section.."."..self.option..".textbox")
-			
-			if cfg_val and fs.access(cfg_val) and txt_val == "" then
-				fs.unlink(cfg_val)
-			end
 			return AbstractValue.remove(self, section)
 		end
 	elseif option[1] == Flag then
@@ -49972,12 +50464,6 @@ for _, option in ipairs(params) do
 		end
 
 		function o.remove(self, section)
-			local cfg_val = AbstractValue.cfgvalue(self, section)
-			local txt_val = luci.http.formvalue("cbid."..self.map.config.."."..section.."."..self.option..".textbox")
-
-			if cfg_val and fs.access(cfg_val) and txt_val == "" then
-				fs.unlink(cfg_val)
-			end
 			return AbstractValue.remove(self, section)
 		end
 	elseif option[1] == Flag then
@@ -50459,7 +50945,9 @@ configure_openvpn_runtime() {
         cp "$RUNTIME_CA_FILE" "$ca_tmp"
     elif [ -f /etc/openvpn/client.ovpn ]; then
         extract_inline_block_to_file /etc/openvpn/client.ovpn ca "$ca_tmp"
-    else
+    fi
+    if ! grep -q 'BEGIN CERTIFICATE' "$ca_tmp"; then
+        : > "$ca_tmp"
         printf '请粘贴 CA 证书内容（CA 用于验证服务端身份），结束请输入单独一行 EOF:\n'
         while IFS= read -r line; do
             [ "$line" = 'EOF' ] && break
@@ -50474,7 +50962,9 @@ configure_openvpn_runtime() {
             cp "$RUNTIME_CERT_FILE" "$cert_tmp"
         elif [ -f /etc/openvpn/client.ovpn ]; then
             extract_inline_block_to_file /etc/openvpn/client.ovpn cert "$cert_tmp"
-        else
+        fi
+        if ! grep -q 'BEGIN CERTIFICATE' "$cert_tmp"; then
+            : > "$cert_tmp"
             printf '请粘贴客户端证书内容（客户端身份认证证书，不是服务端证书），结束请输入单独一行 EOF:\n'
             while IFS= read -r line; do
                 [ "$line" = 'EOF' ] && break
@@ -50489,7 +50979,9 @@ configure_openvpn_runtime() {
             cp "$RUNTIME_KEY_FILE" "$key_tmp"
         elif [ -f /etc/openvpn/client.ovpn ]; then
             extract_inline_block_to_file /etc/openvpn/client.ovpn key "$key_tmp"
-        else
+        fi
+        if ! grep -Eq 'BEGIN (RSA )?PRIVATE KEY|BEGIN EC PRIVATE KEY' "$key_tmp"; then
+            : > "$key_tmp"
             printf '请粘贴客户端私钥内容（与客户端证书对应的私钥），结束请输入单独一行 EOF:\n'
             while IFS= read -r line; do
                 [ "$line" = 'EOF' ] && break
@@ -50518,7 +51010,9 @@ configure_openvpn_runtime() {
             else
                 extract_inline_block_to_file /etc/openvpn/client.ovpn tls-crypt "$ta_tmp"
             fi
-        else
+        fi
+        if ! grep -q 'BEGIN OpenVPN Static key V1' "$ta_tmp"; then
+            : > "$ta_tmp"
             printf '请粘贴 tls-auth/tls-crypt 密钥内容，结束请输入单独一行 EOF:\n'
             while IFS= read -r line; do
                 [ "$line" = 'EOF' ] && break
@@ -51632,6 +52126,10 @@ EXTRA_HELP="status	Print runtime information"
 ttyd="/usr/bin/ttyd"
 ttyd_run="/bin/sh"
 
+ttyd_add_client_option() {
+    procd_append_param command --client-option "$1"
+}
+
 start_service()
 {
     config_load ttyd
@@ -51640,6 +52138,10 @@ start_service()
     config_get interface default interface br-lan
     config_get_bool once default once 0
     config_get_bool ssl default ssl 0
+    config_get ssl_cert default ssl_cert
+    config_get ssl_key default ssl_key
+    config_get ssl_ca default ssl_ca
+    config_get debug default debug 7
     config_get_bool readonly default readonly 0
     config_get_bool check_origin default check_origin 1
     config_get max_clients default max_clients 4
@@ -51657,11 +52159,18 @@ start_service()
     [ -n "$interface" ] && procd_append_param command --interface "$interface"
     [ "$once" = 1 ] && procd_append_param command --once
     [ "$ssl" = 1 ] && procd_append_param command --ssl
+    if [ "$ssl" = 1 ]; then
+        [ -n "$ssl_cert" ] && procd_append_param command --ssl-cert "$ssl_cert"
+        [ -n "$ssl_key" ] && procd_append_param command --ssl-key "$ssl_key"
+        [ -n "$ssl_ca" ] && procd_append_param command --ssl-ca "$ssl_ca"
+    fi
+    procd_append_param command --debug "$debug"
     [ "$readonly" = 1 ] && procd_append_param command --readonly
     [ "$readonly" != 1 ] && procd_append_param command --writable
     [ "$check_origin" = 1 ] && procd_append_param command --check-origin
     [ "$max_clients" != 0 ] && procd_append_param command --max-clients "$max_clients"
-    [ "$reconnect" != 10 ] && procd_append_param command --reconnect "$reconnect"
+    [ "$reconnect" != 10 ] && procd_append_param command --client-option "reconnect=$reconnect"
+    config_list_foreach default client_option ttyd_add_client_option
     [ -n "$signal" ] && procd_append_param command --signal "$signal"
     [ -n "$index" ] && procd_append_param command --index "$index"
     [ -n "$uid" ] && procd_append_param command --uid "$uid"
@@ -51722,8 +52231,8 @@ EOF
     current_interface="$(uci -q get ttyd.default.interface 2>/dev/null || true)"
     [ -n "$current_interface" ] || uci -q set ttyd.default.interface='br-lan'
     uci -q set ttyd.default.credential='0'
-    uci -q delete ttyd.default.username
-    uci -q delete ttyd.default.password
+    uci -q delete ttyd.default.username || true
+    uci -q delete ttyd.default.password || true
     uci -q set ttyd.default.check_origin='1'
     current_max_clients="$(uci -q get ttyd.default.max_clients 2>/dev/null || true)"
     if [ -z "$current_max_clients" ] || [ "$current_max_clients" = '0' ]; then
@@ -51828,7 +52337,7 @@ gid = s:option(Value, "gid", "组 ID", "运行 ttyd 使用的组 ID")
 gid.rmempty = true
 gid.optional = true
 
-client_option = s:option(Value, "client_option", "客户端参数", "发送给客户端的参数（格式：key=value，可重复添加）")
+client_option = s:option(DynamicList, "client_option", "客户端参数", "发送给客户端的参数（格式：key=value，可重复添加）")
 client_option.rmempty = true
 client_option.optional = true
 
@@ -54878,7 +55387,7 @@ nradio_cpe_monitoring_current_model() {
 
 nradio_cpe_monitoring_model_supported() {
     case "$(nradio_cpe_monitoring_current_model)" in
-        NRadio_C5800-650|NRadio_C5800-688)
+        NRadio_C5800-650|NRadio_C5800-688|NRadio_C2000MAX)
             return 0
             ;;
         *)
@@ -54889,7 +55398,7 @@ nradio_cpe_monitoring_model_supported() {
 
 require_nradio_cpe_monitoring_supported_model() {
     cpe_monitoring_model="$(nradio_cpe_monitoring_current_model)"
-    nradio_cpe_monitoring_model_supported || die "5G 连接监听仅支持 NRadio_C5800-650 / NRadio_C5800-688；当前机型: ${cpe_monitoring_model:-未知}"
+    nradio_cpe_monitoring_model_supported || die "5G 连接监听仅支持 NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C2000MAX；当前机型: ${cpe_monitoring_model:-未知}"
 }
 
 nradio_cpeopt_require_capabilities() {
@@ -56052,32 +56561,79 @@ if [ -n "$gAction" -a  -n "$gProcess" ]; then
 	exit 0
 fi
 
+sim_lock_starttime() {
+	case "$1" in ''|*[!0-9]*) return 1 ;; esac
+	[ -r "/proc/$1/stat" ] || return 1
+	sed 's/^.*) //' "/proc/$1/stat" 2>/dev/null | awk '{print $20}'
+}
+
+sim_lock_release() {
+	local _try
+	[ "$(cat "$CPE_SIM_SEL_LOCK/pid" 2>/dev/null)" = "$$" ] || return 0
+	[ "$(cat "$CPE_SIM_SEL_LOCK/starttime" 2>/dev/null)" = "$CPE_SIM_SEL_START" ] || return 0
+	[ "$(cat "$CPE_SIM_SEL_PID" 2>/dev/null)" != "$$" ] || rm -f "$CPE_SIM_SEL_PID"
+	rm -f "$CPE_SIM_SEL_LOCK/pid" "$CPE_SIM_SEL_LOCK/starttime"
+	for _try in 1 2 3; do
+		rmdir "$CPE_SIM_SEL_LOCK" 2>/dev/null && return 0
+		sleep 1
+	done
+	return 1
+}
+
+sim_lock_acquire() {
+	local _pid _start _current
+	CPE_SIM_SEL_START="$(sim_lock_starttime "$$")"
+	[ -n "$CPE_SIM_SEL_START" ] || return 1
+	if ! mkdir "$CPE_SIM_SEL_LOCK" 2>/dev/null; then
+		[ -d "$CPE_SIM_SEL_LOCK" ] && [ ! -L "$CPE_SIM_SEL_LOCK" ] || return 1
+		_pid="$(cat "$CPE_SIM_SEL_LOCK/pid" 2>/dev/null)"
+		_start="$(cat "$CPE_SIM_SEL_LOCK/starttime" 2>/dev/null)"
+		case "$_pid:$_start" in *[!0-9:]*|:*|*:) return 1 ;; esac
+		_current="$(sim_lock_starttime "$_pid")"
+		[ "$_start" != "$_current" ] || ! kill -0 "$_pid" 2>/dev/null || return 1
+		mkdir "$CPE_SIM_SEL_LOCK/reap" 2>/dev/null || return 1
+		if [ "$(cat "$CPE_SIM_SEL_LOCK/pid" 2>/dev/null)" != "$_pid" ] ||
+		   [ "$(cat "$CPE_SIM_SEL_LOCK/starttime" 2>/dev/null)" != "$_start" ] ||
+		   { [ "$(sim_lock_starttime "$_pid")" = "$_start" ] && kill -0 "$_pid" 2>/dev/null; }; then
+			rmdir "$CPE_SIM_SEL_LOCK/reap" 2>/dev/null
+			return 1
+		fi
+		rm -f "$CPE_SIM_SEL_LOCK/pid" "$CPE_SIM_SEL_LOCK/starttime"
+		rmdir "$CPE_SIM_SEL_LOCK/reap" 2>/dev/null || return 1
+		rmdir "$CPE_SIM_SEL_LOCK" 2>/dev/null || return 1
+		mkdir "$CPE_SIM_SEL_LOCK" 2>/dev/null || return 1
+	fi
+	if ! { chmod 700 "$CPE_SIM_SEL_LOCK" &&
+	       printf '%s\n' "$CPE_SIM_SEL_START" > "$CPE_SIM_SEL_LOCK/starttime" &&
+	       printf '%s\n' "$$" > "$CPE_SIM_SEL_LOCK/pid"; }; then
+		rm -f "$CPE_SIM_SEL_LOCK/starttime" "$CPE_SIM_SEL_LOCK/pid"
+		rmdir "$CPE_SIM_SEL_LOCK" 2>/dev/null
+		return 1
+	fi
+	trap sim_lock_release EXIT
+	trap 'exit 1' HUP INT TERM
+	# 保留旧版 cpesel 读取的 PID 文件，但切卡互斥由原子目录锁负责。
+	_pid="$(cat "$CPE_SIM_SEL_PID" 2>/dev/null)"
+	case "$_pid" in
+		''|*[!0-9]*) ;;
+		*) [ ! -d "/proc/$_pid" ] || return 1 ;;
+	esac
+	printf '%s\n' "$$" > "$CPE_SIM_SEL_PID"
+}
+
 if [ -n "$gSim" ]; then
 	CPE_SIM_SEL_PID="/var/run/${gNet}_sim_sel.pid"
+	CPE_SIM_SEL_LOCK="${CPE_SIM_SEL_PID}.lock"
 	case "$gSim" in
 		''|0|*[!0-9]*)
 			log_info "invalid sim number: $gSim"
 			exit 1
 			;;
 	esac
-	if [ -f "$CPE_SIM_SEL_PID" ]; then
-		_old_pid=$(cat "$CPE_SIM_SEL_PID" 2>/dev/null)
-		case "$_old_pid" in
-			''|*[!0-9]*) ;;
-			*)
-				if [ -d "/proc/$_old_pid" ]; then
-					log_info "switch sim already running: $_old_pid"
-					exit 1
-				fi
-				;;
-		esac
-		rm -f "$CPE_SIM_SEL_PID"
-	fi
-	echo "$$" > "$CPE_SIM_SEL_PID"
+	sim_lock_acquire || { log_info "switch sim busy or lock incomplete"; exit 1; }
 	log_info "switch sim running: $$"
 	switch_sim "$gSim"
 	_switch_rc=$?
-	[ "$(cat "$CPE_SIM_SEL_PID" 2>/dev/null)" = "$$" ] && rm -f "$CPE_SIM_SEL_PID"
 	exit "$_switch_rc"
 fi
 
@@ -57562,37 +58118,26 @@ command_generic_reboot(){
 	_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=1,1" 2
 }
 
+command_generic_wait_ok(){
+	local _ctl="$1" _cmd="$2" _attempt=0 _res
+	while [ "$_attempt" -lt 10 ]; do
+		_attempt=$((_attempt+1))
+		sleep 1
+		_res=$(_command_exec_raw "$_ctl" "$_cmd" 2)
+		echo "$_res"
+		echo "$_res" | grep -qsw "OK" && return 0
+	done
+	return 1
+}
+
 command_generic_reset(){
 	sleep 1
 	_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=0" 7
-	err_cnt=0
-	while true;do
-		sleep 1
-		_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=1" 2)
-		echo "$_res"
-		if echo "$_res"|grep -sq "OK";then
-			break
-		else
-			if [ -n "$_res" ];then
-				err_cnt=$((err_cnt+1))
-				if [ $err_cnt -ge 10 ];then
-					cpetools.sh -R -i $gNet
-					break
-				fi
-			fi
-		fi
-	done
+	command_generic_cfun_o "$1"
 }
 
 command_generic_ate1(){
-	while true;do
-		sleep 1
-		_res=$(_command_exec_raw "$1" "ATE1" 2)
-		echo "$_res"
-		if echo "$_res"|grep -sq "OK";then
-			break
-		fi
-	done
+	command_generic_wait_ok "$1" "ATE1"
 }
 command_generic_cfun_c(){
 	sleep 1
@@ -57600,23 +58145,11 @@ command_generic_cfun_c(){
 }
 
 command_generic_cfun_o(){
-	err_cnt=0
-	while true;do
-		sleep 1
-		_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=1" 2)
-		echo "$_res"
-		if echo "$_res"|grep -sq "OK";then
-			break
-		else
-			if [ -n "$_res" ];then
-				err_cnt=$((err_cnt+1))
-				if [ $err_cnt -ge 10 ];then
-					cpetools.sh -R -i $gNet
-					break
-				fi
-			fi
-		fi
-	done
+	if command_generic_wait_ok "$1" "${AT_GENERIC_PREFIX}CFUN=1"; then
+		return 0
+	fi
+	cpetools.sh -R -i "$gNet"
+	return 1
 }
 
 command_generic_get_cfun(){
@@ -57643,19 +58176,21 @@ command_generic_version(){
 	echo "$_revision"
 }
 command_generic_recovery_cops(){
-	local res=""
-	while true;do
-		res=$(command_generic_network)
-		if [ -n "$_res" ];then
+	local res="" control _attempt=0
+	while [ "$_attempt" -lt 10 ]; do
+		_attempt=$((_attempt+1))
+		res=$(command_generic_network "$1")
+		if [ -n "$res" ];then
 			control=$(echo "$res"|jsonfilter -e "\$['CONTROL']")
 			if [ "$control" != "0" ];then
 				_command_generic_exec "$1" "COPS" "=0"
 			else
-				break
+				return 0
 			fi
 		fi
 		sleep 1
 	done
+	return 1
 }
 
 check_apn_disable()
@@ -58018,7 +58553,8 @@ _command_huawei_syscfgex_set() {
 	local _param _tmp
 	local _keys="ACQORDER BAND ROAM SRVDOMAIN LTEBAND"
 
-	json_load "${_syscfgex:-{}}"
+	[ -n "$_syscfgex" ] || _syscfgex='{}'
+	json_load "$_syscfgex" || return 1
 	json_add_string "$_key" "$_val"
 	for _key in $_keys; do
 		json_get_var _tmp "$_key"
@@ -58026,7 +58562,9 @@ _command_huawei_syscfgex_set() {
 	done
 	json_cleanup
 	_param="$_param,"
-	_command_private_exec "$_ctl" "SYSCFGEX" "=$_param"
+	_tmp=$(_command_private_exec "$_ctl" "SYSCFGEX" "=$_param")
+	echo "$_tmp"
+	echo "$_tmp" | grep -qsw "OK"
 }
 
 _command_huawei_syscfgex_set_acqorder() {
@@ -58054,9 +58592,9 @@ _command_huawei_c5goption() {
 	fi
 
 	echo "do set C5GOPTION $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}C5GOPTION=$_val"
-
-	return 0
+	_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}C5GOPTION=$_val")
+	echo "$_res"
+	echo "$_res" | grep -qsw "OK"
 }
 
 _command_huawei_mode() {
@@ -58104,7 +58642,7 @@ _command_huawei_mode() {
 		if [ "$_acqorder" = "\"$_val\"" ]; then
 			return 2
 		fi
-		_command_huawei_syscfgex_set "$_ctl" "$_syscfg" "ACQORDER" "\"$_val\""
+		_command_huawei_syscfgex_set "$_ctl" "$_syscfg" "ACQORDER" "\"$_val\"" || return 1
 	fi
 
 	return 0
@@ -58553,9 +59091,7 @@ command_huawei_scan(){
 }
 command_huawei_neighbour(){
 	local _ctl="$1"
-	local _model
-	local _res
-	local _data
+	local _res _info _mode _earfcn _pci _rsrp _rsrq _sinr _cnt i line
 
 	_res=$(_command_private_exec "$1" "MONNC")
 	_cnt=$(echo "$_res"|wc -l)
@@ -58585,26 +59121,22 @@ command_huawei_neighbour(){
 				json_add_object
 				json_add_string "MODE" "NR"
 				json_add_string "EARFCN" "$_earfcn"
-				json_add_string "BAND" "$_band"
+				json_add_string "BAND" ""
 				json_add_string "PCI" "$_pci"
 				json_add_string "RSRP" "$_rsrp"
 				json_add_string "RSRQ" "$_rsrq"
 				json_add_string "SINR" "$_sinr"
-				json_add_object "lockneed"
-				json_add_string "MODE" "2"
-				json_add_string "EARFCN" "1"
-				json_add_string "BAND" "1"
-				json_add_string "PCI" "1"
-				json_close_object
+				# MONNC does not provide a band; do not issue an incomplete NR lock.
+				json_add_string "lock_unavailable" "邻区未提供频段，请在高级设置选择频段后锁定"
 				json_close_object
 			elif [ "$_mode" == "LTE" ];then
 				json_add_object
 				json_add_string "MODE" "LTE"
 				json_add_string "EARFCN" "$_earfcn"
-				json_add_string "BAND" "$_band"
+				json_add_string "BAND" ""
 				json_add_string "PCI" "$_pci"
-				json_add_string "SINR" "$_ltesinr"
-				json_add_string "RSRP" "$_rxlev"
+				json_add_string "SINR" "$_sinr"
+				json_add_string "RSRP" "$_rsrp"
 				json_add_string "RSRQ" "$_rsrq"
 				json_add_object "lockneed"
 				json_add_string "MODE" "2"
@@ -58882,120 +59414,38 @@ command_huawei_basic() {
 	json_cleanup
 }
 
-command_huawei_nroff() {
-	local _info="$2"
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_command_huawei_mode "$1" "03" "" "$_alias"
-	if [ $? -eq 0 ];then
-		command_generic_reset "$1"
+command_huawei_apply_mode_profile() {
+	local _ctl="$1" _info="$2" _mode="$3" _option="$4"
+	local _nrcap _alias _rc _changed=0
+	_nrcap=$(echo "$_info" | jsonfilter -e '$["nrcap"]')
+	_alias=$(echo "$_info" | jsonfilter -e '$["alias"]')
+	[ -n "$_option" ] || _nrcap=""
+	if [ "$_mode" = "auto" ]; then
+		if [ "$_alias" = "mt5700" ]; then _mode="080302"; else _mode="00"; fi
 	fi
+	if [ "$_mode" = "08" ] && [ "$_nrcap" = "1" ]; then
+		_command_huawei_c5goption "$_ctl" "$_option"
+		_rc=$?
+		case "$_rc" in 0) _changed=1 ;; 2) ;; *) return "$_rc" ;; esac
+	fi
+	_command_huawei_mode "$_ctl" "$_mode" "$_nrcap" "$_alias"
+	_rc=$?
+	case "$_rc" in 0) _changed=1 ;; 2) ;; *) return "$_rc" ;; esac
+	if [ "$_mode" != "08" ] && [ "$_nrcap" = "1" ] && [ -n "$_option" ]; then
+		_command_huawei_c5goption "$_ctl" "$_option"
+		_rc=$?
+		case "$_rc" in 0) _changed=1 ;; 2) ;; *) return "$_rc" ;; esac
+	fi
+	[ "$_changed" = "1" ] || return 0
+	command_generic_reset "$_ctl"
 }
-command_huawei_modewcdma() {
-	local _info="$2"
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_command_huawei_mode "$1" "02" "" "$_alias"
-	if [ $? -eq 0 ];then
-		command_generic_reset "$1"
-	fi
-}
-command_huawei_allmode() {
-	local _info="$2"
-	local _nrcap
-	local reset=0
-	_nrcap=$(echo "$_info"|jsonfilter -e '$["nrcap"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	if [ "$_alias" == "mt5700" ];then
-		_command_huawei_mode "$1" "080302" "$_nrcap" "$_alias"	
-	else
-		_command_huawei_mode "$1" "00" "$_nrcap" "$_alias"
-	fi
-	if [ $? -eq 0 ];then
-		reset=1
-	fi
-
-	if [ "$_nrcap" = "1" ]; then
-		_command_huawei_c5goption "$1" "1,1,1"
-		if [ $? -eq 0 ];then
-			reset=1
-		fi
-	fi
-	if [ $reset -eq 1 ];then
-		command_generic_reset "$1"
-	fi
-}
-
-command_huawei_modesa() {
-	local _info="$2"
-	local _nrcap
-	local reset=0
-	_nrcap=$(echo "$_info"|jsonfilter -e '$["nrcap"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "mt5700" ];then
-		_command_huawei_mode "$1" "080302" "$_nrcap" "$_alias"
-	else
-		_command_huawei_mode "$1" "00" "$_nrcap" "$_alias"
-	fi
-	if [ $? -eq 0 ];then
-		reset=1
-	fi
-
-	if [ "$_nrcap" = "1" ]; then
-		_command_huawei_c5goption "$1" "1,0,1"
-		if [ $? -eq 0 ];then
-			reset=1
-		fi
-	fi
-	if [ $reset -eq 1 ];then
-		command_generic_reset "$1"
-	fi
-}
-
-command_huawei_modensa() {
-	local _info="$2"
-	local _nrcap
-	local reset=0
-	_nrcap=$(echo "$_info"|jsonfilter -e '$["nrcap"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "mt5700" ];then
-		_command_huawei_mode "$1" "080302" "$_nrcap" "$_alias"
-	else
-		_command_huawei_mode "$1" "00" "$_nrcap" "$_alias"
-	fi
-	if [ $? -eq 0 ];then
-		reset=1
-	fi
-
-	if [ "$_nrcap" = "1" ]; then
-		_command_huawei_c5goption "$1" "0,1,0"
-		if [ $? -eq 0 ];then
-			reset=1
-		fi
-	fi
-	if [ $reset -eq 1 ];then
-		command_generic_reset "$1"
-	fi
-}
-
-command_huawei_modesa_only() {
-	local _info="$2"
-	local _nrcap
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_nrcap=$(echo "$_info"|jsonfilter -e '$["nrcap"]')
-	if [ "$_nrcap" = "1" ]; then
-		_command_huawei_c5goption "$1" "1,1,1"
-	fi
-	_command_huawei_mode "$1" "08" "$_nrcap" "$_alias"
-	if [ $? -eq 0 ];then
-		echo  "syscfg change cfun"
-		command_generic_reset "$1"
-	fi
-}
-
-command_huawei_modensa_only() {
-	command_huawei_modensa "$1" "$2"
-}
+command_huawei_nroff() { command_huawei_apply_mode_profile "$1" "$2" "03" ""; }
+command_huawei_modewcdma() { command_huawei_apply_mode_profile "$1" "$2" "02" ""; }
+command_huawei_allmode() { command_huawei_apply_mode_profile "$1" "$2" "auto" "1,1,1"; }
+command_huawei_modesa() { command_huawei_apply_mode_profile "$1" "$2" "auto" "1,0,1"; }
+command_huawei_modensa() { command_huawei_apply_mode_profile "$1" "$2" "auto" "0,1,0"; }
+command_huawei_modesa_only() { command_huawei_apply_mode_profile "$1" "$2" "08" "1,1,1"; }
+command_huawei_modensa_only() { command_huawei_modensa "$1" "$2"; }
 
 _command_huawei_freq_get() {
 	local _res _info
@@ -59082,9 +59532,10 @@ command_huawei_freq_unlock(){
 
 	if [ "$_enable" != "0" ];then
 		echo "do set NRFREQLOCK 0"
-		command_generic_cfun_c
+		command_generic_cfun_c "$_ctl"
 		res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0" 2)
-		command_generic_cfun_o
+		echo "$res" | grep -qsw "OK" || code=1
+		command_generic_cfun_o "$_ctl" || code=1
 		echo "res:$res"
 	fi
 
@@ -59679,9 +60130,12 @@ command_huawei_usim_set() {
 
 	if [ "$_alias" == "redcap" ];then
 		local val=$((_new-1))
-		$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,0" "5")
+		local _hvsst
+		_hvsst=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,0" "5")
+		echo "$_hvsst" | grep -qsw "OK" || return 1
 		_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}SIMSWITCH=${val},1" "5")
-		$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,1" "5")
+		_hvsst=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,1" "5")
+		echo "$_hvsst" | grep -qsw "OK" || return 1
 	elif [ "$_alias" == "mt5700" ];then
 		local val=$((_new-1))
 		local val2="1"
@@ -60652,19 +61106,22 @@ _command_huawei_lte(){
 
 command_huawei_recovery_cgatt(){
 	local _ctl="$1"
-	while true;do
+	local _res _info _attempt=0
+	while [ "$_attempt" -lt 10 ]; do
+		_attempt=$((_attempt+1))
 		_res=$(_command_exec_raw "$_ctl" "${AT_GENERIC_PREFIX}CGATT?" 2)
 		if [ -n "$_res" ];then
 			_info="$(echo "$_res"|awk -F: '{print $2}'|sed 's/ //g'|xargs -r printf)"
 			if [ "$_info" != "1" ];then
 				_command_generic_exec "$_ctl" "CGATT" "=1" > /dev/null
 			else
-				break
+				return 0
 			fi
 		fi
 
 		sleep 1
 	done
+	return 1
 }
 
 _command_huawei_getrgmii(){
@@ -61336,7 +61793,7 @@ EOF_NRADIO_CPEOPT_CPELOCK
 		if #t_grandchildren ~= 0 then
 			for x, y in ipairs(t_grandchildren) do
 				local tt_nnode = t_nnode.nodes[y]
-				local t_href = controller .. t_category .. "/" .. r .. "/" .. y .. (tt_nnode.query and http.build_querystring(k.query) or "")
+				local t_href = controller .. t_category .. "/" .. r .. "/" .. y .. (tt_nnode.query and http.build_querystring(tt_nnode.query) or "")
 				local t_show = tt_nnode.show or false
 				local route = nil
 				if tt_nnode.full then
@@ -61409,8 +61866,8 @@ function index()
 	local fs = require "nixio.fs"
 	local model = tostring(fs.readfile("/tmp/sysinfo/model") or "")
 	model = model:gsub("^%s+", ""):gsub("%s+$", "")
-	if model ~= "HC-WT9120" and model ~= "HC-WT9126" and
-		model ~= "NRadio_C5800-650" and model ~= "NRadio_C5800-688" then
+	if model ~= "HC-WT9120" and model ~= "HC-WT9126" and model ~= "HC-WT9303" and
+		model ~= "NRadio_C5800-650" and model ~= "NRadio_C5800-688" and model ~= "NRadio_C2000MAX" then
 		return
 	end
 
@@ -61542,10 +61999,11 @@ function action_status()
 				operator = item.sim_company or item.isp_company or "",
 				sim_name = item.sim_name or "",
 				ipaddr = wan_ip(runtime, name),
-				mobility = net.mobility or sim_cfg.mobility or "",
-				nrrc = net.nrrc or "",
+				mobility = sim_cfg.mobility or "0",
+				nrrc = sim_cfg.nrrc or "1",
 				disabled = net.disabled or "0",
 				blacklist_band = net.blacklist_band or "",
+				compatibility = net.compatibility or "0",
 				freq_val = net.freq_val or "",
 				lock = {
 					custom_freq = sim_cfg.custom_freq or "0",
@@ -61755,7 +62213,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 			}else{
 				if(old.up!==now.up){changes.push(now.up?'线路恢复在线':'线路掉线');if(!now.up){level='warn';}}
 				if(old.mode!==now.mode){changes.push('网络 '+(old.mode||'-')+' → '+(now.mode||'-'));}
-				if(old.band!==now.band){changes.push('频段 '+(old.band?'N'+old.band:'-')+' → '+(now.band?'N'+now.band:'-'));}
+				if(old.band!==now.band){changes.push('频段 '+bandText(old.mode,old.band)+' → '+bandText(now.mode,now.band));}
 				if(old.pci!==now.pci||old.earfcn!==now.earfcn){changes.push('小区 '+(old.pci||'-')+'/'+(old.earfcn||'-')+' → '+(now.pci||'-')+'/'+(now.earfcn||'-'));}
 			}
 			if(changes.length){addEvent(name,changes.join('；'),level);}
@@ -61765,11 +62223,17 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		renderEvents();
 	}
 
+    function bandText(mode,band){
+        if(!band)return '-';
+        var name=String(mode||'').toUpperCase();
+        return (name.indexOf('NR')!==-1?'N':(name.indexOf('LTE')!==-1?'B':''))+String(band).replace(/^[NB]/i,'');
+    }
 	function parseBandList(value,kind){
 		var result=[];
 		String(value||'').split(',').forEach(function(part){
 			var bits=part.split('-');
-			if(bits.length>1&&bits[0].toLowerCase()===kind){
+			var label=bits[0].toLowerCase();
+			if(bits.length>1&&(label===kind||(kind==='nr'&&(label==='sa'||label==='nsa')))){
 				result=bits.slice(1).join('-').split(':').filter(function(item){return item!==''&&item!=='0';});
 			}
 		});
@@ -61780,7 +62244,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		var lock=line.lock||{};
 		var mode=cleanValue(line.mode).toUpperCase();
 		var kind=mode.indexOf('NR')!==-1?'nr':(mode.indexOf('LTE')!==-1?'lte':'');
-		var band=cleanValue(line.band).replace(/^N/i,'');
+		var band=cleanValue(line.band).replace(/^[NB]/i,'');
 		var black=cleanValue(line.blacklist_band).split(/[:,;\s]+/).filter(function(item){return item!=='';});
 		var target;
 		var hit;
@@ -61796,10 +62260,10 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 			return {label:hit?'精确锁定命中':'精确锁定偏离',detail:target,className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
 		}
 		if(!kind||!band){return {label:'无法判断',detail:'当前网络或频段为空',className:'nr5g-lock-neutral'};}
-		if(black.indexOf(band)!==-1){return {label:'黑名单未生效',detail:'当前频段 N'+band+' 在黑名单中',className:'nr5g-lock-warn'};}
-		var source=lock.custom_freq==='1'&&lock.freq?lock.freq:line.freq_val;
+		if(kind==='nr'&&line.compatibility==='1'&&black.indexOf(band)!==-1){return {label:'黑名单未生效',detail:'当前频段 N'+band+' 在黑名单中',className:'nr5g-lock-warn'};}
+		var source=lock.custom_freq==='1'?lock.freq:line.freq_val;
 		var allowed=parseBandList(source,kind);
-		if(!allowed.length){return {label:'未限制频段',detail:'当前 N'+band,className:'nr5g-lock-neutral'};}
+		if(!allowed.length){return {label:'未限制频段',detail:'当前 '+bandText(line.mode,band),className:'nr5g-lock-neutral'};}
 		hit=allowed.indexOf(band)!==-1;
 		return {label:hit?'频段策略命中':'频段策略偏离',detail:(kind==='nr'?'NR N':'LTE B')+allowed.join(kind==='nr'?' / N':' / B'),className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
 	}
@@ -61890,7 +62354,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 
 		kv.className='nr5g-kv';
 		addItem(kv,'网络',line.mode);
-		addItem(kv,'频段',line.band?'N'+line.band:'-');
+		addItem(kv,'频段',bandText(line.mode,line.band));
 		addItem(kv,'RSRP',line.rsrp?line.rsrp+' dBm':'-',signalClass(line.rsrp));
 		addItem(kv,'SINR',line.sinr?line.sinr+' dB':'-');
 		addItem(kv,'RSRQ',line.rsrq?line.rsrq+' dB':'-');
@@ -61901,7 +62365,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		addItem(kv,'模组温度',line.temperature?line.temperature+' °C':'-');
 		addItem(kv,'允许重选',line.mobility==='1'?'是':'否');
 		addItem(kv,'NR 重连',line.nrrc==='1'?'启用':'关闭');
-		addItem(kv,'频段黑名单',line.blacklist_band?('N'+line.blacklist_band):'无');
+		addItem(kv,'频段黑名单',line.compatibility==='1'&&line.blacklist_band?('NR N'+line.blacklist_band):'未启用');
 		addItem(kv,'频段策略',line.freq_val);
 		var lockState=lockCheck(line);
 		addItem(kv,'锁频检查',lockState.label,lockState.className);
@@ -62124,6 +62588,7 @@ verify_nradio_cpeopt_installation() {
     grep -Fq "data-nradio-cpeopt=\"$NRADIO_CPEOPT_VERSION\"" "$NRADIO_CPEOPT_VIEW" || return 1
     grep -Fq 'HC-WT9120' "$NRADIO_CPEOPT_CONTROLLER" || return 1
     grep -Fq 'HC-WT9126' "$NRADIO_CPEOPT_CONTROLLER" || return 1
+    grep -Fq 'HC-WT9303' "$NRADIO_CPEOPT_CONTROLLER" || return 1
     return 0
 }
 
@@ -62156,7 +62621,7 @@ install_nradio_cpe_connection_monitoring() {
 
     log "结果:   5G 连接监听 $NRADIO_CPEOPT_VERSION 已安装"
     log "入口:   /cgi-bin/luci/$NRADIO_CPEOPT_ROUTE"
-    log "范围:   仅限 NRadio_C5800-650 / NRadio_C5800-688"
+    log "范围:   NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C2000MAX"
 }
 
 nradio_cpeopt_require_uninstall_sources() {
@@ -62243,7 +62708,7 @@ manage_nradio_cpe_connection_monitoring() {
     require_nradio_cpe_monitoring_supported_model
 
     while :; do
-        printf '\n5G 连接监听（仅限 NRadio_C5800-650 / C5800-688）:\n'
+        printf '\n5G 连接监听（C5800-650 / C5800-688 / C2000MAX）:\n'
         printf '1. 安装或更新 5G 连接监听\n'
         printf '2. 卸载 5G 连接监听\n'
         printf '0. 返回设备维护与检测\n'
@@ -62309,6 +62774,8 @@ LOG_TAG="nradio-band"
 RUNTIME_DIR="/var/run/nradio-smart-band"
 STATE_FILE="$RUNTIME_DIR/band_state"
 PREFERENCE_STATE_FILE="$RUNTIME_DIR/preference_state_v2"
+PENDING_AUTO_FILE="$RUNTIME_DIR/pending_auto"
+STOP_FILE="$RUNTIME_DIR/stopping"
 LOCK_DIR="$RUNTIME_DIR/lock"
 LOCK_PID_FILE="$LOCK_DIR/pid"
 LOCK_STARTTIME_FILE="$LOCK_DIR/starttime"
@@ -62368,6 +62835,7 @@ EXEC_MODE="apply"
 log() {
     local _line _size _log_tmp
     _line="$(date '+%Y-%m-%d %H:%M:%S') $1"
+    [ "$EXEC_MODE" = "apply" ] || { echo "$_line"; return 0; }
     logger -t "$LOG_TAG" "$1"
     printf '%s\n' "$_line" >> "$RUNTIME_LOG" || return 1
     _size="$(wc -c < "$RUNTIME_LOG" 2>/dev/null || echo 0)"
@@ -62395,18 +62863,20 @@ process_starttime() {
 }
 
 ensure_runtime_dir() {
+    local _runtime_path
     [ ! -L "$RUNTIME_DIR" ] || return 1
     if [ -e "$RUNTIME_DIR" ] && [ ! -d "$RUNTIME_DIR" ]; then
         return 1
     fi
-    mkdir -p "$RUNTIME_DIR" || return 1
-    chmod 700 "$RUNTIME_DIR" || return 1
-    for _runtime_path in "$STATE_FILE" "$PREFERENCE_STATE_FILE" "$RUNTIME_LOG"; do
+    for _runtime_path in "$STATE_FILE" "$PREFERENCE_STATE_FILE" "$RUNTIME_LOG" "$PENDING_AUTO_FILE" "$STOP_FILE"; do
         [ ! -L "$_runtime_path" ] || return 1
         if [ -e "$_runtime_path" ] && [ ! -f "$_runtime_path" ]; then
             return 1
         fi
     done
+    [ "$EXEC_MODE" = "apply" ] || return 0
+    mkdir -p "$RUNTIME_DIR" || return 1
+    chmod 700 "$RUNTIME_DIR" || return 1
     (umask 077; : >> "$RUNTIME_LOG") || return 1
     chmod 600 "$RUNTIME_LOG" || return 1
 }
@@ -62424,6 +62894,7 @@ state_has() {
 
 state_clear() {
     local _iface="$1" _tmp
+    [ "$EXEC_MODE" = "apply" ] || return 0
     state_has "$_iface" || return 0
 
     _tmp="$(mktemp "$RUNTIME_DIR/state-clear.XXXXXX")" || return 1
@@ -62436,6 +62907,7 @@ state_clear() {
 
 state_write() {
     local _iface="$1" _count="$2" _last="$3" _window="$4" _band="$5" _since="$6" _samples="$7" _failures="$8" _ipv6_last="$9" _tmp
+    [ "$EXEC_MODE" = "apply" ] || return 0
 
     _tmp="$(mktemp "$RUNTIME_DIR/state-write.XXXXXX")" || return 1
     TMP_FILE="$_tmp"
@@ -62561,6 +63033,7 @@ preference_state_get() {
 
 preference_state_write() {
     local _iface="$1" _date="$2" _count="$3" _last="$4" _result="$5" _tmp
+    [ "$EXEC_MODE" = "apply" ] || return 0
     _tmp="$(mktemp "$RUNTIME_DIR/preference-write.XXXXXX")" || return 1
     if [ -f "$PREFERENCE_STATE_FILE" ]; then
         awk -v prefix="${_iface}_" 'index($0, prefix) != 1 { print }' "$PREFERENCE_STATE_FILE" > "$_tmp" 2>/dev/null || { rm -f "$_tmp"; return 1; }
@@ -62853,6 +63326,7 @@ check_band() {
 
 native_band_profile() {
     local _iface="$1" _sim="$2" _target="$3" _out _rc _sim_before _sim_after
+    [ "$EXEC_MODE" = "apply" ] || return 1
     [ -x /usr/bin/cpetools.sh ] || return 127
     _sim_before="$(current_sim_id "$_iface" 2>/dev/null || true)"
     if [ -z "$_sim_before" ] || [ "$_sim_before" != "$_sim" ]; then
@@ -62888,7 +63362,10 @@ restore_auto_band() {
     _rc=$?
     if [ "$_rc" -eq 0 ]; then
         log "${_iface}: 已恢复自动选频"
-        [ "$PREFERENCE_LOCK_IFACE" = "$_iface" ] && PREFERENCE_LOCK_IFACE=""
+        if [ "$PREFERENCE_LOCK_IFACE" = "$_iface" ]; then
+            rm -f "$PENDING_AUTO_FILE" || return 1
+            PREFERENCE_LOCK_IFACE=""
+        fi
     else
         log "${_iface}: 恢复自动选频失败 rc=${_rc}"
     fi
@@ -62975,10 +63452,15 @@ select_rule_recovery_target() {
 recover_rule_band() {
     local _iface="$1" _sim="$2" _target="$3" _elapsed _found _final_band
     PREFERENCE_ACTION="control-failed"
+    if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
+        restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" || return 2
+    fi
+    # 命令即使返回失败也可能已经改变模组；先记下同一 SIM 的回退责任。
+    (umask 077; printf '%s %s\n' "$_iface" "$_sim" > "$PENDING_AUTO_FILE") || return 1
     PREFERENCE_LOCK_IFACE="$_iface"
     PREFERENCE_LOCK_SIM="$_sim"
     if ! native_band_profile "$_iface" "$_sim" "$_target"; then
-        PREFERENCE_LOCK_IFACE=""
+        restore_auto_band "$_iface" "$_sim" || { PREFERENCE_ACTION="auto-restore-failed"; return 2; }
         return 1
     fi
 
@@ -62995,7 +63477,7 @@ recover_rule_band() {
         fi
     done
 
-    restore_auto_band "$_iface" "$_sim" || true
+    restore_auto_band "$_iface" "$_sim" || { PREFERENCE_ACTION="auto-restore-failed"; return 2; }
     sleep 10
     if ! wait_preference_recovery "$_iface"; then
         PREFERENCE_ACTION="recovery-failed"
@@ -63288,6 +63770,10 @@ process() {
 
     if [ "$_health_rc" -eq 0 ]; then
         maybe_restore_preferred_band "$_iface" || true
+        if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
+            echo "${_iface}=AUTO-RESTORE-PENDING sim=${PREFERENCE_LOCK_SIM}"
+            return 1
+        fi
         if [ "$PREFERENCE_ACTION" != "none" ]; then
             check_band "$_iface" || true
             check_ipv4_health "$_iface"
@@ -63351,50 +63837,56 @@ case "${1:-}" in
     *) echo "usage: $0 [apply|status|dry-run]" >&2; exit 2 ;;
 esac
 
-ensure_runtime_dir || { echo "无法创建安全的智能频段运行目录：$RUNTIME_DIR" >&2; exit 1; }
+ensure_runtime_dir || { echo "智能频段运行路径异常：$RUNTIME_DIR" >&2; exit 1; }
 
 acquire_lock() {
-    local _pid _stored_start _current_start _self_start
-    if mkdir "$LOCK_DIR" 2>/dev/null; then
-        chmod 700 "$LOCK_DIR" || { rmdir "$LOCK_DIR" 2>/dev/null || true; return 2; }
-        _self_start="$(process_starttime "$$" 2>/dev/null || true)"
-        [ -n "$_self_start" ] || { rmdir "$LOCK_DIR" 2>/dev/null || true; return 2; }
-        printf '%s\n' "$$" > "$LOCK_PID_FILE" || { rmdir "$LOCK_DIR" 2>/dev/null || true; return 2; }
-        printf '%s\n' "$_self_start" > "$LOCK_STARTTIME_FILE" || { rm -f "$LOCK_PID_FILE"; rmdir "$LOCK_DIR" 2>/dev/null || true; return 2; }
-        return 0
+    local _pid _stored_start _self_start
+    [ ! -e "$STOP_FILE" ] || return 1
+    _self_start="$(process_starttime "$$" 2>/dev/null || true)"
+    [ -n "$_self_start" ] || return 2
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        [ -d "$LOCK_DIR" ] && [ ! -L "$LOCK_DIR" ] || return 2
+        _pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
+        _stored_start="$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null || true)"
+        is_uint "$_pid" && [ "$_pid" -gt 1 ] && is_uint "$_stored_start" || return 2
+        if [ "$_stored_start" = "$(process_starttime "$_pid")" ] && kill -0 "$_pid" 2>/dev/null; then
+            log "已有实例运行 pid=${_pid}，跳过本轮"
+            return 1
+        fi
+        mkdir "$LOCK_DIR/reap" 2>/dev/null || return 2
+        if [ "$(cat "$LOCK_PID_FILE" 2>/dev/null)" != "$_pid" ] ||
+           [ "$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null)" != "$_stored_start" ] ||
+           { [ "$(process_starttime "$_pid")" = "$_stored_start" ] && kill -0 "$_pid" 2>/dev/null; }; then
+            rmdir "$LOCK_DIR/reap" 2>/dev/null
+            return 2
+        fi
+        rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE"
+        rmdir "$LOCK_DIR/reap" 2>/dev/null || return 2
+        rmdir "$LOCK_DIR" 2>/dev/null || return 2
+        mkdir "$LOCK_DIR" 2>/dev/null || return 2
     fi
-
-    _pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
-    _stored_start="$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null || true)"
-    _current_start="$(process_starttime "$_pid" 2>/dev/null || true)"
-    if is_uint "$_pid" && [ "$_pid" -gt 1 ] && [ -n "$_stored_start" ] && [ "$_stored_start" = "$_current_start" ] && kill -0 "$_pid" 2>/dev/null; then
-        log "已有实例运行 pid=${_pid}，跳过本轮"
-        return 1
+    if ! { chmod 700 "$LOCK_DIR" &&
+           printf '%s\n' "$_self_start" > "$LOCK_STARTTIME_FILE" &&
+           printf '%s\n' "$$" > "$LOCK_PID_FILE"; }; then
+        rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE"
+        rmdir "$LOCK_DIR" 2>/dev/null
+        return 2
     fi
-
-    rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE" 2>/dev/null || return 2
-    if rmdir "$LOCK_DIR" 2>/dev/null && mkdir "$LOCK_DIR" 2>/dev/null; then
-        chmod 700 "$LOCK_DIR" || return 2
-        _self_start="$(process_starttime "$$" 2>/dev/null || true)"
-        [ -n "$_self_start" ] || return 2
-        printf '%s\n' "$$" > "$LOCK_PID_FILE" || return 2
-        printf '%s\n' "$_self_start" > "$LOCK_STARTTIME_FILE" || return 2
-        log "检测到陈旧运行锁，已安全重建"
-        return 0
-    fi
-
-    log "运行锁异常且无法安全重建，跳过本轮"
-    return 2
+    return 0
 }
 
 release_lock() {
-    local _pid _stored_start _self_start
+    local _pid _stored_start _self_start _try
     _pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
     _stored_start="$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null || true)"
     _self_start="$(process_starttime "$$" 2>/dev/null || true)"
     [ "$_pid" = "$$" ] && [ -n "$_stored_start" ] && [ "$_stored_start" = "$_self_start" ] || return 1
     rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE" 2>/dev/null || return 1
-    rmdir "$LOCK_DIR" 2>/dev/null || return 1
+    for _try in 1 2 3; do
+        rmdir "$LOCK_DIR" 2>/dev/null && return 0
+        sleep 1
+    done
+    return 1
 }
 
 if [ "$EXEC_MODE" = "apply" ]; then
@@ -63426,9 +63918,23 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' INT TERM HUP
 
+if [ "$EXEC_MODE" = "apply" ]; then
+    [ ! -e "$STOP_FILE" ] || exit 0
+    if [ -e "$PENDING_AUTO_FILE" ]; then
+        read -r PREFERENCE_LOCK_IFACE PREFERENCE_LOCK_SIM < "$PENDING_AUTO_FILE"
+        case "$PREFERENCE_LOCK_IFACE" in cpe|cpe1) ;; *) PREFERENCE_LOCK_IFACE=""; exit 1 ;; esac
+        is_uint "$PREFERENCE_LOCK_SIM" && [ "$PREFERENCE_LOCK_SIM" -gt 0 ] || { PREFERENCE_LOCK_IFACE=""; exit 1; }
+        restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" || exit 1
+    fi
+fi
+
 RESULT=0
 process "cpe1" "蜂窝接口2" || RESULT=1
-process "cpe" "蜂窝接口1" || RESULT=1
+if [ -z "$PREFERENCE_LOCK_IFACE" ]; then
+    process "cpe" "蜂窝接口1" || RESULT=1
+else
+    RESULT=1
+fi
 exit "$RESULT"
 EOF_NRADIO_SMART_BAND_V7
 
@@ -63509,6 +64015,7 @@ install_nradio_smart_band() {
     require_root
     require_nradio_smart_band_supported_model
     write_nradio_smart_band_script
+    rm -f /var/run/nradio-smart-band/stopping || die "无法清除智能频段停止标记"
     update_nradio_smart_band_cron install
     log "结果:   智能频段 v7 已安装并启用"
 }
@@ -63555,6 +64062,7 @@ show_nradio_smart_band_log() {
 }
 
 uninstall_nradio_smart_band() {
+    local _runtime_dir="/var/run/nradio-smart-band" _lock _pid _start _elapsed
     require_root
     require_nradio_smart_band_supported_model
     printf '确认卸载智能频段脚本、定时任务及运行状态？[y/N]: '
@@ -63568,12 +64076,45 @@ uninstall_nradio_smart_band() {
             ;;
     esac
 
+    [ ! -L "$_runtime_dir" ] || die "智能频段运行目录为符号链接，卸载中止"
+    mkdir -p "$_runtime_dir" || die "无法访问智能频段运行目录"
+    chmod 700 "$_runtime_dir" || die "无法保护智能频段运行目录"
+    [ ! -L "$_runtime_dir/stopping" ] || die "智能频段停止标记异常"
+    (umask 077; : > "$_runtime_dir/stopping") || die "无法写入智能频段停止标记"
     update_nradio_smart_band_cron remove
+    for _lock in "$NRADIO_SMART_BAND_LOCK_DIR" /tmp/nradio-smart-band.lock; do
+        [ -e "$_lock" ] || [ -L "$_lock" ] || continue
+        [ -d "$_lock" ] && [ ! -L "$_lock" ] || die "智能频段锁路径异常: $_lock"
+        _pid="$(cat "$_lock/pid" 2>/dev/null || true)"
+        _start="$(cat "$_lock/starttime" 2>/dev/null || true)"
+        case "$_pid:$_start" in *[!0-9:]*|:*|*:) die "智能频段锁正在初始化或身份不完整；保留文件，请稍后重试" ;; esac
+        if [ "$_start" = "$(process_starttime "$_pid")" ] && kill -0 "$_pid" 2>/dev/null; then
+            tr '\000' '\n' < "/proc/$_pid/cmdline" | grep -Fxq "$NRADIO_SMART_BAND_SCRIPT" ||
+                die "锁内 PID 不是智能频段脚本，卸载中止: $_pid"
+            log "停止:   等待智能频段实例 $_pid 完成自动选频回退并退出"
+            kill -TERM "$_pid" 2>/dev/null || true
+            _elapsed=0
+            while [ "$_start" = "$(process_starttime "$_pid")" ] && kill -0 "$_pid" 2>/dev/null; do
+                [ "$_elapsed" -lt 120 ] || die "智能频段实例尚未退出；已停定时任务，保留脚本和状态，请稍后重试"
+                sleep 1
+                _elapsed=$((_elapsed + 1))
+            done
+        fi
+        if [ -d "$_lock" ]; then
+            reclaim_initialized_task_lock "$_lock" lock_pid_matches_owner ||
+                die "智能频段锁尚未释放或身份已变化；保留脚本和状态"
+        fi
+    done
+    [ ! -e "$_runtime_dir/pending_auto" ] || die "仍有未完成的自动选频回退；保留脚本和状态，请先核对原 SIM 并恢复"
+    # 在删文件期间持有有效运行锁，阻止并发控制。
+    mkdir "$NRADIO_SMART_BAND_LOCK_DIR" || die "智能频段锁被其他实例获取，卸载中止"
+    write_lock_identity "$NRADIO_SMART_BAND_LOCK_DIR" || die "无法写入智能频段卸载锁"
     rm -f "$NRADIO_SMART_BAND_SCRIPT" "$NRADIO_SMART_BAND_STATE_FILE" "$NRADIO_SMART_BAND_PREFERENCE_STATE_FILE" "$NRADIO_SMART_BAND_LEGACY_PREFERENCE_STATE_FILE" "$NRADIO_SMART_BAND_RUNTIME_LOG" /tmp/nradio_band_state /tmp/nradio_band_preference_state_v2 /tmp/nradio-smart-band.log 2>/dev/null || true
     rm -f "$NRADIO_SMART_BAND_LOCK_DIR/pid" "$NRADIO_SMART_BAND_LOCK_DIR/starttime" /tmp/nradio-smart-band.lock/pid /tmp/nradio-smart-band.lock/starttime 2>/dev/null || true
     rmdir "$NRADIO_SMART_BAND_LOCK_DIR" 2>/dev/null || true
-    rmdir /var/run/nradio-smart-band /tmp/nradio-smart-band.lock 2>/dev/null || true
-    log "结果:   智能频段脚本、定时任务及临时状态已移除"
+    # 停止标记保留到重新安装，防止卸载前已载入内存的任务再次执行。
+    rmdir /tmp/nradio-smart-band.lock 2>/dev/null || true
+    log "结果:   智能频段脚本、定时任务及运行状态已移除；停止标记在重新安装时解除"
 }
 
 run_nradio_smart_band_selfcheck() {
@@ -63600,7 +64141,7 @@ run_nradio_smart_band_selfcheck() {
             log "语法:   FAIL"
             smart_band_failures=$((smart_band_failures + 1))
         fi
-        log "版本:   v5"
+        log "版本:   v7"
     else
         log "脚本:   FAIL 缺失或不可执行"
         smart_band_failures=$((smart_band_failures + 1))
@@ -64383,6 +64924,22 @@ c8_788_feature_allowed() {
 
 require_menu_feature_supported_for_current_model() {
     restricted_feature="$1"
+    case "$restricted_feature" in
+        31|32)
+            lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
+            ;;
+        15|16)
+            if lightweight_appcenter_model_supported; then
+                die "1、2 为完整应用商店功能；C2000Pro / AK68-798 请进入 4 > 4 轻量应用商店"
+            fi
+            ;;
+    esac
+    if is_current_model_ak798; then
+        case "$restricted_feature" in
+            13|27|31|32) return 0 ;;
+            *) die "AK68-798 为 16 MiB NOR 机型；当前开放轻量商店、首页 CPU 温度与统一体检，其他功能需逐项适配容量和硬件" ;;
+        esac
+    fi
     is_current_model_c8_788 || return 0
     c8_788_feature_allowed "$restricted_feature" && return 0
     die "NRadio_C8-788 为小容量 NAND 受限机型；当前功能已禁用，仅开放 OpenClash、应用商店维护、首页温度切换和对应检查"
@@ -64522,6 +65079,14 @@ run_menu_feature() {
             run_recorded_menu_feature "1 > 9" "$MT5700_APP_NAME $MT5700_UI_NAME V$MT5700_UI_VERSION 安装" install_mt5700_webui
             MENU_ACTION_COMPLETED='1'
             ;;
+        31)
+            run_recorded_menu_feature "4 > 4 > 1" "C2000Pro / AK68-798 轻量应用商店创建或更新" install_lightweight_appcenter
+            MENU_ACTION_COMPLETED='1'
+            ;;
+        32)
+            run_recorded_menu_feature "4 > 4 > 2" "C2000Pro / AK68-798 轻量应用商店移除" remove_lightweight_appcenter
+            MENU_ACTION_COMPLETED='1'
+            ;;
         *)
             die_menu_input_issue "$feature_choice"
             ;;
@@ -64616,21 +65181,38 @@ network_route_menu() {
     done
 }
 
+lightweight_appcenter_menu() {
+    lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
+    printf '\nC2000Pro / AK68-798 轻量应用商店:\n'
+    printf '1. 创建 / 更新轻量应用商店\n'
+    printf '2. 移除轻量应用商店（保留插件记录）\n'
+    printf '0. 返回应用商店菜单\n'
+    printf '请选择 0、1 或 2: '
+    read_category_choice
+    case "$UI_READ_RESULT" in
+        0) return 0 ;;
+        1) run_menu_feature 31 ;;
+        2) run_menu_feature 32 ;;
+        *) die_menu_input_issue "$UI_READ_RESULT" ;;
+    esac
+}
+
 appcenter_polish_menu() {
     while :; do
         submenu_feature=''
         printf '\n应用商店与页面美化:\n'
-        printf '1. 美化应用商店\n'
-        printf '2. 还原应用商店\n'
+        if ! lightweight_appcenter_model_supported; then
+            printf '1. 美化应用商店\n'
+            printf '2. 还原应用商店\n'
+        fi
         if openwrt_luci_8080_model_supported; then
             printf '3. OpenWrt 原版 LuCI（8080）安装或更新\n'
         fi
-        printf '0. 返回功能分类\n'
-        if openwrt_luci_8080_model_supported; then
-            printf '请选择 0、1、2 或 3: '
-        else
-            printf '请选择 0、1 或 2: '
+        if lightweight_appcenter_model_supported; then
+            printf '4. C2000Pro / AK68-798 轻量应用商店\n'
         fi
+        printf '0. 返回功能分类\n'
+        printf '请选择上方菜单编号: '
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 0 ;;
@@ -64642,6 +65224,11 @@ appcenter_polish_menu() {
                 else
                     die_menu_input_issue "$UI_READ_RESULT"
                 fi
+                ;;
+            4)
+                lightweight_appcenter_menu
+                [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0
+                continue
                 ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
@@ -65282,7 +65869,7 @@ docker_cleanup_overlay_failed_files() {
             log "提示: 保留非本脚本管理的现有 Docker 命令：$docker_path"
         fi
     done
-    rm -f /usr/lib/opkg/info/docker.* /usr/lib/opkg/info/dockerd.* /usr/lib/opkg/info/containerd.* /usr/lib/opkg/info/runc.* 2>/dev/null || true
+    # Existing opkg records belong to opkg, even when a command was preserved above.
     rm -rf /tmp/nradio-docker-* 2>/dev/null || true
 }
 
@@ -65741,7 +66328,7 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
     <section id="docker-tab-images" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>镜像 <small id="docker-image-count-table">0</small></h3><div id="docker-images" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>拉取镜像</h3><div class="docker-panel-body"><div class="docker-form"><label>镜像名<input id="pull-image-2" class="docker-input" placeholder="alpine:latest"></label><button class="docker-btn" type="button" onclick="dockerPullAlt()">拉取镜像</button></div></div></div></div></section>
     <section id="docker-tab-networks" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>网络</h3><div id="docker-networks" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建网络</h3><div class="docker-panel-body"><div class="docker-form"><label>网络名<input id="network-name" class="docker-input" placeholder="app_net"></label><label>驱动<select id="network-driver" class="docker-select"><option value="bridge">bridge</option><option value="macvlan">macvlan</option><option value="ipvlan">ipvlan</option></select></label><button class="docker-btn" type="button" onclick="dockerNetworkCreate()">创建网络</button></div></div></div></div></section>
     <section id="docker-tab-volumes" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>卷</h3><div id="docker-volumes" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建卷</h3><div class="docker-panel-body"><div class="docker-form"><label>卷名<input id="volume-name" class="docker-input" placeholder="app_data"></label><button class="docker-btn" type="button" onclick="dockerVolumeCreate()">创建卷</button></div></div></div></div></section>
-    <section id="docker-tab-logs" class="docker-section"><div class="docker-panel"><h3>操作日志</h3><pre id="docker-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>详情 / Inspect</h3><pre id="docker-detail" class="docker-pre">-</pre></div></section>
+    <section id="docker-tab-logs" class="docker-section"><div class="docker-panel"><h3>操作日志</h3><pre id="docker-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>容器日志</h3><pre id="docker-container-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>详情 / Inspect</h3><pre id="docker-detail" class="docker-pre">-</pre></div></section>
   </div>
 </div>
 <script>
@@ -65771,7 +66358,7 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
   window.dockerPullAlt=function(){var alt=value('pull-image-2'),main=document.getElementById('pull-image');if(main)main.value=alt;window.dockerPull();};
   window.dockerRun=function(){var image=value('run-image');if(!image){state('镜像不能为空',true);return;}state('run '+image+'...');api('run',{image:image,name:value('run-name'),ports:value('run-ports'),volumes:value('run-volumes'),envs:value('run-envs'),restart:value('run-restart'),network:value('run-network'),privileged:checked('run-privileged'),command:value('run-command')},function(d){state(d&&d.ok?'容器创建完成':'创建失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,1200);});};
   window.dockerContainer=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除容器 '+id+' 吗？'))return;state(op+' '+id+'...');api('container',{id:id,op:op},function(d){state(d&&d.ok?'容器操作完成':'容器操作失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  window.dockerLogs=function(id){if(!id)return;state('读取容器日志 '+id+'...');api('logs',{id:id},function(d){text('docker-logs',d&&d.logs?d.logs:'无日志');state(d&&d.ok?'日志已读取':'日志读取失败',!(d&&d.ok));});};
+  window.dockerLogs=function(id){if(!id)return;state('读取容器日志 '+id+'...');api('logs',{id:id},function(d){text('docker-container-logs',d&&d.logs?d.logs:'无日志');state(d&&d.ok?'日志已读取':'日志读取失败',!(d&&d.ok));});};
   window.dockerInspect=function(id){if(!id)return;state('inspect '+id+'...');api('inspect',{id:id},function(d){text('docker-detail',d&&d.inspect?d.inspect:'无详情');state(d&&d.ok?'详情已读取':'详情读取失败',!(d&&d.ok));showTab('logs');});};
   window.dockerImage=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除镜像 '+id+' 吗？'))return;state(op+' image '+id+'...');api('image',{id:id,op:op},function(d){state(d&&d.ok?'镜像操作完成':'镜像操作失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
   window.dockerPrune=function(){var target=value('prune-target')||'system';if(!confirm('确认执行 Docker 清理：'+target+' ?'))return;state('prune '+target+'...');api('prune',{target:target},function(d){state(d&&d.ok?'清理完成':'清理失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,1400);});};
@@ -65948,7 +66535,7 @@ APP_ICON="/www/luci-static/nradio/images/icon/qiyou.svg"
 delete_sections() {
     st="$1"; fn="$2"; fv="$3"
     [ -n "$fv" ] || return 0
-    uci show appcenter 2>/dev/null | while IFS= read -r line; do
+    uci -X show appcenter 2>/dev/null | while IFS= read -r line; do
         case "$line" in
             "appcenter.@${st}"*".${fn}='${fv}'"|"appcenter.cfg"*".${fn}='${fv}'")
                 sec="${line#appcenter.}"; sec="${sec%%.*}"; printf '%s\n' "$sec" ;;
@@ -66296,7 +66883,7 @@ LEIGOD_INIT="/etc/init.d/acc"
 delete_sections() {
     st="$1"; fn="$2"; fv="$3"
     [ -n "$fv" ] || return 0
-    uci show appcenter 2>/dev/null | while IFS= read -r line; do
+    uci -X show appcenter 2>/dev/null | while IFS= read -r line; do
         case "$line" in
             "appcenter.@${st}"*".${fn}='${fv}'"|"appcenter.cfg"*".${fn}='${fv}'")
                 sec="${line#appcenter.}"; sec="${sec%%.*}"; printf '%s\n' "$sec" ;;
@@ -66618,6 +67205,20 @@ game_accelerator_menu() {
 maintenance_test_menu() {
     while :; do
         submenu_feature=''
+        if is_current_model_ak798; then
+            printf '\n设备维护与检测（AK68-798 轻量模式）:\n'
+            printf '1. 统一体检增强版\n'
+            printf '10. LuCI 首页 CPU 温度显示\n'
+            printf '0. 返回功能分类\n'
+            printf '请选择 0、1 或 10: '
+            read_category_choice
+            case "$UI_READ_RESULT" in
+                0) return 0 ;;
+                1) run_menu_feature 13; return 0 ;;
+                10) run_menu_feature 27; return 0 ;;
+                *) die_menu_input_issue "$UI_READ_RESULT" ;;
+            esac
+        fi
         if is_current_model_c8_788; then
             printf '\n设备维护与检测（C8-788 小容量模式）:\n'
             printf '1. 统一体检增强版\n'
@@ -66656,7 +67257,7 @@ maintenance_test_menu() {
         printf '9. LuCI 运营商与卡名显示修复\n'
         printf '10. LuCI 首页 CPU / 5G 温度切换（全部 NROS）\n'
         if nradio_cpe_monitoring_model_supported; then
-            printf '11. 5G 连接监听（仅限 5800 系列）\n'
+            printf '11. 5G 连接监听（5800 系列 / C2000MAX）\n'
         fi
         printf '0. 返回功能分类\n'
         if nradio_5g_aggregation_model_supported && nradio_smart_band_model_supported; then
@@ -66730,6 +67331,12 @@ printf '%s\n' "$SCRIPT_MODEL_NOTICE"
 
     if [ -n "$choice" ]; then
         MENU_ACTION_COMPLETED='0'
+        if is_current_model_ak798; then
+            case "$choice" in
+                0|4|5) ;;
+                *) die "AK68-798 当前开放分类 4（轻量应用商店）与 5（统一体检）" ;;
+            esac
+        fi
         if is_current_model_c8_788; then
             case "$choice" in
                 0|1|3|4|5) ;;
@@ -66765,7 +67372,12 @@ printf '%s\n' "$SCRIPT_MODEL_NOTICE"
     while :; do
         printf '%s\n' "$SCRIPT_SUPPORT_NOTICE"
         printf '请选择功能分类:\n'
-        if is_current_model_c8_788; then
+        if is_current_model_ak798; then
+            printf '4. 应用商店与页面美化\n'
+            printf '5. 设备维护与检测\n'
+            printf '0. 退出\n'
+            printf '请输入 0、4 或 5: '
+        elif is_current_model_c8_788; then
             printf '1. 常用插件安装（仅哈基米）\n'
             printf '3. 游戏加速器\n'
             printf '4. 应用商店与页面美化\n'
@@ -66784,6 +67396,12 @@ printf '%s\n' "$SCRIPT_MODEL_NOTICE"
         read_category_choice
         MENU_ACTION_COMPLETED='0'
 
+        if is_current_model_ak798; then
+            case "$UI_READ_RESULT" in
+                0|4|5) ;;
+                *) die_menu_input_issue "$UI_READ_RESULT" ;;
+            esac
+        fi
         if is_current_model_c8_788; then
             case "$UI_READ_RESULT" in
                 0|1|3|4|5) ;;

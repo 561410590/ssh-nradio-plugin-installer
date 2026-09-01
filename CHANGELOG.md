@@ -1,5 +1,13 @@
 # Changelog
 
+## V3.0.5 - 2026-09-01（本地构建）
+
+- 新增 `NRadio_AK68-798`，识别 `HC-WT9194 / HCMT7987-S256`，按 16 MiB NOR 轻量模式开放功能。
+- `4 > 4` 增加 C2000Pro / AK68-798 轻量应用商店；完整应用商店美化和还原对两个轻量机型隐藏。
+- AK68-798 开放 `5 > 10` 首页 CPU 温度显示和统一体检。
+- 支持页新增 AK68-798 SSH 2222 恢复教程和 `AK68-798-SSH-2222.nr` 下载。
+- Repository checks 新增配置包封装、gzip/tar、Dropbear 内容、SHA-256、网页链接、Vercel 路由和校验清单检查。
+
 ## NRadio QoS Pro 1.0.24 - 2026-08-31
 
 - 支持页版本、包名与固定下载入口更新到 `luci-app-nradio-qos-pro_1.0.24-1_all.ipk`。

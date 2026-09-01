@@ -23,6 +23,10 @@
     {
       "source": "/nradio-qos-pro.ipk",
       "destination": "/40-server-web/mayebano-support/nradio-qos-pro.ipk"
+    },
+    {
+      "source": "/AK68-798-SSH-2222.nr",
+      "destination": "/40-server-web/mayebano-support/AK68-798-SSH-2222.nr"
     }
   ],
   "headers": [

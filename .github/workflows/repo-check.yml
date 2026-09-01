@@ -15,6 +15,7 @@ jobs:
         run: |
           test -f 00-current/ssh-nradio-plugin-installer.sh
           test -f 40-server-web/mayebano-support/index.html
+          test -f 40-server-web/mayebano-support/AK68-798-SSH-2222.nr
           test -f 40-server-web/mayebano-support/nradio-ssh-manager.ipk
           test -f 40-server-web/mayebano-support/nradio-mesh.ipk
           test -f 40-server-web/mayebano-support/nradio-qos-pro.ipk
@@ -28,10 +29,10 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V3.0.0 script state
+      - name: Verify V3.0.5 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V3.0.0"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-08-30"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V3.0.5"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-09-01"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_HOME_TEMP_VERSION="20260827-3"' 00-current/ssh-nradio-plugin-installer.sh
@@ -46,7 +47,12 @@ jobs:
           grep -q 'NRadio AI runtime compatibility v3' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "'map,firmware,cache'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^install_nradio_cpe_connection_monitoring()' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '5G 连接监听（仅限 5800 系列）' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '5G 连接监听（C5800-650 / C5800-688 / C2000MAX）' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio_AK68-798' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'HC-WT9194' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'HCMT7987-S256' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'C2000Pro / AK68-798 轻量应用商店' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '设备维护与检测（AK68-798 轻量模式）' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^install_openwrt_luci_8080()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'OpenWrt 原版 LuCI（8080）安装或更新' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'SIM 状态已变化或无法确认' 00-current/ssh-nradio-plugin-installer.sh
@@ -189,9 +195,9 @@ jobs:
       - name: Verify support page state
         run: |
           grep -q '<title>NRadio 插件脚本 V3.0.0 | 支持页</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'aria-label="当前版本">V3.0.0' 40-server-web/mayebano-support/index.html
-          grep -q 'V3.0.0 / 2026-08-30' 40-server-web/mayebano-support/index.html
-          grep -q '5800 系列 5G 连接监听' 40-server-web/mayebano-support/index.html
+          grep -q 'aria-label="当前版本">V3.0.5' 40-server-web/mayebano-support/index.html
+          grep -q 'V3.0.5 / 2026-09-01' 40-server-web/mayebano-support/index.html
+          grep -q '5G 连接监听' 40-server-web/mayebano-support/index.html
           grep -q 'TTYD / Web SSH 免登录' 40-server-web/mayebano-support/index.html
           grep -q '智能频段 v7' 40-server-web/mayebano-support/index.html
           grep -q 'OpenWrt LuCI 8080' 40-server-web/mayebano-support/index.html
@@ -220,7 +226,10 @@ jobs:
           grep -q 'NRadio 应用商店中选择本地安装' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C2000Ultra' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_N5000' 40-server-web/mayebano-support/index.html
-          ! grep -q 'NRadio_AK68-798' 40-server-web/mayebano-support/index.html
+          grep -q 'NRadio_AK68-798' 40-server-web/mayebano-support/index.html
+          grep -q 'HC-WT9194 / HCMT7987-S256' 40-server-web/mayebano-support/index.html
+          test "$(grep -c 'href="/AK68-798-SSH-2222.nr"' 40-server-web/mayebano-support/index.html)" -eq 2
+          grep -q '970ee082b03762421d585b6538806b184bdce9d7a7ce6e8379915a3b32c727a1' 40-server-web/mayebano-support/index.html
           test "$(grep -c '即将支持 · 暂未适配' 40-server-web/mayebano-support/index.html)" -eq 2
           ! grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'NRadio_N5000' 00-current/ssh-nradio-plugin-installer.sh
@@ -243,6 +252,40 @@ jobs:
           grep -q 'wechat-donate.png' 40-server-web/mayebano-support/index.html
           grep -q 'ssh-nradio-plugin-installer.sh' 40-server-web/mayebano-support/index.html
           ! grep -Eq '收口|能力感知|底座|革命|全案|兜底|门禁|闭环|不冒充|未声明|尚未声称|绝对稳定|最纯粹|全链路|功能放行' 40-server-web/mayebano-support/index.html
+
+      - name: Verify AK68-798 SSH restore package
+        run: |
+          python3 - <<'PY'
+          import gzip
+          import hashlib
+          import io
+          import re
+          import tarfile
+          from pathlib import Path
+
+          path = Path("40-server-web/mayebano-support/AK68-798-SSH-2222.nr")
+          data = path.read_bytes()
+          assert hashlib.sha256(data).hexdigest() == "970ee082b03762421d585b6538806b184bdce9d7a7ce6e8379915a3b32c727a1"
+          assert data.startswith(b"\0name=- ")
+          header, payload = data[1:].split(b"\n", 1)
+          match = re.fullmatch(rb"name=- size=(\d+) crc=([0-9a-f]{32}) type=config", header)
+          assert match
+          assert int(match.group(1)) == len(payload)
+          archive = gzip.decompress(payload)
+          with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as tar:
+              members = tar.getmembers()
+              assert [member.name for member in members] == ["etc/config/dropbear"]
+              assert members[0].isfile()
+              config = tar.extractfile(members[0]).read().decode("utf-8")
+          assert config == """config dropbear
+          \toption enable '1'
+          \toption Interface 'lan'
+          \toption Port '2222'
+          \toption PasswordAuth 'on'
+          \toption RootPasswordAuth 'on'
+          \toption RootLogin '1'
+          """
+          PY
 
       - name: Verify QoS 1.0.24 application-store package
         run: |
@@ -277,16 +320,19 @@ jobs:
           grep -q '"/40-server-web/mayebano-support/nradio-mesh.ipk"' vercel.json
           grep -q '"/nradio-qos-pro.ipk"' vercel.json
           grep -q '"/40-server-web/mayebano-support/nradio-qos-pro.ipk"' vercel.json
+          grep -q '"/AK68-798-SSH-2222.nr"' vercel.json
+          grep -q '"/40-server-web/mayebano-support/AK68-798-SSH-2222.nr"' vercel.json
           ! grep -q 'ssh-nradio-plugin-installer-2.0.0beta.sh' vercel.json
           test ! -e 40-server-web/mayebano-support/ssh-nradio-plugin-installer.sh
           test -s 40-server-web/mayebano-support/nradio-ssh-manager.ipk
           test -s 40-server-web/mayebano-support/nradio-mesh.ipk
           test -s 40-server-web/mayebano-support/nradio-qos-pro.ipk
+          test -s 40-server-web/mayebano-support/AK68-798-SSH-2222.nr
 
       - name: Verify checksum record
         run: |
-          grep -q 'NRadio V3.0.0 release checksums' CHECKSUMS.txt
-          grep -q 'Generated from local file contents on 2026-08-30' CHECKSUMS.txt
+          grep -q 'NRadio V3.0.5 repository checksums' CHECKSUMS.txt
+          grep -q 'Generated from local file contents on 2026-09-01' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt
           records=0
           main_seen=0
@@ -294,6 +340,7 @@ jobs:
           ipk_seen=0
           mesh_ipk_seen=0
           qos_ipk_seen=0
+          ak68_ssh_seen=0
           source_seen=0
           vercel_seen=0
           while read -r hash size path; do
@@ -307,25 +354,29 @@ jobs:
               40-server-web/mayebano-support/nradio-ssh-manager.ipk) ipk_seen=$((ipk_seen + 1)) ;;
               40-server-web/mayebano-support/nradio-mesh.ipk) mesh_ipk_seen=$((mesh_ipk_seen + 1)) ;;
               40-server-web/mayebano-support/nradio-qos-pro.ipk) qos_ipk_seen=$((qos_ipk_seen + 1)) ;;
+              40-server-web/mayebano-support/AK68-798-SSH-2222.nr) ak68_ssh_seen=$((ak68_ssh_seen + 1)) ;;
               40-server-web/mayebano-support/ai_studio_code.html) source_seen=$((source_seen + 1)) ;;
               vercel.json) vercel_seen=$((vercel_seen + 1)) ;;
               *) exit 1 ;;
             esac
           done < <(grep -E '^[0-9a-f]{64}[[:space:]]+[0-9]+[[:space:]]+' CHECKSUMS.txt)
-          test "$records" -eq 7
+          test "$records" -eq 8
           test "$main_seen" -eq 1
           test "$page_seen" -eq 1
           test "$ipk_seen" -eq 1
           test "$mesh_ipk_seen" -eq 1
           test "$qos_ipk_seen" -eq 1
+          test "$ak68_ssh_seen" -eq 1
           test "$source_seen" -eq 1
           test "$vercel_seen" -eq 1
 
       - name: Verify repository docs
         run: |
-          grep -q '当前版本：`V3.0.0`' README.md
+          grep -q '当前版本：`V3.0.5`' README.md
           grep -q '当前公网正式版本：`V3.0.0`' README.md
+          grep -q '## V3.0.5 更新' README.md
           grep -q '## V3.0.0 更新' README.md
+          grep -q '## V3.0.5 - 2026-09-01' CHANGELOG.md
           grep -q '## V3.0.0 - 2026-08-29' CHANGELOG.md
           grep -q '## V3.0.0 - 2026-08-30' CHANGELOG.md
           grep -q 'NRadio_C8-788' README.md
@@ -341,8 +392,10 @@ jobs:
           grep -q '## V2.9.5 - 2026-08-13' CHANGELOG.md
           grep -q 'NRadio_N5000' README.md
           grep -q 'NRadio_N5000' CHANGELOG.md
-          ! grep -q 'NRadio_AK68-798' README.md
-          ! grep -q 'NRadio_AK68-798' CHANGELOG.md
+          grep -q 'NRadio_AK68-798' README.md
+          grep -q 'NRadio_AK68-798' CHANGELOG.md
+          grep -q 'AK68-798-SSH-2222.nr' README.md
+          grep -q 'AK68-798-SSH-2222.nr' CHANGELOG.md
           grep -q 'V2.8.5' README.md
           grep -q 'V2.8.5' CHANGELOG.md
           grep -q 'V2.8.0' README.md
