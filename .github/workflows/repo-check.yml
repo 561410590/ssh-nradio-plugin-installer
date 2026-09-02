@@ -32,7 +32,7 @@ jobs:
       - name: Verify V3.0.5 script state
         run: |
           grep -q 'SCRIPT_VERSION="V3.0.5"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-09-01"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-09-02"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_HOME_TEMP_VERSION="20260827-3"' 00-current/ssh-nradio-plugin-installer.sh
@@ -51,6 +51,8 @@ jobs:
           grep -q 'NRadio_AK68-798' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HC-WT9194' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HCMT7987-S256' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'HC-WT9500' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'C2000Pro / AK68-798 轻量应用商店' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '设备维护与检测（AK68-798 轻量模式）' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^install_openwrt_luci_8080()' 00-current/ssh-nradio-plugin-installer.sh
@@ -196,7 +198,8 @@ jobs:
         run: |
           grep -q '<title>NRadio 插件脚本 V3.0.5 | 支持页</title>' 40-server-web/mayebano-support/index.html
           grep -q 'aria-label="当前版本">V3.0.5' 40-server-web/mayebano-support/index.html
-          grep -q 'V3.0.5 / 2026-09-01' 40-server-web/mayebano-support/index.html
+          grep -q 'V3.0.5 / 2026-09-02' 40-server-web/mayebano-support/index.html
+          grep -q '10 款 NRadio 机型' 40-server-web/mayebano-support/index.html
           grep -q '5G 连接监听' 40-server-web/mayebano-support/index.html
           grep -q 'TTYD / Web SSH 免登录' 40-server-web/mayebano-support/index.html
           grep -q '智能频段 v7' 40-server-web/mayebano-support/index.html
@@ -225,13 +228,14 @@ jobs:
           grep -q '不能通过隐藏链接打开 SSH' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio 应用商店中选择本地安装' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_C2000Ultra' 40-server-web/mayebano-support/index.html
+          grep -q 'HC-WT9500 · 通用功能已适配' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_N5000' 40-server-web/mayebano-support/index.html
           grep -q 'NRadio_AK68-798' 40-server-web/mayebano-support/index.html
           grep -q 'HC-WT9194 / HCMT7987-S256' 40-server-web/mayebano-support/index.html
           test "$(grep -c 'href="/AK68-798-SSH-2222.nr"' 40-server-web/mayebano-support/index.html)" -eq 2
           grep -q '970ee082b03762421d585b6538806b184bdce9d7a7ce6e8379915a3b32c727a1' 40-server-web/mayebano-support/index.html
-          test "$(grep -c '即将支持 · 暂未适配' 40-server-web/mayebano-support/index.html)" -eq 2
-          ! grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
+          test "$(grep -c '即将支持 · 暂未适配' 40-server-web/mayebano-support/index.html)" -eq 1
+          grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q 'NRadio_N5000' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'C5800-650 另兼容已验证的 NROS 1.9.x，标准 OpenWrt 不适用' 40-server-web/mayebano-support/index.html
           grep -q '此工具是 SSH 脚本，不是应用商店安装包或固件包' 40-server-web/mayebano-support/index.html
@@ -287,6 +291,33 @@ jobs:
           """
           PY
 
+      - name: Verify Mesh 1.0.14 application-store package
+        run: |
+          grep -q 'V1.0.14-1 · MESH' 40-server-web/mayebano-support/index.html
+          grep -q 'luci-app-nradio-roaming_1.0.14-1_all.ipk' 40-server-web/mayebano-support/index.html
+          work="$(mktemp -d)"
+          tar -xzf 40-server-web/mayebano-support/nradio-mesh.ipk -C "$work"
+          test "$(cat "$work/debian-binary")" = 2.0
+          mkdir "$work/control" "$work/data"
+          tar -xzf "$work/control.tar.gz" -C "$work/control"
+          tar -xzf "$work/data.tar.gz" -C "$work/data"
+          grep -qx 'Package: luci-app-nradio-roaming' "$work/control/control"
+          grep -qx 'Version: 1.0.14-1' "$work/control/control"
+          grep -qx 'Architecture: all' "$work/control/control"
+          grep -qx 'PLUGIN_VERSION=1.0.14-1' "$work/data/usr/sbin/nradio-roaming"
+          grep -qx 'MAX_ONBOARD_CANDIDATES=8' "$work/data/usr/sbin/nradio-roaming"
+          grep -q 'candidate-trying' "$work/data/usr/sbin/nradio-roaming"
+          grep -q 'candidate-trying' "$work/data/usr/lib/lua/luci/view/nradio_roaming/status.htm"
+          test -x "$work/data/etc/init.d/nradio-roaming"
+          test -x "$work/data/usr/sbin/nradio-roaming"
+          test -x "$work/data/usr/libexec/nradio-roaming-appcenter"
+          test -x "$work/data/usr/libexec/nradio-roaming-homepage"
+          test -x "$work/data/usr/libexec/nradio-roaming-oem-wifi"
+          sh -n "$work/data/etc/init.d/nradio-roaming"
+          sh -n "$work/data/usr/sbin/nradio-roaming"
+          sh -n "$work/data/usr/libexec/nradio-roaming-appcenter"
+          sh -n "$work/data/usr/libexec/nradio-roaming-homepage"
+
       - name: Verify QoS 1.0.24 application-store package
         run: |
           grep -q 'V1.0.24-1 · QOS' 40-server-web/mayebano-support/index.html
@@ -332,7 +363,7 @@ jobs:
       - name: Verify checksum record
         run: |
           grep -q 'NRadio V3.0.5 release checksums' CHECKSUMS.txt
-          grep -q 'Generated from local file contents on 2026-09-01' CHECKSUMS.txt
+          grep -q 'Generated from local file contents on 2026-09-02' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt
           records=0
           main_seen=0
@@ -372,11 +403,13 @@ jobs:
 
       - name: Verify repository docs
         run: |
+          grep -q '## Mesh组网插件 1.0.14' README.md
+          grep -q '## NRadio Mesh 1.0.14 - 2026-09-02' CHANGELOG.md
           grep -q '当前版本：`V3.0.5`' README.md
           grep -q '当前公网正式版本：`V3.0.5`' README.md
           grep -q '## V3.0.5 更新' README.md
           grep -q '## V3.0.0 更新' README.md
-          grep -q '## V3.0.5 - 2026-09-01' CHANGELOG.md
+          grep -q '## V3.0.5 - 2026-09-02' CHANGELOG.md
           grep -q '## V3.0.0 - 2026-08-29' CHANGELOG.md
           grep -q '## V3.0.0 - 2026-08-30' CHANGELOG.md
           grep -q 'NRadio_C8-788' README.md
@@ -394,6 +427,8 @@ jobs:
           grep -q 'NRadio_N5000' CHANGELOG.md
           grep -q 'NRadio_AK68-798' README.md
           grep -q 'NRadio_AK68-798' CHANGELOG.md
+          grep -q 'NRadio_C2000Ultra' README.md
+          grep -q 'NRadio_C2000Ultra' CHANGELOG.md
           grep -q 'AK68-798-SSH-2222.nr' README.md
           grep -q 'AK68-798-SSH-2222.nr' CHANGELOG.md
           grep -q 'V2.8.5' README.md

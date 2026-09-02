@@ -2,15 +2,22 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V3.0.5`（2026-09-01）
+- 当前版本：`V3.0.5`（2026-09-02）
 - 当前公网正式版本：`V3.0.5`，下载与校验以 GitHub Releases 页面为准
-- 当前状态：`V3.0.5` 总脚本、支持页、AK68-798 SSH 配置包和 Repository checks 已同步。
+- 当前状态：`V3.0.5` Ultra 适配总脚本、支持页、Mesh `1.0.14-1` 下载包和 Repository checks 已同步。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
 `V3.0.5` 总脚本、支持页、仓库资料与检查规则使用同一版本。正式标签与 Release 为 `v3.0.5`。
+
+## Mesh组网插件 1.0.14
+
+- 当前下载包：`luci-app-nradio-roaming_1.0.14-1_all.ipk`；支持页固定入口为 [nradio-mesh.ipk](https://nradio.mayebano.shop/nradio-mesh.ipk)。
+- 自动连接按 5G 优先、同频信号强度排序；当前候选失败后自动尝试下一个，最多尝试 8 个候选。
+- NRadio BSSID 候选识别覆盖 `F0/F2/F4/F6/F8/FA/FC/FE:83:C6` 地址族，并继续通过受保护探针确认真实控制器。
+- 本地 12 项插件测试、IPK 解包审计与 Repository checks 均通过；真实组网仍需按设备现场验收。
 
 ## QoS 应用商店插件 1.0.24
 
@@ -35,8 +42,9 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 | `NRadio_C2000MAX` | `HC-WT9303` | NROS 2.x |
 | `NRadio_C2000Pro` | `UDX710` / `RG200U-CN` | NROS 2.x（有限兼容） |
 | `NRadio_AK68-798` | `HC-WT9194` / `HCMT7987-S256` | NROS 2.x（16 MiB NOR 轻量模式） |
+| `NRadio_C2000Ultra` | `HC-WT9500` / `HCMT7987-SNSD` | NROS 2.x（通用功能） |
 
-支持页已预告 `NRadio_C2000Ultra` 与 `NRadio_N5000`，两款当前均为“即将支持、暂未适配”：不属于上表的当前支持范围，总脚本不会识别或放行，请等待正式适配公告。
+支持页已预告 `NRadio_N5000`，当前为“即将支持、暂未适配”：不属于上表的当前支持范围，总脚本不会识别或放行，请等待正式适配公告。
 
 标准 OpenWrt 不适用。脚本不是应用商店安装包，也不是固件升级包。
 
@@ -74,6 +82,7 @@ sh ssh-nradio-plugin-installer.sh
 
 ## V3.0.5 更新
 
+- 新增 `NRadio_C2000Ultra`：识别 `HC-WT9500 / HCMT7987-SNSD`，开放原厂完整应用商店、OpenWrt LuCI 8080、奇游映射及默认通用菜单，保留各机型专属功能限制。
 - 新增 `NRadio_AK68-798`：识别 `HC-WT9194 / HCMT7987-S256`，使用 16 MiB NOR 轻量模式。
 - `4 > 4` 为 C2000Pro / AK68-798 轻量应用商店；完整应用商店功能对这两个机型隐藏。
 - AK68-798 开放 `5 > 10` 首页 CPU 温度显示和统一体检。
@@ -321,8 +330,8 @@ bash -n 00-current/ssh-nradio-plugin-installer.sh
 当前脚本：
 
 ```text
-SHA256  6c4d4ff8478a957bf0a67149dec91eca380996c38f6ed010f10d907fa8a55966
-Bytes   2641074
+SHA256  fe93daf988937b216020b7c96e00cef998ef30ffa6903dcf8dd478ca07d241c9
+Bytes   2647729
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

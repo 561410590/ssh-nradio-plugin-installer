@@ -4,9 +4,9 @@ umask 077
 
 SCRIPT_VERSION="V3.0.5"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-01"
+SCRIPT_RELEASE_DATE="2026-09-02"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
-SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
+SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
 SCRIPT_DISCLAIMER="此脚本为免费分享的非商业项目，禁止任何形式的付费传播或倒卖"
 SCRIPT_SUPPORT_NOTICE="自愿支持仅用于脚本维护与后续更新"
@@ -1162,6 +1162,9 @@ normalize_nradio_model() {
             ;;
         *HC-WT9111*|*NRADIO-WT9111*)
             printf '%s\n' 'NRadio_NBCPE'
+            ;;
+        *HC-WT9500*)
+            printf '%s\n' 'NRadio_C2000Ultra'
             ;;
         *HC-WT9303*)
             printf '%s\n' 'NRadio_C2000MAX'
@@ -6787,6 +6790,9 @@ local function nradio_appcenter_read_model_name()
 	if text:find("HC-WT9302", 1, true) or text:find("HCMT7987-NAND", 1, true) or text:find("C8-788", 1, true) then
 		return "NRadio_C8-788"
 	end
+	if text:find("HC-WT9500", 1, true) or text:find("C2000ULTRA", 1, true) then
+		return "NRadio_C2000Ultra"
+	end
 	if text:find("HC-WT9303", 1, true) or text:find("C2000MAX", 1, true) then
 		return "NRadio_C2000MAX"
 	end
@@ -9861,6 +9867,9 @@ local function nradio_appcenter_read_model_name()
 	local text = (model .. " " .. board):upper()
 	if text:find("HC-WT9302", 1, true) or text:find("HCMT7987-NAND", 1, true) or text:find("C8-788", 1, true) then
 		return "NRadio_C8-788"
+	end
+	if text:find("HC-WT9500", 1, true) or text:find("C2000ULTRA", 1, true) then
+		return "NRadio_C2000Ultra"
 	end
 	if text:find("HC-WT9303", 1, true) or text:find("C2000", 1, true) then
 		return "NRadio_C2000MAX"
@@ -37697,21 +37706,94 @@ local function collect_status(opts)
 
     local log_lower = tostring(log or ""):lower()
     local log_focus_lower = tostring(log_focus or ""):lower()
+    local log_history_lower = log_lower .. "\n" .. log_focus_lower
     local log_has_init_marker = log_lower:find("initialization sequence completed", 1, true) ~= nil
         or log_focus_lower:find("initialization sequence completed", 1, true) ~= nil
-    local log_error = log_focus_lower:find("auth_failed", 1, true) ~= nil
-        or log_focus_lower:find("tls error", 1, true) ~= nil
-        or log_focus_lower:find("fatal", 1, true) ~= nil
-        or log_focus_lower:find("error", 1, true) ~= nil
+    local current_log_lower = log_lower
+    local init_search_from = 1
+    while true do
+        local _, init_end = log_lower:find("initialization sequence completed", init_search_from, true)
+        if not init_end then break end
+        current_log_lower = log_lower:sub(init_end + 1)
+        init_search_from = init_end + 1
+    end
+    local log_error = current_log_lower:find("auth_failed", 1, true) ~= nil
+        or current_log_lower:find("tls error", 1, true) ~= nil
+        or current_log_lower:find("fatal", 1, true) ~= nil
+        or current_log_lower:find("ping-restart", 1, true) ~= nil
+        or current_log_lower:find("connection reset", 1, true) ~= nil
+        or current_log_lower:find("network is unreachable", 1, true) ~= nil
+        or current_log_lower:find("error", 1, true) ~= nil
     local log_state_ok = connected and not log_error
     local log_state_label = "未确认"
     if log_error then
-        log_state_label = "近期异常"
+        log_state_label = "当前会话异常"
     elseif connected then
         log_state_label = log_has_init_marker and "运行稳定" or "运行中"
     elseif log_has_init_marker then
         log_state_label = "已初始化"
     end
+
+    local remote_cert_tls = first_argument(profile["remote-cert-tls"]):lower()
+    local server_verify_ready = remote_cert_tls == "server"
+        or profile["verify-x509-name"] ~= nil
+        or first_argument(profile["ns-cert-type"]):lower() == "server"
+    local tun_mtu = first_argument(profile["tun-mtu"])
+    local has_mss_or_fragment = profile.mssfix ~= nil or profile.fragment ~= nil
+    local mtu_warning = has_mss_or_fragment and tun_mtu ~= "" and tun_mtu ~= "1500"
+    local rekey_seen = log_history_lower:find("tls: soft reset", 1, true) ~= nil
+        or log_history_lower:find("tls_process: killed expiring key", 1, true) ~= nil
+    local restart_recovered = connected and log_has_init_marker
+        and log_history_lower:find("sigterm received", 1, true) ~= nil
+    local ping_restart_recovered = connected and log_has_init_marker
+        and log_history_lower:find("ping-restart", 1, true) ~= nil
+        and not log_error
+    local dns_retry_recovered = connected and log_has_init_marker
+        and (log_history_lower:find("resolve: cannot resolve", 1, true) ~= nil
+            or log_history_lower:find("temporary failure in name resolution", 1, true) ~= nil)
+    local log_notice_label = "等待连接"
+    local log_notice_tone = "bad"
+    local log_notice_parts = {}
+    if log_error then
+        log_notice_label = "当前会话异常"
+        log_notice_tone = "bad"
+        log_notice_parts[#log_notice_parts + 1] = "当前初始化完成后的日志仍有连接错误，先看错误行，再决定是否手动重连。"
+    elseif ping_restart_recovered then
+        log_notice_label = "网络中断后已恢复"
+        log_notice_tone = "warn"
+        log_notice_parts[#log_notice_parts + 1] = "发现 ping-restart，说明链路曾超时；后续已重新初始化完成。"
+    elseif restart_recovered then
+        log_notice_label = "服务重启后已恢复"
+        log_notice_tone = "warn"
+        log_notice_parts[#log_notice_parts + 1] = "SIGTERM 表示本机或外部操作重启了 OpenVPN；后续已重新初始化，不属于 ping 超时掉线。"
+    elseif connected then
+        log_notice_label = rekey_seen and "正常 TLS 密钥轮换" or "当前会话正常"
+        log_notice_tone = "good"
+    end
+    if rekey_seen then
+        log_notice_parts[#log_notice_parts + 1] = "TLS soft reset / killed expiring key 是定时密钥轮换；后续校验成功时不算掉线。"
+    end
+    if dns_retry_recovered then
+        log_notice_parts[#log_notice_parts + 1] = "启动阶段曾等待 DNS/WAN 就绪，后续已解析并连接成功。"
+    end
+    if not server_verify_ready then
+        log_notice_parts[#log_notice_parts + 1] = "未启用服务端证书身份校验属于安全风险，与当前连通性分开处理。"
+        if log_notice_tone == "good" then
+            log_notice_label = "连接正常 · 安全警告"
+            log_notice_tone = "warn"
+        end
+    end
+    if mtu_warning then
+        log_notice_parts[#log_notice_parts + 1] = "mssfix/fragment 与 tun-mtu " .. tun_mtu .. " 触发 MTU 配置提示；它本身不能证明发生掉线。"
+        if log_notice_tone == "good" then
+            log_notice_label = "连接正常 · MTU 提示"
+            log_notice_tone = "warn"
+        end
+    end
+    if #log_notice_parts == 0 then
+        log_notice_parts[#log_notice_parts + 1] = connected and "当前未发现需要处理的连接日志。" or "当前未检测到已连接的 OpenVPN 会话。"
+    end
+    local log_notice_detail = table.concat(log_notice_parts, " ")
 
     local health_ok = 0
     local health_total = 0
@@ -37739,8 +37821,11 @@ local function collect_status(opts)
         if health_ok == health_total then
             health_label = "健康"
             health_class = "ok"
+        elseif log_state_ok then
+            health_label = "目标待查"
+            health_class = "warn"
         else
-            health_label = "告警"
+            health_label = "会话异常"
             health_class = "warn"
         end
     end
@@ -37752,18 +37837,20 @@ local function collect_status(opts)
     local auth_note = "还没有可启动的配置文件。"
 
     if connected then
-        if health_class == "ok" then
+        if log_state_ok then
             action_kind = "stable"
             action_label = "OpenVPN 运行中"
-            action_hint = "当前连接状态正常，如无必要无需重连；如需断开可直接停止。"
-            runtime_note = "当前实例运行正常，建议保持当前连接；只有在切换配置或排障时再执行重连。"
+            action_hint = health_class == "ok"
+                and "当前隧道与目标检查正常；如需断开可直接停止。"
+                or "当前隧道会话正常，告警来自路由、映射或远端目标；请查看目标检查，无需先重连。"
+            runtime_note = "当前实例运行正常；路由或远端设备异常应按目标检查处理，重连不会自动修复这些问题。"
             auth_note = "当前配置已在运行，认证材料按现有实例生效。"
         else
             action_kind = "restart"
-            action_label = "重连 OpenVPN"
-            action_hint = "当前已在线但存在告警，可先尝试重连或查看下方目标检查。"
-            runtime_note = "当前实例已由 LuCI 接管；如果状态异常，可直接重连当前 custom_config。"
-            auth_note = "当前配置已在运行，但存在待确认项，可优先检查认证材料和下方日志。"
+            action_label = "检查后重连 OpenVPN"
+            action_hint = "当前会话日志仍有连接错误；先查看关键日志，确认后可手动重连。"
+            runtime_note = "当前进程和隧道接口仍在，但本次会话日志存在错误；重连会短暂中断现有流量。"
+            auth_note = "当前配置已在运行；如出现 AUTH_FAILED，请先修正认证材料再重连。"
         end
     elseif activation_ready and uci_managed then
         action_kind = "start"
@@ -37833,7 +37920,7 @@ local function collect_status(opts)
         connected = connected,
         health_label = health_label,
         health_class = health_class,
-        status_summary_label = connected and ((health_class == "ok") and "已连接 · 健康" or "已连接 · 告警") or "未连接",
+        status_summary_label = connected and ((health_class == "ok") and "已连接 · 健康" or (log_state_ok and "已连接 · 目标待查" or "已连接 · 会话异常")) or "未连接",
         status_label = connected and "已连接" or "已停止",
         health_ratio = ratio_text(health_ok, health_total),
         online_device_ratio = online_device_ratio,
@@ -37875,6 +37962,11 @@ local function collect_status(opts)
         process_line = ps ~= "" and ps or "no process",
         log_state = log_state_label,
         log_state_ok = log_state_ok,
+        log_notice_label = log_notice_label,
+        log_notice_tone = log_notice_tone,
+        log_notice_detail = log_notice_detail,
+        server_verify_ready = server_verify_ready,
+        mtu_warning = mtu_warning,
         auth_ready = bool_text((not auth_required) or has_auth_file),
         ca_ready = bool_text(has_ca),
         cert_ready = bool_text(has_cert),
@@ -38183,6 +38275,7 @@ local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)
       </div>
       <div class="vpn-focus-strip">
         <span class="vpn-focus-pill">优先项: TLS / AUTH / tun0</span>
+        <span id="vpn-log-event" class="vpn-focus-pill">正在分类日志事件</span>
         <span id="vpn-focus-ts" class="vpn-focus-pill vpn-focus-pill-muted">等待更新</span>
       </div>
       <pre id="vpn-focus-log">等待更新</pre>
@@ -38600,19 +38693,19 @@ function vpnCopyConfig() {
     var stopForm = document.getElementById('vpn-stop-form');
     if (primaryForm && primaryButton) {
       if (status.connected) {
-        if (status.health_class === 'ok') {
+        if (status.action_kind === 'stable') {
           primaryForm.action = '#';
           primaryButton.value = status.action_label || 'OpenVPN 运行中';
           primaryButton.className = 'cbi-button vpn-button-passive';
           primaryButton.disabled = true;
-          primaryButton.title = '当前连接稳定，如无异常无需重连。';
+          primaryButton.title = status.health_class === 'ok' ? '当前连接稳定，无需重连。' : '隧道会话正常，请按目标检查处理路由或远端设备告警。';
           setVisible('vpn-stop-form', true);
         } else {
           primaryForm.action = restartUrl;
-          primaryButton.value = status.action_label || '重连 OpenVPN';
+          primaryButton.value = status.action_label || '检查后重连 OpenVPN';
           primaryButton.className = 'cbi-button cbi-button-apply';
           primaryButton.disabled = false;
-          primaryButton.title = '当前连接存在异常，建议重新拉起。';
+          primaryButton.title = '当前会话日志存在错误；重连会短暂中断现有流量。';
           setVisible('vpn-stop-form', true);
         }
       } else if (status.activation_ready) {
@@ -38657,14 +38750,14 @@ function vpnCopyConfig() {
     setText('vpn-stat-health-meta', status.online_breakdown || '远端目标在线比例');
 
     var authReady = !!status.activation_ready;
-    var runtimeCardState = shellState;
+    var runtimeCardState = status.connected ? (status.log_state_ok ? 'is-ok' : 'is-warn') : shellState;
     var authCardState = authReady ? 'is-ok' : (status.profile_ready ? 'is-profile-ready' : 'is-empty');
     var routeCardState = status.route_badge_ok ? 'is-ok' : (((status.route_count || 0) > 0 || status.map_enabled) ? 'is-warn' : 'is-empty');
     setCardState('vpn-runtime-card', runtimeCardState);
     setCardState('vpn-auth-card', authCardState);
     setCardState('vpn-route-card', routeCardState);
     setClass('vpn-panel-live-badge', 'vpn-panel-live-badge ' + runtimeCardState);
-    setText('vpn-panel-live-badge', status.connected ? (status.health_class === 'ok' ? '在线诊断' : '异常待处理') : (authReady ? '可直接启动' : (status.profile_ready ? '待补认证' : '待写配置')));
+    setText('vpn-panel-live-badge', status.connected ? (status.log_state_ok ? (status.health_class === 'ok' ? '在线诊断' : '隧道在线 · 目标待查') : '连接异常待处理') : (authReady ? '可直接启动' : (status.profile_ready ? '待补认证' : '待写配置')));
 
     setClass('vpn-runtime-badge', 'vpn-card-badge ' + (status.connected ? 'vpn-badge-ok' : 'vpn-badge-bad'));
     setText('vpn-runtime-badge', status.connected ? '在线' : '离线');
@@ -38698,7 +38791,7 @@ function vpnCopyConfig() {
     setText('vpn-runtime-note', status.runtime_note || '断开后如条件满足，可直接从当前页启动或接管启动。');
     setText('vpn-auth-note', status.auth_note || '配置文件和认证材料齐全后，当前页才能直接启动。');
     setText('vpn-mini-action', status.action_label || '-');
-    setText('vpn-mini-action-note', status.connected ? (status.health_class === 'ok' ? '当前连接稳定，主按钮已转为状态提示。' : '当前连接有异常，主按钮保持可重连。') : (status.activation_ready ? '配置已齐，可直接从首屏启动。' : '首屏会提示还缺哪一类材料。'));
+    setText('vpn-mini-action-note', status.connected ? (status.action_kind === 'stable' ? (status.health_class === 'ok' ? '当前连接稳定，主按钮仅显示运行状态。' : '隧道正常，路由或远端目标告警请到目标检查处理。') : '当前会话日志存在错误，确认后可手动重连。') : (status.activation_ready ? '配置已齐，可直接从首屏启动。' : '首屏会提示还缺哪一类材料。'));
     setText('vpn-mini-managed', status.managed_label || (status.uci_managed ? (status.uci_enabled ? '已接管' : '已接管未启用') : (status.profile_ready ? '可接管' : '未配置')));
     setText('vpn-mini-managed-note', (status.service_label || status.service_status || 'stopped') + ' · ' + (status.mode_label || status.mode || '-'));
     setText('vpn-mini-auth', status.auth_badge_label || (authReady ? '可启动' : '缺认证文件'));
@@ -38722,7 +38815,9 @@ function vpnCopyConfig() {
     renderRouteChecks(status);
     renderNatChecks(status);
 
-    setText('vpn-focus-meta', '优先展示连接、认证、路由相关行。' + (status.ts ? (' · ' + status.ts) : ''));
+    setText('vpn-focus-meta', (status.log_notice_detail || '优先展示连接、认证、路由相关行。') + (status.ts ? (' · ' + status.ts) : ''));
+    setClass('vpn-log-event', 'vpn-focus-pill ' + esc(status.log_notice_tone || 'bad'));
+    setText('vpn-log-event', status.log_notice_label || '日志事件待确认');
     setText('vpn-focus-ts', status.ts ? ('最近刷新: ' + status.ts) : '等待刷新');
     setText('vpn-route-strip-count', '目标数: ' + ((status.route_count || 0) + ' 条'));
     setText('vpn-route-strip-health', '规则状态: ' + (status.route_rule_ratio || '-'));
@@ -38735,7 +38830,11 @@ function vpnCopyConfig() {
       .replace(/(fail)/gi, '<span class="vpn-log-bad">$1</span>')
       .replace(/(warn)/gi, '<span class="vpn-log-warn">$1</span>')
       .replace(/(tun[0-9]+)/g, '<span class="vpn-log-info">$1</span>')
-      .replace(/(route)/gi, '<span class="vpn-log-info">$1</span>'));
+      .replace(/(route)/gi, '<span class="vpn-log-info">$1</span>')
+      .replace(/(TLS: soft reset)/gi, '<span class="vpn-log-good">$1</span>')
+      .replace(/(tls_process: killed expiring key)/gi, '<span class="vpn-log-good">$1</span>')
+      .replace(/(SIGTERM received)/gi, '<span class="vpn-log-warn">$1</span>')
+      .replace(/(Closing TUN\/TAP interface)/gi, '<span class="vpn-log-warn">$1</span>'));
     setText('vpn-route-meta', status.probe_deferred ? '路由规则已显示，在线目标正在并行探测。' : '基于当前内核状态与目标探测的实时结果。优先看离线和缺规则项。');
     setText('vpn-runtime-meta', '完整日志更适合排查重连、认证和 TLS 问题。' + (status.ts ? (' · ' + status.ts) : ''));
     setText('vpn-runtime-log', status.log || 'no log');
@@ -50698,6 +50797,8 @@ install_openvpn() {
     grep -Fq 'configured_log == "/tmp/openvpn-client.log"' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: legacy runtime log path compatibility missing"
     grep -Fq 'shell_quote(active_log_path)' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: runtime log path guard missing"
     grep -Fq 'probe_ping_batch' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: parallel target probe missing"
+    grep -Fq 'log_notice_label' /usr/lib/lua/luci/controller/nradio_adv/openvpn_full.lua || die "OpenVPN verify failed: log event classification missing"
+    grep -Fq 'vpn-log-event' /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm || die "OpenVPN verify failed: log event notice missing"
     grep -Fq 'return "/etc/openvpn/auth.txt"' /usr/lib/lua/luci/model/cbi/openvpn-file.lua || die "OpenVPN verify failed: custom auth path fallback missing"
     grep -Fq 'fs.chmod(auth_file, "0600")' /usr/lib/lua/luci/model/cbi/openvpn-file.lua || die "OpenVPN verify failed: auth file permissions missing"
     verify_luci_route admin/services/openvpn "OpenVPN"
@@ -64256,7 +64357,7 @@ openwrt_luci_8080_current_model() {
 
 openwrt_luci_8080_model_supported() {
     case "$(openwrt_luci_8080_current_model 2>/dev/null || true)" in
-        NRadio_C8-668|NRadio_C8-688|NRadio_C5800-650|NRadio_C5800-688|NRadio_NBCPE|NRadio_C2000MAX|NRadio_C2000Pro)
+        NRadio_C8-668|NRadio_C8-688|NRadio_C5800-650|NRadio_C5800-688|NRadio_NBCPE|NRadio_C2000MAX|NRadio_C2000Ultra|NRadio_C2000Pro)
             return 0
             ;;
         *)
@@ -64433,6 +64534,8 @@ local function normalize_nradio_model(raw_model, raw_board, raw_compatible)
 		return "NRadio_C5800-688"
 	elseif combined:find("HC%-WT9111") or combined:find("NRADIO%-WT9111") then
 		return "NRadio_NBCPE"
+	elseif combined:find("HC%-WT9500") then
+		return "NRadio_C2000Ultra"
 	elseif combined:find("HC%-WT9303") then
 		return "NRadio_C2000MAX"
 	elseif combined:find("UDX710") or combined:find("RG200U%-CN") then
@@ -64615,6 +64718,8 @@ EOF_OPENWRT_LUCI_8080_WRAPPER
 			return "NRadio_C5800-688"
 		elseif combined:find("HC%-WT9111") or combined:find("NRADIO%-WT9111") then
 			return "NRadio_NBCPE"
+		elseif combined:find("HC%-WT9500") then
+			return "NRadio_C2000Ultra"
 		elseif combined:find("HC%-WT9303") then
 			return "NRadio_C2000MAX"
 		elseif combined:find("UDX710") or combined:find("RG200U%-CN") then
@@ -66579,11 +66684,12 @@ qiyou_detect_identity() {
         HC-WT9126/*) QIYOU_IDENTITY_MODEL='C5800-688' ;;
         HC-WT9120/*) QIYOU_IDENTITY_MODEL='C5800-650' ;;
         HC-WT9302/*|*/HCMT7987-NAND) QIYOU_IDENTITY_MODEL='C8-788' ;;
+        HC-WT9500/*) QIYOU_IDENTITY_MODEL='C2000Ultra' ;;
         HC-WT9303/*) QIYOU_IDENTITY_MODEL='C2000MAX' ;;
         HC-WT9111/*|NRADIO-WT9111/*) QIYOU_IDENTITY_MODEL='NBCPE' ;;
         *UDX710*|*udx710*|*RG200U-CN*) QIYOU_IDENTITY_MODEL='C2000Pro' ;;
         */HCMT7981-EMMC) QIYOU_IDENTITY_MODEL='C5800-688' ;;
-        */HCMT7987-SNSD) QIYOU_IDENTITY_MODEL='C2000MAX' ;;
+        */HCMT7987-SNSD) QIYOU_IDENTITY_MODEL='C2000' ;;
         *)
             QIYOU_IDENTITY_MODEL="$QIYOU_IDENTITY_RAW_MODEL"
             [ -n "$QIYOU_IDENTITY_MODEL" ] || QIYOU_IDENTITY_MODEL="$QIYOU_IDENTITY_BOARD"
@@ -66665,11 +66771,12 @@ local function friendly_model(raw_model,board)
     if key=="HC-WT9126" then return "C5800-688" end
     if key=="HC-WT9120" then return "C5800-650" end
     if key=="HC-WT9302" or board_key=="HCMT7987-NAND" then return "C8-788" end
+    if key=="HC-WT9500" then return "C2000Ultra" end
     if key=="HC-WT9303" then return "C2000MAX" end
     if key=="HC-WT9111" or key=="NRADIO-WT9111" then return "NBCPE" end
     if key:find("UDX710",1,true) or key:find("RG200U-CN",1,true) or board_key:find("UDX710",1,true) then return "C2000Pro" end
     if board_key=="HCMT7981-EMMC" then return "C5800-688" end
-    if board_key=="HCMT7987-SNSD" then return "C2000MAX" end
+    if board_key=="HCMT7987-SNSD" then return "C2000" end
     if raw~="" then return raw end
     if trim(board)~="" then return trim(board) end
     return "未知机型"

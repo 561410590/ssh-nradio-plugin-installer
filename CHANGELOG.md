@@ -1,7 +1,16 @@
 # Changelog
 
-## V3.0.5 - 2026-09-01（正式发布）
+## NRadio Mesh 1.0.14 - 2026-09-02
 
+- 支持页和固定下载包更新到 `luci-app-nradio-roaming_1.0.14-1_all.ipk`。
+- 自动连接改为 5G 优先、同频信号强度排序；失败后继续尝试候选，最多 8 个。
+- NRadio BSSID 候选识别扩展到 `F0/F2/F4/F6/F8/FA/FC/FE:83:C6` 地址族。
+- 修复缺少 `join_backup / last_backup` UCI 项时恢复测试被 `set -e` 提前中断；插件 12 项测试与 IPK 审计通过。
+- Repository checks 新增 Mesh 1.0.14 包名、版本、关键行为、权限和 Shell 语法检查。
+
+## V3.0.5 - 2026-09-02（正式发布）
+
+- 新增 `NRadio_C2000Ultra`，识别 `HC-WT9500 / HCMT7987-SNSD`；共用板号时优先按原始 model 区分 C2000 Ultra 与 C2000MAX，开放默认通用菜单并保留机型专属功能限制。
 - 新增 `NRadio_AK68-798`，识别 `HC-WT9194 / HCMT7987-S256`，按 16 MiB NOR 轻量模式开放功能。
 - `4 > 4` 增加 C2000Pro / AK68-798 轻量应用商店；完整应用商店美化和还原对两个轻量机型隐藏。
 - AK68-798 开放 `5 > 10` 首页 CPU 温度显示和统一体检。
