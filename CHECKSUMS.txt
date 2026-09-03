@@ -1,4 +1,4 @@
-# NRadio V3.0.6 local build checksums
+# NRadio V3.0.6 release checksums
 
 Generated from local file contents on 2026-09-03.
 

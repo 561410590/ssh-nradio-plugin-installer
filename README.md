@@ -3,14 +3,14 @@
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
 - 当前本地版本：`V3.0.6`（2026-09-03）
-- 当前公网正式版本：`V3.0.5`，下载与校验以 GitHub Releases 页面为准
-- 当前状态：`V3.0.6` 总脚本、支持页与 Repository checks 已同步；公网仍保持 `V3.0.5`。
+- 当前公网正式版本：`V3.0.6`，下载与校验以 GitHub Releases 页面为准
+- 当前状态：`V3.0.6` 总脚本、图文支持页、仓库资料与 Repository checks 已同步发布。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-本地总脚本、支持页、仓库资料与检查规则使用 `V3.0.6`。正式标签与 Release 仍为 `v3.0.5`。
+总脚本、图文支持页、仓库资料与检查规则使用 `V3.0.6`。正式标签与 Release 为 `v3.0.6`。
 
 ## Mesh组网插件 1.0.14
 
@@ -334,7 +334,7 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 bash -n 00-current/ssh-nradio-plugin-installer.sh
 ```
 
-`CHECKSUMS.txt` 记录 V3.0.6 本地构建文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布 GitHub Release 或更新公网前，需要重新计算并核对总脚本、支持页、AK68-798 SSH 配置包、三个插件 IPK 和 `vercel.json` 的 hash 与大小。
+`CHECKSUMS.txt` 记录 V3.0.6 发布文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布 GitHub Release 或更新公网前，需要重新计算并核对总脚本、支持页、AK68-798 SSH 配置包、三个插件 IPK 和 `vercel.json` 的 hash 与大小。
 
 ## 脚本校验
 
