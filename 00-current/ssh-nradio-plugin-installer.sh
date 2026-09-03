@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.0.5"
+SCRIPT_VERSION="V3.0.6"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-02"
+SCRIPT_RELEASE_DATE="2026-09-03"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -43,11 +43,15 @@ NRADIO_HOME_TEMP_JS="/www/luci-static/nradio/js/nradio-home-temperature-switch.j
 NRADIO_HOME_TEMP_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_HOME_TEMP_MARKER_BEGIN="<!-- nradio-home-temperature-switch:start -->"
 NRADIO_HOME_TEMP_MARKER_END="<!-- nradio-home-temperature-switch:end -->"
-NRADIO_CPEOPT_VERSION="20260829-2"
+NRADIO_CPEOPT_VERSION="20260903-4"
 NRADIO_CPEOPT_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua"
 NRADIO_CPEOPT_VIEW="/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm"
 NRADIO_CPEOPT_ICON="/www/luci-static/nradio/images/icon/cpeopt.svg"
 NRADIO_CPEOPT_ROUTE="nradioadv/cellular/cpeopt"
+NRADIO_CPEOPT_MONITOR="/usr/libexec/nradio-cpe-monitor.lua"
+NRADIO_CPEOPT_MONITOR_INIT="/etc/init.d/nradio-cpe-monitor"
+NRADIO_CPEOPT_EVENT_LOG="/etc/nradio-cpe-monitor/events.log"
+NRADIO_CPEOPT_MONITOR_STATUS="/var/run/nradio-cpe-monitor/status"
 RUNTIME_STATE_FILE="$STATE_DIR/openvpn_runtime.conf"
 ROUTE_STATE_FILE="$STATE_DIR/openvpn_routes.conf"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
@@ -55529,11 +55533,15 @@ nradio_cpeopt_payload_markers_ok() {
     [ -s "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" ] || return 1
     [ -s "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" ] || return 1
     [ -s "$cpeopt_payload_root/www/luci-static/nradio/images/icon/cpeopt.svg" ] || return 1
+    [ -s "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" ] || return 1
+    [ -s "$cpeopt_payload_root/etc/init.d/nradio-cpe-monitor" ] || return 1
 
     sh -n "$cpeopt_payload_root/usr/bin/cpetools.sh" || return 1
     sh -n "$cpeopt_payload_root/usr/bin/cpesel.sh" || return 1
     sh -n "$cpeopt_payload_root/etc/cpetools/generic.sh" || return 1
     sh -n "$cpeopt_payload_root/etc/cpetools/huawei.sh" || return 1
+    sh -n "$cpeopt_payload_root/etc/init.d/nradio-cpe-monitor" || return 1
+    lua "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" --check || return 1
 
     grep -Fq 'record_dial_log()' "$cpeopt_payload_root/usr/bin/cpetools.sh" || return 1
     grep -Fq 'run_command_retry()' "$cpeopt_payload_root/usr/bin/cpetools.sh" || return 1
@@ -55547,8 +55555,18 @@ nradio_cpeopt_payload_markers_ok() {
     grep -Fq 'tt_nnode.image' "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/index.htm" || return 1
     grep -Fq "version = \"$NRADIO_CPEOPT_VERSION\"" "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
     grep -Fq "data-nradio-cpeopt=\"$NRADIO_CPEOPT_VERSION\"" "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" || return 1
+    grep -Fq 'action_smart_status' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
+    grep -Fq 'action_smart_apply' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
+    grep -Fq 'id="nr5g-smart-apply"' "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" || return 1
     grep -Fq 'HC-WT9120' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
     grep -Fq 'HC-WT9126' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
+    grep -Fq 'HC-WT9303' "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" || return 1
+    grep -Fq 'NRadio CPE background monitor 20260903-1' "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" || return 1
+    grep -Fq '/etc/nradio-cpe-monitor/events.log' "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" || return 1
+    grep -Fq 'network:find("4G", 1, true)' "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" || return 1
+    grep -Fq 'procd_set_param command /usr/bin/lua "$PROG"' "$cpeopt_payload_root/etc/init.d/nradio-cpe-monitor" || return 1
+    grep -Fq "name.indexOf('4G')" "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" || return 1
+    ! grep -Fq 'nradio-cpeopt-events-v2' "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" || return 1
     return 0
 }
 
@@ -55562,6 +55580,8 @@ extract_nradio_cpeopt_payload() {
         "$cpeopt_payload_root/usr/lib/lua/luci/model/cbi/nradio_cpecfg" \
         "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv" \
         "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv" \
+        "$cpeopt_payload_root/usr/libexec" \
+        "$cpeopt_payload_root/etc/init.d" \
         "$cpeopt_payload_root/www/luci-static/nradio/images/icon" || die "创建 5G 连接监听释放目录失败"
 
     cat > "$cpeopt_payload_root/usr/bin/cpetools.sh" <<'EOF_NRADIO_CPEOPT_CPETOOLS'
@@ -61958,10 +61978,341 @@ EOF_NRADIO_CPEOPT_CPELOCK
 <%+footer%>
 EOF_NRADIO_CPEOPT_INDEX
 
+    cat > "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" <<'EOF_NRADIO_CPEOPT_MONITOR'
+#!/usr/bin/lua
+
+-- NRadio CPE background monitor 20260903-1
+
+local nixio = require "nixio"
+local fs = require "nixio.fs"
+local util = require "luci.util"
+
+local VERSION = "20260903-1"
+local INTERVAL = 10
+local LOG_LIMIT = 262144
+local LOG_PATH = "/etc/nradio-cpe-monitor/events.log"
+local LOG_ROTATED_PATH = "/etc/nradio-cpe-monitor/events.log.1"
+local STATUS_PATH = "/var/run/nradio-cpe-monitor/status"
+local allowed_cpe = { cpe = true, cpe1 = true }
+local previous = {}
+
+local function clean(value)
+	value = tostring(value or "")
+	value = value:gsub("[\r\n\t]", " ")
+	return value
+end
+
+local function band_text(mode, band)
+	local value = clean(band):gsub("^[NnBb]", "")
+	local network = clean(mode):upper()
+	if value == "" then
+		return "-"
+	elseif network:find("NR", 1, true) or network:find("5G", 1, true) or
+		network == "SA" or network == "NSA" then
+		return "N" .. value
+	elseif network:find("LTE", 1, true) or network:find("4G", 1, true) then
+		return "B" .. value
+	end
+	return value
+end
+
+local function cell_text(state)
+	return (state.pci ~= "" and state.pci or "-") .. "/" ..
+		(state.earfcn ~= "" and state.earfcn or "-")
+end
+
+local function rotate_log()
+	local stat = fs.stat(LOG_PATH)
+	if stat and tonumber(stat.size or 0) >= LOG_LIMIT then
+		fs.unlink(LOG_ROTATED_PATH)
+		os.rename(LOG_PATH, LOG_ROTATED_PATH)
+	end
+end
+
+local function append_event(name, level, detail)
+	rotate_log()
+	local handle = io.open(LOG_PATH, "a")
+	if not handle then
+		return false
+	end
+	handle:write(os.date("%Y-%m-%d %H:%M:%S"), "\t", clean(name), "\t",
+		clean(level), "\t", clean(detail), "\n")
+	handle:close()
+	return true
+end
+
+local function write_status(sample_state, line_count)
+	local tmp = STATUS_PATH .. ".tmp"
+	local handle = io.open(tmp, "w")
+	if not handle then
+		return false
+	end
+	handle:write(tostring(os.time()), "\t", os.date("%Y-%m-%d %H:%M:%S"), "\t",
+		tostring(line_count or 0), "\t", clean(sample_state), "\t", VERSION, "\n")
+	handle:close()
+	if not os.rename(tmp, STATUS_PATH) then
+		fs.unlink(tmp)
+		return false
+	end
+	return true
+end
+
+local function normalize_state(item)
+	return {
+		up = tonumber(item.status) == 0,
+		mode = clean(item.mode),
+		band = clean(item.band),
+		pci = clean(item.pci),
+		earfcn = clean(item.earfcn),
+		sim = clean(item.simno)
+	}
+end
+
+local function keep_last_nonempty(now, old)
+	if not now.up or not old then
+		return
+	end
+	for _, key in ipairs({ "mode", "band", "pci", "earfcn", "sim" }) do
+		if now[key] == "" then
+			now[key] = old[key]
+		end
+	end
+end
+
+local function record_state(name, now)
+	local old = previous[name]
+	keep_last_nonempty(now, old)
+	local changes = {}
+	local level = ""
+
+	if not old then
+		changes[#changes + 1] = "后台监听启动：" .. (now.up and "在线" or "离线") ..
+			"，" .. (now.mode ~= "" and now.mode or "未知网络") ..
+			"，" .. band_text(now.mode, now.band) .. "，小区 " .. cell_text(now)
+	else
+		if old.up ~= now.up then
+			changes[#changes + 1] = now.up and "线路恢复在线" or "线路掉线"
+			if not now.up then
+				level = "warn"
+			end
+		end
+		if old.sim ~= now.sim then
+			changes[#changes + 1] = "SIM " .. (old.sim ~= "" and old.sim or "-") ..
+				" → " .. (now.sim ~= "" and now.sim or "-")
+		end
+		if old.mode ~= now.mode then
+			changes[#changes + 1] = "网络 " .. (old.mode ~= "" and old.mode or "-") ..
+				" → " .. (now.mode ~= "" and now.mode or "-")
+		end
+		if old.band ~= now.band then
+			changes[#changes + 1] = "频段 " .. band_text(old.mode, old.band) ..
+				" → " .. band_text(now.mode, now.band)
+		end
+		if old.pci ~= now.pci or old.earfcn ~= now.earfcn then
+			changes[#changes + 1] = "小区 " .. cell_text(old) .. " → " .. cell_text(now)
+		end
+	end
+
+	if #changes > 0 then
+		append_event(name, level, table.concat(changes, "；"))
+	end
+	previous[name] = now
+end
+
+local function sample()
+	local ok, runtime = pcall(util.ubus, "infocd", "runtime")
+	if not ok or type(runtime) ~= "table" or type(runtime.cpe) ~= "table" then
+		write_status("read_error", 0)
+		return
+	end
+
+	local line_count = 0
+	for _, item in ipairs(runtime.cpe) do
+		local name = clean(item.name)
+		if allowed_cpe[name] then
+			line_count = line_count + 1
+			record_state(name, normalize_state(item))
+		end
+	end
+	write_status("ok", line_count)
+end
+
+if arg and arg[1] == "--check" then
+	os.exit(0)
+end
+
+while true do
+	local ok = pcall(sample)
+	if not ok then
+		write_status("runtime_error", 0)
+	end
+	nixio.nanosleep(INTERVAL)
+end
+EOF_NRADIO_CPEOPT_MONITOR
+
+    cat > "$cpeopt_payload_root/etc/init.d/nradio-cpe-monitor" <<'EOF_NRADIO_CPEOPT_MONITOR_INIT'
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=95
+STOP=10
+
+PROG="/usr/libexec/nradio-cpe-monitor.lua"
+RUNTIME_DIR="/var/run/nradio-cpe-monitor"
+LOG_DIR="/etc/nradio-cpe-monitor"
+STATUS_FILE="$RUNTIME_DIR/status"
+
+start_service() {
+	mkdir -p "$RUNTIME_DIR" "$LOG_DIR" || return 1
+	chmod 700 "$RUNTIME_DIR" "$LOG_DIR" || return 1
+	rm -f "$STATUS_FILE" "$STATUS_FILE.tmp"
+
+	procd_open_instance
+	procd_set_param command /usr/bin/lua "$PROG"
+	procd_set_param respawn 3600 5 5
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+stop_service() {
+	rm -f "$STATUS_FILE" "$STATUS_FILE.tmp"
+}
+
+status() {
+	local now last age
+	[ -r "$STATUS_FILE" ] || return 1
+	now="$(date +%s)"
+	last="$(cut -f1 "$STATUS_FILE" 2>/dev/null)"
+	case "$last" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	age=$((now - last))
+	[ "$age" -ge 0 ] && [ "$age" -le 30 ]
+}
+EOF_NRADIO_CPEOPT_MONITOR_INIT
+
     cat > "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" <<'EOF_NRADIO_CPEOPT_CONTROLLER'
 -- NRadio 5G connection monitoring page
 
 module("luci.controller.nradio_adv.cpeopt", package.seeall)
+
+local SMART_BAND_SCRIPT = "/root/nradio-smart-band.sh"
+local SMART_BAND_CRON = "/etc/crontabs/root"
+local SMART_BAND_CRON_LINE = "*/30 5-21 * * * sh /root/nradio-smart-band.sh >/dev/null 2>&1 # nradio-smart-band"
+local SMART_BAND_RUNTIME = "/var/run/nradio-smart-band"
+local SMART_BAND_STOP = SMART_BAND_RUNTIME .. "/stopping"
+local SMART_BAND_LOCK_PID = SMART_BAND_RUNTIME .. "/lock/pid"
+
+local function trim(value)
+	return tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function smart_band_supported(model)
+	return model == "HC-WT9126" or model == "NRadio_C5800-688"
+end
+
+local function run_smart_band(sys, mode)
+	local raw = sys.exec("sh " .. SMART_BAND_SCRIPT .. " " .. mode ..
+		" 2>&1; printf '\\n__NRADIO_RC__%s\\n' \"$?\"") or ""
+	local code = tonumber(raw:match("\n__NRADIO_RC__(%d+)\n?$") or "1") or 1
+	local output = raw:gsub("\n__NRADIO_RC__%d+\n?$", "")
+	return code, output
+end
+
+local function smart_band_summary(fs, model)
+	local cron = fs.readfile(SMART_BAND_CRON) or ""
+	local installed = fs.access(SMART_BAND_SCRIPT) and true or false
+	local scheduled = cron:find(SMART_BAND_SCRIPT, 1, true) ~= nil
+	return {
+		supported = smart_band_supported(model),
+		installed = installed,
+		scheduled = scheduled,
+		enabled = installed and scheduled and not fs.access(SMART_BAND_STOP),
+		version = "v7"
+	}
+end
+
+local function smart_band_cron_without_task(cron)
+	local kept = {}
+	for line in (cron .. "\n"):gmatch("(.-)\n") do
+		if not line:find(SMART_BAND_SCRIPT, 1, true) and
+			not line:find("# nradio-smart-band", 1, true) and
+			not line:find("#nradio-smart-band", 1, true) then
+			kept[#kept + 1] = line
+		end
+	end
+	while #kept > 0 and kept[#kept] == "" do
+		table.remove(kept)
+	end
+	return #kept > 0 and (table.concat(kept, "\n") .. "\n") or ""
+end
+
+local function write_smart_band_cron(fs, content, suffix)
+	local current = fs.readfile(SMART_BAND_CRON) or ""
+	if current == content then
+		return true
+	end
+	local tmp = SMART_BAND_CRON .. suffix
+	if not fs.writefile(tmp, content) then
+		return false
+	end
+	fs.chmod(tmp, "0600")
+	if not fs.rename(tmp, SMART_BAND_CRON) then
+		fs.unlink(tmp)
+		return false
+	end
+	return true
+end
+
+local function reload_smart_band_cron(fs, sys)
+	if fs.access("/etc/init.d/cron") then
+		return sys.call("/etc/init.d/cron restart >/dev/null 2>&1") == 0
+	end
+	return sys.call("killall -HUP crond >/dev/null 2>&1") == 0
+end
+
+local function disable_smart_band(fs, sys)
+	local cron = fs.readfile(SMART_BAND_CRON) or ""
+	local filtered = smart_band_cron_without_task(cron)
+
+	if sys.call("mkdir -p " .. SMART_BAND_RUNTIME .. " && chmod 700 " .. SMART_BAND_RUNTIME) ~= 0 or
+		not fs.writefile(SMART_BAND_STOP, "disabled\n") then
+		return false, "无法写入智能频段停止状态"
+	end
+
+	if not write_smart_band_cron(fs, filtered, ".nradio-disable") then
+		return false, "无法停用智能频段定时任务"
+	end
+
+	local pid = trim(fs.readfile(SMART_BAND_LOCK_PID))
+	if pid:match("^%d+$") and tonumber(pid) and tonumber(pid) > 1 then
+		local cmdline = fs.readfile("/proc/" .. pid .. "/cmdline") or ""
+		if cmdline:find(SMART_BAND_SCRIPT, 1, true) then
+			sys.call("kill -TERM " .. pid .. " >/dev/null 2>&1")
+		end
+	end
+
+	if not reload_smart_band_cron(fs, sys) then
+		return false, "智能频段已停用，但 crond 刷新失败"
+	end
+	return true, "智能频段已停用，5G 连接监听继续运行，频段交由系统管理"
+end
+
+local function enable_smart_band(fs, sys)
+	local cron = fs.readfile(SMART_BAND_CRON) or ""
+	local enabled_cron = smart_band_cron_without_task(cron) .. SMART_BAND_CRON_LINE .. "\n"
+	if not write_smart_band_cron(fs, enabled_cron, ".nradio-enable") then
+		return false, "无法恢复智能频段定时任务"
+	end
+	if fs.access(SMART_BAND_STOP) and not fs.unlink(SMART_BAND_STOP) then
+		return false, "定时任务已恢复，但无法解除智能频段停止状态"
+	end
+	if not reload_smart_band_cron(fs, sys) then
+		return false, "智能频段已启用，但 crond 刷新失败"
+	end
+	return true, "智能频段已启用，将按每 30 分钟执行；5G 连接监听继续运行"
+end
 
 function index()
 	local fs = require "nixio.fs"
@@ -61981,9 +62332,9 @@ function index()
 	)
 	page.icon = "signal-4"
 	if fs.access("/www/luci-static/nradio/images/icon/cpeopt.png") then
-		page.image = "/luci-static/nradio/images/icon/cpeopt.png?v=20260828-2"
+		page.image = "/luci-static/nradio/images/icon/cpeopt.png?v=20260903-4"
 	else
-		page.image = "/luci-static/nradio/images/icon/cpeopt.svg?v=20260828-2"
+		page.image = "/luci-static/nradio/images/icon/cpeopt.svg?v=20260903-4"
 	end
 	page.show = true
 	page.leaf = false
@@ -61999,6 +62350,39 @@ function index()
 	)
 	apply.leaf = true
 	apply.post = true
+
+	local clear = entry(
+		{"nradioadv", "cellular", "cpeopt", "clear"},
+		call("action_clear"), nil, nil, true
+	)
+	clear.leaf = true
+	clear.post = true
+
+	entry(
+		{"nradioadv", "cellular", "cpeopt", "smart-status"},
+		call("action_smart_status"), nil, nil, true
+	).leaf = true
+
+	local smart_apply = entry(
+		{"nradioadv", "cellular", "cpeopt", "smart-apply"},
+		call("action_smart_apply"), nil, nil, true
+	)
+	smart_apply.leaf = true
+	smart_apply.post = true
+
+	local smart_disable = entry(
+		{"nradioadv", "cellular", "cpeopt", "smart-disable"},
+		call("action_smart_disable"), nil, nil, true
+	)
+	smart_disable.leaf = true
+	smart_disable.post = true
+
+	local smart_enable = entry(
+		{"nradioadv", "cellular", "cpeopt", "smart-enable"},
+		call("action_smart_enable"), nil, nil, true
+	)
+	smart_enable.leaf = true
+	smart_enable.post = true
 end
 
 function action_status()
@@ -62060,19 +62444,111 @@ function action_status()
 		return result_logs, "ready"
 	end
 
+	local function read_event_logs()
+		local all = {}
+		local existing = 0
+		local read_error = false
+		for _, path in ipairs({ "/etc/nradio-cpe-monitor/events.log.1", "/etc/nradio-cpe-monitor/events.log" }) do
+			if fs.access(path) then
+				existing = existing + 1
+				local content = fs.readfile(path)
+				if content == nil then
+					read_error = true
+				else
+					for line in content:gmatch("[^\r\n]+") do
+						local stamp, name, level, detail = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t(.*)$")
+						if stamp and name and detail then
+							all[#all + 1] = {
+								time = stamp,
+								name = name,
+								level = level or "",
+								detail = detail
+							}
+						end
+					end
+				end
+			end
+		end
+
+		local events = {}
+		local first = math.max(1, #all - 199)
+		for index = #all, first, -1 do
+			events[#events + 1] = all[index]
+		end
+		if read_error then
+			return events, "read_error"
+		elseif existing == 0 then
+			return events, "missing"
+		elseif #all == 0 then
+			return events, "empty"
+		end
+		return events, "ready"
+	end
+
+	local function read_monitor_status()
+		local content = fs.readfile("/var/run/nradio-cpe-monitor/status") or ""
+		local epoch, stamp, count, sample_state, version = content:match("^(%d+)\t([^\t]*)\t(%d+)\t([^\t]*)\t([^\r\n]*)")
+		epoch = tonumber(epoch or "0") or 0
+		local age = epoch > 0 and (os.time() - epoch) or 999999
+		return {
+			active = age >= 0 and age <= 30,
+			last_sample = stamp or "",
+			line_count = tonumber(count or "0") or 0,
+			sample_state = sample_state or "missing",
+			version = version or ""
+		}
+	end
+
+	local function merge_smart_band_logs(logs, status)
+		if not smart_band_supported(model) then
+			return logs, status
+		end
+		local content = fs.readfile("/var/run/nradio-smart-band/runtime.log") or ""
+		for line in content:gmatch("[^\r\n]+") do
+			local stamp = line:sub(1, 19)
+			local detail = trim(line:sub(20))
+			local name = detail:match("^(cpe1)%(") or detail:match("^(cpe)%(") or ""
+			logs[#logs + 1] = {
+				time = stamp,
+				source = "smart-band",
+				name = name,
+				detail = detail
+			}
+		end
+		table.sort(logs, function(a, b)
+			return tostring(a.time or "") > tostring(b.time or "")
+		end)
+		while #logs > 200 do
+			table.remove(logs)
+		end
+		return logs, #logs > 0 and "ready" or status
+	end
+
 	local runtime = util.ubus("infocd", "runtime") or {}
 	local dial_logs, dial_log_status = read_dial_logs()
+	dial_logs, dial_log_status = merge_smart_band_logs(dial_logs, dial_log_status)
+	local events, event_log_status = read_event_logs()
+	local monitor = read_monitor_status()
+	local smart_band = smart_band_summary(fs, model)
 	local result = {
 		ok = true,
-		version = "20260829-2",
+		version = "20260903-4",
 		model = model,
 		dial_logs = dial_logs,
 		dial_log_status = dial_log_status,
+		events = events,
+		event_log_status = event_log_status,
+		monitor = monitor,
+		smart_band = smart_band,
 		components = {
 			cpetools = fs.access("/usr/bin/cpetools.sh") and true or false,
 			cpesel = fs.access("/usr/bin/cpesel.sh") and true or false,
 			huawei = fs.access("/etc/cpetools/huawei.sh") and true or false,
-			cpelock = fs.access("/usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua") and true or false
+			cpelock = fs.access("/usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua") and true or false,
+			monitor = monitor.active,
+			smartband = smart_band.installed,
+			smartband_enabled = smart_band.enabled,
+			smartband_supported = smart_band.supported
 		},
 		lines = {}
 	}
@@ -62128,6 +62604,133 @@ function action_status()
 	http.write_json(result)
 end
 
+function action_smart_status()
+	local fs = require "nixio.fs"
+	local http = require "luci.http"
+	local sys = require "luci.sys"
+	local model = trim(fs.readfile("/tmp/sysinfo/model"))
+	local summary = smart_band_summary(fs, model)
+	local preview = {}
+	local code, output = 1, ""
+
+	if summary.supported and summary.installed then
+		code, output = run_smart_band(sys, "dry-run")
+		for line in output:gmatch("[^\r\n]+") do
+			local name, detail = line:match("^(cpe1)=(.*)$")
+			if not name then
+				name, detail = line:match("^(cpe)=(.*)$")
+			end
+			if name and detail then
+				preview[name] = detail
+			end
+		end
+	end
+
+	http.prepare_content("application/json")
+	http.write_json({
+		ok = summary.supported and summary.installed and code == 0,
+		installed = summary.installed,
+		scheduled = summary.scheduled,
+		preview = preview
+	})
+end
+
+function action_smart_apply()
+	local fs = require "nixio.fs"
+	local http = require "luci.http"
+	local sys = require "luci.sys"
+	local model = trim(fs.readfile("/tmp/sysinfo/model"))
+	local summary = smart_band_summary(fs, model)
+
+	if not summary.supported or not summary.installed then
+		http.prepare_content("application/json")
+		http.write_json({ ok = false, message = "智能频段未随连接监听安装" })
+		return
+	end
+	if not summary.enabled then
+		http.prepare_content("application/json")
+		http.write_json({ ok = false, message = "智能频段已停用，当前由系统管理频段" })
+		return
+	end
+
+	local code = run_smart_band(sys, "apply")
+	http.prepare_content("application/json")
+	http.write_json({
+		ok = code == 0,
+		message = code == 0 and "智能频段执行完成" or ("智能频段执行异常，退出码=" .. code)
+	})
+end
+
+function action_smart_disable()
+	local fs = require "nixio.fs"
+	local http = require "luci.http"
+	local sys = require "luci.sys"
+	local model = trim(fs.readfile("/tmp/sysinfo/model"))
+	local summary = smart_band_summary(fs, model)
+
+	http.prepare_content("application/json")
+	if not summary.supported then
+		http.write_json({ ok = false, message = "当前机型不支持智能频段" })
+		return
+	end
+	if not summary.installed or not summary.enabled then
+		http.write_json({ ok = true, message = "智能频段已停用，当前由系统管理频段" })
+		return
+	end
+
+	local ok, message = disable_smart_band(fs, sys)
+	if not ok then
+		http.status(500, "Internal Server Error")
+	end
+	http.write_json({ ok = ok, message = message })
+end
+
+function action_smart_enable()
+	local fs = require "nixio.fs"
+	local http = require "luci.http"
+	local sys = require "luci.sys"
+	local model = trim(fs.readfile("/tmp/sysinfo/model"))
+	local summary = smart_band_summary(fs, model)
+
+	http.prepare_content("application/json")
+	if not summary.supported then
+		http.write_json({ ok = false, message = "当前机型不支持智能频段" })
+		return
+	end
+	if not summary.installed then
+		http.write_json({ ok = false, message = "智能频段脚本不存在，请先更新 5G 连接监听" })
+		return
+	end
+	if summary.enabled then
+		http.write_json({ ok = true, message = "智能频段已启用" })
+		return
+	end
+
+	local ok, message = enable_smart_band(fs, sys)
+	if not ok then
+		http.status(500, "Internal Server Error")
+	end
+	http.write_json({ ok = ok, message = message })
+end
+
+function action_clear()
+	local fs = require "nixio.fs"
+	local http = require "luci.http"
+	local ok = true
+	for _, path in ipairs({ "/etc/nradio-cpe-monitor/events.log", "/etc/nradio-cpe-monitor/events.log.1" }) do
+		if fs.access(path) and not fs.unlink(path) then
+			ok = false
+		end
+	end
+	http.prepare_content("application/json")
+	if ok then
+		http.write_json({ ok = true, message = "后台切换记录已清空" })
+	else
+		http.status(500, "Internal Server Error")
+		http.write_json({ ok = false, message = "后台切换记录清空失败" })
+	end
+end
+
 function action_apply()
 	local http = require "luci.http"
 	local sys = require "luci.sys"
@@ -62155,20 +62758,48 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 <%+header%>
 
 <style>
-.nr5g-wrap{max-width:1180px;margin:0 auto}.nr5g-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px}.nr5g-head h2{margin:0}.nr5g-actions{display:flex;gap:8px;flex-wrap:wrap}.nr5g-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.nr5g-card,.nr5g-components{border:1px solid rgba(127,127,127,.22);border-radius:12px;background:rgba(255,255,255,.03);padding:16px;box-sizing:border-box}.nr5g-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.nr5g-title h3{margin:0;font-size:18px}.nr5g-badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:12px;background:#64748b;color:#fff}.nr5g-badge.ok{background:#16a34a}.nr5g-badge.warn{background:#d97706}.nr5g-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.nr5g-item{min-width:0;border-radius:8px;background:rgba(127,127,127,.08);padding:9px}.nr5g-key{display:block;color:#7c8798;font-size:12px;margin-bottom:3px}.nr5g-value{display:block;font-size:14px;font-weight:600;overflow-wrap:anywhere}.nr5g-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}.nr5g-note{font-size:12px;color:#7c8798}.nr5g-components{margin-top:14px}.nr5g-component-list{display:flex;gap:8px;flex-wrap:wrap}.nr5g-component{border-radius:999px;padding:5px 10px;background:rgba(127,127,127,.12)}.nr5g-component.ok{color:#16a34a}.nr5g-component.bad{color:#dc2626}.nr5g-message{display:none;margin:0 0 14px;padding:10px 12px;border-radius:8px;background:rgba(37,99,235,.12)}.nr5g-message.error{background:rgba(220,38,38,.12);color:#dc2626}.nr5g-empty{grid-column:1/-1;text-align:center;padding:28px;color:#7c8798}.nr5g-button{min-height:34px}.nr5g-signal-good{color:#16a34a}.nr5g-signal-mid{color:#d97706}.nr5g-signal-bad{color:#dc2626}@media(max-width:820px){.nr5g-grid{grid-template-columns:1fr}.nr5g-kv{grid-template-columns:repeat(2,minmax(0,1fr))}.nr5g-head{align-items:flex-start;flex-direction:column}}@media(max-width:430px){.nr5g-kv{grid-template-columns:1fr}.nr5g-actions,.nr5g-actions .cbi-button{width:100%}.nr5g-foot{align-items:stretch;flex-direction:column}.nr5g-foot .cbi-button{width:100%}}
-.nr5g-diagnostics{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:14px;margin-top:14px}.nr5g-panel{border:1px solid rgba(127,127,127,.22);border-radius:12px;background:rgba(255,255,255,.03);padding:16px;box-sizing:border-box;min-width:0}.nr5g-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.nr5g-chartbox{min-width:0;border-radius:8px;background:rgba(127,127,127,.08);padding:9px}.nr5g-chart-title{display:flex;align-items:center;justify-content:space-between;color:#7c8798;font-size:12px;margin-bottom:4px}.nr5g-chart{display:block;width:100%;height:160px}.nr5g-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#7c8798}.nr5g-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.nr5g-events{list-style:none;margin:0;padding:0;max-height:548px;overflow:auto}.nr5g-event{border-left:3px solid #0ea5e9;padding:7px 9px;margin:0 0 8px;background:rgba(127,127,127,.07);border-radius:0 7px 7px 0}.nr5g-event.warn{border-left-color:#d97706}.nr5g-event-time{display:block;color:#7c8798;font-size:11px;margin-bottom:2px}.nr5g-small-button{padding:3px 8px;min-height:28px}.nr5g-lock-ok{color:#16a34a}.nr5g-lock-warn{color:#dc2626}.nr5g-lock-neutral{color:#7c8798}@media(max-width:1000px){.nr5g-diagnostics{grid-template-columns:1fr}.nr5g-events{max-height:260px}}@media(max-width:720px){.nr5g-charts{grid-template-columns:1fr}}
-.nr5g-loglist{display:block;max-height:420px;overflow:auto;border-radius:8px;background:rgba(0,0,0,.14)}.nr5g-logrow{display:grid;grid-template-columns:145px 94px 70px minmax(0,1fr);gap:8px;padding:8px 10px;border-bottom:1px solid rgba(127,127,127,.14);font-family:monospace;font-size:12px;align-items:start}.nr5g-logrow:last-child{border-bottom:0}.nr5g-logtime,.nr5g-logsource,.nr5g-logline{color:#7c8798}.nr5g-logdetail{overflow-wrap:anywhere}@media(max-width:720px){.nr5g-logrow{grid-template-columns:1fr;gap:2px}}
+.nr5g-wrap{--nr5g-cyan:#22d3ee;--nr5g-blue:#2563eb;--nr5g-green:#22c55e;--nr5g-amber:#f59e0b;--nr5g-red:#ef4444;--nr5g-text:#e8f2ff;--nr5g-muted:#8ba0bb;--nr5g-line:rgba(148,163,184,.18);max-width:1220px;margin:0 auto;color:var(--nr5g-text)}
+.nr5g-hero{position:relative;overflow:hidden;border:1px solid rgba(56,189,248,.24);border-radius:22px;padding:24px;margin-bottom:16px;background:radial-gradient(circle at 88% 15%,rgba(34,211,238,.18),transparent 28%),radial-gradient(circle at 8% 100%,rgba(37,99,235,.22),transparent 34%),linear-gradient(135deg,#071426 0%,#0b1d37 52%,#07111f 100%);box-shadow:0 22px 60px rgba(2,8,23,.28)}
+.nr5g-hero:before,.nr5g-hero:after{content:"";position:absolute;border:1px solid rgba(34,211,238,.15);border-radius:50%;pointer-events:none}.nr5g-hero:before{width:280px;height:280px;right:-118px;top:-166px}.nr5g-hero:after{width:190px;height:190px;right:-62px;top:-116px}
+.nr5g-head{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.nr5g-eyebrow{margin-bottom:7px;color:var(--nr5g-cyan);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.nr5g-head h2{margin:0;color:#fff;font-size:28px;line-height:1.12;letter-spacing:-.03em}.nr5g-subtitle{max-width:670px;margin-top:9px;color:#a9b9ce;font-size:13px;line-height:1.7}.nr5g-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:390px;max-width:100%}.nr5g-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-width:0;min-height:42px;margin:0!important;padding:0 16px!important;border-radius:11px!important;font-size:13px!important;font-weight:750!important;line-height:1.2!important;white-space:nowrap;text-align:center;text-decoration:none!important;transition:border-color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease}.nr5g-button-primary,.nr5g-button-stop{grid-column:1/-1;min-height:46px}.nr5g-hero .nr5g-button{border:1px solid rgba(125,211,252,.3)!important;background:rgba(15,35,60,.78)!important;color:#e6f7ff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 20px rgba(2,8,23,.2);backdrop-filter:blur(8px)}.nr5g-hero .nr5g-button-primary{border-color:rgba(34,211,238,.52)!important;background:linear-gradient(135deg,rgba(8,145,178,.9),rgba(37,99,235,.86))!important;color:#fff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 28px rgba(8,145,178,.23)}.nr5g-hero .nr5g-button-stop{border-color:rgba(245,158,11,.38)!important;background:rgba(120,53,15,.32)!important;color:#fde7b0!important}.nr5g-hero .nr5g-button:hover{border-color:rgba(125,211,252,.58)!important;background:rgba(20,47,79,.92)!important;transform:translateY(-1px)}.nr5g-hero .nr5g-button-primary:hover{background:linear-gradient(135deg,rgba(6,182,212,.95),rgba(37,99,235,.94))!important}.nr5g-hero .nr5g-button-stop:hover{border-color:rgba(251,191,36,.62)!important;background:rgba(146,64,14,.42)!important}.nr5g-hero .nr5g-button:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(34,211,238,.2),inset 0 1px 0 rgba(255,255,255,.08)}.nr5g-hero .nr5g-button:disabled{cursor:not-allowed;opacity:.55;transform:none}
+.nr5g-hero .nr5g-button-enable{border-color:rgba(34,197,94,.42)!important;background:linear-gradient(135deg,rgba(21,128,61,.72),rgba(5,150,105,.72))!important;color:#ecfdf5!important}.nr5g-hero .nr5g-button-enable:hover{border-color:rgba(74,222,128,.68)!important;background:linear-gradient(135deg,rgba(22,163,74,.86),rgba(5,150,105,.86))!important}
+.nr5g-hero-tags{position:relative;z-index:1;display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.nr5g-hero-tag{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(148,163,184,.16);border-radius:999px;padding:6px 10px;background:rgba(15,23,42,.42);color:#aebed1;font-size:11px}.nr5g-hero-tag:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--nr5g-cyan);box-shadow:0 0 12px var(--nr5g-cyan)}
+.nr5g-summary{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.nr5g-summary-card{border:1px solid rgba(148,163,184,.15);border-radius:13px;padding:12px 13px;background:rgba(8,20,37,.64);backdrop-filter:blur(10px)}.nr5g-summary-label{display:block;color:#7890ad;font-size:11px;margin-bottom:5px}.nr5g-summary-value{display:block;color:#f4f9ff;font-size:15px;font-weight:750;overflow-wrap:anywhere}.nr5g-summary-value.ok{color:#6ee7a0}.nr5g-summary-value.warn{color:#fbbf24}
+.nr5g-message{display:none;margin:0 0 14px;padding:11px 13px;border:1px solid rgba(37,99,235,.22);border-radius:10px;background:rgba(37,99,235,.1)}.nr5g-message.error{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.1);color:#f87171}
+.nr5g-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.nr5g-card,.nr5g-panel,.nr5g-components{position:relative;overflow:hidden;border:1px solid var(--nr5g-line);border-radius:16px;background:linear-gradient(145deg,rgba(20,36,58,.96),rgba(9,20,35,.96));padding:17px;box-sizing:border-box;box-shadow:0 13px 34px rgba(2,8,23,.16)}.nr5g-card:before,.nr5g-panel:before,.nr5g-components:before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.7),transparent)}
+.nr5g-title{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.nr5g-title h3{margin:0;color:#eef7ff;font-size:17px;letter-spacing:-.01em}.nr5g-badge{display:inline-flex;align-items:center;border:1px solid rgba(148,163,184,.18);border-radius:999px;padding:4px 9px;font-size:11px;background:rgba(100,116,139,.18);color:#cbd5e1}.nr5g-badge.ok{border-color:rgba(34,197,94,.28);background:rgba(34,197,94,.15);color:#6ee7a0}.nr5g-badge.warn{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.14);color:#fbbf24}
+.nr5g-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.nr5g-item{min-width:0;border:1px solid rgba(148,163,184,.1);border-radius:10px;background:rgba(4,15,29,.46);padding:10px}.nr5g-key{display:block;color:#7890aa;font-size:11px;margin-bottom:4px}.nr5g-value{display:block;color:#e7f0fb;font-size:13px;font-weight:650;overflow-wrap:anywhere}.nr5g-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px}.nr5g-note{font-size:12px;color:var(--nr5g-muted)}.nr5g-signal-good,.nr5g-lock-ok{color:#4ade80}.nr5g-signal-mid{color:#fbbf24}.nr5g-signal-bad,.nr5g-lock-warn{color:#fb7185}.nr5g-lock-neutral{color:#94a3b8}.nr5g-empty{grid-column:1/-1;text-align:center;padding:28px;color:var(--nr5g-muted)}
+.nr5g-diagnostics{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(330px,.7fr);gap:14px;margin-top:14px}.nr5g-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.nr5g-chartbox{min-width:0;border:1px solid rgba(148,163,184,.1);border-radius:11px;background:rgba(3,13,26,.48);padding:9px}.nr5g-chart-title{display:flex;align-items:center;justify-content:space-between;color:#7890aa;font-size:11px;margin-bottom:4px}.nr5g-chart{display:block;width:100%;height:160px}.nr5g-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:#8da2bb}.nr5g-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;box-shadow:0 0 10px currentColor}
+.nr5g-events{list-style:none;margin:0;padding:0;max-height:438px;overflow:auto}.nr5g-event{position:relative;border:1px solid rgba(14,165,233,.14);border-left:3px solid #22d3ee;padding:9px 10px;margin:0 0 8px;background:rgba(8,25,43,.72);border-radius:0 9px 9px 0}.nr5g-event.warn{border-left-color:#f59e0b}.nr5g-event-time{display:block;color:#7890aa;font-size:10px;margin-bottom:3px}.nr5g-small-button{padding:3px 8px;min-height:28px;border-radius:8px!important}
+.nr5g-components{margin-top:14px}.nr5g-component-list{display:flex;gap:8px;flex-wrap:wrap}.nr5g-component{border:1px solid rgba(148,163,184,.13);border-radius:999px;padding:6px 10px;background:rgba(4,15,29,.42);color:#94a3b8;font-size:12px}.nr5g-component.ok{border-color:rgba(34,197,94,.22);color:#4ade80}.nr5g-component.bad{border-color:rgba(239,68,68,.22);color:#fb7185}.nr5g-component.disabled{border-color:rgba(245,158,11,.24);color:#fbbf24}
+.nr5g-loglist{display:block;max-height:420px;overflow:auto;border:1px solid rgba(148,163,184,.1);border-radius:10px;background:rgba(2,10,22,.58)}.nr5g-logrow{display:grid;grid-template-columns:145px 94px 70px minmax(0,1fr);gap:8px;padding:9px 10px;border-bottom:1px solid rgba(148,163,184,.11);font-family:monospace;font-size:12px;align-items:start}.nr5g-logrow:last-child{border-bottom:0}.nr5g-logtime,.nr5g-logsource,.nr5g-logline{color:#7890aa}.nr5g-logdetail{overflow-wrap:anywhere;color:#c9d6e5}
+@media(max-width:1000px){.nr5g-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.nr5g-diagnostics{grid-template-columns:1fr}.nr5g-events{max-height:300px}}
+@media(max-width:820px){.nr5g-head{flex-direction:column}.nr5g-actions{align-self:flex-start}.nr5g-grid{grid-template-columns:1fr}.nr5g-kv{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.nr5g-charts{grid-template-columns:1fr}.nr5g-logrow{grid-template-columns:1fr;gap:2px}}
+@media(max-width:430px){.nr5g-hero{padding:18px;border-radius:16px}.nr5g-head h2{font-size:24px}.nr5g-summary{grid-template-columns:1fr 1fr}.nr5g-actions{width:100%;grid-template-columns:1fr}.nr5g-button-primary,.nr5g-button-stop{grid-column:auto}.nr5g-kv{grid-template-columns:1fr}.nr5g-foot{align-items:stretch;flex-direction:column}.nr5g-foot .cbi-button{width:100%}}
 </style>
 
-<div class="nr5g-wrap" data-nradio-cpeopt="20260829-2">
-	<div class="nr5g-head">
-		<div>
-			<h2>5G 连接监听</h2>
-			<div class="nr5g-note">NRadio 蜂窝线路状态、信号趋势与拨号日志监听</div>
+<div class="nr5g-wrap" data-nradio-cpeopt="20260903-4">
+	<div class="nr5g-hero">
+		<div class="nr5g-head">
+			<div>
+				<div class="nr5g-eyebrow">NRadio Cellular Observatory</div>
+				<h2>5G 连接监听</h2>
+				<div class="nr5g-subtitle">路由器后台持续捕获线路、网络、频段及基站变化。页面关闭后继续记录，重新打开即可查看真实切换时间线。</div>
+			</div>
+			<div class="nr5g-actions">
+				<button class="cbi-button cbi-button-action nr5g-button nr5g-button-primary" id="nr5g-smart-apply" type="button" style="display:none">立即执行智能频段</button>
+				<a class="cbi-button nr5g-button" href="<%=url('nradio','cellular','cpelock')%>">锁频设置</a>
+				<button class="cbi-button cbi-button-action nr5g-button" id="nr5g-refresh" type="button">刷新状态</button>
+				<button class="cbi-button nr5g-button nr5g-button-stop" id="nr5g-smart-toggle" type="button" style="display:none">停用智能频段（系统管理）</button>
+			</div>
 		</div>
-		<div class="nr5g-actions">
-			<a class="cbi-button nr5g-button" href="<%=url('nradio','cellular','cpelock')%>">锁频设置</a>
-			<button class="cbi-button cbi-button-action nr5g-button" id="nr5g-refresh" type="button">刷新状态</button>
+		<div class="nr5g-hero-tags"><span class="nr5g-hero-tag">10 秒后台采样</span><span class="nr5g-hero-tag">关页持续记录</span><span class="nr5g-hero-tag">256 KiB 自动轮转</span></div>
+		<div class="nr5g-summary">
+			<div class="nr5g-summary-card"><span class="nr5g-summary-label">后台服务</span><strong class="nr5g-summary-value" id="nr5g-monitor-service">检测中</strong></div>
+			<div class="nr5g-summary-card"><span class="nr5g-summary-label">最近采样</span><strong class="nr5g-summary-value" id="nr5g-monitor-sample">-</strong></div>
+			<div class="nr5g-summary-card"><span class="nr5g-summary-label">监听线路</span><strong class="nr5g-summary-value" id="nr5g-monitor-lines">-</strong></div>
+			<div class="nr5g-summary-card"><span class="nr5g-summary-label">后台事件</span><strong class="nr5g-summary-value" id="nr5g-monitor-events">-</strong></div>
 		</div>
 	</div>
 
@@ -62177,7 +62808,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 
 	<div class="nr5g-diagnostics">
 		<section class="nr5g-panel">
-			<div class="nr5g-title"><h3>信号趋势</h3><span class="nr5g-badge">15 秒采样</span></div>
+			<div class="nr5g-title"><h3>页面实时信号</h3><span class="nr5g-badge">15 秒采样</span></div>
 			<div class="nr5g-legend"><span><i class="nr5g-dot" style="background:#00d5ff"></i>主线路 cpe</span><span><i class="nr5g-dot" style="background:#f59e0b"></i>副线路 cpe1</span></div>
 			<div class="nr5g-charts">
 				<div class="nr5g-chartbox"><div class="nr5g-chart-title"><span>RSRP</span><span>dBm</span></div><canvas class="nr5g-chart" id="nr5g-chart-rsrp"></canvas></div>
@@ -62186,8 +62817,8 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 			</div>
 		</section>
 		<section class="nr5g-panel">
-			<div class="nr5g-title"><h3>切换时间线</h3><button class="cbi-button nr5g-small-button" id="nr5g-clear-events" type="button">清空</button></div>
-			<ul class="nr5g-events" id="nr5g-events"><li class="nr5g-note">等待首次状态采样…</li></ul>
+			<div class="nr5g-title"><h3>后台切换时间线</h3><button class="cbi-button nr5g-small-button" id="nr5g-clear-events" type="button">清空记录</button></div>
+			<ul class="nr5g-events" id="nr5g-events"><li class="nr5g-note">正在读取后台记录…</li></ul>
 		</section>
 	</div>
 
@@ -62197,7 +62828,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 	</div>
 
 	<div class="nr5g-components">
-		<div class="nr5g-title"><h3>拨号日志记录</h3><span class="nr5g-badge ok">脚本直接记录</span></div>
+		<div class="nr5g-title"><h3>连接与智能频段日志</h3><span class="nr5g-badge ok">后台直接记录</span></div>
 		<div class="nr5g-loglist" id="nr5g-dial-logs"><div class="nr5g-empty">暂无拨号日志</div></div>
 	</div>
 </div>
@@ -62207,14 +62838,21 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 	'use strict';
 	var statusUrl='<%=url("nradioadv","cellular","cpeopt","status")%>';
 	var applyUrl='<%=url("nradioadv","cellular","cpeopt","apply")%>';
+	var clearUrl='<%=url("nradioadv","cellular","cpeopt","clear")%>';
+	var smartStatusUrl='<%=url("nradioadv","cellular","cpeopt","smart-status")%>';
+	var smartApplyUrl='<%=url("nradioadv","cellular","cpeopt","smart-apply")%>';
+	var smartDisableUrl='<%=url("nradioadv","cellular","cpeopt","smart-disable")%>';
+	var smartEnableUrl='<%=url("nradioadv","cellular","cpeopt","smart-enable")%>';
 	var csrfToken='<%=token%>';
 	var grid=document.getElementById('nr5g-grid');
 	var message=document.getElementById('nr5g-message');
 	var refreshButton=document.getElementById('nr5g-refresh');
-	var eventKey='nradio-cpeopt-events-v2';
-	var stateKey='nradio-cpeopt-state-v2';
-	var timelineEvents=storageRead(eventKey,[]);
-	var previousState=storageRead(stateKey,{});
+	var smartApplyButton=document.getElementById('nr5g-smart-apply');
+	var smartToggleButton=document.getElementById('nr5g-smart-toggle');
+	var timelineEvents=[];
+	var smartPreview={};
+	var smartBand={};
+	var latestLines=[];
 	var signalHistory={cpe:[],cpe1:[]};
 	var lineColors={cpe:'#00d5ff',cpe1:'#f59e0b'};
 
@@ -62251,50 +62889,33 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		return 'nr5g-signal-bad';
 	}
 
-	function storageRead(key,fallback){
-		try{
-			var value=window.localStorage.getItem(key);
-			return value?JSON.parse(value):fallback;
-		}catch(e){return fallback;}
-	}
-
-	function storageWrite(key,value){
-		try{window.localStorage.setItem(key,JSON.stringify(value));}catch(e){}
-	}
-
 	function cleanValue(value){
 		return value===undefined||value===null?'':String(value);
 	}
 
-	function timeText(value){
-		var d=new Date(value);
-		function pad(n){return n<10?'0'+n:String(n);}
-		return pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
-	}
-
-	function addEvent(name,detail,level){
-		timelineEvents.unshift({time:Date.now(),name:name,detail:detail,level:level||''});
-		if(timelineEvents.length>50){timelineEvents.length=50;}
-		storageWrite(eventKey,timelineEvents);
-	}
-
-	function renderEvents(){
+	function renderEvents(status){
 		var list=document.getElementById('nr5g-events');
 		list.textContent='';
 		if(!timelineEvents.length){
 			var empty=document.createElement('li');
 			empty.className='nr5g-note';
-			empty.textContent='暂无切换记录';
+			if(status==='missing'){
+				empty.textContent='后台事件日志正在初始化';
+			}else if(status==='read_error'){
+				empty.textContent='后台事件日志读取失败';
+			}else{
+				empty.textContent='后台监听运行中，暂无切换记录';
+			}
 			list.appendChild(empty);
 			return;
 		}
-		timelineEvents.slice(0,20).forEach(function(item){
+		timelineEvents.slice(0,100).forEach(function(item){
 			var row=document.createElement('li');
 			var stamp=document.createElement('span');
 			var detail=document.createElement('span');
 			row.className='nr5g-event'+(item.level?' '+item.level:'');
 			stamp.className='nr5g-event-time';
-			stamp.textContent=timeText(item.time)+' · '+cleanValue(item.name);
+			stamp.textContent=cleanValue(item.time)+' · '+cleanValue(item.name);
 			detail.textContent=cleanValue(item.detail);
 			row.appendChild(stamp);
 			row.appendChild(detail);
@@ -62302,33 +62923,13 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		});
 	}
 
-	function trackLines(lines){
-		lines.forEach(function(line){
-			var name=cleanValue(line.name);
-			var now={up:!!line.up,mode:cleanValue(line.mode),band:cleanValue(line.band),pci:cleanValue(line.pci),earfcn:cleanValue(line.earfcn)};
-			var old=previousState[name];
-			var changes=[];
-			var level='';
-			if(!old){
-				changes.push('开始监测：'+(now.up?'在线':'离线')+'，'+(now.mode||'未知网络')+'，'+(now.band?'N'+now.band:'未知频段'));
-			}else{
-				if(old.up!==now.up){changes.push(now.up?'线路恢复在线':'线路掉线');if(!now.up){level='warn';}}
-				if(old.mode!==now.mode){changes.push('网络 '+(old.mode||'-')+' → '+(now.mode||'-'));}
-				if(old.band!==now.band){changes.push('频段 '+bandText(old.mode,old.band)+' → '+bandText(now.mode,now.band));}
-				if(old.pci!==now.pci||old.earfcn!==now.earfcn){changes.push('小区 '+(old.pci||'-')+'/'+(old.earfcn||'-')+' → '+(now.pci||'-')+'/'+(now.earfcn||'-'));}
-			}
-			if(changes.length){addEvent(name,changes.join('；'),level);}
-			previousState[name]=now;
-		});
-		storageWrite(stateKey,previousState);
-		renderEvents();
+	function bandText(mode,band){
+		if(!band)return '-';
+		var name=String(mode||'').toUpperCase();
+		var isNr=name.indexOf('NR')!==-1||name.indexOf('5G')!==-1||name==='SA'||name==='NSA';
+		var isLte=name.indexOf('LTE')!==-1||name.indexOf('4G')!==-1;
+		return (isNr?'N':(isLte?'B':''))+String(band).replace(/^[NB]/i,'');
 	}
-
-    function bandText(mode,band){
-        if(!band)return '-';
-        var name=String(mode||'').toUpperCase();
-        return (name.indexOf('NR')!==-1?'N':(name.indexOf('LTE')!==-1?'B':''))+String(band).replace(/^[NB]/i,'');
-    }
 	function parseBandList(value,kind){
 		var result=[];
 		String(value||'').split(',').forEach(function(part){
@@ -62344,7 +62945,8 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 	function lockCheck(line){
 		var lock=line.lock||{};
 		var mode=cleanValue(line.mode).toUpperCase();
-		var kind=mode.indexOf('NR')!==-1?'nr':(mode.indexOf('LTE')!==-1?'lte':'');
+		var kind=(mode.indexOf('NR')!==-1||mode.indexOf('5G')!==-1||mode==='SA'||mode==='NSA')?'nr':
+			((mode.indexOf('LTE')!==-1||mode.indexOf('4G')!==-1)?'lte':'');
 		var band=cleanValue(line.band).replace(/^[NB]/i,'');
 		var black=cleanValue(line.blacklist_band).split(/[:,;\s]+/).filter(function(item){return item!=='';});
 		var target;
@@ -62367,6 +62969,27 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		if(!allowed.length){return {label:'未限制频段',detail:'当前 '+bandText(line.mode,band),className:'nr5g-lock-neutral'};}
 		hit=allowed.indexOf(band)!==-1;
 		return {label:hit?'频段策略命中':'频段策略偏离',detail:(kind==='nr'?'NR N':'LTE B')+allowed.join(kind==='nr'?' / N':' / B'),className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
+	}
+
+	function smartPreviewText(value){
+		var raw=cleanValue(value);
+		if(!raw){return '等待策略分析';}
+		var token=raw.split(/\s+/)[0];
+		var labels={
+			'HOLD':'保持当前频段',
+			'WAIT':'等待连续健康检查',
+			'WOULD-SOFT-RECOVER-THEN-CFUN':'预计先软恢复再重连',
+			'BLOCKED':'当前已阻止执行',
+			'RECOVERED':'本轮已恢复',
+			'UNHEALTHY':'检测到线路异常'
+		};
+		return (labels[token]||token)+(raw.length>token.length?' · '+raw.slice(token.length).replace(/^\s+/, ''):'');
+	}
+	function smartPreviewClass(value){
+		var token=cleanValue(value).split(/\s+/)[0];
+		if(token==='HOLD'||token==='RECOVERED'){return 'nr5g-lock-ok';}
+		if(token==='WAIT'||token==='WOULD-SOFT-RECOVER-THEN-CFUN'||token==='BLOCKED'||token==='UNHEALTHY'){return 'nr5g-lock-warn';}
+		return 'nr5g-lock-neutral';
 	}
 
 	function numberValue(value){
@@ -62471,6 +63094,15 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		var lockState=lockCheck(line);
 		addItem(kv,'锁频检查',lockState.label,lockState.className);
 		addItem(kv,'锁频目标',lockState.detail);
+		if(smartBand.supported){
+			if(!smartBand.installed){
+				addItem(kv,'智能策略','未随监听安装','nr5g-lock-warn');
+			}else if(!smartBand.enabled){
+				addItem(kv,'智能策略','已停用 · 系统自行管理','nr5g-lock-neutral');
+			}else{
+				addItem(kv,'智能策略',smartPreviewText(smartPreview[line.name]),smartPreviewClass(smartPreview[line.name]));
+			}
+		}
 		card.appendChild(kv);
 
 		foot.className='nr5g-foot';
@@ -62486,20 +63118,33 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		return card;
 	}
 
-	function renderComponents(components,version){
+	function renderComponents(components,version,monitor,eventCount){
 		var list=document.getElementById('nr5g-components');
 		var versionNode=document.getElementById('nr5g-version');
-		var names={cpetools:'cpetools.sh',cpesel:'cpesel.sh',huawei:'huawei.sh',cpelock:'锁频页面'};
+		var names={monitor:'后台监听',cpetools:'cpetools.sh',cpesel:'cpesel.sh',huawei:'huawei.sh',cpelock:'锁频页面'};
+		if(components.smartband_supported){names.smartband='智能频段';}
+		monitor=monitor||{};
 		list.textContent='';
 		Object.keys(names).forEach(function(key){
 			var node=document.createElement('span');
 			var ok=!!components[key];
-			node.className='nr5g-component '+(ok?'ok':'bad');
-			node.textContent=(ok?'✓ ':'✕ ')+names[key];
+			if(key==='smartband'&&ok&&!components.smartband_enabled){
+				node.className='nr5g-component disabled';
+				node.textContent='○ 智能频段已停用';
+			}else{
+				node.className='nr5g-component '+(ok?'ok':'bad');
+				node.textContent=(ok?'✓ ':'✕ ')+names[key];
+			}
 			list.appendChild(node);
 		});
-		versionNode.textContent=version||'未知版本';
-		versionNode.className='nr5g-badge ok';
+		versionNode.textContent=(version||'未知版本')+(monitor.active?' · 后台记录中':' · 后台未运行');
+		versionNode.className='nr5g-badge '+(monitor.active?'ok':'warn');
+		var service=document.getElementById('nr5g-monitor-service');
+		service.textContent=monitor.active?'持续记录中':'未运行';
+		service.className='nr5g-summary-value '+(monitor.active?'ok':'warn');
+		document.getElementById('nr5g-monitor-sample').textContent=monitor.last_sample||'-';
+		document.getElementById('nr5g-monitor-lines').textContent=String(monitor.line_count||0)+' 路';
+		document.getElementById('nr5g-monitor-events').textContent=String(eventCount||0)+' 条';
 	}
 
 	function renderDialLogs(logs,status){
@@ -62543,24 +63188,50 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		});
 	}
 
-	function render(data){
-		var lines=data.lines||[];
-		trackLines(lines);
-		sampleSignals(lines);
+	function renderLines(lines){
+		latestLines=lines||[];
 		grid.textContent='';
-		if(!lines.length){
+		if(!latestLines.length){
 			var empty=document.createElement('div');
 			empty.className='nr5g-empty';
 			empty.textContent='未读取到 CPE 线路';
 			grid.appendChild(empty);
 		}else{
-			lines.forEach(function(line){grid.appendChild(renderLine(line));});
+			latestLines.forEach(function(line){grid.appendChild(renderLine(line));});
 		}
-		renderComponents(data.components||{},data.version);
-		renderDialLogs(data.dial_logs||[],data.dial_log_status);
 	}
 
-	function loadStatus(){
+	function render(data){
+		var lines=data.lines||[];
+		timelineEvents=data.events||[];
+		smartBand=data.smart_band||{};
+		renderEvents(data.event_log_status);
+		sampleSignals(lines);
+		renderLines(lines);
+		renderComponents(data.components||{},data.version,data.monitor||{},timelineEvents.length);
+		renderDialLogs(data.dial_logs||[],data.dial_log_status);
+		smartApplyButton.style.display=smartBand.supported&&smartBand.enabled?'inline-flex':'none';
+		smartApplyButton.disabled=!smartBand.enabled;
+		smartToggleButton.style.display=smartBand.supported&&smartBand.installed?'inline-flex':'none';
+		smartToggleButton.disabled=false;
+		smartToggleButton.className='cbi-button nr5g-button nr5g-button-stop'+(smartBand.enabled?'':' nr5g-button-enable');
+		smartToggleButton.textContent=smartBand.enabled?'停用智能频段（系统管理）':'启用智能频段';
+	}
+
+	function loadSmartPreview(){
+		if(!smartBand.supported||!smartBand.enabled){return;}
+		(new XHR()).get(smartStatusUrl,null,function(x){
+			try{
+				var data=JSON.parse(x.responseText||'{}');
+				smartPreview=data.preview||{};
+				renderLines(latestLines);
+			}catch(e){
+				smartPreview={};
+			}
+		});
+	}
+
+	function loadStatus(refreshSmart){
 		refreshButton.disabled=true;
 		(new XHR()).get(statusUrl,null,function(x){
 			refreshButton.disabled=false;
@@ -62568,6 +63239,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 				var data=JSON.parse(x.responseText||'{}');
 				if(!data.ok){throw new Error(data.message||'状态读取失败');}
 				render(data);
+				if(refreshSmart){loadSmartPreview();}
 				showMessage('',false);
 			}catch(e){
 				showMessage(e.message||'状态读取失败',true);
@@ -62591,12 +63263,54 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		});
 	}
 
-	refreshButton.onclick=loadStatus;
-	document.getElementById('nr5g-clear-events').onclick=function(){timelineEvents=[];storageWrite(eventKey,timelineEvents);renderEvents();};
+	refreshButton.onclick=function(){loadStatus(true);};
+	smartApplyButton.onclick=function(){
+		if(!window.confirm('立即执行一次智能频段？运行中可能调整频段或恢复异常线路。')){return;}
+		smartApplyButton.disabled=true;
+		showMessage('正在执行智能频段…',false);
+		(new XHR()).post(smartApplyUrl,{token:csrfToken},function(x){
+			try{
+				var data=JSON.parse(x.responseText||'{}');
+				showMessage(data.message||'操作完成',!data.ok);
+			}catch(e){showMessage('智能频段执行失败',true);}
+			window.setTimeout(function(){loadStatus(true);},1200);
+		});
+	};
+	smartToggleButton.onclick=function(){
+		var enabling=!smartBand.enabled;
+		var prompt=enabling?'启用智能频段后，将恢复每 30 分钟自动任务。确认启用？':'停用智能频段后，将移除自动任务并停止当前运行；5G 连接监听继续工作，频段交由系统管理。确认停用？';
+		if(!window.confirm(prompt)){return;}
+		smartToggleButton.disabled=true;
+		smartApplyButton.disabled=true;
+		showMessage(enabling?'正在启用智能频段…':'正在停用智能频段…',false);
+		(new XHR()).post(enabling?smartEnableUrl:smartDisableUrl,{token:csrfToken},function(x){
+			try{
+				var data=JSON.parse(x.responseText||'{}');
+				showMessage(data.message||'操作完成',!data.ok);
+			}catch(e){showMessage(enabling?'智能频段启用失败':'智能频段停用失败',true);}
+			window.setTimeout(function(){loadStatus(true);},800);
+		});
+	};
+	document.getElementById('nr5g-clear-events').onclick=function(){
+		var button=this;
+		if(!window.confirm('清空路由器后台保存的全部基站切换记录？')){return;}
+		button.disabled=true;
+		(new XHR()).post(clearUrl,{token:csrfToken},function(x){
+			button.disabled=false;
+			try{
+				var data=JSON.parse(x.responseText||'{}');
+				if(!data.ok){throw new Error(data.message||'清空失败');}
+				timelineEvents=[];
+				renderEvents('empty');
+				document.getElementById('nr5g-monitor-events').textContent='0 条';
+				showMessage(data.message||'后台切换记录已清空',false);
+			}catch(e){showMessage(e.message||'清空失败',true);}
+		});
+	};
 	window.addEventListener('resize',drawAllCharts);
-	renderEvents();
-	loadStatus();
-	window.setInterval(loadStatus,15000);
+	renderEvents('missing');
+	loadStatus(true);
+	window.setInterval(function(){loadStatus(false);},15000);
 })();
 </script>
 
@@ -62664,65 +63378,53 @@ install_nradio_cpeopt_payload_file() {
     mv -f "$cpeopt_target_tmp" "$cpeopt_target" || die "替换文件失败：$cpeopt_target"
 }
 
-verify_nradio_cpeopt_installation() {
-    [ -s "$NRADIO_CPEOPT_CONTROLLER" ] || return 1
-    [ -s "$NRADIO_CPEOPT_VIEW" ] || return 1
-    [ -s "$NRADIO_CPEOPT_ICON" ] || return 1
-
-    sh -n /usr/bin/cpetools.sh || return 1
-    sh -n /usr/bin/cpesel.sh || return 1
-    sh -n /etc/cpetools/generic.sh || return 1
-    sh -n /etc/cpetools/huawei.sh || return 1
-    lua -e 'assert(loadfile("/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua"))' || return 1
-    lua -e 'assert(loadfile("/usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua"))' || return 1
-
-    grep -Fq 'record_dial_log()' /usr/bin/cpetools.sh || return 1
-    grep -Fq 'run_command_retry()' /usr/bin/cpetools.sh || return 1
-    grep -Fq 'validate_freq_data()' /usr/bin/cpetools.sh || return 1
-    grep -Fq 'record_dial_log()' /usr/bin/cpesel.sh || return 1
-    grep -Fq 'sim_switch_running()' /usr/bin/cpesel.sh || return 1
-    grep -Fq -e '-L 1' /etc/cpetools/generic.sh || return 1
-    grep -Fq 'verify_only="$4"' /etc/cpetools/huawei.sh || return 1
-    grep -Fq 'validate_freq_value' /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua || return 1
-    grep -Fq 'tt_nnode.image' /usr/lib/lua/luci/view/nradio_adv/index.htm || return 1
-    grep -Fq "version = \"$NRADIO_CPEOPT_VERSION\"" "$NRADIO_CPEOPT_CONTROLLER" || return 1
-    grep -Fq "data-nradio-cpeopt=\"$NRADIO_CPEOPT_VERSION\"" "$NRADIO_CPEOPT_VIEW" || return 1
-    grep -Fq 'HC-WT9120' "$NRADIO_CPEOPT_CONTROLLER" || return 1
-    grep -Fq 'HC-WT9126' "$NRADIO_CPEOPT_CONTROLLER" || return 1
-    grep -Fq 'HC-WT9303' "$NRADIO_CPEOPT_CONTROLLER" || return 1
-    return 0
-}
-
 install_nradio_cpe_connection_monitoring() {
     nradio_cpeopt_require_capabilities
 
-    log_stage 1 4 "释放本地 5G 连接监听组件"
+    log_stage 1 5 "释放本地 5G 连接监听组件"
     extract_nradio_cpeopt_payload
 
-    log_stage 2 4 "更新拨号、SIM 与锁频执行链"
+    log_stage 2 5 "更新拨号、SIM 与锁频执行链"
     install_nradio_cpeopt_payload_file usr/bin/cpetools.sh 755
     install_nradio_cpeopt_payload_file usr/bin/cpesel.sh 755
     install_nradio_cpeopt_payload_file etc/cpetools/generic.sh 755
     install_nradio_cpeopt_payload_file etc/cpetools/huawei.sh 755
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua 644
 
-    log_stage 3 4 "安装 5G 连接监听页面与图标"
+    log_stage 3 5 "安装并启动后台基站切换记录服务"
+    install_nradio_cpeopt_payload_file usr/libexec/nradio-cpe-monitor.lua 755
+    install_nradio_cpeopt_payload_file etc/init.d/nradio-cpe-monitor 755
+    "$NRADIO_CPEOPT_MONITOR_INIT" enable >/dev/null 2>&1 || die "启用 5G 后台监听服务失败"
+    "$NRADIO_CPEOPT_MONITOR_INIT" restart >/dev/null 2>&1 || die "启动 5G 后台监听服务失败"
+    cpeopt_wait=0
+    while ! "$NRADIO_CPEOPT_MONITOR_INIT" status >/dev/null 2>&1; do
+        cpeopt_wait=$((cpeopt_wait + 1))
+        [ "$cpeopt_wait" -lt 15 ] || die "5G 后台监听服务未在 15 秒内就绪"
+        sleep 1
+    done
+
+    log_stage 4 5 "安装 5G 连接监听页面与智能频段组件"
+    if nradio_smart_band_model_supported; then
+        install_nradio_smart_band
+    fi
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/index.htm 644
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua 644
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/cpeopt.htm 644
     install_nradio_cpeopt_payload_file www/luci-static/nradio/images/icon/cpeopt.svg 644
 
-    log_stage 4 4 "重启 SIM 选择服务、刷新 LuCI 并核对安装结果"
+    log_stage 5 5 "重启 SIM 选择服务并刷新 LuCI"
     if [ -x /etc/init.d/cpesel ]; then
         /etc/init.d/cpesel restart >/dev/null 2>&1 || die "重启 SIM 选择服务失败"
     fi
     rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || die "重载 uhttpd 失败"
-    verify_nradio_cpeopt_installation || die "5G 连接监听安装校验失败"
-
     log "结果:   5G 连接监听 $NRADIO_CPEOPT_VERSION 已安装"
     log "入口:   /cgi-bin/luci/$NRADIO_CPEOPT_ROUTE"
+    log "记录:   每 10 秒后台采样，事件持久保存到 $NRADIO_CPEOPT_EVENT_LOG"
     log "范围:   NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C2000MAX"
+    if nradio_smart_band_model_supported; then
+        log "集成:   智能频段 v7 已并入连接监听"
+    fi
 }
 
 nradio_cpeopt_require_uninstall_sources() {
@@ -62779,7 +63481,17 @@ uninstall_nradio_cpe_connection_monitoring() {
 
     nradio_cpeopt_require_uninstall_sources
 
-    log_stage 1 3 "恢复 NROS 原厂拨号、SIM 与锁频组件"
+    if nradio_smart_band_model_supported; then
+        remove_nradio_smart_band
+    fi
+
+    log_stage 1 4 "停止并禁用后台基站切换记录服务"
+    if [ -x "$NRADIO_CPEOPT_MONITOR_INIT" ]; then
+        "$NRADIO_CPEOPT_MONITOR_INIT" stop >/dev/null 2>&1 || true
+        "$NRADIO_CPEOPT_MONITOR_INIT" disable >/dev/null 2>&1 || die "禁用 5G 后台监听服务失败"
+    fi
+
+    log_stage 2 4 "恢复 NROS 原厂拨号、SIM 与锁频组件"
     restore_nradio_cpeopt_rom_file /usr/bin/cpetools.sh 755
     restore_nradio_cpeopt_rom_file /usr/bin/cpesel.sh 755
     restore_nradio_cpeopt_rom_file /etc/cpetools/generic.sh 755
@@ -62787,14 +63499,18 @@ uninstall_nradio_cpe_connection_monitoring() {
     restore_nradio_cpeopt_rom_file /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua 644
     restore_nradio_cpeopt_rom_file /usr/lib/lua/luci/view/nradio_adv/index.htm 644
 
-    log_stage 2 3 "移除 5G 连接监听页面、图标与拨号日志"
+    log_stage 3 4 "移除监听页面、后台服务与历史日志"
     restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_CONTROLLER" 644
     restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_VIEW" 644
     restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_ICON" 644
     restore_or_remove_nradio_cpeopt_optional_file /www/luci-static/nradio/images/icon/cpeopt.png 644
+    rm -f "$NRADIO_CPEOPT_MONITOR" "$NRADIO_CPEOPT_MONITOR_INIT" || die "删除 5G 后台监听服务失败"
+    rm -f "$NRADIO_CPEOPT_EVENT_LOG" "$NRADIO_CPEOPT_EVENT_LOG.1" || die "删除基站切换历史失败"
+    rm -f "$NRADIO_CPEOPT_MONITOR_STATUS" "$NRADIO_CPEOPT_MONITOR_STATUS.tmp" || die "删除后台监听状态失败"
+    rmdir /var/run/nradio-cpe-monitor /etc/nradio-cpe-monitor 2>/dev/null || true
     rm -f /var/log/nradio-cpe-dial.log /var/log/nradio-cpe-dial.log.1 || die "删除 5G 连接监听拨号日志失败"
 
-    log_stage 3 3 "重启 SIM 选择服务并刷新 LuCI"
+    log_stage 4 4 "重启 SIM 选择服务并刷新 LuCI"
     if [ -x /etc/init.d/cpesel ]; then
         /etc/init.d/cpesel restart >/dev/null 2>&1 || die "重启 SIM 选择服务失败"
     fi
@@ -62809,7 +63525,11 @@ manage_nradio_cpe_connection_monitoring() {
     require_nradio_cpe_monitoring_supported_model
 
     while :; do
-        printf '\n5G 连接监听（C5800-650 / C5800-688 / C2000MAX）:\n'
+        if nradio_smart_band_model_supported; then
+            printf '\n5G 连接监听（C5800-688，已集成智能频段）:\n'
+        else
+            printf '\n5G 连接监听（C5800-650 / C2000MAX）:\n'
+        fi
         printf '1. 安装或更新 5G 连接监听\n'
         printf '2. 卸载 5G 连接监听\n'
         printf '0. 返回设备维护与检测\n'
@@ -62820,14 +63540,16 @@ manage_nradio_cpe_connection_monitoring() {
                 return 0
                 ;;
             1)
-                run_recorded_menu_feature "5 > 11 > 1" "5G 连接监听安装或更新" install_nradio_cpe_connection_monitoring
+                cpe_monitoring_menu_path="${CURRENT_CPE_MONITORING_MENU_PATH:-5 > 10}"
+                run_recorded_menu_feature "$cpe_monitoring_menu_path > 1" "5G 连接监听安装或更新" install_nradio_cpe_connection_monitoring
                 MENU_ACTION_COMPLETED='1'
                 return 0
                 ;;
             2)
                 uninstall_nradio_cpe_connection_monitoring
                 if [ "${NRADIO_CPEOPT_UNINSTALL_COMPLETED:-0}" = '1' ]; then
-                    record_action_history "5 > 11 > 2" "5G 连接监听卸载" "PASS" "disabled"
+                    cpe_monitoring_menu_path="${CURRENT_CPE_MONITORING_MENU_PATH:-5 > 10}"
+                    record_action_history "$cpe_monitoring_menu_path > 2" "5G 连接监听卸载" "PASS" "disabled"
                 fi
                 MENU_ACTION_COMPLETED='1'
                 return 0
@@ -64107,11 +64829,6 @@ update_nradio_smart_band_cron() {
     fi
 }
 
-require_nradio_smart_band_installed() {
-    [ -x "$NRADIO_SMART_BAND_SCRIPT" ] || die "智能频段脚本未安装；请先执行 5 > 8 > 1"
-    sh -n "$NRADIO_SMART_BAND_SCRIPT" >/dev/null 2>&1 || die "已安装智能频段脚本语法异常"
-}
-
 install_nradio_smart_band() {
     require_root
     require_nradio_smart_band_supported_model
@@ -64121,61 +64838,10 @@ install_nradio_smart_band() {
     log "结果:   智能频段 v7 已安装并启用"
 }
 
-show_nradio_smart_band_status() {
-    require_root
-    require_nradio_smart_band_supported_model
-    require_nradio_smart_band_installed
-    log "智能频段状态:"
-    if sh "$NRADIO_SMART_BAND_SCRIPT" status; then
-        return 0
-    else
-        smart_band_rc="$?"
-    fi
-    log "状态:   存在异常接口，退出码=$smart_band_rc"
-    return "$smart_band_rc"
-}
-
-dry_run_nradio_smart_band() {
-    require_root
-    require_nradio_smart_band_supported_model
-    require_nradio_smart_band_installed
-    log "智能频段只读模拟:"
-    sh "$NRADIO_SMART_BAND_SCRIPT" dry-run
-}
-
-run_nradio_smart_band_now() {
-    require_root
-    require_nradio_smart_band_supported_model
-    require_nradio_smart_band_installed
-    log "智能频段立即执行:"
-    sh "$NRADIO_SMART_BAND_SCRIPT" apply
-}
-
-show_nradio_smart_band_log() {
-    require_root
-    require_nradio_smart_band_supported_model
-    if [ ! -s "$NRADIO_SMART_BAND_RUNTIME_LOG" ]; then
-        log "日志:   暂无 $NRADIO_SMART_BAND_RUNTIME_LOG"
-        return 0
-    fi
-    log "最近 120 行运行日志:"
-    tail -n 120 "$NRADIO_SMART_BAND_RUNTIME_LOG"
-}
-
-uninstall_nradio_smart_band() {
+remove_nradio_smart_band() {
     local _runtime_dir="/var/run/nradio-smart-band" _lock _pid _start _elapsed
     require_root
     require_nradio_smart_band_supported_model
-    printf '确认卸载智能频段脚本、定时任务及运行状态？[y/N]: '
-    ui_read_line || die "input cancelled"
-    case "$UI_READ_RESULT" in
-        y|Y|yes|YES)
-            ;;
-        *)
-            log "已取消"
-            return 0
-            ;;
-    esac
 
     [ ! -L "$_runtime_dir" ] || die "智能频段运行目录为符号链接，卸载中止"
     mkdir -p "$_runtime_dir" || die "无法访问智能频段运行目录"
@@ -64289,63 +64955,6 @@ run_nradio_smart_band_selfcheck() {
         set_last_selfcheck_status PASS 0 0
     fi
 }
-
-manage_nradio_smart_band() {
-    while :; do
-        printf '\nNRadio 智能频段管理（C5800-688）:\n'
-        printf '1. 安装或更新（完整源码由总脚本释放）\n'
-        printf '2. 查看当前状态\n'
-        printf '3. 只读模拟运行\n'
-        printf '4. 立即执行一次\n'
-        printf '5. 查看运行日志\n'
-        printf '6. 卸载智能频段\n'
-        printf '0. 返回设备维护与检测\n'
-        printf '请选择 0、1、2、3、4、5 或 6: '
-        read_category_choice
-        case "$UI_READ_RESULT" in
-            0)
-                return 0
-                ;;
-            1)
-                install_nradio_smart_band
-                record_action_history "5 > 8 > 1" "智能频段安装或更新" "PASS" "$BACKUP_DIR"
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            2)
-                show_nradio_smart_band_status
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            3)
-                dry_run_nradio_smart_band
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            4)
-                run_nradio_smart_band_now
-                record_action_history "5 > 8 > 4" "智能频段立即执行" "PASS" "$BACKUP_DIR"
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            5)
-                show_nradio_smart_band_log
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            6)
-                uninstall_nradio_smart_band
-                record_action_history "5 > 8 > 6" "智能频段卸载" "PASS" "$BACKUP_DIR"
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            *)
-                die_menu_input_issue "$UI_READ_RESULT"
-                ;;
-        esac
-    done
-}
-
 
 openwrt_luci_8080_current_model() {
     if [ -n "$CURRENT_DETECTED_MODEL" ]; then
@@ -65162,9 +65771,6 @@ run_menu_feature() {
             ;;
         24)
             run_final_stability_toolbox
-            ;;
-        25)
-            manage_nradio_smart_band
             ;;
         26)
             manage_nradio_operator_display_fix
@@ -67315,14 +67921,14 @@ maintenance_test_menu() {
         if is_current_model_ak798; then
             printf '\n设备维护与检测（AK68-798 轻量模式）:\n'
             printf '1. 统一体检增强版\n'
-            printf '10. LuCI 首页 CPU 温度显示\n'
-            printf '0. 返回功能分类\n'
-            printf '请选择 0、1 或 10: '
+            printf '2. LuCI 首页 CPU 温度显示\n'
+            printf '3. 返回功能分类\n'
+            printf '请选择 0、1、2 或 3: '
             read_category_choice
             case "$UI_READ_RESULT" in
-                0) return 0 ;;
+                0|3) return 0 ;;
                 1) run_menu_feature 13; return 0 ;;
-                10) run_menu_feature 27; return 0 ;;
+                2) run_menu_feature 27; return 0 ;;
                 *) die_menu_input_issue "$UI_READ_RESULT" ;;
             esac
         fi
@@ -67331,93 +67937,96 @@ maintenance_test_menu() {
             printf '1. 统一体检增强版\n'
             printf '2. NRadio_C8-688 / C8-788 / C2000MAX 风扇控制\n'
             printf '3. 哈基米傻瓜分流助手\n'
-            printf '6. 哈基米依赖检查修复\n'
-            printf '10. LuCI 首页 CPU / 5G 温度切换（全部 NROS）\n'
-            printf '0. 返回功能分类\n'
-            printf '请选择 0、1、2、3、6 或 10: '
+            printf '4. 哈基米依赖检查修复\n'
+            printf '5. LuCI 首页 CPU / 5G 温度切换（全部 NROS）\n'
+            printf '6. 返回功能分类\n'
+            printf '请选择 0、1、2、3、4、5 或 6: '
             read_category_choice
             case "$UI_READ_RESULT" in
-                0) return 0 ;;
+                0|6) return 0 ;;
                 1) submenu_feature='13' ;;
                 2) submenu_feature='14' ;;
                 3) submenu_feature='19' ;;
-                6) submenu_feature='23' ;;
-                10) submenu_feature='27' ;;
+                4) submenu_feature='23' ;;
+                5) submenu_feature='27' ;;
                 *) die_menu_input_issue "$UI_READ_RESULT" ;;
             esac
             run_menu_feature "$submenu_feature"
             return 0
         fi
+
+        maintenance_next_choice=1
         printf '\n设备维护与检测:\n'
-        printf '1. 统一体检增强版\n'
-        printf '2. NRadio_C8-688 / C8-788 / C2000MAX 风扇控制\n'
-        printf '3. 哈基米傻瓜分流助手\n'
-        printf '4. eMMC 存储扩展\n'
+        maintenance_health_choice=$maintenance_next_choice
+        printf '%s. 统一体检增强版\n' "$maintenance_health_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+        maintenance_fan_choice=$maintenance_next_choice
+        printf '%s. NRadio_C8-688 / C8-788 / C2000MAX 风扇控制\n' "$maintenance_fan_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+        maintenance_split_choice=$maintenance_next_choice
+        printf '%s. 哈基米傻瓜分流助手\n' "$maintenance_split_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+        maintenance_emmc_choice=$maintenance_next_choice
+        printf '%s. eMMC 存储扩展\n' "$maintenance_emmc_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+
+        maintenance_aggregation_choice=''
         if nradio_5g_aggregation_model_supported; then
-            printf '5. 5G聚合修复检查\n'
+            maintenance_aggregation_choice=$maintenance_next_choice
+            printf '%s. 5G聚合修复检查\n' "$maintenance_aggregation_choice"
+            maintenance_next_choice=$((maintenance_next_choice + 1))
         fi
-        printf '6. 哈基米依赖检查修复\n'
-        printf '7. 封版工具箱\n'
-        if nradio_smart_band_model_supported; then
-            printf '8. 智能频段管理（C5800-688）\n'
-        fi
-        printf '9. LuCI 运营商与卡名显示修复\n'
-        printf '10. LuCI 首页 CPU / 5G 温度切换（全部 NROS）\n'
+
+        maintenance_dependency_choice=$maintenance_next_choice
+        printf '%s. 哈基米依赖检查修复\n' "$maintenance_dependency_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+        maintenance_toolbox_choice=$maintenance_next_choice
+        printf '%s. 封版工具箱\n' "$maintenance_toolbox_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+        maintenance_operator_choice=$maintenance_next_choice
+        printf '%s. LuCI 运营商与卡名显示修复\n' "$maintenance_operator_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+        maintenance_temperature_choice=$maintenance_next_choice
+        printf '%s. LuCI 首页 CPU / 5G 温度切换（全部 NROS）\n' "$maintenance_temperature_choice"
+        maintenance_next_choice=$((maintenance_next_choice + 1))
+
+        maintenance_monitoring_choice=''
         if nradio_cpe_monitoring_model_supported; then
-            printf '11. 5G 连接监听（5800 系列 / C2000MAX）\n'
+            maintenance_monitoring_choice=$maintenance_next_choice
+            printf '%s. 5G 连接监听（C5800-650 / C5800-688 / C2000MAX）\n' "$maintenance_monitoring_choice"
+            maintenance_next_choice=$((maintenance_next_choice + 1))
         fi
-        printf '0. 返回功能分类\n'
-        if nradio_5g_aggregation_model_supported && nradio_smart_band_model_supported; then
-            maintenance_monitoring_choice=''
-            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
-            printf '请选择 0、1、2、3、4、5、6、7、8、9、10%s: ' "$maintenance_monitoring_choice"
-        elif nradio_5g_aggregation_model_supported; then
-            maintenance_monitoring_choice=''
-            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
-            printf '请选择 0、1、2、3、4、5、6、7、9、10%s: ' "$maintenance_monitoring_choice"
-        elif nradio_smart_band_model_supported; then
-            maintenance_monitoring_choice=''
-            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
-            printf '请选择 0、1、2、3、4、6、7、8、9、10%s: ' "$maintenance_monitoring_choice"
-        else
-            maintenance_monitoring_choice=''
-            nradio_cpe_monitoring_model_supported && maintenance_monitoring_choice=' 或 11'
-            printf '请选择 0、1、2、3、4、6、7、9、10%s: ' "$maintenance_monitoring_choice"
-        fi
+
+        maintenance_return_choice=$maintenance_next_choice
+        printf '%s. 返回功能分类\n' "$maintenance_return_choice"
+        printf '请选择 0-%s: ' "$maintenance_return_choice"
         read_category_choice
-        case "$UI_READ_RESULT" in
-            0) return 0 ;;
-            1) submenu_feature='13' ;;
-            2) submenu_feature='14' ;;
-            3) submenu_feature='19' ;;
-            4) submenu_feature='20' ;;
-            5)
-                if nradio_5g_aggregation_model_supported; then
-                    submenu_feature='21'
-                else
-                    die_menu_input_issue "$UI_READ_RESULT"
-                fi
-                ;;
-            6) submenu_feature='23' ;;
-            7) submenu_feature='24' ;;
-            8)
-                if nradio_smart_band_model_supported; then
-                    submenu_feature='25'
-                else
-                    die_menu_input_issue "$UI_READ_RESULT"
-                fi
-                ;;
-            9) submenu_feature='26' ;;
-            10) submenu_feature='27' ;;
-            11)
-                if nradio_cpe_monitoring_model_supported; then
-                    submenu_feature='29'
-                else
-                    die_menu_input_issue "$UI_READ_RESULT"
-                fi
-                ;;
-            *) die_menu_input_issue "$UI_READ_RESULT" ;;
-        esac
+        if [ "$UI_READ_RESULT" = '0' ] || [ "$UI_READ_RESULT" = "$maintenance_return_choice" ]; then
+            return 0
+        elif [ "$UI_READ_RESULT" = "$maintenance_health_choice" ]; then
+            submenu_feature='13'
+        elif [ "$UI_READ_RESULT" = "$maintenance_fan_choice" ]; then
+            submenu_feature='14'
+        elif [ "$UI_READ_RESULT" = "$maintenance_split_choice" ]; then
+            submenu_feature='19'
+        elif [ "$UI_READ_RESULT" = "$maintenance_emmc_choice" ]; then
+            submenu_feature='20'
+        elif [ -n "$maintenance_aggregation_choice" ] && [ "$UI_READ_RESULT" = "$maintenance_aggregation_choice" ]; then
+            submenu_feature='21'
+        elif [ "$UI_READ_RESULT" = "$maintenance_dependency_choice" ]; then
+            submenu_feature='23'
+        elif [ "$UI_READ_RESULT" = "$maintenance_toolbox_choice" ]; then
+            submenu_feature='24'
+        elif [ "$UI_READ_RESULT" = "$maintenance_operator_choice" ]; then
+            submenu_feature='26'
+        elif [ "$UI_READ_RESULT" = "$maintenance_temperature_choice" ]; then
+            submenu_feature='27'
+        elif [ -n "$maintenance_monitoring_choice" ] && [ "$UI_READ_RESULT" = "$maintenance_monitoring_choice" ]; then
+            submenu_feature='29'
+            CURRENT_CPE_MONITORING_MENU_PATH="5 > $maintenance_monitoring_choice"
+        else
+            die_menu_input_issue "$UI_READ_RESULT"
+        fi
         run_menu_feature "$submenu_feature"
         return 0
     done

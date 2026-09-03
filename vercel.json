@@ -9,6 +9,22 @@
       "destination": "/40-server-web/mayebano-support/wechat-donate.png"
     },
     {
+      "source": "/nros-ssh-security-enable.png",
+      "destination": "/40-server-web/mayebano-support/nros-ssh-security-enable.png"
+    },
+    {
+      "source": "/c8-788-ssh-manager-plugin.png",
+      "destination": "/40-server-web/mayebano-support/c8-788-ssh-manager-plugin.png"
+    },
+    {
+      "source": "/ak68-798-backup-upgrade-menu.png",
+      "destination": "/40-server-web/mayebano-support/ak68-798-backup-upgrade-menu.png"
+    },
+    {
+      "source": "/ak68-798-backup-restore-page.png",
+      "destination": "/40-server-web/mayebano-support/ak68-798-backup-restore-page.png"
+    },
+    {
       "source": "/ssh-nradio-plugin-installer.sh",
       "destination": "/00-current/ssh-nradio-plugin-installer.sh"
     },
