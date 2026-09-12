@@ -85,7 +85,6 @@ iptables() {
     command cat "$MOCK_ROOT/rules4"
 }
 ip6tables() { command cat "$MOCK_ROOT/rules6"; }
-iptables-save() { printf '%s\n' '-A FORWARD -j openclash'; }
 pidof() { [ ! -f "$MOCK_ROOT/openclash" ] || printf '123\n'; }
 dmesg() { command cat "$MOCK_ROOT/dmesg"; }
 cat() {
@@ -177,6 +176,8 @@ class HardwareAccelerationTests(unittest.TestCase):
         self.write("actions", "")
         self.write("etc/init.d/mtkhnat", self.relocate('#!/bin/sh\n# /sbin/mtkhnat\n. "$MOCK_ROOT/mocks.sh"\nmock_service "$@"\n'), executable=True)
         self.write("sbin/mtkhnat", "#!/bin/sh\n# OEM controller fixture\n", executable=True)
+        # dash rejects hyphens in function names; mock this command via PATH.
+        self.write("bin/iptables-save", "#!/bin/sh\nprintf '%s\\n' '-A FORWARD -j openclash'\n", executable=True)
 
     def relocate(self, text):
         for path in self.paths:
@@ -193,6 +194,7 @@ class HardwareAccelerationTests(unittest.TestCase):
     def run_shell(self, body, stdin="", model="5800", rc=0):
         self.write("case.sh", 'set -eu\n. "$MOCK_ROOT/mocks.sh"\n. "$MOCK_ROOT/library.sh"\nSTATE_DIR="$MOCK_ROOT/state"\nMENU_ACTION_COMPLETED=0\n' + body + "\n")
         env = dict(os.environ, MOCK_ROOT=self.root.as_posix(), TEST_MODEL=model)
+        env["PATH"] = str(self.root / "bin") + os.pathsep + env.get("PATH", "")
         # Bytes keep LF input intact on Windows; text-mode pipes add CRLF.
         result = subprocess.run([OPTIONS.shell, str(self.root / "case.sh")], input=stdin.encode("utf-8"), capture_output=True, env=env, timeout=30)
         stdout = result.stdout.decode("utf-8", errors="replace")
