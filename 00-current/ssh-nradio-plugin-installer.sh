@@ -38,7 +38,7 @@ NRADIO_SIM_NAME_MAP_JS="/www/luci-static/nradio/js/nradio-sim-name-map.js"
 NRADIO_OPERATOR_FIX_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_OPERATOR_FIX_MARKER_BEGIN="<!-- nradio-operator-display-fix:start -->"
 NRADIO_OPERATOR_FIX_MARKER_END="<!-- nradio-operator-display-fix:end -->"
-NRADIO_HOME_TEMP_VERSION="20260912-4"
+NRADIO_HOME_TEMP_VERSION="20260912-6"
 NRADIO_HOME_TEMP_JS="/www/luci-static/nradio/js/nradio-home-temperature-switch.js"
 NRADIO_HOME_TEMP_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_HOME_TEMP_MARKER_BEGIN="<!-- nradio-home-temperature-switch:start -->"
@@ -264,6 +264,7 @@ MT5700_CONFIG_FILE="${MT5700_CONFIG_FILE:-/etc/config/at-webserver}"
 MT5700_ATSD_PROXY_PATH="${MT5700_ATSD_PROXY_PATH:-/usr/libexec/nradio-mt5700-atsd-proxy.lua}"
 MT5700_ATSD_PROXY_INIT="${MT5700_ATSD_PROXY_INIT:-/etc/init.d/nradio-mt5700-atsd-proxy}"
 MT5700_ATSD_PROXY_PORT="20250"
+MT5700_NRADIO_ADAPT_VERSION="20260912-2"
 MT5700_MIN_FREE_BYTES="${MT5700_MIN_FREE_BYTES:-25165824}"
 DOCKER_APP_NAME="${DOCKER_APP_NAME:-Docker}"
 DOCKER_PACKAGE_NAME="${DOCKER_PACKAGE_NAME:-nradio-docker}"
@@ -35903,6 +35904,7 @@ write_mt5700_atsd_proxy_program() {
 #!/usr/bin/lua
 
 local socket = require("socket")
+local fs = require("nixio.fs")
 local listen_port = tonumber(os.getenv("MT5700_ATSD_PROXY_PORT") or "20250")
 local line = os.getenv("MT5700_ATSD_PROXY_LINE") or "cpe"
 assert(line == "cpe" or line == "cpe1", "invalid AT line")
@@ -35947,6 +35949,53 @@ local function execute_at(command)
     return normalize_response(response)
 end
 
+-- ATSd owns the modem connection. Its live log contains the unsolicited PDCP
+-- reports which atsd_cli command replies omit; never open a second modem port.
+local log_path = "/tmp/log/messages"
+local function open_reports(at_end)
+    local stat = fs.stat(log_path)
+    local file = stat and io.open(log_path, "r")
+    if not file then return nil end
+    return {file = file, inode = stat.ino, offset = file:seek(at_end and "end" or "set", 0), pending = ""}
+end
+
+local function read_reports(source)
+    local stat = fs.stat(log_path)
+    if not stat then return source, "" end
+    if not source or source.inode ~= stat.ino or stat.size < source.offset then
+        if source then source.file:close() end
+        source = open_reports(false)
+    end
+    if not source then return nil, "" end
+    if stat.size - source.offset > 65536 then
+        source.offset = math.max(0, stat.size - 16384)
+        source.pending = ""
+    end
+    source.file:seek("set", source.offset)
+    local data = source.file:read(65536)
+    if not data then return source, "" end
+    source.offset = source.file:seek()
+    data = source.pending .. data
+    local complete = data:match("^(.*\n)") or ""
+    source.pending = data:sub(#complete + 1)
+    if #source.pending > 16384 then source.pending = "" end
+    local report = ""
+    for entry in complete:gmatch("[^\n]+") do
+        if entry:find("[" .. line .. "]", 1, true) then
+            local current = entry:match("(%^PDCPDATAINFO:%s*[%d,]+)")
+            if current then report = current .. "\r\n" end
+        end
+    end
+    return source, report
+end
+
+local function send_all(client, value)
+    client:settimeout(2)
+    local sent, err = client:send(value)
+    client:settimeout(0.2)
+    return sent == #value and not err
+end
+
 local server, bind_error = socket.bind("127.0.0.1", listen_port, 4)
 if not server then
     error("MT5700 ATSd proxy bind failed: " .. tostring(bind_error))
@@ -35956,9 +36005,11 @@ server:settimeout(nil)
 while true do
     local client = server:accept()
     if client then
-        client:settimeout(nil)
+        client:settimeout(0.2)
         local buffer = {}
         local length = 0
+        local reports = open_reports(true)
+        local next_report = socket.gettime()
 
         while true do
             local data, receive_error, partial = client:receive(1)
@@ -35969,11 +36020,15 @@ while true do
                         local command = table.concat(buffer)
                         buffer = {}
                         length = 0
-                        local response = execute_at(command)
-                        local sent, send_error = client:send(response)
-                        if not sent or send_error then
-                            break
+                        local setting = command:upper():match("^%s*AT%^PDCPDATAINFO=([01])")
+                        local response
+                        if setting == "0" then
+                            -- Pages filter their own reports; the shared feed stays alive.
+                            response = "OK\r\n"
+                        else
+                            response = execute_at(command)
                         end
+                        if not send_all(client, response) then break end
                     end
                 elseif length < 16384 then
                     length = length + 1
@@ -35981,13 +36036,18 @@ while true do
                 else
                     buffer = {}
                     length = 0
-                    client:send("ERROR\r\n")
+                    if not send_all(client, "ERROR\r\n") then break end
                 end
             end
-            if receive_error then
-                break
+            if receive_error and receive_error ~= "timeout" then break end
+            if socket.gettime() >= next_report then
+                next_report = socket.gettime() + 0.2
+                local payload
+                reports, payload = read_reports(reports)
+                if payload ~= "" and not send_all(client, payload) then break end
             end
         end
+        if reports then reports.file:close() end
         client:close()
     else
         socket.sleep(1)
@@ -35995,6 +36055,26 @@ while true do
 end
 EOF_MT5700_ATSD_PROXY
     chmod 700 "$MT5700_ATSD_PROXY_PATH" || die "设置 MT5700 AT 共享桥权限失败"
+}
+
+patch_mt5700_speed_display() {
+    # Keep genuine zero-rate samples instead of the upstream last-positive fallback.
+    for mt5700_asset in "$MT5700_WEB_ROOT"/assets/index-*.js; do
+        [ -f "$mt5700_asset" ] || continue
+        /usr/bin/lua - "$mt5700_asset" <<'EOF_MT5700_SPEED_DISPLAY'
+local path = arg[1]
+local file = assert(io.open(path, "r"))
+local text = file:read("*a")
+file:close()
+local updated, count = text:gsub("([%w_$]+)=([%w_$]+)&&%(%2%.ulPdcpRate>0||%2%.dlPdcpRate>0%)%?%2:[%w_$]+", "%1=%2")
+if count > 0 then
+    file = assert(io.open(path, "w"))
+    assert(file:write(updated))
+    file:close()
+end
+EOF_MT5700_SPEED_DISPLAY
+        [ "$?" -eq 0 ] || die "更新 MT5700 网速显示失败"
+    done
 }
 
 write_mt5700_c2000max_atsd_proxy() {
@@ -36200,6 +36280,11 @@ EOF_MT5700_DUAL_CONFIG
     var NativeWebSocket = window.WebSocket;
     var api = '/cgi-bin/luci/nradioadv/system/mt5700?dual=1&line=' + line;
     var host = location.hostname.replace(/^\[|\]$/g, '');
+    var channelState = '正在连接', activeChannel = null;
+    function updateSelection() {
+        if (!shadow) return;
+        shadow.querySelector('.selected').textContent = available.length ? (available.length > 1 ? '双线路 · 当前管理：' : '单线路 · ') + line.toUpperCase() + ' · ' + channelState : '未检测到线路';
+    }
     // 每个页面固定绑定一路；多个标签页、重连、旧的本地连接设置均不会串线。
     window.WebSocket = class extends NativeWebSocket {
         constructor(url, protocols) {
@@ -36207,6 +36292,50 @@ EOF_MT5700_DUAL_CONFIG
             target.hostname = location.hostname;
             target.port = String(ports[line]);
             if (protocols === undefined) super(target.href); else super(target.href, protocols);
+            this.nradioSpeedEnabled = false;
+            activeChannel = this;
+            channelState = '正在连接';
+            updateSelection();
+            this.addEventListener('open', function () { if (activeChannel === this) { channelState = '已连接'; updateSelection(); } });
+            this.addEventListener('close', function () { if (activeChannel === this) { channelState = '连接已断开'; updateSelection(); } });
+            this.addEventListener('message', function (event) {
+                if (this.nradioFiltering || typeof event.data !== 'string') return;
+                var message;
+                try { message = JSON.parse(event.data); } catch (_) { return; }
+                var key = null;
+                if (message.type === 'pdcp_data' && message.data) {
+                    key = [message.data.id, message.data.pduSessionId, message.data.ulPdcpRate, message.data.dlPdcpRate].join(':');
+                } else if (message.type === 'raw_data' && typeof message.data === 'string') {
+                    var report = message.data.match(/\^PDCPDATAINFO:\s*([\d,]+)/);
+                    if (report) {
+                        var fields = report[1].split(',');
+                        if (fields.length >= 14) key = [fields[0], fields[1], fields[10], fields[11]].join(':');
+                    }
+                }
+                if (key === null) return;
+                // The Go backend sends both raw_data and pdcp_data for one report.
+                var previous = this.nradioLastReport, now = Date.now();
+                var duplicate = previous && previous.key === key && previous.type !== message.type && now - previous.at < 150;
+                if (this.nradioSpeedEnabled && !duplicate) {
+                    this.nradioLastReport = {key: key, type: message.type, at: now};
+                    return;
+                }
+                event.stopImmediatePropagation();
+                if (message.type === 'pdcp_data') return;
+                message.data = message.data.replace(/\^PDCPDATAINFO:[^\r\n]*/g, '').trim();
+                if (message.data) {
+                    this.nradioFiltering = true;
+                    try { this.dispatchEvent(new MessageEvent('message', {data: JSON.stringify(message)})); }
+                    finally { this.nradioFiltering = false; }
+                }
+            });
+        }
+        send(data) {
+            var setting = typeof data === 'string' && data.trim().match(/^AT\^PDCPDATAINFO=([01])(?:,\d+)?$/i);
+            // Pause only this page. Another tab and NROS keep their shared reports.
+            var result = super.send(setting && setting[1] === '0' ? 'AT\r' : data);
+            if (setting) this.nradioSpeedEnabled = setting[1] === '1';
+            return result;
         }
     };
     window.fetch = function (input, init) {
@@ -36221,6 +36350,8 @@ EOF_MT5700_DUAL_CONFIG
                     switchLine(result.line);
                     throw new Error('正在切换到可用线路');
                 }
+                var actualPort = Number(result.data.port);
+                if (Number.isInteger(actualPort) && actualPort > 0 && actualPort < 65536) ports[line] = actualPort;
                 var data = {host: host, port: ports[line], require_auth: result.data.require_auth};
                 var payload = url.pathname === '/cgi-bin/at-ws-info' ? {success: true, data: data} : {status: 'true', at: data, require_auth: data.require_auth};
                 return new Response(JSON.stringify(payload), {headers: {'Content-Type': 'application/json'}});
@@ -36265,7 +36396,7 @@ EOF_MT5700_DUAL_CONFIG
             if (name === 'cpe') cards.insertBefore(button, cards.firstChild); else cards.appendChild(button);
         });
         cards.style.gridTemplateColumns = names.length > 1 ? 'repeat(2,minmax(0,1fr))' : 'minmax(0,1fr)';
-        shadow.querySelector('.selected').textContent = names.length > 1 ? '双线路 · 当前管理：' + line.toUpperCase() : names.length === 1 ? '单线路 · ' + names[0].toUpperCase() : '未检测到线路';
+        updateSelection();
     }
     function render(result, cached) {
         if (!shadow) return;
@@ -36340,9 +36471,10 @@ EOF_MT5700_DUAL_CONFIG
 }());
 EOF_MT5700_DUAL_UI
     mt5700_dual_index="$mt5700_workdir/dual-index.html"
-    awk -v stamp="$MT5700_UI_VERSION-$mt5700_main_ws-$mt5700_second_ws-20260908-1" '
+    awk -v stamp="$MT5700_UI_VERSION-$mt5700_main_ws-$mt5700_second_ws-$MT5700_NRADIO_ADAPT_VERSION" '
     {
         gsub(/<script src="\/5700\/nradio-dual-(config|ui)\.js[^\"]*"><\/script>/, "")
+        gsub(/\.js\?v=[^\"]+/, ".js?v=" stamp)
         if (!added && /<head[^>]*>/) {
             sub(/<head[^>]*>/, "&\n<script src=\"/5700/nradio-dual-config.js?v=" stamp "\"></script>\n<script src=\"/5700/nradio-dual-ui.js?v=" stamp "\"></script>")
             added = 1
@@ -36351,7 +36483,7 @@ EOF_MT5700_DUAL_UI
     }' "$MT5700_WEB_ROOT/index.html" > "$mt5700_dual_index" || die "写入双线路页面入口失败"
     cp "$mt5700_dual_index" "$MT5700_WEB_ROOT/index.html" || die "部署双线路页面失败"
     chmod 644 "$MT5700_WEB_ROOT/nradio-dual-config.js" "$MT5700_WEB_ROOT/nradio-dual-ui.js" "$MT5700_WEB_ROOT/index.html"
-    printf '%s\n' '20260908-1' > "$mt5700_dual_dir/enabled"
+    printf '%s\n' "$MT5700_NRADIO_ADAPT_VERSION" > "$mt5700_dual_dir/enabled"
     /etc/init.d/nradio-mt5700-dual enable || die "启用双线路服务失败"
     /etc/init.d/nradio-mt5700-dual restart || die "启动双线路服务失败"
 }
@@ -36360,6 +36492,24 @@ install_mt5700_webui() {
     require_nradio_oem_appcenter
 
     mt5700_workdir="$WORKDIR/mt5700"
+    if [ "${NRADIO_MT5700_ADAPT_ONLY:-0}" = 1 ]; then
+        case "${CURRENT_DETECTED_MODEL:-}" in
+            NRadio_C5800-650|NRadio_C5800-688) ;;
+            *) die "现有双线路适配更新适用于 C5800" ;;
+        esac
+        [ -x "$MT5700_BIN_PATH" ] && [ -f "$MT5700_WEB_ROOT/index.html" ] &&
+            [ -f /etc/nradio-mt5700-dual/enabled ] || die "请先安装 MT5700 WebUI"
+        MT5700_PACKAGE_VERSION="$(get_installed_package_version "$MT5700_PACKAGE_NAME")"
+        MT5700_UI_VERSION="$(printf '%s' "$MT5700_PACKAGE_VERSION" | sed 's/-r\{0,1\}[0-9][0-9]*$//')"
+        mkdir -p "$mt5700_workdir" || die "创建 MT5700 适配工作目录失败"
+        patch_mt5700_speed_display
+        write_mt5700_nradio_controller
+        write_mt5700_c5800_dual
+        ubus call service signal '{"name":"at-webserver","signal":15}' >/dev/null || die "重启 MT5700 主线路后端失败"
+        log "安装完成: MT5700 双线路适配 $MT5700_NRADIO_ADAPT_VERSION"
+        log "网速: CPE / CPE1 独立实时上报，暂停按页面隔离，零速率按实际显示"
+        return 0
+    fi
     mt5700_artifact="$mt5700_workdir/$MT5700_ARTIFACT_NAME"
     mt5700_unpack="$mt5700_workdir/unpack"
     mt5700_ipk=''
@@ -36407,6 +36557,7 @@ install_mt5700_webui() {
     MT5700_UI_VERSION="$(printf '%s' "$MT5700_PACKAGE_VERSION" | sed 's/-r\{0,1\}[0-9][0-9]*$//')"
     patch_mt5700_version_display
     patch_mt5700_boot_fallback
+    patch_mt5700_speed_display
     write_mt5700_c2000max_atsd_proxy
     write_mt5700_c5800_dual
 
@@ -56521,6 +56672,111 @@ write_nradio_home_temperature_switch_js() {
         }
     }
 
+    function installSpeedRefresh() {
+        var originalSpeedShow = window.speed_show;
+        var samples = Object.create(null);
+        var jquery = window.jQuery;
+        var staleAfter = 4000;
+
+        if (window.low_cpu || typeof originalSpeedShow !== 'function' ||
+            typeof window.get_speed_data !== 'function' || typeof jquery !== 'function' ||
+            typeof window.nradio_rate_format !== 'function') {
+            return;
+        }
+
+        function sampleTime() {
+            return window.performance && typeof window.performance.now === 'function' ?
+                window.performance.now() : new Date().getTime();
+        }
+
+        function renderSpeed(wanItem, sample) {
+            var prefix = '.box_wans_' + wanItem.name;
+            var up = window.nradio_rate_format(sample.upRate).split(' ');
+            var down = window.nradio_rate_format(sample.downRate).split(' ');
+            jquery(prefix + ' .speedup_data').text(up[0]);
+            jquery(prefix + ' .speedup_unit').text(up[1] || 'bps');
+            jquery(prefix + ' .speeddown_data').text(down[0]);
+            jquery(prefix + ' .speeddown_unit').text(down[1] || 'bps');
+            wanItem.ulbytes = sample.upload;
+            wanItem.dlbytes = sample.download;
+        }
+
+        // The OEM ready handler uses this interval to start its existing timer.
+        window.speed_interval = 1;
+        window.speed_show = function (wanItem, uploadBytes, downloadBytes, interval) {
+            var now = sampleTime();
+            var upload = Number(uploadBytes);
+            var download = Number(downloadBytes);
+            var sample;
+            var elapsed;
+            if (!wanItem) {
+                return originalSpeedShow.apply(this, arguments);
+            }
+            if (uploadBytes == null || downloadBytes == null ||
+                !isFinite(upload) || !isFinite(download) || upload < 0 || download < 0) {
+                return;
+            }
+            sample = samples[wanItem.name];
+            if (!sample || upload < sample.upload || download < sample.download || now < sample.at) {
+                sample = { upload: upload, download: download, at: now, upRate: 0, downRate: 0 };
+                samples[wanItem.name] = sample;
+            } else if (upload !== sample.upload || download !== sample.download) {
+                elapsed = (now - sample.at) / 1000;
+                if (elapsed <= 0) {
+                    return;
+                }
+                sample.upRate = (upload - sample.upload) * 8 / elapsed;
+                sample.downRate = (download - sample.download) * 8 / elapsed;
+                sample.upload = upload;
+                sample.download = download;
+                sample.at = now;
+            } else if (now - sample.at >= staleAfter) {
+                sample.upRate = 0;
+                sample.downRate = 0;
+            }
+            // infocd returns the same cached counters between its 2-second
+            // samples. Keep the last measured rate and its original baseline.
+            sample.seen = now;
+            renderSpeed(wanItem, sample);
+        };
+
+        window.reset_box_speed = function (wans) {
+            var now = sampleTime();
+            var index;
+            var item;
+            var sample;
+            for (index = 0; index < wans.length; index += 1) {
+                item = wans[index];
+                sample = samples[item.name];
+                if (item.disabled === '1') {
+                    delete samples[item.name];
+                    originalSpeedShow.call(window, item, 0, 0, 1);
+                } else if (sample) {
+                    if (now - sample.seen >= staleAfter) {
+                        sample.upRate = 0;
+                        sample.downRate = 0;
+                    }
+                    // Runtime/layout refreshes must not clear active rates.
+                    renderSpeed(item, sample);
+                } else {
+                    originalSpeedShow.call(window, item, 0, 0, 1);
+                }
+            }
+        };
+
+        function sampleNow() {
+            window.get_speed_data();
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                window.setTimeout(sampleNow, 0);
+            }, false);
+        } else {
+            window.setTimeout(sampleNow, 0);
+            window.setTimeout(sampleNow, 1000);
+        }
+    }
+
     function validTemperature(value) {
         var number;
         if (value === null || value === undefined || value === '') {
@@ -57056,6 +57312,7 @@ write_nradio_home_temperature_switch_js() {
         window.addEventListener('resize', renderAllTemperatures, false);
         document.addEventListener('visibilitychange', renderAllTemperatures, false);
         installStyle();
+        installSpeedRefresh();
         installed = true;
         window.NRadioHomeTemperatureSwitch = {
             version: VERSION,
@@ -57154,6 +57411,7 @@ install_nradio_home_temperature_switch() {
     log "显示:   双线路时副5G固定显示5G温度；仅副5G单线路时可切换CPU/5G温度"
     log "操作:   首页点击温度按钮切换，当前浏览器自动记住选择"
     log "手机:   温源按钮横排，状态卡片两列自适应高度"
+    log "网速:   首页立即采样，按后台新样本计算，重复样本和页面刷新不清零"
     log "生效:   重新加载 LuCI 首页"
 }
 
@@ -68353,16 +68611,31 @@ nradio_hwaccel_hook_state() {
     case "$parsed" in 0|1) printf '%s\n' "$parsed"; return 0 ;; esac
     [ "$log_readable" = 1 ] || { printf 'unknown\n'; return 0; }
     after="$(dmesg 2>/dev/null)" || { printf 'unknown\n'; return 0; }
-    # Require the old snapshot to remain an exact prefix. A rotated/reset ring
-    # or repeated log line must not turn historical output into a fresh result.
+    # The kernel ring may discard old leading lines on this very read. Match
+    # the retained old suffix against the new prefix, then parse only new lines.
+    # No overlap (cleared/replaced log) must not reuse a historical hook state.
     printf '%s\n' "$before" '__NRADIO_HNAT_LOG_BOUNDARY__' "$after" | awk '
         $0 == "__NRADIO_HNAT_LOG_BOUNDARY__" && !reading {
             if (count==1 && old[1]=="") count=0
             reading=1; next
         }
         !reading { old[++count]=$0; next }
-        reading { pos++; if (pos<=count) { if ($0!=old[pos]) changed=1 } else added=added $0 "\n" }
-        END { if (!changed && pos>=count) printf "%s", added }
+        reading { current[++pos]=$0 }
+        END {
+            if (!count) {
+                for (i=1; i<=pos; i++) print current[i]
+                exit
+            }
+            for (start=1; start<=count; start++) {
+                overlap=count-start+1
+                if (pos<overlap || current[1]!=old[start]) continue
+                for (i=1; i<=overlap; i++)
+                    if (current[i]!=old[start+i-1]) break
+                if (i<=overlap) continue
+                for (i=overlap+1; i<=pos; i++) print current[i]
+                exit
+            }
+        }
     ' | nradio_hwaccel_parse_hook
 }
 
@@ -68561,6 +68834,18 @@ nradio_hwaccel_set() {
         *unknown*) log '无法切换: 当前运行状态读取失败，无法建立恢复基线'; return 1 ;;
     esac
     if nradio_hwaccel_state_matches "$target"; then log '结果:   目标状态已生效，无需重复切换'; return 0; fi
+    if [ "${NRADIO_HWACCEL_NO_BACKUP:-0}" = 1 ]; then
+        if nradio_hwaccel_apply "$target" && nradio_hwaccel_verify "$target"; then
+            if [ "$target" = 1 ]; then
+                log '结果:   HNAT 已开启，配置已保存并启用开机服务'
+            else
+                log '结果:   硬件加速已关闭，软件卸载已启用并保存'
+            fi
+            return 0
+        fi
+        log "结果:   ${HWACCEL_STAGE:-切换或验收}失败，请检查当前状态"
+        return 1
+    fi
     if ! nradio_hwaccel_backup; then log '结果:   配置备份失败，切换已停止'; return 1; fi
     log "备份:   $HWACCEL_BACKUP"
     if nradio_hwaccel_apply "$target" > "$HWACCEL_BACKUP/apply.log" 2>&1 && nradio_hwaccel_verify "$target"; then

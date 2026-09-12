@@ -32,7 +32,6 @@ jobs:
           test -f LICENSE
           test -f CONTRIBUTING.md
           test -f SECURITY.md
-          test -f tests/test_hardware_acceleration.py
 
       - name: Verify V3.1.0 script state
         run: |
@@ -40,14 +39,16 @@ jobs:
           grep -q 'SCRIPT_RELEASE_DATE="2026-09-12"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'NRADIO_HOME_TEMP_VERSION="20260912-4"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'NRADIO_HOME_TEMP_VERSION="20260912-6"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_CPEOPT_VERSION="20260906-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'https://gh-proxy.com/https://' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^c2000_storage_swap_model_supported()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C2000MAX|NRadio_C2000Ultra) return 0' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'dhcp.@dnsmasq\[0\].localuse=1' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '本机与局域网普通查询统一经 AdGuardHome' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '20260908-1' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'MT5700_NRADIO_ADAPT_VERSION="20260912-2"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q '^manage_nradio_hardware_acceleration()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_item 11 '硬件加速管理'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C8-788' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HC-WT9302' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HCMT7987-NAND' 00-current/ssh-nradio-plugin-installer.sh
@@ -141,8 +142,57 @@ jobs:
           bash -n 00-current/ssh-nradio-plugin-installer.sh
           dash -n 00-current/ssh-nradio-plugin-installer.sh
 
-      - name: Verify hardware acceleration menu and recovery
-        run: python3 tests/test_hardware_acceleration.py --shell /bin/sh -v
+      - name: Verify HNAT log reading and embedded UI syntax
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          source = Path("00-current/ssh-nradio-plugin-installer.sh").read_text(encoding="utf-8")
+          functions = []
+          for name in ("nradio_hwaccel_parse_hook", "nradio_hwaccel_hook_state"):
+              match = re.search(r"(?ms)^" + name + r"\(\) \{\n.*?^\}", source)
+              assert match, name
+              functions.append(match.group(0))
+          stubs = """
+          cat() { printf '%s\n' "$RAW_HOOK"; }
+          dmesg() { IFS= read -r message <&3; printf '%b\n' "$message"; }
+          """
+          enabled = "[3] value=1, hook is enabled now!"
+          disabled = "[3] value=0, hook is disabled now!"
+          cases = [
+              ("1", "old", "old", "1"),
+              ("0", "old", "old", "0"),
+              ("", "old\nretained", "old\nretained\n" + enabled, "1"),
+              ("", "old\nretained", "retained\n" + enabled, "1"),
+              ("", "old\nretained", "retained\n" + disabled, "0"),
+              ("", enabled, enabled, "unknown"),
+              ("", "old", enabled, "unknown"),
+              ("", "", disabled, "0"),
+          ]
+          for raw, before, after, expected in cases:
+              logs = before.replace("\n", "\\n") + "\n" + after.replace("\n", "\\n")
+              program = "\n".join(functions) + stubs + "\nexec 3<<'DMESG'\n" + logs + "\nDMESG\nnradio_hwaccel_hook_state\n"
+              result = subprocess.run(["sh"], input=program, text=True, capture_output=True,
+                                      env={**os.environ, "RAW_HOOK": raw}, check=True)
+              assert result.stdout.strip() == expected, (before, after, result.stdout, expected)
+          print("HNAT: 8 direct-read and log-boundary cases passed")
+
+          for marker, quoted in (("EOF_MT5700_DUAL_UI", True), ("EOF_NRADIO_HOME_TEMPERATURE_SWITCH", False)):
+              opening = "<<'" + marker + "'\n" if quoted else "<<" + marker + "\n"
+              assert source.count(opening) == 1, marker
+              body = source.split(opening, 1)[1].split("\n" + marker + "\n", 1)[0]
+              if not quoted:
+                  version = re.search(r'^NRADIO_HOME_TEMP_VERSION="([^"]+)"', source, re.M).group(1)
+                  rendered = subprocess.run(["sh"], input="cat <<" + marker + "\n" + body + "\n" + marker + "\n",
+                                            text=True, capture_output=True, encoding="utf-8", check=True,
+                                            env={**os.environ, "NRADIO_HOME_TEMP_VERSION": version})
+                  body = rendered.stdout
+              subprocess.run(["node", "--check"], input=body, text=True, encoding="utf-8", check=True)
+              print(marker + ": JavaScript syntax passed")
+          PY
 
       - name: Verify embedded smart band v7
         run: |
