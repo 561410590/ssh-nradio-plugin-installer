@@ -2,15 +2,15 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前本地版本：`V3.0.9`（2026-09-11）
+- 当前版本：`V3.1.0`（2026-09-12）
 - 公开版本：以 GitHub Releases 页面为准
-- 当前状态：总脚本、支持页和检查规则同步到本地 V3.0.9，配套 Mesh 1.20.1-2。
+- 当前状态：总脚本、支持页和检查规则同步到 V3.1.0，配套 Mesh 1.20.1-2。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-总脚本、支持页、仓库资料与检查规则使用 `V3.0.9`。下载使用 `ghproxy.vip`；代理读取 GitHub main 中的文件，本地新版需同步仓库后才能通过代理下载。
+总脚本、支持页、仓库资料与检查规则使用 `V3.1.0`。下载使用 `ghproxy.vip`；代理读取 GitHub main 中的文件。
 
 ## Mesh组网插件 1.20.1-2
 
@@ -25,7 +25,7 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 - VPN 与双线路联动：启停、VPN 重连和后台检查同步站点路由的 mwan3 排除集合；失败显示诊断，VPN-only 恢复保留限速队列。
 - C8-788：依据 `HC-WT9302 / HCMT7987-NAND / NROS 2.2.12.n0.c1` 实机输出适配 `eth3` 蜂窝出口及原厂双栈全宽 mark 分类顺序。
 - 合并 IPv6 多地址跟踪、减少队列重建、未保存输入保护和请求超时处理。本地回归与安装包检查通过；实机 VPN 连通性和限速数值需按设备验收。
-- 本节是独立 QoS 插件更新，当前本地总脚本版本为 `V3.0.9`。
+- 本节是独立 QoS 插件更新，当前本地总脚本版本为 `V3.1.0`。
 
 ## 适用设备
 
@@ -76,7 +76,15 @@ cd /tmp && wget -O ssh-nradio-plugin-installer.sh https://ghproxy.vip/https://gi
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、手机保存按钮兼容、原厂还原、C2000Pro / AK68-798 轻量应用商店、OpenWrt LuCI 8080 |
-| 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、智能频段 v7、首页 CPU/5G 温度、5G 连接监听 |
+| 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、智能频段 v7、首页 CPU/5G 温度、5G 连接监听、硬件加速管理 |
+
+## V3.1.0 更新
+
+- `5 > 11` 硬件加速管理：开启原厂 HNAT、关闭硬件加速并保留软件卸载、查看当前状态。
+- 优化应用商店应用栏、打开按钮与操作弹窗，修复标签文字重叠；首页 CPU / 5G 切换按钮仅显示名称。
+- 分别显示保存配置、HNAT 实际开关、IPv4/IPv6 卸载规则与 BIND 数量；零绑定显示“尚未观察到硬件命中”。
+- 切换前专用备份保存在 `/root/.nradio-plugin-menu/hnat-backups/`；切换或验收失败自动恢复，并报告恢复结果。开启和关闭均持久保存。
+- 版本日期为 `2026-09-12`；模拟测试覆盖开关、菜单、状态读取与失败恢复，实机效果按设备验收。
 
 ## V3.0.9 更新
 
@@ -308,9 +316,9 @@ cd /tmp && wget -O ssh-nradio-plugin-installer.sh https://ghproxy.vip/https://gi
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V3.0.9 本地总脚本，已内嵌智能频段 v7 与 5G 连接监听 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V3.1.0 本地总脚本，已内嵌智能频段 v7 与 5G 连接监听 |
 | `00-current/nradio-smart-band.sh` | 历史独立开发校验源；当前运行代码以总脚本内嵌 v7 为准，不是运行或发布依赖 |
-| `40-server-web/mayebano-support/index.html` | V3.0.9 本地支持页入口 |
+| `40-server-web/mayebano-support/index.html` | V3.1.0 本地支持页入口 |
 | `40-server-web/mayebano-support/AK68-798-SSH-2222.nr` | AK68-798 SSH 2222 配置恢复包 |
 | `40-server-web/mayebano-support/nradio-ssh-manager.ipk` | C8-788 在 NRadio 应用商店本地安装的 SSH 管理包 |
 | `40-server-web/mayebano-support/nradio-mesh.ipk` | NROS 应用商店本地安装的 Mesh 组网包 |
@@ -346,15 +354,15 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 bash -n 00-current/ssh-nradio-plugin-installer.sh
 ```
 
-`CHECKSUMS.txt` 记录 V3.0.9 本地配套文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布前重新核对总脚本、支持页、AK68-798 SSH 配置包、三个插件 IPK 和 `vercel.json` 的 hash 与大小。
+`CHECKSUMS.txt` 记录 V3.1.0 本地配套文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布前重新核对总脚本、支持页、AK68-798 SSH 配置包、三个插件 IPK 和 `vercel.json` 的 hash 与大小。
 
 ## 脚本校验
 
 当前脚本：
 
 ```text
-SHA256  b379d1488cd3113b2194b6a2c9276d64229f4a7a60bc3bc2f84f4fe6ebee2511
-Bytes   2778148
+SHA256  0cdf7fd434f2a3ce773f4c3473fdad44be5995779bd3804bf8c377548b1fe20c
+Bytes   2813977
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

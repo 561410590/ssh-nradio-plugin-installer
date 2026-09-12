@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.0.9"
+SCRIPT_VERSION="V3.1.0"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-11"
+SCRIPT_RELEASE_DATE="2026-09-12"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -38,7 +38,7 @@ NRADIO_SIM_NAME_MAP_JS="/www/luci-static/nradio/js/nradio-sim-name-map.js"
 NRADIO_OPERATOR_FIX_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_OPERATOR_FIX_MARKER_BEGIN="<!-- nradio-operator-display-fix:start -->"
 NRADIO_OPERATOR_FIX_MARKER_END="<!-- nradio-operator-display-fix:end -->"
-NRADIO_HOME_TEMP_VERSION="20260906-3"
+NRADIO_HOME_TEMP_VERSION="20260912-4"
 NRADIO_HOME_TEMP_JS="/www/luci-static/nradio/js/nradio-home-temperature-switch.js"
 NRADIO_HOME_TEMP_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_HOME_TEMP_MARKER_BEGIN="<!-- nradio-home-temperature-switch:start -->"
@@ -1000,7 +1000,7 @@ require_startup_disclaimer_acceptance_once() {
 
     [ -f "$DISCLAIMER_ACCEPTED_FLAG_FILE" ] && return 0
 
-    prime_startup_disclaimer_model
+    prime_startup_disclaimer_model || true
     clear_startup_screen
     print_startup_disclaimer_text
     printf '\n'
@@ -9316,8 +9316,8 @@ EOF
 
         BootstrapDialog.show({
             type: ok ? BootstrapDialog.TYPE_SUCCESS : BootstrapDialog.TYPE_DANGER,
-            title: "<%:Tips%>",
-            message: msg,
+            title: ok ? "卸载完成" : "卸载失败",
+            message: typeof nr_result_markup === "function" ? nr_result_markup(ok, nr_escape_html(msg)) : msg,
             buttons: [{
                 label: "<%:OK%>",
                 cssClass: "btn-primary",
@@ -9403,7 +9403,10 @@ EOF
         msg.onhide = function(){};
         msg.callback = function(){
             $(".modal-footer").css("display","none");
-            dialogDeal.setMessage(loading_htm);
+            if(typeof nr_appcenter_loading === "function"){
+                dialogDeal.setTitle(nr_escape_html(nr_operation_title("uninstall", app_name)));
+                dialogDeal.setMessage(nr_appcenter_loading("uninstall", app_name));
+            } else dialogDeal.setMessage(loading_htm);
             nradio_plugin_uninstall_start(app_name, dialogDeal);
         };
         dialogDeal = confirm_box(msg);
@@ -9419,6 +9422,7 @@ EOF
                 $(this).addClass("top_menu_active");
             }
         });
+        if(typeof nr_sync_top_tabs === "function") nr_sync_top_tabs(id, true);
 
         sub_dialogDeal = BootstrapDialog.show({
             type: BootstrapDialog.TYPE_DEFAULT,
@@ -9429,6 +9433,7 @@ EOF
             onhide:function(){
                 $(".top_menu").removeClass("top_menu_active");
                 $(".top_menu").eq(0).addClass("top_menu_active");
+                if(typeof nr_sync_top_tabs === "function") nr_sync_top_tabs(null, false);
             },
             onshown:function(){
                 $(".modal.app_frame").scrollTop(0);
@@ -15266,7 +15271,7 @@ patch_appcenter_card_polish_v3() {
 
     cat > "$v3_css" <<'EOF_APPCENTER_V3_CSS'
     /* NRadio appcenter v3: begin */
-    .appcontainer{
+    .appcontainer, #app_top_menu{
         --nr-v3-bg: #07101b;
         --nr-v3-panel: #0f1d2b;
         --nr-v3-panel-2: #0f1d2d;
@@ -15280,6 +15285,8 @@ patch_appcenter_card_polish_v3() {
         --nr-v3-green: #50c697;
         --nr-v3-amber: #e1ad64;
         --nr-v3-red: #df7d82;
+    }
+    .appcontainer{
         position: relative;
         display: grid;
         grid-template-columns: 116px minmax(0,1fr);
@@ -15297,7 +15304,10 @@ patch_appcenter_card_polish_v3() {
     }
     .appcontainer *,
     .appcontainer *::before,
-    .appcontainer *::after{
+    .appcontainer *::after,
+    #app_top_menu *,
+    #app_top_menu *::before,
+    #app_top_menu *::after{
         box-sizing: border-box;
     }
     body[class*="AppCenterTitle"] .footer,
@@ -15308,24 +15318,77 @@ patch_appcenter_card_polish_v3() {
     #app_top_menu{
         display: flex;
         align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 52px;
+        margin: 0 0 12px !important;
+        padding: 6px 10px !important;
+        overflow: hidden !important;
+        box-sizing: border-box;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 12px;
+        background: #0c1825;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    #app_top_menu .nr_tabs_viewport{
+        position: relative;
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+    }
+    #app_top_menu .nr_tabs_scroller{
+        display: flex;
+        align-items: center;
         gap: 6px;
-        min-height: 40px;
-        margin: 0 0 12px;
-        padding: 0 2px 9px;
+        padding: 3px;
         overflow-x: auto;
-        border-bottom: 1px solid rgba(128,157,184,.16);
-        scrollbar-width: thin;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    #app_top_menu .nr_tabs_scroller::-webkit-scrollbar{ display: none; }
+    #app_top_menu .nr_tabs_viewport::before,
+    #app_top_menu .nr_tabs_viewport::after{
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 1;
+        width: 20px;
+        pointer-events: none;
+    }
+    #app_top_menu .nr_tabs_before::before{
+        content: "";
+        left: 0;
+        background: linear-gradient(90deg,#0c1825,transparent);
+    }
+    #app_top_menu .nr_tabs_after::after{
+        content: "";
+        right: 0;
+        background: linear-gradient(270deg,#0c1825,transparent);
     }
     #app_top_menu .top_menu{
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
         flex: 0 0 auto;
+        float: none !important;
+        min-height: 36px;
         margin: 0;
         padding: 8px 10px;
         border: 1px solid transparent;
         border-radius: 8px;
+        background: transparent;
         color: var(--nr-v3-muted);
+        font-family: inherit;
         font-size: 13px;
+        font-weight: 600;
         line-height: 1.2;
         white-space: nowrap;
+        cursor: pointer;
         -webkit-background-clip: border-box !important;
         background-clip: border-box !important;
         -webkit-text-fill-color: currentColor !important;
@@ -15340,6 +15403,10 @@ patch_appcenter_card_polish_v3() {
         display: inline-flex;
         align-items: center;
         flex: 0 0 auto;
+        float: none !important;
+        margin: 0 !important;
+        padding: 0;
+        height: auto;
         overflow: hidden;
         border: 1px solid rgba(128,157,184,.13);
         border-radius: 8px;
@@ -15351,10 +15418,41 @@ patch_appcenter_card_polish_v3() {
         background: rgba(76,198,216,.055);
     }
     #app_top_menu .top_menu_inner .top_menu{
+        min-width: 0;
         padding: 6px 7px 6px 9px;
         border: 0;
         border-radius: 0;
         background: transparent;
+    }
+    #app_top_menu .top_menu_inner.nr_tab_active{
+        border-color: rgba(76,198,216,.42);
+        background: rgba(76,198,216,.12);
+    }
+    #app_top_menu .nr_top_icon{
+        flex: 0 0 18px;
+        width: 18px;
+        height: 18px;
+        object-fit: contain;
+        border-radius: 4px;
+    }
+    #app_top_menu .nr_top_name{
+        position: static;
+        display: block;
+        float: none;
+        min-width: 0;
+        max-width: 150px;
+        height: auto;
+        margin: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        line-height: inherit;
+        -webkit-background-clip: border-box;
+        background-clip: border-box;
+        -webkit-text-fill-color: currentColor;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     #app_top_menu .top_menu_inner_icon{
         top: 0;
@@ -15422,6 +15520,7 @@ patch_appcenter_card_polish_v3() {
         box-shadow: inset 0 0 0 1px rgba(128,157,184,.12);
     }
     .app_btn_box .mem_progress_inner{
+        width: 0;
         background: linear-gradient(90deg, #4c94d8, #4cc6d8);
         box-shadow: 0 0 10px rgba(76,198,216,.24);
     }
@@ -15453,14 +15552,29 @@ patch_appcenter_card_polish_v3() {
         min-width: 0;
     }
     .nr_app_search::before{
-        content: "⌕";
+        content: "";
         position: absolute;
-        left: 11px;
+        left: 12px;
         top: 50%;
         z-index: 1;
         transform: translateY(-50%);
         color: var(--nr-v3-muted);
-        font-size: 18px;
+        width: 12px;
+        height: 12px;
+        border: 2px solid currentColor;
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .nr_app_search::after{
+        content: "";
+        position: absolute;
+        left: 24px;
+        top: calc(50% + 5px);
+        width: 6px;
+        height: 2px;
+        transform: rotate(45deg);
+        transform-origin: left center;
+        background: var(--nr-v3-muted);
         pointer-events: none;
     }
     #nr_app_search_input{
@@ -15670,6 +15784,7 @@ patch_appcenter_card_polish_v3() {
         background: var(--nr-v3-panel);
         box-shadow: 0 3px 10px rgba(0,0,0,.10);
         transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+        container-type: inline-size;
     }
     .container_right .app_box:hover,
     .container_right .app_box:focus-within{
@@ -15734,7 +15849,11 @@ patch_appcenter_card_polish_v3() {
         font-weight: 700;
         line-height: 1.4;
         text-overflow: ellipsis;
-        white-space: nowrap;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
     }
     .container_right .app_version{
         grid-column: 1;
@@ -15803,6 +15922,29 @@ patch_appcenter_card_polish_v3() {
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
     }
+    .container_right .app_des[role="button"]{ cursor: pointer; }
+    .container_right .app_des.nr_desc_expanded{
+        display: block;
+        height: auto;
+        overflow: visible;
+        overflow-wrap: anywhere;
+    }
+    .appcontainer mark.nr_search_match{
+        padding: 0;
+        border-radius: 2px;
+        color: #effdff;
+        background: rgba(76,198,216,.24);
+    }
+    @container (max-width: 320px){
+        .app_title{ grid-template-columns: 1fr !important; }
+        .app_meta_row{
+            grid-column: 1 !important;
+            grid-row: 3 !important;
+            flex-direction: row !important;
+            flex-wrap: wrap;
+            align-items: center !important;
+        }
+    }
     .container_right .app_action{
         grid-column: 1 / -1;
         grid-row: 2;
@@ -15848,11 +15990,17 @@ patch_appcenter_card_polish_v3() {
         color: #e7fbff;
         outline: none;
     }
-    .container_right .nr_action_install,
-    .container_right .nr_action_open{
+    .container_right .nr_action_install{
         border-color: var(--nr-v3-cyan);
         color: #06242e;
         background: var(--nr-v3-cyan);
+    }
+    .container_right .nr_action_open{
+        min-width: 76px;
+        border-color: rgba(76,198,216,.32);
+        color: #b9edf2;
+        background: #15333f;
+        box-shadow: none;
     }
     .container_right .nr_action_update{
         border-color: rgba(225,173,100,.28);
@@ -15865,13 +16013,17 @@ patch_appcenter_card_polish_v3() {
         background: transparent;
         border-color: transparent;
     }
-    .container_right .nr_action_open:hover,
-    .container_right .nr_action_open:focus-visible,
     .container_right .nr_action_install:hover,
     .container_right .nr_action_install:focus-visible{
         border-color: #79e0ea;
         background: #79e0ea;
         color: #06242e;
+    }
+    .container_right .nr_action_open:hover,
+    .container_right .nr_action_open:focus-visible{
+        border-color: rgba(76,198,216,.58);
+        background: #1b424e;
+        color: #e4fbfd;
     }
     .container_right .nr_action_uninstall:hover,
     .container_right .nr_action_uninstall:focus-visible{
@@ -15913,10 +16065,13 @@ patch_appcenter_card_polish_v3() {
         text-align: center;
     }
     .nr_search_empty::before{
-        content: "⌕";
+        content: "";
         margin-bottom: 7px;
         color: var(--nr-v3-cyan);
-        font-size: 25px;
+        width: 20px;
+        height: 20px;
+        border: 2px solid currentColor;
+        border-radius: 50%;
         line-height: 1;
         opacity: .68;
     }
@@ -15927,6 +16082,16 @@ patch_appcenter_card_polish_v3() {
     .nr_search_empty span{
         margin-top: 4px;
         font-size: 12px;
+    }
+    .nr_search_reset{
+        min-height: 44px;
+        margin-top: 12px;
+        padding: 0 16px;
+        border: 1px solid rgba(76,198,216,.35);
+        border-radius: 8px;
+        background: rgba(76,198,216,.08);
+        color: #c8f6fb;
+        cursor: pointer;
     }
     #app_status_mount{
         grid-area: status;
@@ -16095,9 +16260,26 @@ patch_appcenter_card_polish_v3() {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: var(--nr-v3-green);
-        box-shadow: 0 0 8px rgba(80,198,151,.48);
+        background: var(--nr-v3-muted);
     }
+    #app_status_mount.nr_status_ok .app_status_toggle::before{ background: var(--nr-v3-green); }
+    #app_status_mount.nr_status_busy .app_status_toggle::before{ background: var(--nr-v3-cyan); }
+    #app_status_mount.nr_status_error .app_status_toggle::before{ background: var(--nr-v3-amber); }
+    #app_status_mount.nr_status_error .app_status_time{ color: var(--nr-v3-amber); }
+    .nr_dialog_result{
+        padding: 18px;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+    .nr_dialog_result_icon{
+        display: block;
+        margin: 0 auto 12px;
+        color: #50c697;
+        font-size: 28px;
+    }
+    .nr_dialog_result_error .nr_dialog_result_icon{ color: #df7d82; }
+    .nr_dialog_result .error_box{ text-align: left; }
+    .nr_dialog_result strong{ display: block; margin-bottom: 8px; }
     #app_status_mount.nr_status_collapsed .app_status_toggle:hover{
         border-color: rgba(76,198,216,.46);
         background: #132334;
@@ -16108,6 +16290,9 @@ patch_appcenter_card_polish_v3() {
     .app_btn_group .app_btn_class:focus-visible,
     .container_left .app_menu:focus-visible,
     .container_right .action_list_li:focus-visible,
+    .container_right .app_des:focus-visible,
+    .nr_search_reset:focus-visible,
+    #app_top_menu .nr_store_tab:focus-visible,
     .app_status_toggle:focus-visible{
         outline: 2px solid rgba(76,198,216,.72) !important;
         outline-offset: 2px;
@@ -16182,6 +16367,34 @@ patch_appcenter_card_polish_v3() {
         background: #0d1a29;
         color: #edf5fb;
         box-shadow: 0 16px 44px rgba(0,0,0,.32);
+    }
+    .modal.bootstrap-dialog.in:not(.app_frame){
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        padding: 16px !important;
+        overflow-y: auto;
+    }
+    .modal.bootstrap-dialog:not(.app_frame) .modal-dialog{
+        max-width: 100%;
+        margin: auto !important;
+    }
+    .modal.bootstrap-dialog:not(.app_frame) .bootstrap-dialog-header{
+        display: flex;
+        flex-direction: row-reverse;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .modal.bootstrap-dialog:not(.app_frame) .bootstrap-dialog-title{
+        min-width: 0;
+        margin: 0;
+        text-align: left;
+        line-height: 1.5;
+    }
+    .modal.bootstrap-dialog:not(.app_frame) .bootstrap-dialog-close-button{
+        flex: 0 0 auto;
+        float: none;
     }
     .modal.bootstrap-dialog .modal-header{
         padding: 12px 16px;
@@ -16259,13 +16472,19 @@ patch_appcenter_card_polish_v3() {
         }
     }
     @media (max-width: 680px){
+        #app_top_menu{ padding: 4px 6px !important; gap: 5px; }
+        #app_top_menu .top_menu{ min-height: 44px; }
+        #app_top_menu .nr_top_name{ max-width: 120px; }
+        .nr_app_search_clear{ width: 44px; height: 44px; right: 48px; }
+        .app_status_toggle{ min-height: 44px; }
         #nr_app_search_input{
             height: 42px;
+            padding-right: 100px;
             font-size: 16px;
         }
         .app_btn_group .app_btn_class,
         .container_left .app_menu{
-            min-height: 42px;
+            min-height: 44px;
         }
         .app_btn_group .app_btn_class{
             line-height: 40px;
@@ -16282,8 +16501,8 @@ patch_appcenter_card_polish_v3() {
         }
         #app_top_menu .top_menu_inner_icon,
         .modal.bootstrap-dialog .bootstrap-dialog-close-button .close{
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
         }
         .modal.bootstrap-dialog .bootstrap-dialog-title{
             line-height: 40px;
@@ -16393,6 +16612,8 @@ patch_appcenter_card_polish_v3() {
         }
     }
     @media (prefers-reduced-motion: reduce){
+        #app_top_menu *,
+        .bootstrap-dialog-message .nr_dialog_spinner,
         .appcontainer *,
         .appcontainer *::before,
         .appcontainer *::after{
@@ -16411,6 +16632,76 @@ EOF_APPCENTER_V3_CSS
         if(key == "luci-app-adguardhome") return "AdGuardHome";
         if(key == "luci-app-ddns-go") return "DDNS-GO";
         return name || "未命名应用";
+    }
+
+    function nr_escape_html(value){
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function(ch){
+            return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];
+        });
+    }
+
+    function nr_highlight_text(value, query){
+        var text = String(value || ""), lower = text.toLowerCase(), result = "", start = 0, found;
+        if(!query) return nr_escape_html(text);
+        while((found = lower.indexOf(query, start)) >= 0){
+            result += nr_escape_html(text.slice(start, found)) + '<mark class="nr_search_match">' +
+                nr_escape_html(text.slice(found, found + query.length)) + '</mark>';
+            start = found + query.length;
+        }
+        return result + nr_escape_html(text.slice(start));
+    }
+
+    var NR_ACTIVE_APP_NAME = "";
+    function nr_update_tab_edges(){
+        var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
+        if(!scroller) return;
+        $(scroller.parentNode).toggleClass("nr_tabs_before", scroller.scrollLeft > 2)
+            .toggleClass("nr_tabs_after", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2);
+    }
+
+    function nr_sync_top_tabs(id, reveal){
+        var selected = null;
+        $("#app_top_menu .top_menu_inner").each(function(){
+            var link = $(this).find(".top_menu");
+            var active = id != null && String(link.attr("data-index")) === String(id);
+            $(this).toggleClass("nr_tab_active", active);
+            link.toggleClass("top_menu_active", active).attr("aria-current", active ? "page" : "false");
+            if(active) selected = this;
+        });
+        $("#app_top_menu .nr_store_tab").toggleClass("top_menu_active", !selected)
+            .attr("aria-current", selected ? "false" : "page");
+        NR_ACTIVE_APP_NAME = selected ? $(selected).attr("data-app-name") : "";
+        var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
+        if(reveal && selected && scroller){
+            var box = selected.getBoundingClientRect(), view = scroller.getBoundingClientRect();
+            if(box.left < view.left + 4) scroller.scrollLeft += box.left - view.left - 4;
+            else if(box.right > view.right - 4) scroller.scrollLeft += box.right - view.right + 4;
+        }
+        nr_update_tab_edges();
+    }
+
+    function nr_operation_title(action, name){
+        var verb = {install:"安装",uninstall:"卸载",update:"更新",open:"打开",close:"关闭",check:"检测版本"}[action] || "处理";
+        return verb + (name ? " " + nr_appcenter_display_name(name) : "");
+    }
+
+    function nr_appcenter_loading(action, name){
+        return '<div id="scan_loading" class="nr_dialog_loading" role="status" aria-live="polite">' +
+            '<span class="nr_dialog_spinner" aria-hidden="true"></span><strong>正在' +
+            nr_escape_html(nr_operation_title(action, name)) + '</strong><small>请稍候</small></div>';
+    }
+
+    function nr_result_markup(ok, message){
+        return '<div class="nr_dialog_result' + (ok ? '' : ' nr_dialog_result_error') + '" role="status">' +
+            '<span class="nr_dialog_result_icon" aria-hidden="true">' + (ok ? '✓' : '!') + '</span>' +
+            '<strong>' + (ok ? '操作完成' : '操作失败') + '</strong><div>' + (message || '') + '</div></div>';
+    }
+
+    function nr_appcenter_result(dialog, ok, action, name, message){
+        if(!dialog) return;
+        dialog.setTitle(nr_escape_html(nr_operation_title(action, name)) + (ok ? "完成" : "失败"));
+        dialog.setType(ok ? BootstrapDialog.TYPE_SUCCESS : BootstrapDialog.TYPE_DANGER);
+        dialog.setMessage(nr_result_markup(ok, message));
     }
 
     function nr_appcenter_display_version(name, version){
@@ -16437,7 +16728,7 @@ EOF_APPCENTER_V3_CSS
     }
 
     function nr_appcenter_search_empty(){
-        return '<div class="nr_search_empty" role="status"><strong>没有找到匹配应用</strong><span>换个名称、版本或功能关键词试试</span></div>';
+        return '<div class="nr_search_empty" role="status"><strong>没有找到匹配应用</strong><span>换个名称、版本或功能关键词试试</span><button type="button" class="nr_search_reset">清空搜索</button></div>';
     }
 
     var NR_APP_STATUS_LAST = null;
@@ -16446,6 +16737,17 @@ EOF_APPCENTER_V3_CSS
     var NR_APP_STATUS_INTERVAL = 5000;
     var NR_APP_STATUS_EXPANDED = false;
     var NR_APP_STATUS_AUTO_EXPANDED = false;
+    var NR_APP_STATUS_UPDATED_AT = "";
+    var NR_APP_STATUS_STATE = "waiting";
+
+    function nr_status_feedback(state){
+        NR_APP_STATUS_STATE = state;
+        var label = state === "error" ? "更新失败" : state === "busy" ? "刷新中" : state === "ok" ? "已更新" : "等待刷新";
+        if(NR_APP_STATUS_UPDATED_AT && state !== "busy") label += " · " + NR_APP_STATUS_UPDATED_AT;
+        $("#app_status_mount").toggleClass("nr_status_ok", state === "ok")
+            .toggleClass("nr_status_busy", state === "busy").toggleClass("nr_status_error", state === "error");
+        $(".app_status_time").text(label).attr("title", NR_APP_STATUS_UPDATED_AT ? "上次更新 " + NR_APP_STATUS_UPDATED_AT : label);
+    }
 
     function nr_format_kib(kib){
         var mb = Number(kib || 0) / 1024;
@@ -16492,10 +16794,11 @@ EOF_APPCENTER_V3_CSS
         if(!$("#app_status_mount").length) $(".container_left").before('<div id="app_status_mount"></div>');
         $("#app_status_mount").html(nr_build_status_panel(data));
         nr_sync_status_panel_state();
-        if(NR_APP_STATUS_LAST) nr_update_status_panel(NR_APP_STATUS_LAST);
+        if(NR_APP_STATUS_LAST) nr_update_status_panel(NR_APP_STATUS_LAST, true);
+        nr_status_feedback(NR_APP_STATUS_STATE);
     }
 
-    function nr_update_status_panel(data){
+    function nr_update_status_panel(data, cached){
         if(!data) return;
         NR_APP_STATUS_LAST = data;
         var now = new Date();
@@ -16503,7 +16806,10 @@ EOF_APPCENTER_V3_CSS
         var cpu = data.cpu_percent;
         var memPercent = Number(data.mem_percent || 0);
         var memText = nr_format_kib(data.mem_used) + " / " + nr_format_kib(data.mem_total);
-        $(".app_status_time").text(("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2)+":"+("0"+now.getSeconds()).slice(-2));
+        if(!cached){
+            NR_APP_STATUS_UPDATED_AT = ("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2)+":"+("0"+now.getSeconds()).slice(-2);
+            nr_status_feedback("ok");
+        }
         $(".app_status_temp").text(temp > 0 ? temp.toFixed(1)+" ℃" : "--");
         nr_set_status_width(".app_status_temp_bar", temp > 0 ? temp : 0);
         if(cpu === null || typeof cpu === "undefined" || cpu === ""){
@@ -16537,16 +16843,19 @@ EOF_APPCENTER_V3_CSS
     function nr_get_system_status(){
         if(document.hidden || NR_APP_STATUS_BUSY) return;
         NR_APP_STATUS_BUSY = true;
-        var data={token:'<%=token%>'};
-        (new XHR()).post('<%=controller%>nradioadv/system/appcenter/sys_status', data, function(xhr){
-            NR_APP_STATUS_BUSY = false;
-            if(!xhr) return;
-            var contentType = xhr.getResponseHeader("Content-Type") || "";
-            if(contentType.indexOf("application/json") !== 0) return;
-            try{
-                var response = JSON.parse(xhr.responseText || '{}');
-                if(response && response.result) nr_update_status_panel(response.result);
-            } catch(e) {}
+        nr_status_feedback("busy");
+        $.ajax({
+            type: "POST",
+            url: '<%=controller%>nradioadv/system/appcenter/sys_status',
+            data: {token:'<%=token%>'},
+            dataType: "json",
+            timeout: 10000,
+            success: function(response){
+                if(response && response.result && typeof response.result === "object") nr_update_status_panel(response.result);
+                else nr_status_feedback("error");
+            },
+            error: function(){ nr_status_feedback("error"); },
+            complete: function(){ NR_APP_STATUS_BUSY = false; }
         });
     }
 
@@ -16584,8 +16893,11 @@ EOF_APPCENTER_V3_CSS
         var active = $(".container_right:not(.hide)");
         active.find(".nr_search_empty").remove();
         active.find(".app_box").each(function(){
-            var text = $(this).text().toLowerCase();
+            var text = ($(this).attr("data-search") || $(this).text()).toLowerCase();
             $(this).toggleClass("nr_app_filtered", query.length > 0 && text.indexOf(query) < 0);
+            $(this).find("[data-nr-text]").each(function(){
+                $(this).html(nr_highlight_text($(this).attr("data-nr-text"), query));
+            });
         });
         $(".nr_app_search").toggleClass("nr_searching", query.length > 0);
         $("#nr_app_search_clear").attr("aria-hidden", query.length > 0 ? "false" : "true").attr("tabindex", query.length > 0 ? "0" : "-1");
@@ -16599,7 +16911,10 @@ EOF_APPCENTER_V3_CSS
         if(!data.result.applist) data.result.applist = [];
         var htm = "";
         var htm_installed = "";
-        var top_menu_ht = "<span class='top_menu top_menu_active'><%:AppCenterTitle%></span>";
+        var old_scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
+        var old_scroll = old_scroller ? old_scroller.scrollLeft : 0;
+        var active_name = NR_ACTIVE_APP_NAME, active_index = null;
+        var top_menu_ht = '<button type="button" class="top_menu nr_store_tab top_menu_active" aria-current="page"><%:AppCenterTitle%></button><div class="nr_tabs_viewport"><div class="nr_tabs_scroller" role="navigation" aria-label="已打开的应用">';
         $.each(data.result.applist, function(index, db){
             var optht = '';
             var icon_name = db.icon && db.icon.length ? db.icon : "app_default.png";
@@ -16612,7 +16927,8 @@ EOF_APPCENTER_V3_CSS
             var icon_fallback = "this.onerror=null;this.src='/luci-static/nradio/images/icon/app_default.png';";
             var open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'open\',\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
             if(db.open == 1){
-                top_menu_ht += '<div class="top_menu_inner"><span class="top_menu" role="button" tabindex="0" data-index="'+index+'" onclick="callback(\''+index+'\',\''+open_route+'\')">'+display_name+'</span><button type="button" aria-label="关闭应用" title="关闭应用" onclick="app_action(\''+db.name+'\',\'close\')" class="top_menu_inner_icon">×</button></div>';
+                if(db.name === active_name) active_index = index;
+                top_menu_ht += '<div class="top_menu_inner" data-app-name="'+nr_escape_html(db.name)+'"><span class="top_menu" role="button" tabindex="0" data-index="'+index+'" title="'+nr_escape_html(display_name)+'" onclick="'+nr_escape_html("callback("+JSON.stringify(String(index))+","+JSON.stringify(open_route)+")")+'"><img class="nr_top_icon" src="/luci-static/nradio/images/icon/'+nr_escape_html(icon_name)+'" alt="" onerror="'+nr_escape_html(icon_fallback)+'"><span class="nr_top_name">'+nr_escape_html(display_name)+'</span></span><button type="button" aria-label="'+nr_escape_html("关闭 "+display_name)+'" title="'+nr_escape_html("关闭 "+display_name)+'" onclick="'+nr_escape_html("app_action("+JSON.stringify(db.name)+",\"close\")")+'" class="top_menu_inner_icon">×</button></div>';
                 open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="callback(\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
                 open_badge = '<span class="app_open_badge">后台</span>';
             }
@@ -16629,10 +16945,11 @@ EOF_APPCENTER_V3_CSS
             }
             var row = APPTableRow.compose({
                 name: db.name,
-                display_name: display_name,
-                version: db.version,
-                display_version: display_version,
-                des: des_info,
+                display_name: nr_escape_html(display_name),
+                version: nr_escape_html(db.version),
+                display_version: nr_escape_html(display_version),
+                des: nr_escape_html(des_info),
+                search_text: nr_escape_html([db.name,display_name,db.version,des_info].join(" ")),
                 icon: icon_name,
                 icon_fallback: icon_fallback,
                 opt: optht,
@@ -16646,7 +16963,11 @@ EOF_APPCENTER_V3_CSS
         });
         if(!htm_installed) htm_installed = nr_appcenter_empty_state("暂无已安装应用");
         if(!htm) htm = nr_appcenter_empty_state("暂无应用");
-        $("#app_top_menu").html(top_menu_ht);
+        $("#app_top_menu").html(top_menu_ht + '</div></div>');
+        var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
+        scroller.scrollLeft = old_scroll;
+        scroller.addEventListener("scroll", nr_update_tab_edges);
+        nr_sync_top_tabs(active_index, false);
         $(".app_all").html(htm);
         $(".app_installed").html(htm_installed);
         nr_update_menu_counts(data);
@@ -16656,10 +16977,19 @@ EOF_APPCENTER_V3_CSS
     }
 
     $(document).on("input", "#nr_app_search_input", nr_apply_app_search);
-    $(document).on("click", "#nr_app_search_clear", function(){
+    $(document).on("click", "#nr_app_search_clear, .nr_search_reset", function(){
         $("#nr_app_search_input").val("").focus();
         nr_apply_app_search();
     });
+    $(document).on("click", ".app_des[role='button']", function(){
+        var expanded = $(this).attr("aria-expanded") !== "true";
+        $(this).toggleClass("nr_desc_expanded", expanded).attr("aria-expanded", expanded ? "true" : "false");
+    });
+    $(document).on("click", "#app_top_menu .nr_store_tab", function(){
+        if(typeof sub_dialogDeal !== "undefined" && sub_dialogDeal) sub_dialogDeal.close();
+        nr_sync_top_tabs(null, false);
+    });
+    window.addEventListener("resize", nr_update_tab_edges);
     $(document).on("click", ".app_menu", function(){ window.setTimeout(nr_apply_app_search, 0); });
     $(document).on("click", ".app_status_toggle", function(){
         NR_APP_STATUS_EXPANDED = !NR_APP_STATUS_EXPANDED;
@@ -16672,7 +17002,7 @@ EOF_APPCENTER_V3_CSS
             event.preventDefault();
         }
     });
-    $(document).on("keydown", ".action_list_li, .app_menu, .app_btn_class, #app_top_menu .top_menu[role='button']", function(event){
+    $(document).on("keydown", ".action_list_li, .app_menu, .app_btn_class, .app_des[role='button'], #app_top_menu .top_menu[role='button']", function(event){
         if(event.key === "Enter" || event.key === " "){
             event.preventDefault();
             $(this).trigger("click");
@@ -16723,7 +17053,7 @@ local storage_markup = [[        <div class="mem_track nr-storage-track">
             <div class="nr-storage-row nr-storage-system-row">
                 <div class="mem_header">
                     <span>系统空间</span>
-                    <span id="memory_detail">9.9 G / 99.9 G</span>
+                    <span id="memory_detail">-- / --</span>
                 </div>
                 <div class="mem_progress">
                     <div class="mem_progress_inner" id="memory_progress_inner"></div>
@@ -16732,7 +17062,7 @@ local storage_markup = [[        <div class="mem_track nr-storage-track">
             <div class="nr-storage-row nr-storage-expand-row" id="storage_expand_memory_row">
                 <div class="mem_header">
                     <span>存储扩展</span>
-                    <span id="storage_expand_memory_detail">0.0 G / 0.0 G</span>
+                    <span id="storage_expand_memory_detail">-- / --</span>
                 </div>
                 <div class="mem_progress">
                     <div class="mem_progress_inner" id="storage_expand_memory_progress_inner"></div>
@@ -16752,15 +17082,15 @@ html = html:sub(1, menu_pos - 1) .. '    <div id="app_status_mount"></div>\n' ..
 local row_start = assert(html:find("    var APPTableRow = ''+", 1, true), "APPTableRow start not found")
 local error_start = assert(html:find("    var APPErrorRow = ''+", row_start, true), "APPErrorRow start not found")
 local row = [[    var APPTableRow = ''+
-    '<div class="app_box app_item{{index}}" data-status="{{status}}">'+
+    '<div class="app_box app_item{{index}}" data-status="{{status}}" data-search="{{search_text}}">'+
         '    <div class="app_icon"><img class="app_icon_img" src="/luci-static/nradio/images/icon/{{icon}}" alt="{{display_name}}" onerror="{{icon_fallback}}"></div>'+
         '    <div class="app_info">'+
         '        <div class="app_title">'+
-        '            <div class="app_name" title="{{display_name}}">{{display_name}}</div>'+
-        '            <div class="app_version" title="{{version}}">{{display_version}}</div>'+
+        '            <div class="app_name" title="{{display_name}}" data-nr-text="{{display_name}}">{{display_name}}</div>'+
+        '            <div class="app_version" title="{{version}}" data-nr-text="{{display_version}}">{{display_version}}</div>'+
         '            <div class="app_meta_row"><span class="app_state_badge app_state_{{status}}">{{status_label}}</span>{{open_badge}}</div>'+
         '        </div>'+
-        '        <div class="app_des" title="{{des}}">{{des}}</div>'+
+        '        <div class="app_des" title="{{des}}" data-nr-text="{{des}}" role="button" tabindex="0" aria-expanded="false" aria-label="展开或收起应用说明">{{des}}</div>'+
         '    </div>'+
         '    <div class="app_action"><ul class="action_list">{{opt}}</ul></div>'+
         '</div>';
@@ -16774,12 +17104,62 @@ html = html:sub(1, show_start - 1) .. renderer .. html:sub(loading_start)
 
 loading_start = assert(html:find("    var loading_htm = ", 1, true), "loading_htm start not found after renderer")
 local loading_end = assert(html:find("\n", loading_start, true), "loading_htm end not found")
-local loading_markup = [[    var loading_htm = '<div id="scan_loading" class="nr_dialog_loading" role="status" aria-live="polite"><span class="nr_dialog_spinner" aria-hidden="true"></span><strong>正在处理</strong><small>请稍候，不要关闭页面</small></div>';]]
+local loading_markup = [[    var loading_htm = nr_appcenter_loading("", "");]]
 html = html:sub(1, loading_start - 1) .. loading_markup .. html:sub(loading_end)
+
+local function replace_plain(text, old, new)
+    local pos = 1
+    while true do
+        local first, last = text:find(old, pos, true)
+        if not first then return text end
+        text = text:sub(1, first - 1) .. new .. text:sub(last + 1)
+        pos = first + #new
+    end
+end
+
+local function polish_function(name, changes)
+    local first = assert(html:find("    function " .. name .. "(", 1, true), "function not found: " .. name)
+    local last = html:find("\n    function ", first + 1, true) or html:find("\n</script>", first, true)
+    local body = html:sub(first, last - 1)
+    for _, change in ipairs(changes) do body = replace_plain(body, change[1], change[2]) end
+    html = html:sub(1, first - 1) .. body .. html:sub(last)
+end
+
+polish_function("app_action", {
+    {"message: loading_htm", "message: nr_appcenter_loading(action, app_name)"},
+    {"dialogDeal.setMessage(loading_htm);", "dialogDeal.setTitle(nr_escape_html(nr_operation_title(action, app_name))); dialogDeal.setMessage(nr_appcenter_loading(action, app_name));"}
+})
+polish_function("check_version", {
+    {'loading_htm+"<br><%:APPVerisonCheckNote%>"', 'nr_appcenter_loading("check", "")'},
+    {'message: loading_htm', 'message: nr_appcenter_loading("check", "")'},
+    {'refresh_data();', 'nr_appcenter_result(appstore_check_dial, true, "check", "", nr_escape_html(msg)); refresh_data();'},
+    {'appstore_check_dial.setMessage(\'<i class="far fa-nradio-note fa-fw icon_disable" ></i>\'+error_info);', 'nr_appcenter_result(appstore_check_dial, false, "check", "", nr_escape_html(error_info));'},
+    {'appstore_check_dial.setMessage(data_res.result.msg);', 'nr_appcenter_result(appstore_check_dial, code == 0, "check", "", nr_escape_html(data_res.result.msg));'}
+})
+polish_function("request_result", {
+    {'check_dial.setMessage(err_info);', 'nr_appcenter_result(check_dial, code == APPCENTER_OK, action, name, err_info);'},
+    {'check_dial.setMessage("<%:APPErrorTimeout%>");', 'nr_appcenter_result(check_dial, false, action, name, "<%:APPErrorTimeout%>");'}
+})
+polish_function("request_appstore_result", {
+    {'appstore_check_dial.setMessage(data_res.result.msg);', 'nr_appcenter_result(appstore_check_dial, code == 0, "check", "", nr_escape_html(data_res.result.msg));'},
+    {'appstore_check_dial.setMessage("<%:APPstoreErrorTimeout%>");', 'nr_appcenter_result(appstore_check_dial, false, "check", "", "<%:APPstoreErrorTimeout%>");'}
+})
+polish_function("process_deal", {
+    {'refresh_data();', 'if(dialogDeal && !callback) nr_appcenter_result(dialogDeal, true, action, name, nr_escape_html(msg)); refresh_data();'},
+    {'var htm = genarate_loading_box(error_info,0);', 'var htm = nr_appcenter_loading(action, name);'},
+    {"title: '',", 'title: nr_escape_html(nr_operation_title(action, name)),'},
+    {'message: \'<i class="far fa-nradio-note fa-fw icon_disable" ></i>\'+error_info,', 'message: nr_result_markup(false, nr_escape_html(error_info)),'}
+})
+polish_function("show_error", {
+    {'daillog.setMessage(err_info);', 'nr_appcenter_result(daillog, result.code == APPCENTER_OK, "install", "", err_info);'},
+    {'message:err_info,', 'message:nr_result_markup(result.code == APPCENTER_OK, err_info),'},
+    {"title: '',", 'title: result.code == APPCENTER_OK ? "安装完成" : "安装失败",'}
+})
 
 local ready_count
 html, ready_count = html:gsub("        get_memory%(%)%;", "        get_memory();\n        nr_start_status_polling();", 1)
 assert(ready_count == 1, "document ready hook not found")
+html = html:gsub("9%.9 G / 99%.9 G", "-- / --"):gsub("0%.0 G / 0%.0 G", "-- / --")
 
 local tmp_path = tpl_path .. ".nradio-v3.tmp"
 local output = assert(io.open(tmp_path, "wb"), "create failed: " .. tmp_path)
@@ -33461,6 +33841,9 @@ if not html:find("NRadio appcenter v3: begin", 1, true) and not html:find("div.a
 storage_layout_css .. [[    .mem_mobile{]], "failed to patch appcenter storage layout css")
 end
 html = html:gsub("margin%-top:%s*%-5px;", "margin-top: 0;")
+if html:find("NRadio appcenter v3: begin", 1, true) then
+    html = html:gsub("9%.9 G / 99%.9 G", "-- / --"):gsub("0%.0 G / 0%.0 G", "-- / --")
+end
 
 local old_update_start = html:find("    function update_memory(", 1, true)
 local old_update_end = html:find("    function get_memory(){", old_update_start or 1, true)
@@ -56203,9 +56586,12 @@ write_nradio_home_temperature_switch_js() {
         }
 
         cpes = result.cpe;
-        if (!cpes) {
+        if (!cpes || typeof cpes !== 'object') {
             return;
         }
+        // Each CPE list is a snapshot. Retain source preferences separately,
+        // but discard runtime entries for lines absent from this response.
+        temperatureStates = Object.create(null);
         if (typeof cpes.length === 'number') {
             for (index = 0; index < cpes.length; index += 1) {
                 rememberCpe(cpes[index]);
@@ -56296,28 +56682,18 @@ write_nradio_home_temperature_switch_js() {
         return state && (state.nrcap === '0' || state.nrcap === '') ? '4G温度' : '5G温度';
     }
 
-    function updateTemperatureButton(button, name, mode, label, active, disabled, value) {
-        var fullLabel;
-        var compactLabel;
+    function updateTemperatureButton(button, name, mode, label, active, disabled) {
         button.type = 'button';
         button.className = 'nr-home-temp-choice' + (active && !disabled ? ' active' : '');
         button.setAttribute('data-name', name);
         button.setAttribute('data-mode', mode);
         button.setAttribute('aria-pressed', active && !disabled ? 'true' : 'false');
         button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
-        button.title = label + (disabled ? '：暂无数据' : '：' + formattedTemperature(value));
+        button.title = label + (disabled ? '：暂无数据' : '');
         button.setAttribute('aria-label', button.title);
         button.disabled = disabled;
         if (button.getAttribute('data-temperature-label') !== label) {
-            button.textContent = '';
-            fullLabel = document.createElement('span');
-            fullLabel.className = 'nr-home-temp-label-full';
-            fullLabel.textContent = label;
-            compactLabel = document.createElement('span');
-            compactLabel.className = 'nr-home-temp-label-compact';
-            compactLabel.textContent = mode === 'cpu' ? 'CPU' : label.slice(0, 2);
-            button.appendChild(fullLabel);
-            button.appendChild(compactLabel);
+            button.textContent = mode === 'cpu' ? 'CPU' : label.slice(0, 2);
             button.setAttribute('data-temperature-label', label);
         }
     }
@@ -56369,12 +56745,12 @@ write_nradio_home_temperature_switch_js() {
         }
         if (!secondaryFixed) {
             updateTemperatureButton(buttons[index], name, 'cpu', 'CPU温度',
-                mode === 'cpu', cpuDisabled, cpuTemperature);
+                mode === 'cpu', cpuDisabled);
             index += 1;
         }
         updateTemperatureButton(buttons[index], name, 'cpe',
             secondaryFixed ? '5G温度' : cpeTemperatureLabel(state),
-            mode === 'cpe', cpeDisabled, state.modelTemperature);
+            mode === 'cpe', cpeDisabled);
         if (node.firstChild !== switcher) {
             while (node.firstChild) {
                 node.removeChild(node.firstChild);
@@ -56448,7 +56824,45 @@ write_nradio_home_temperature_switch_js() {
         return gauge;
     }
 
-    function updateTemperatureGauge(name, value) {
+    function renderVisibleTemperatureGauge(gauge, id, value, mode) {
+        var node = document.getElementById(id);
+        var cached;
+        var canvas;
+        if (!node) {
+            return gauge;
+        }
+        cached = node.nradioTemperatureGaugeState;
+        if (document.hidden || !node.getClientRects().length) {
+            if (cached) {
+                cached.visible = false;
+            }
+            return gauge;
+        }
+        canvas = node.querySelector('canvas');
+        // A recreated card must own its gauge, even if the WAN item still
+        // references the canvas from the removed card.
+        if (!canvas || (gauge && gauge.ctx && gauge.ctx.canvas !== canvas)) {
+            gauge = null;
+        }
+        if (cached && cached.visible && cached.gauge === gauge &&
+            cached.canvas === canvas && cached.value === value && cached.mode === mode &&
+            cached.width === node.offsetWidth && cached.height === node.offsetHeight) {
+            return gauge;
+        }
+        gauge = renderTemperatureGauge(gauge, id, value);
+        node.nradioTemperatureGaugeState = {
+            gauge: gauge,
+            canvas: node.querySelector('canvas'),
+            value: value,
+            mode: mode,
+            width: node.offsetWidth,
+            height: node.offsetHeight,
+            visible: true
+        };
+        return gauge;
+    }
+
+    function updateTemperatureGauge(name, value, mode) {
         var wanItem;
         var singleId = 'tempprogress-container-' + name + 'single';
         var multiId = 'tempprogress-container-' + name + 'multi';
@@ -56462,20 +56876,12 @@ write_nradio_home_temperature_switch_js() {
         if (!wanItem) {
             return;
         }
-        if (document.getElementById(singleId)) {
-            wanItem.arcProgressTempSingle = renderTemperatureGauge(
-                wanItem.arcProgressTempSingle,
-                singleId,
-                value
-            );
-        }
-        if (document.getElementById(multiId)) {
-            wanItem.arcProgressTempMulti = renderTemperatureGauge(
-                wanItem.arcProgressTempMulti,
-                multiId,
-                value
-            );
-        }
+        wanItem.arcProgressTempSingle = renderVisibleTemperatureGauge(
+            wanItem.arcProgressTempSingle, singleId, value, mode
+        );
+        wanItem.arcProgressTempMulti = renderVisibleTemperatureGauge(
+            wanItem.arcProgressTempMulti, multiId, value, mode
+        );
     }
 
     function renderTemperature(name) {
@@ -56503,7 +56909,7 @@ write_nradio_home_temperature_switch_js() {
                 descriptions[nodeIndex].textContent = formattedTemperatureDescription(value);
             }
         }
-        updateTemperatureGauge(name, value);
+        updateTemperatureGauge(name, value, mode);
     }
 
     function renderAllTemperatures() {
@@ -56529,26 +56935,28 @@ write_nradio_home_temperature_switch_js() {
         style = document.createElement('style');
         style.id = 'nr-home-temperature-switch-style';
         style.textContent =
-            '.nr-home-temp-switch{display:inline-flex;flex-wrap:wrap;align-items:center;max-width:100%;padding:2px;border:1px solid rgba(0,174,239,.55);border-radius:16px;vertical-align:middle}' +
-            '.nr-home-temp-choice{border:0;border-radius:13px;background:transparent;color:inherit;cursor:pointer;font-size:12px;font-weight:600;line-height:24px;min-height:28px;padding:0 8px;white-space:nowrap;touch-action:manipulation}' +
-            '.nr-home-temp-choice+.nr-home-temp-choice{margin-left:2px}' +
-            '.nr-home-temp-choice.active{background:#00aeef;color:#fff}' +
-            '.nr-home-temp-choice:focus{outline:1px solid #7bdcff;outline-offset:1px}' +
+            'body [data-nradio-home-temp-card]>.panel-heading{padding:8px 8px 0}' +
+            '[data-nradio-home-temp-card]>.panel-heading>.row{margin:0}' +
+            '[data-nradio-home-temp-card]>.panel-heading>.row>div{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding:0}' +
+            '[data-nradio-home-temp-card] .pre_info{font-size:12px;line-height:18px;min-height:18px}' +
+            '[data-nradio-home-temp-card] .pre_info:empty{display:none}' +
+            '[data-nradio-home-temp-card] .rtemp_label{display:block;width:100%;max-width:100%;text-align:center;line-height:0}' +
+            '[data-nradio-home-temp-card] .model_temp{font-variant-numeric:tabular-nums}' +
+            '.nr-home-temp-switch{display:inline-grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);align-items:stretch;gap:8px;width:96px;max-width:100%;box-sizing:border-box;padding:0;border:0;border-radius:0;background:transparent;vertical-align:top}' +
+            '.nr-home-temp-switch>.nr-home-temp-choice{display:grid;grid-template-rows:20px;align-content:center;justify-items:center;min-width:0;box-sizing:border-box;appearance:none;-webkit-appearance:none;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:#99aab4;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;line-height:20px;height:28px;min-height:28px;margin:0;padding:3px 6px;outline:none;box-shadow:none;white-space:nowrap;touch-action:manipulation;transition:border-color .15s,color .15s}' +
+            '.nr-home-temp-switch>.nr-home-temp-choice.active{border-bottom-color:#71c3cc;color:#c6eff2}' +
+            '.nr-home-temp-switch>.nr-home-temp-choice:hover:not(:disabled){color:#d3f4f6}' +
+            '.nr-home-temp-switch>.nr-home-temp-choice:focus{outline:none;box-shadow:none}' +
+            '.nr-home-temp-switch>.nr-home-temp-choice:focus-visible{box-shadow:inset 0 0 0 2px #78cdd5}' +
             '.nr-home-temp-choice:disabled{cursor:not-allowed;opacity:.45}' +
-            '.nr-home-temp-label-compact{display:none}' +
             '@media(max-width:767px){' +
             'body [data-nradio-home-temp-grid]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;float:none;width:100%;height:auto;min-height:0;margin:0 0 20px}' +
             'body [data-nradio-home-temp-grid]>.pc_box{float:none;width:auto;min-width:0;height:auto;min-height:159px;margin:0;box-sizing:border-box}' +
-            'body [data-nradio-home-temp-card]>.panel-heading{padding:8px 8px 0}' +
-            '[data-nradio-home-temp-card]>.panel-heading>.row>div{padding:0}' +
             '[data-nradio-home-temp-card]>.panel-body{padding:0 8px 8px}' +
             '[data-nradio-home-temp-card] [id^="tempprogress-container-"]{width:100%;max-width:130px;margin:0 auto!important}' +
             '[data-nradio-home-temp-card] canvas{display:block;max-width:100%;height:auto!important;margin:0 auto}' +
-            '.nr-home-temp-switch{display:flex;flex-wrap:nowrap;width:100%;box-sizing:border-box;gap:2px;border-radius:12px}' +
-            '.nr-home-temp-choice{flex:1 1 0;min-width:0;box-sizing:border-box;min-height:44px;line-height:20px;padding:6px 2px;border-radius:9px}' +
-            '.nr-home-temp-choice+.nr-home-temp-choice{margin-left:0}' +
-            '.nr-home-temp-label-full{display:none}' +
-            '.nr-home-temp-label-compact{display:inline}' +
+            '.nr-home-temp-switch{width:112px}' +
+            '.nr-home-temp-switch>.nr-home-temp-choice{height:44px;min-height:44px;padding:4px 2px}' +
             '}';
         (document.head || document.documentElement).appendChild(style);
     }
@@ -56614,9 +57022,25 @@ write_nradio_home_temperature_switch_js() {
         wrappedStatsInfo = function (data) {
             var focused = findTemperatureButton(document.activeElement);
             var result;
+            var originalCanvasValShow = window.canvas_val_show;
             captureRuntime(data);
             synchronizeLegacyTemperatureModes();
-            result = originalStatsInfo.apply(this, arguments);
+            // Defer only managed temperature gauges during the OEM refresh.
+            // Paint once below, after it has finished changing card visibility.
+            if (typeof originalCanvasValShow === 'function') {
+                window.canvas_val_show = function (gauge, id) {
+                    var match = /^tempprogress-container-(.+)(single|multi)$/.exec(String(id));
+                    if (match && Object.prototype.hasOwnProperty.call(temperatureStates, match[1])) {
+                        return gauge;
+                    }
+                    return originalCanvasValShow.apply(this, arguments);
+                };
+            }
+            try {
+                result = originalStatsInfo.apply(this, arguments);
+            } finally {
+                window.canvas_val_show = originalCanvasValShow;
+            }
             renderPrimaryLineUsage();
             renderAllTemperatures();
             if (focused && document.documentElement.contains(focused) &&
@@ -56629,6 +57053,8 @@ write_nradio_home_temperature_switch_js() {
         wrappedStatsInfo.nradioHomeTemperatureSwitch = VERSION;
         window.stats_info = wrappedStatsInfo;
         document.addEventListener('click', handleTemperatureClick, true);
+        window.addEventListener('resize', renderAllTemperatures, false);
+        document.addEventListener('visibilitychange', renderAllTemperatures, false);
         installStyle();
         installed = true;
         window.NRadioHomeTemperatureSwitch = {
@@ -67879,9 +68305,315 @@ manage_openwrt_luci_8080() {
     MENU_ACTION_COMPLETED='1'
 }
 
+# Hardware acceleration uses the OEM mode controller, independently of the
+# aggregation repair actions. Keep its config backups separate from backup_file.
+
+nradio_hwaccel_capabilities() {
+    local cmd
+    HWACCEL_MISSING=''
+    for cmd in uci fw3 iptables awk cmp mktemp; do
+        command -v "$cmd" >/dev/null 2>&1 || HWACCEL_MISSING="$HWACCEL_MISSING 缺少$cmd;"
+    done
+    if [ ! -x /etc/init.d/mtkhnat ]; then
+        HWACCEL_MISSING="$HWACCEL_MISSING 缺少原厂mtkhnat服务;"
+    fi
+    [ -x /sbin/mtkhnat ] || HWACCEL_MISSING="$HWACCEL_MISSING 缺少mtkhnat控制程序;"
+    [ -r /sys/kernel/debug/hnat/hook_toggle ] && [ -w /sys/kernel/debug/hnat/hook_toggle ] ||
+        HWACCEL_MISSING="$HWACCEL_MISSING 缺少可读写HNAT控制接口;"
+    [ -d /sys/module/mtkhnat ] || HWACCEL_MISSING="$HWACCEL_MISSING HNAT驱动未加载;"
+    [ -f "/lib/modules/$(uname -r)/xt_FLOWOFFLOAD.ko" ] ||
+        HWACCEL_MISSING="$HWACCEL_MISSING 缺少原厂软件卸载模块;"
+    [ -r /etc/config/mtkhnat ] && [ -r /etc/config/firewall ] ||
+        HWACCEL_MISSING="$HWACCEL_MISSING 缺少加速或防火墙配置;"
+    if command -v uci >/dev/null 2>&1; then
+        [ "$(uci -q get mtkhnat.global 2>/dev/null)" = global ] || HWACCEL_MISSING="$HWACCEL_MISSING 缺少mtkhnat.global;"
+        [ "$(uci -q get firewall.@defaults[0] 2>/dev/null)" = defaults ] || HWACCEL_MISSING="$HWACCEL_MISSING 缺少防火墙defaults;"
+    fi
+    [ -z "$HWACCEL_MISSING" ]
+}
+
+nradio_hwaccel_parse_hook() {
+    awk '
+        /^[[:space:]]*[01][[:space:]]*$/ { gsub(/[[:space:]]/, ""); value=$0 }
+        /value=[01], hook is (enabled|disabled) now!/ {
+            if (/value=1, hook is enabled now!/) value=1
+            if (/value=0, hook is disabled now!/) value=0
+        }
+        END { if (value != "") print value; else print "unknown" }
+    '
+}
+
+nradio_hwaccel_hook_state() {
+    local before raw parsed after log_readable=1
+    # This driver may print the read result only to dmesg. Use a boundary from
+    # before the read, never an old "enabled" message from the log history.
+    before="$(dmesg 2>/dev/null)" || log_readable=0
+    raw="$(cat /sys/kernel/debug/hnat/hook_toggle 2>/dev/null)" || { printf 'unknown\n'; return 0; }
+    parsed="$(printf '%s\n' "$raw" | nradio_hwaccel_parse_hook)"
+    case "$parsed" in 0|1) printf '%s\n' "$parsed"; return 0 ;; esac
+    [ "$log_readable" = 1 ] || { printf 'unknown\n'; return 0; }
+    after="$(dmesg 2>/dev/null)" || { printf 'unknown\n'; return 0; }
+    # Require the old snapshot to remain an exact prefix. A rotated/reset ring
+    # or repeated log line must not turn historical output into a fresh result.
+    printf '%s\n' "$before" '__NRADIO_HNAT_LOG_BOUNDARY__' "$after" | awk '
+        $0 == "__NRADIO_HNAT_LOG_BOUNDARY__" && !reading {
+            if (count==1 && old[1]=="") count=0
+            reading=1; next
+        }
+        !reading { old[++count]=$0; next }
+        reading { pos++; if (pos<=count) { if ($0!=old[pos]) changed=1 } else added=added $0 "\n" }
+        END { if (!changed && pos>=count) printf "%s", added }
+    ' | nradio_hwaccel_parse_hook
+}
+
+nradio_hwaccel_rule_state() {
+    local rules
+    rules="$("$1" -t filter -S FORWARD 2>/dev/null)" || { printf 'unknown\n'; return 0; }
+    printf '%s\n' "$rules" | awk '
+        /-j FLOWOFFLOAD([[:space:]]|$)/ { if (/--hw([[:space:]]|$)/) hw=1; else sw=1 }
+        END { if (hw && sw) print "mixed"; else if (hw) print "hardware"; else if (sw) print "software"; else print "none" }
+    '
+}
+
+nradio_hwaccel_collect_state() {
+    HWACCEL_MODE="$(uci -q get mtkhnat.global.mode 2>/dev/null || true)"
+    HWACCEL_ENABLE="$(uci -q get mtkhnat.global.enable 2>/dev/null || true)"
+    HWACCEL_FLOW="$(uci -q get firewall.@defaults[0].flow_offloading 2>/dev/null || true)"
+    HWACCEL_HW_FLOW="$(uci -q get firewall.@defaults[0].flow_offloading_hw 2>/dev/null || true)"
+    HWACCEL_HOOK="$(nradio_hwaccel_hook_state)"
+    HWACCEL_RULE4="$(nradio_hwaccel_rule_state iptables)"
+    HWACCEL_RULE6='unavailable'
+    HWACCEL_IPV6_DISABLED="$(uci -q get firewall.@defaults[0].disable_ipv6 2>/dev/null || true)"
+    if [ -d /proc/sys/net/ipv6 ]; then
+        HWACCEL_RULE6="$(nradio_hwaccel_rule_state ip6tables)"
+    fi
+    HWACCEL_BOOT=unknown
+    if [ -x /etc/init.d/mtkhnat ]; then
+        HWACCEL_BOOT=0
+        /etc/init.d/mtkhnat enabled >/dev/null 2>&1 && HWACCEL_BOOT=1
+    fi
+    return 0
+}
+
+nradio_hwaccel_state_matches() {
+    [ "$HWACCEL_ENABLE" = 1 ] && [ "$HWACCEL_HW_FLOW" = 0 ] && [ "$HWACCEL_BOOT" = 1 ] || return 1
+    case "$1" in
+        1)
+            [ "$HWACCEL_MODE" = 0 ] && [ "$HWACCEL_HOOK" = 1 ] && [ "$HWACCEL_FLOW" = 0 ] &&
+                [ "$HWACCEL_RULE4" = none ] || return 1
+            case "$HWACCEL_RULE6" in none|unavailable) ;; *) return 1 ;; esac
+            ;;
+        0)
+            [ "$HWACCEL_MODE" = 2 ] && [ "$HWACCEL_HOOK" = 0 ] && [ "$HWACCEL_FLOW" = 1 ] &&
+                [ "$HWACCEL_RULE4" = software ] || return 1
+            case "$HWACCEL_RULE6" in
+                software|unavailable) ;;
+                none) [ "${HWACCEL_IPV6_DISABLED:-0}" = 1 ] || return 1 ;;
+                *) return 1 ;;
+            esac
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+nradio_hwaccel_state_label() {
+    case "$1" in
+        1) printf '开启' ;; 0) printf '关闭' ;;
+        hardware) printf '硬件卸载' ;; software) printf '软件卸载' ;;
+        mixed) printf '软硬规则并存' ;; none) printf '无卸载规则' ;;
+        unavailable) printf '未启用IPv6' ;; *) printf '未知' ;;
+    esac
+}
+
+nradio_hwaccel_openclash_status() {
+    local enabled running rules
+    enabled="$(uci -q get openclash.config.enable 2>/dev/null || true)"
+    running="$(pidof clash clash_meta mihomo 2>/dev/null || true)"
+    if [ -z "$enabled" ] && [ -z "$running" ] && [ ! -x /etc/init.d/openclash ]; then return 0; fi
+    if [ -n "$running" ]; then log 'OpenClash: 核心进程存在'; else log 'OpenClash: 未检测到核心进程'; fi
+    rules="$(iptables-save 2>/dev/null)" || { log 'OpenClash: 规则读取失败'; return 0; }
+    if printf '%s\n' "$rules" | grep -qi openclash; then
+        log 'OpenClash: 检测到相关规则；仅代表进程/规则检查结果'
+    else
+        log 'OpenClash: 未检测到相关规则；代理可用性尚未验证'
+    fi
+}
+
+nradio_hwaccel_show_status() {
+    local entries bound
+    nradio_hwaccel_collect_state
+    log "配置:   mode=${HWACCEL_MODE:-自动} enable=${HWACCEL_ENABLE:-未配置} 软件卸载=${HWACCEL_FLOW:-未配置} 防火墙硬件卸载=${HWACCEL_HW_FLOW:-未配置}"
+    log "HNAT:   $(nradio_hwaccel_state_label "$HWACCEL_HOOK")；开机服务：$(nradio_hwaccel_state_label "$HWACCEL_BOOT")"
+    log "IPv4:   $(nradio_hwaccel_state_label "$HWACCEL_RULE4")"
+    log "IPv6:   $(nradio_hwaccel_state_label "$HWACCEL_RULE6")"
+    [ ! -e /var/run/mtkhnat/status ] || log '阻止:   原厂 HNAT 阻止标记存在'
+    if entries="$(cat /sys/kernel/debug/hnat/all_entry 2>/dev/null)"; then
+        bound="$(printf '%s\n' "$entries" | awk '/state=BIND([^[:alnum:]_]|$)/ { n++ } END { print n+0 }')"
+        if [ "$bound" -gt 0 ]; then
+            log "硬件表: BIND=$bound，已观察到绑定条目"
+        else
+            log '硬件表: BIND=0，尚未观察到硬件命中'
+        fi
+    else
+        log '硬件表: 无法读取，实际命中未知'
+    fi
+    nradio_hwaccel_openclash_status
+}
+
+nradio_hwaccel_backup() {
+    HWACCEL_BACKUP=''
+    mkdir -p "$STATE_DIR/hnat-backups" || return 1
+    chmod 700 "$STATE_DIR/hnat-backups" || return 1
+    HWACCEL_BACKUP="$(mktemp -d "$STATE_DIR/hnat-backups/$(date +%Y%m%d-%H%M%S)-XXXXXX")" || return 1
+    cp -p /etc/config/mtkhnat "$HWACCEL_BACKUP/mtkhnat" &&
+        cp -p /etc/config/firewall "$HWACCEL_BACKUP/firewall" &&
+        printf '%s\n' "$HWACCEL_BOOT" > "$HWACCEL_BACKUP/boot" &&
+        printf '%s\n' "$HWACCEL_HOOK" > "$HWACCEL_BACKUP/hook" &&
+        printf '%s\n' "$HWACCEL_RULE4" > "$HWACCEL_BACKUP/rule4" &&
+        printf '%s\n' "$HWACCEL_RULE6" > "$HWACCEL_BACKUP/rule6" &&
+        cmp -s /etc/config/mtkhnat "$HWACCEL_BACKUP/mtkhnat" &&
+        cmp -s /etc/config/firewall "$HWACCEL_BACKUP/firewall"
+}
+
+nradio_hwaccel_apply() {
+    local target="$1"
+    HWACCEL_STAGE='关闭现有 HNAT'
+    printf '0\n' > /sys/kernel/debug/hnat/hook_toggle || return 1
+    HWACCEL_STAGE='保存防火墙配置'
+    uci set firewall.@defaults[0].flow_offloading_hw=0 || return 1
+    uci set firewall.@defaults[0].flow_offloading=0 || return 1
+    uci commit firewall || return 1
+    HWACCEL_STAGE='保存加速模式'
+    if [ "$target" = 1 ]; then
+        uci set mtkhnat.global.mode=0 || return 1
+    else
+        uci set mtkhnat.global.mode=2 || return 1
+    fi
+    uci set mtkhnat.global.enable=1 || return 1
+    uci commit mtkhnat || return 1
+    HWACCEL_STAGE='重载防火墙'
+    fw3 reload || return 1
+    HWACCEL_STAGE='启用开机服务'
+    /etc/init.d/mtkhnat enable || return 1
+    HWACCEL_STAGE='应用加速模式'
+    /etc/init.d/mtkhnat restart || return 1
+}
+
+nradio_hwaccel_verify() {
+    local attempt=0
+    HWACCEL_STAGE='核验运行状态'
+    while [ "$attempt" -lt 5 ]; do
+        nradio_hwaccel_collect_state
+        nradio_hwaccel_state_matches "$1" && return 0
+        attempt=$((attempt + 1))
+        [ "$attempt" -ge 5 ] || sleep 1
+    done
+    return 1
+}
+
+nradio_hwaccel_restore() {
+    local failed=0 saved_boot saved_hook saved_rule4 saved_rule6
+    saved_boot="$(cat "$HWACCEL_BACKUP/boot")" || return 1
+    saved_hook="$(cat "$HWACCEL_BACKUP/hook")" || return 1
+    saved_rule4="$(cat "$HWACCEL_BACKUP/rule4")" || return 1
+    saved_rule6="$(cat "$HWACCEL_BACKUP/rule6")" || return 1
+    uci -q revert mtkhnat || failed=1
+    uci -q revert firewall || failed=1
+    cp -p "$HWACCEL_BACKUP/mtkhnat" /etc/config/mtkhnat || return 1
+    cp -p "$HWACCEL_BACKUP/firewall" /etc/config/firewall || return 1
+    /etc/init.d/mtkhnat restart || failed=1
+    sleep 2
+    # The OEM service can rewrite firewall defaults. Restore the exact saved
+    # file after it runs, including an originally absent flow_offloading_hw.
+    cp -p "$HWACCEL_BACKUP/firewall" /etc/config/firewall || return 1
+    fw3 reload || failed=1
+    case "$saved_hook" in 0|1) printf '%s\n' "$saved_hook" > /sys/kernel/debug/hnat/hook_toggle || failed=1 ;; *) failed=1 ;; esac
+    if [ "$saved_boot" = 1 ]; then
+        /etc/init.d/mtkhnat enable || failed=1
+    else
+        /etc/init.d/mtkhnat disable || failed=1
+    fi
+    nradio_hwaccel_collect_state
+    cmp -s "$HWACCEL_BACKUP/mtkhnat" /etc/config/mtkhnat || failed=1
+    cmp -s "$HWACCEL_BACKUP/firewall" /etc/config/firewall || failed=1
+    [ "$HWACCEL_BOOT" = "$saved_boot" ] && [ "$HWACCEL_HOOK" = "$saved_hook" ] || failed=1
+    [ "$HWACCEL_RULE4" = "$saved_rule4" ] && [ "$HWACCEL_RULE6" = "$saved_rule6" ] || failed=1
+    case "$saved_rule4:$saved_rule6" in *unknown*) failed=1 ;; esac
+    [ "$failed" = 0 ]
+}
+
+nradio_hwaccel_set() {
+    local target="$1" pending
+    HWACCEL_BACKUP=''
+    HWACCEL_STAGE='准备切换'
+    case "$target" in 0|1) ;; *) return 1 ;; esac
+    if ! nradio_hwaccel_capabilities; then log "无法切换: $HWACCEL_MISSING"; return 1; fi
+    if [ "$target" = 1 ] && [ -e /var/run/mtkhnat/status ]; then
+        log '无法开启: 原厂 HNAT 阻止标记存在（/var/run/mtkhnat/status）'
+        return 1
+    fi
+    pending="$(uci changes mtkhnat)" || { log '无法切换: 加速配置读取失败'; return 1; }
+    [ -z "$pending" ] || { log '无法切换: 加速或防火墙存在未提交配置，请先处理'; return 1; }
+    pending="$(uci changes firewall)" || { log '无法切换: 防火墙配置读取失败'; return 1; }
+    [ -z "$pending" ] || { log '无法切换: 加速或防火墙存在未提交配置，请先处理'; return 1; }
+    nradio_hwaccel_collect_state
+    case "$HWACCEL_HOOK:$HWACCEL_RULE4:$HWACCEL_RULE6:$HWACCEL_BOOT" in
+        *unknown*) log '无法切换: 当前运行状态读取失败，无法建立恢复基线'; return 1 ;;
+    esac
+    if nradio_hwaccel_state_matches "$target"; then log '结果:   目标状态已生效，无需重复切换'; return 0; fi
+    if ! nradio_hwaccel_backup; then log '结果:   配置备份失败，切换已停止'; return 1; fi
+    log "备份:   $HWACCEL_BACKUP"
+    if nradio_hwaccel_apply "$target" > "$HWACCEL_BACKUP/apply.log" 2>&1 && nradio_hwaccel_verify "$target"; then
+        if [ "$target" = 1 ]; then
+            log '结果:   HNAT 已开启，配置已保存并启用开机服务'
+        else
+            log '结果:   硬件加速已关闭，软件卸载已启用并保存'
+        fi
+        return 0
+    fi
+    log "结果:   ${HWACCEL_STAGE:-切换或验收}失败，正在恢复；日志：$HWACCEL_BACKUP/apply.log"
+    if nradio_hwaccel_restore > "$HWACCEL_BACKUP/restore.log" 2>&1; then
+        log '恢复:   原配置、HNAT 开关、卸载规则和开机服务状态已恢复'
+    else
+        log "恢复:   未能完整确认恢复，请检查当前状态；备份和日志：$HWACCEL_BACKUP"
+    fi
+    return 1
+}
+
+manage_nradio_hardware_acceleration() {
+    local menu_path='5 > 11' result=PASS action
+    print_menu_header "$menu_path / 硬件加速管理"
+    nradio_hwaccel_show_status
+    printf '\n'
+    print_menu_item 1 '开启硬件加速'
+    print_menu_item 2 '关闭硬件加速（保留软件加速）'
+    print_menu_item 3 '查看当前状态'
+    print_menu_item 0 '返回设备维护'
+    print_menu_prompt '0-3'
+    read_category_choice
+    action="$UI_READ_RESULT"
+    case "$action" in
+        0) return 0 ;;
+        1|2)
+            result=FAIL
+            if [ "$action" = 1 ]; then
+                if nradio_hwaccel_set 1; then result=PASS; fi
+            else
+                if nradio_hwaccel_set 0; then result=PASS; fi
+            fi
+            record_action_history "$menu_path > $action" '硬件加速切换' "$result" "${HWACCEL_BACKUP:-}"
+            nradio_hwaccel_show_status
+            ;;
+        3) nradio_hwaccel_show_status ;;
+        *) die_menu_input_issue "$action" ;;
+    esac
+    MENU_ACTION_COMPLETED=1
+    [ "$result" = PASS ]
+}
+
 c8_788_feature_allowed() {
     case "$1" in
-        2|13|14|15|16|19|23|27)
+        2|13|14|15|16|19|23|27|33)
             return 0
             ;;
     esac
@@ -67891,6 +68623,7 @@ c8_788_feature_allowed() {
 require_menu_feature_supported_for_current_model() {
     restricted_feature="$1"
     case "$restricted_feature" in
+        33) return 0 ;;
         31|32)
             lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
             ;;
@@ -67902,7 +68635,7 @@ require_menu_feature_supported_for_current_model() {
     esac
     if is_current_model_ak798; then
         case "$restricted_feature" in
-            13|27|31|32) return 0 ;;
+            13|27|31|32|33) return 0 ;;
             *) die "AK68-798 为 16 MiB NOR 机型；当前开放轻量商店、首页 CPU 温度与统一体检，其他功能需逐项适配容量和硬件" ;;
         esac
     fi
@@ -67911,10 +68644,19 @@ require_menu_feature_supported_for_current_model() {
     die "NRadio_C8-788 为小容量 NAND 受限机型；当前功能已禁用，仅开放 OpenClash、应用商店维护、首页温度切换和对应检查"
 }
 
+require_nradio_menu_environment() {
+    [ "${NRADIO_MENU_ENVIRONMENT_CHECKED:-0}" != 1 ] || return 0
+    require_supported_nradio_model_environment || return 1
+    log_nradio_oem_environment_hint
+    require_nradio_appcenter_startup_environment || return 1
+    NRADIO_MENU_ENVIRONMENT_CHECKED=1
+}
+
 run_menu_feature() {
     feature_choice="$1"
     show_support_page_hint='0'
 
+    [ "$feature_choice" = 33 ] || require_nradio_menu_environment
     require_menu_feature_supported_for_current_model "$feature_choice"
 
     case "$feature_choice" in
@@ -68048,6 +68790,9 @@ run_menu_feature() {
         32)
             run_recorded_menu_feature "4 > 4 > 2" "C2000Pro / AK68-798 轻量应用商店移除" remove_lightweight_appcenter
             MENU_ACTION_COMPLETED='1'
+            ;;
+        33)
+            manage_nradio_hardware_acceleration || return $?
             ;;
         *)
             die_menu_input_issue "$feature_choice"
@@ -70189,13 +70934,15 @@ maintenance_test_menu() {
             print_menu_header '5 / 设备维护 · AK68-798'
             print_menu_item 1 '统一体检增强版'
             print_menu_item 2 'LuCI 首页 CPU 温度显示'
-            print_menu_item 3 '返回功能分类'
-            print_menu_prompt '0-3'
+            print_menu_item 11 '硬件加速管理'
+            print_menu_item 12 '返回功能分类'
+            print_menu_prompt '0-2 / 11-12'
             read_category_choice
             case "$UI_READ_RESULT" in
-                0|3) return 0 ;;
+                0|12) return 0 ;;
                 1) run_menu_feature 13; return 0 ;;
                 2) run_menu_feature 27; return 0 ;;
+                11) run_menu_feature 33 || return $?; [ "${MENU_ACTION_COMPLETED:-0}" = 1 ] && return 0; continue ;;
                 *) die_menu_input_issue "$UI_READ_RESULT" ;;
             esac
         fi
@@ -70207,19 +70954,26 @@ maintenance_test_menu() {
             print_menu_item 3 '哈基米傻瓜分流助手'
             print_menu_item 4 '哈基米依赖检查修复'
             print_menu_item 5 '首页 CPU / 5G 温度切换'
-            print_menu_item 6 '返回功能分类'
-            print_menu_prompt '0-6'
+            print_menu_item 11 '硬件加速管理'
+            print_menu_item 12 '返回功能分类'
+            print_menu_prompt '0-5 / 11-12'
             read_category_choice
             case "$UI_READ_RESULT" in
-                0|6) return 0 ;;
+                0|12) return 0 ;;
                 1) submenu_feature='13' ;;
                 2) submenu_feature='14' ;;
                 3) submenu_feature='19' ;;
                 4) submenu_feature='23' ;;
                 5) submenu_feature='27' ;;
+                11) submenu_feature='33' ;;
                 *) die_menu_input_issue "$UI_READ_RESULT" ;;
             esac
-            run_menu_feature "$submenu_feature"
+            if [ "$submenu_feature" = 33 ]; then
+                run_menu_feature 33 || return $?
+                [ "${MENU_ACTION_COMPLETED:-0}" = 1 ] || continue
+            else
+                run_menu_feature "$submenu_feature"
+            fi
             return 0
         fi
 
@@ -70265,9 +71019,15 @@ maintenance_test_menu() {
             maintenance_next_choice=$((maintenance_next_choice + 1))
         fi
 
-        maintenance_return_choice=$maintenance_next_choice
+        maintenance_hwaccel_choice=11
+        print_menu_item "$maintenance_hwaccel_choice" '硬件加速管理'
+        maintenance_return_choice=12
         print_menu_item "$maintenance_return_choice" '返回功能分类'
-        print_menu_prompt "0-$maintenance_return_choice"
+        if [ "$maintenance_next_choice" -eq 11 ]; then
+            print_menu_prompt '0-12'
+        else
+            print_menu_prompt "0-$((maintenance_next_choice - 1)) / 11-12"
+        fi
         read_category_choice
         if [ "$UI_READ_RESULT" = '0' ] || [ "$UI_READ_RESULT" = "$maintenance_return_choice" ]; then
             return 0
@@ -70293,10 +71053,17 @@ maintenance_test_menu() {
         elif [ -n "$maintenance_monitoring_choice" ] && [ "$UI_READ_RESULT" = "$maintenance_monitoring_choice" ]; then
             submenu_feature='29'
             CURRENT_CPE_MONITORING_MENU_PATH="5 > $maintenance_monitoring_choice"
+        elif [ "$UI_READ_RESULT" = "$maintenance_hwaccel_choice" ]; then
+            submenu_feature='33'
         else
             die_menu_input_issue "$UI_READ_RESULT"
         fi
-        run_menu_feature "$submenu_feature"
+        if [ "$submenu_feature" = 33 ]; then
+            run_menu_feature 33 || return $?
+            [ "${MENU_ACTION_COMPLETED:-0}" = 1 ] || continue
+        else
+            run_menu_feature "$submenu_feature"
+        fi
         return 0
     done
 }
@@ -70306,13 +71073,13 @@ main_menu() {
     require_root
     acquire_script_lock
     require_startup_disclaimer_acceptance_once
-    require_supported_nradio_model_environment
-    log_nradio_oem_environment_hint
-    require_nradio_appcenter_startup_environment
+    prime_startup_disclaimer_model || true
+    CURRENT_DETECTED_NROS_REVISION="$(detect_nros_revision 2>/dev/null || true)"
     print_main_menu_header
 
     if [ -n "$choice" ]; then
         MENU_ACTION_COMPLETED='0'
+        case "$choice" in 1|2|3|4) require_nradio_menu_environment ;; esac
         if is_current_model_ak798; then
             case "$choice" in
                 0|4|5) ;;
@@ -70377,6 +71144,7 @@ main_menu() {
         read_category_choice
         MENU_ACTION_COMPLETED='0'
 
+        case "$UI_READ_RESULT" in 1|2|3|4) require_nradio_menu_environment ;; esac
         if is_current_model_ak798; then
             case "$UI_READ_RESULT" in
                 0|4|5) ;;

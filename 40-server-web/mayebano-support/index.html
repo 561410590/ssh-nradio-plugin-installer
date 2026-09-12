@@ -3,15 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="NRadio NROS 插件脚本 V3.0.9 与 Mesh 1.20.1-2，提供插件下载、安装教程、适配机型和更新记录。">
+    <meta name="description" content="NRadio NROS 插件脚本 V3.1.0 与 Mesh 1.20.1-2，提供插件下载、安装教程、适配机型和更新记录。">
     <meta name="robots" content="index,follow">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="color-scheme" content="light">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="NRadio 插件工具 V3.0.9">
-    <meta property="og:description" content="V3.0.9 / 2026-09-11：支持 10 款机型，分流助手可同步域名 DNS 与订阅下载策略；Mesh 1.20.1-2 完善 Q6000 级联组网、断线恢复和拓扑诊断。">
+    <meta property="og:title" content="NRadio 插件工具 V3.1.0">
+    <meta property="og:description" content="V3.1.0 / 2026-09-12：5 → 11 硬件加速管理，开启 HNAT、关闭后保留软件加速，显示开关与硬件绑定状态；配套 Mesh 1.20.1-2。">
     <meta name="theme-color" content="#fff1f2">
-    <title>NRadio 插件脚本 V3.0.9 | 支持页</title>
+    <title>NRadio 插件脚本 V3.1.0 | 支持页</title>
     <style>
         /* 
          * ============================================================
@@ -714,7 +714,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">更新记录</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info" aria-label="当前版本">V3.0.9</div>
+            <div class="nav-v-info" aria-label="当前版本">V3.1.0</div>
         </nav>
     </div>
 
@@ -731,7 +731,7 @@
                     <a href="https://github.com/561410590/ssh-nradio-plugin-installer" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="btn btn-outline">GitHub 开源</a>
                 </div>
                 <div class="badge-list">
-                    <div class="badge-item">V3.0.9 / 2026-09-11</div>
+                    <div class="badge-item">V3.1.0 / 2026-09-12</div>
                     <div class="badge-item">分流与 DNS 联动</div>
                     <div class="badge-item">Mesh 1.20.1-2</div>
                     <div class="badge-item">GitHub 下载加速</div>
@@ -743,8 +743,8 @@
                     <div class="badge-item">C2000Ultra · SD 卡 / Swap</div>
                 </div>
                 <div class="release-panel" aria-label="当前版本信息">
-                    <div class="release-stat"><span>脚本版本</span><strong>V3.0.9</strong></div>
-                    <div class="release-stat"><span>更新日期</span><strong>2026-09-11</strong></div>
+                    <div class="release-stat"><span>脚本版本</span><strong>V3.1.0</strong></div>
+                    <div class="release-stat"><span>更新日期</span><strong>2026-09-12</strong></div>
                     <div class="release-stat"><span>运行方式</span><strong>SSH 终端</strong></div>
                     <div class="release-stat"><span>适配机型</span><strong>10 款 NRadio 机型</strong></div>
                 </div>
@@ -754,12 +754,15 @@
         <section class="release-notes" id="release" aria-labelledby="release-title">
             <div class="release-notes-head">
                 <div>
-                    <p class="release-kicker">V3.0.9 · 2026-09-11</p>
-                    <h2 id="release-title">分流与 DNS 联动，Mesh 组网更新</h2>
+                    <p class="release-kicker">V3.1.0 · 2026-09-12</p>
+                    <h2 id="release-title">硬件加速管理与状态核验</h2>
                 </div>
-                <div class="release-date-chip">2026-09-11</div>
+                <div class="release-date-chip">2026-09-12</div>
             </div>
             <div class="fix-grid">
+                <article class="fix-card"><span>5 → 11 · 硬件加速</span><strong>开启 HNAT，关闭保留软件加速</strong><p>开关持久保存，可查看当前状态。</p></article>
+                <article class="fix-card"><span>5 · 加速状态</span><strong>开关与实际绑定分别显示</strong><p>分别展示 HNAT 开关、IPv4/IPv6 卸载规则与硬件绑定数量，零绑定时提示尚未观察到硬件命中。</p></article>
+                <article class="fix-card"><span>5 · 切换恢复</span><strong>配置备份与失败恢复</strong><p>切换前保存加速、防火墙及开机服务状态，切换或验收失败时恢复并报告结果。</p></article>
                 <article class="fix-card"><span>5 → 3 · DNS</span><strong>域名分流与加密解析</strong><p>添加域名分流时，可同时设置加密 DNS，并在重载后清理路由器 DNS 缓存。</p></article>
                 <article class="fix-card"><span>5 → 3 · 订阅</span><strong>同步订阅下载策略</strong><p>可为匹配域名的 HTTP 订阅设置下载出口，修复分流后订阅仍走直连的问题。</p></article>
                 <article class="fix-card"><span>5 → 3 · 重载</span><strong>分流重载修复</strong><p>已有规则可继续重载，重载后检查分流、订阅与 DNS 设置。</p></article>
@@ -918,7 +921,7 @@
             <div class="container">
                 <div class="guide-header">
                     <h2 style="color:white;">适配机型</h2>
-                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">V3.0.9 已识别 10 款机型，功能按机型开放</p>
+                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">V3.1.0 已识别 10 款机型，功能按机型开放</p>
                 </div>
                 <div class="device-grid">
                     <div class="device-card"><strong>NRadio_C8-688</strong><span>已适配</span></div>
@@ -942,7 +945,8 @@
                 <h2>更新记录</h2>
             </div>
             <div class="history-grid" id="historyGrid">
-                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.0.9 · 2026-09-11</h5><p>分流助手加入域名加密 DNS 与订阅下载策略联动，修复重复规则跳过重载并增加生效核验；同步提供 Mesh 1.20.1-2，完善级联组网、无线重连与拓扑诊断。</p></div>
+                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.1.0 · 2026-09-12</h5><p>5 → 11 硬件加速管理，开启原厂 HNAT，关闭后保留软件卸载；核对运行开关、卸载规则与硬件绑定，提供配置备份及失败恢复。</p></div>
+                <div class="v-card"><h5>V3.0.9 · 2026-09-11</h5><p>分流助手加入域名加密 DNS 与订阅下载策略联动，修复重复规则跳过重载并增加生效核验；同步提供 Mesh 1.20.1-2。</p></div>
                 <div class="v-card"><span class="v-badge">V3.0.7</span><h5>2026-09-07 · 下载与存储适配</h5><p>GitHub 下载接入 gh-proxy 优先与官方回退；C2000Ultra 补齐 SD 卡检测、Swap 扩容与状态显示，同步优化 AdGuardHome 安装设置、MT5700 双线路页面及应用商店体验。</p></div>
                 <div class="v-card"><span class="v-badge">V3.0.6</span><h5>2026-09-03 · 5G 后台监听</h5><p>5G 连接监听改为后台常驻记录，修复 4G 频段误标；智能频段状态、预览、执行、日志及可逆启停统一并入 LuCI 监听页面。</p></div>
                 <div class="v-card"><span class="v-badge">V3.0.5</span><h5>2026-09-02 · 机型适配与修复</h5><p>新增 C2000 Ultra（HC-WT9500）机型适配，完善 AK68-798 轻量应用商店、首页 CPU 温度入口和 SSH 2222 配置恢复教程。</p></div>
@@ -1005,7 +1009,7 @@
                     <p>本项目用于增强 NRadio 原厂系统功能，并尽量减少对原厂文件和用户配置的影响。</p>
                     <p>代码公开，可查看脚本内容后再决定是否使用。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面：V3.0.9 / 2026-09-11｜Mesh 1.20.1-2</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面：V3.1.0 / 2026-09-12｜Mesh 1.20.1-2</p>
                     </div>
                 </div>
             </div>
@@ -1016,7 +1020,7 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">支持页面同步总脚本 V3.0.9 / 2026-09-11 与 Mesh 1.20.1-2 组网插件。</p>
+        <p class="footer-pause">支持页面同步总脚本 V3.1.0 / 2026-09-12 与 Mesh 1.20.1-2 组网插件。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 

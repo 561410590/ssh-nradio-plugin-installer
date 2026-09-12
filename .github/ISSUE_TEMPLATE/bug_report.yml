@@ -11,7 +11,7 @@ body:
     id: model
     attributes:
       label: Device model
-      description: Example: NRadio_C2000MAX
+      description: "Example: NRadio_C2000MAX"
       placeholder: NRadio_C2000MAX
     validations:
       required: true
@@ -19,7 +19,7 @@ body:
     id: firmware
     attributes:
       label: Firmware version
-      description: Example: NROS2.1.8.n0.c1
+      description: "Example: NROS2.1.8.n0.c1"
       placeholder: NROS2.1.8.n0.c1
     validations:
       required: true
@@ -27,14 +27,14 @@ body:
     id: script_version
     attributes:
       label: Script version
-      placeholder: V2.0.2
+      placeholder: V3.1.0
     validations:
       required: true
   - type: input
     id: menu_path
     attributes:
       label: Menu path
-      description: Example: 设备维护与检测 -> 风扇控制
+      description: "Example: 设备维护与检测 -> 风扇控制"
       placeholder: 设备维护与检测 -> 风扇控制
     validations:
       required: true
@@ -52,4 +52,3 @@ body:
       label: Expected result
     validations:
       required: true
-
