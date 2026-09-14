@@ -18,7 +18,10 @@ jobs:
           test -f 40-server-web/mayebano-support/AK68-798-SSH-2222.nr
           test -f 40-server-web/mayebano-support/nradio-ssh-manager.ipk
           test -f 40-server-web/mayebano-support/nradio-mesh.ipk
+          test -f 40-server-web/mayebano-support/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk
           test -f 40-server-web/mayebano-support/nradio-qos-pro.ipk
+          test -f 20-tools/nradio-multiwan.sh
+          test -f 20-tools/test_nradio_multiwan.py
           test -f 40-server-web/mayebano-support/ai_studio_code.html
           test -f 40-server-web/mayebano-support/wechat-donate.png
           test -f 40-server-web/mayebano-support/nros-ssh-security-enable.png
@@ -33,10 +36,10 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V3.1.0 script state
+      - name: Verify V3.2.0 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V3.1.0"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-09-12"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V3.2.0"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-09-14"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_HOME_TEMP_VERSION="20260912-6"' 00-current/ssh-nradio-plugin-installer.sh
@@ -126,9 +129,19 @@ jobs:
           ! grep -q 'NRADIO_SMART_BAND_EXPECTED_SHA256' 00-current/ssh-nradio-plugin-installer.sh || exit 1
           ! grep -q 'verify_remote_script_sha256' 00-current/ssh-nradio-plugin-installer.sh || exit 1
           ! grep -q 'SHA256SUMS' 00-current/ssh-nradio-plugin-installer.sh || exit 1
-          ! grep -Eq '[0-9a-fA-F]{64}' 00-current/ssh-nradio-plugin-installer.sh || exit 1
-          ! grep -Eq '[0-9a-fA-F]{32}' 00-current/ssh-nradio-plugin-installer.sh || exit 1
-          ! grep -q '\.bak' 00-current/ssh-nradio-plugin-installer.sh || exit 1
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          source = Path("00-current/ssh-nradio-plugin-installer.sh").read_text(encoding="utf-8")
+          # LuCI cache filenames are identifiers, not pinned download checksums.
+          source = re.sub(r"/tmp/luci-modulecache/[0-9a-fA-F]+(?=\s|$)", "", source)
+          assert not re.search(r"[0-9a-fA-F]{32,}", source), "Unexpected fixed hash outside LuCI cache paths"
+          # Removing OpenClash's old temporary archive does not create a backup.
+          for line in source.splitlines():
+              if ".bak" in line:
+                  assert re.fullmatch(r"\s*rm -rf (?:/[^\s;&|<>]+ )*/tmp/openclash\.bak \|\| return 1", line), "Unexpected backup path: " + line
+          PY
           ! grep -q 'appcenter-transaction' 00-current/ssh-nradio-plugin-installer.sh || exit 1
           ! grep -q 'APPCENTER_TRANSACTION' 00-current/ssh-nradio-plugin-installer.sh || exit 1
           ! grep -Eq 'mkdir -p[^[:cntrl:]]*\$BACKUP_DIR|cp[^[:cntrl:]]*\$BACKUP_DIR' 00-current/ssh-nradio-plugin-installer.sh || exit 1
@@ -141,6 +154,14 @@ jobs:
           sh -n 00-current/ssh-nradio-plugin-installer.sh
           bash -n 00-current/ssh-nradio-plugin-installer.sh
           dash -n 00-current/ssh-nradio-plugin-installer.sh
+
+      - name: Verify IPv4 and IPv6 multi-WAN integration
+        run: |
+          grep -q '^nradio_multiwan_install_assets()' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'record_action_history "5 > 5 > 2 > $mwui_choice"' 00-current/ssh-nradio-plugin-installer.sh
+          sh -n 20-tools/nradio-multiwan.sh
+          dash -n 20-tools/nradio-multiwan.sh
+          python3 20-tools/test_nradio_multiwan.py
 
       - name: Verify HNAT log reading and embedded UI syntax
         run: |
@@ -156,7 +177,7 @@ jobs:
               match = re.search(r"(?ms)^" + name + r"\(\) \{\n.*?^\}", source)
               assert match, name
               functions.append(match.group(0))
-          stubs = """
+          stubs = r"""
           cat() { printf '%s\n' "$RAW_HOOK"; }
           dmesg() { IFS= read -r message <&3; printf '%b\n' "$message"; }
           """
@@ -292,9 +313,9 @@ jobs:
 
       - name: Verify support page state
         run: |
-          grep -q '<title>NRadio 插件脚本 V3.1.0 | 支持页</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'aria-label="当前版本">V3.1.0' 40-server-web/mayebano-support/index.html
-          grep -q 'V3.1.0 / 2026-09-12' 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件脚本 V3.2.0 | 支持页</title>' 40-server-web/mayebano-support/index.html
+          grep -q 'aria-label="当前版本">V3.2.0' 40-server-web/mayebano-support/index.html
+          grep -q 'V3.2.0 / 2026-09-14' 40-server-web/mayebano-support/index.html
           grep -q '10 款 NRadio 机型' 40-server-web/mayebano-support/index.html
           grep -q '5G 连接监听' 40-server-web/mayebano-support/index.html
           grep -q 'GitHub 下载加速' 40-server-web/mayebano-support/index.html
@@ -304,7 +325,10 @@ jobs:
           grep -q '5800 双线路页面' 40-server-web/mayebano-support/index.html
           grep -q 'href="https://ghproxy.vip/https://github.com/561410590/ssh-nradio-plugin-installer/raw/refs/heads/main/00-current/ssh-nradio-plugin-installer.sh"' 40-server-web/mayebano-support/index.html
           grep -q 'MT5700 WebUI V3.0.0' 40-server-web/mayebano-support/index.html
-          ! grep -q '<div class="step-index">04</div>' 40-server-web/mayebano-support/index.html || exit 1
+          grep -q '<div class="step-index">04</div>' 40-server-web/mayebano-support/index.html
+          grep -q '配置双栈多线分流' 40-server-web/mayebano-support/index.html
+          grep -q '5 → 5 → 2' 40-server-web/mayebano-support/index.html
+          grep -q 'IPv4 / IPv6 双栈多线分流' 40-server-web/mayebano-support/index.html
           grep -q 'role="progressbar"' 40-server-web/mayebano-support/index.html
           grep -q 'aria-current="page"' 40-server-web/mayebano-support/index.html
           grep -q 'history-toggle' 40-server-web/mayebano-support/index.html
@@ -317,7 +341,8 @@ jobs:
           grep -q '128MB NAND · SSH 需安装 IPK' 40-server-web/mayebano-support/index.html
           grep -q 'href="https://ghproxy.vip/https://github.com/561410590/ssh-nradio-plugin-installer/raw/refs/heads/main/40-server-web/mayebano-support/nradio-ssh-manager.ipk"' 40-server-web/mayebano-support/index.html
           grep -q 'NROS上开发的插件' 40-server-web/mayebano-support/index.html
-          grep -q 'href="https://ghproxy.vip/https://github.com/561410590/ssh-nradio-plugin-installer/raw/refs/heads/main/40-server-web/mayebano-support/nradio-mesh.ipk"' 40-server-web/mayebano-support/index.html
+          grep -q 'href="./nradio-mesh.ipk"' 40-server-web/mayebano-support/index.html
+          grep -q 'href="./luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk"' 40-server-web/mayebano-support/index.html
           grep -q 'href="https://ghproxy.vip/https://github.com/561410590/ssh-nradio-plugin-installer/raw/refs/heads/main/40-server-web/mayebano-support/nradio-qos-pro.ipk"' 40-server-web/mayebano-support/index.html
           grep -q 'C8-788 安装 SSH 管理 IPK' 40-server-web/mayebano-support/index.html
           grep -q '进入 NRadio 应用商店，选择本地安装并上传该 IPK' 40-server-web/mayebano-support/index.html
@@ -348,7 +373,7 @@ jobs:
           grep -q 'V2.6.0' 40-server-web/mayebano-support/index.html
           grep -q 'V2.5.0' 40-server-web/mayebano-support/index.html
           grep -q 'PicoClaw / 鲲鹏小龙虾' 40-server-web/mayebano-support/index.html
-          grep -q '当前页面：V3.1.0 / 2026-09-12｜Mesh 1.20.1-2' 40-server-web/mayebano-support/index.html
+          grep -q '当前页面：V3.2.0 / 2026-09-14｜IPv4 / IPv6 多线分流' 40-server-web/mayebano-support/index.html
           ! grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html || exit 1
           grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
           grep -q '/_vercel/insights/script.js' 40-server-web/mayebano-support/index.html
@@ -406,10 +431,10 @@ jobs:
           sh -n "$work/data/etc/init.d/nradio-ssh-manager"
           sh -n "$work/data/usr/libexec/nradio-ssh-manager"
 
-      - name: Verify Mesh 1.20.1-2 application-store package
+      - name: Verify Mesh 1.20.1-4 application-store package
         run: |
-          grep -q 'V1.20.1-2 · MESH' 40-server-web/mayebano-support/index.html
-          grep -q 'luci-app-nradio-roaming_1.20.1-2_all.ipk' 40-server-web/mayebano-support/index.html
+          grep -q 'V1.20.1-4 · MESH' 40-server-web/mayebano-support/index.html
+          grep -q 'download="luci-app-nradio-roaming_1.20.1-4_all.ipk"' 40-server-web/mayebano-support/index.html
           work="$(mktemp -d)"
           tar -xzf 40-server-web/mayebano-support/nradio-mesh.ipk -C "$work"
           test "$(cat "$work/debian-binary")" = 2.0
@@ -417,9 +442,9 @@ jobs:
           tar -xzf "$work/control.tar.gz" -C "$work/control"
           tar -xzf "$work/data.tar.gz" -C "$work/data"
           grep -qx 'Package: luci-app-nradio-roaming' "$work/control/control"
-          grep -qx 'Version: 1.20.1-2' "$work/control/control"
+          grep -qx 'Version: 1.20.1-4' "$work/control/control"
           grep -qx 'Architecture: all' "$work/control/control"
-          grep -qx 'PLUGIN_VERSION=1.20.1-2' "$work/data/usr/sbin/nradio-roaming"
+          grep -qx 'PLUGIN_VERSION=1.20.1-4' "$work/data/usr/sbin/nradio-roaming"
           grep -qx 'MAX_ONBOARD_CANDIDATES=8' "$work/data/usr/sbin/nradio-roaming"
           grep -q 'candidate-trying' "$work/data/usr/sbin/nradio-roaming"
           grep -q 'candidate-trying' "$work/data/usr/lib/lua/luci/view/nradio_roaming/status.htm"
@@ -433,6 +458,38 @@ jobs:
           sh -n "$work/data/usr/libexec/nradio-roaming-appcenter"
           sh -n "$work/data/usr/libexec/nradio-roaming-homepage"
           sh -n "$work/data/usr/libexec/nradio-ikuai"
+
+      - name: Verify AK68-798 bridge 1.2.0-5 application-store package
+        run: |
+          grep -q 'V1.2.0-5 · AK68-798' 40-server-web/mayebano-support/index.html
+          grep -q 'download="luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk"' 40-server-web/mayebano-support/index.html
+          work="$(mktemp -d)"
+          tar -xzf 40-server-web/mayebano-support/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk -C "$work"
+          test "$(cat "$work/debian-binary")" = 2.0
+          mkdir "$work/control" "$work/data"
+          tar -xzf "$work/control.tar.gz" -C "$work/control"
+          tar -xzf "$work/data.tar.gz" -C "$work/data"
+          grep -qx 'Package: luci-app-nradio-ak798-bridge' "$work/control/control"
+          grep -qx 'Version: 1.2.0-5' "$work/control/control"
+          grep -qx 'Architecture: all' "$work/control/control"
+          for script in preinst postinst prerm postrm; do
+            test -x "$work/control/$script"
+            sh -n "$work/control/$script"
+          done
+          test -x "$work/data/etc/init.d/nradio-ak798-bridge"
+          test -x "$work/data/usr/libexec/nradio-ak798-bridge"
+          test -x "$work/data/usr/libexec/nradio-ak798-appcenter"
+          test -x "$work/data/usr/libexec/nradio-ak798-refresh"
+          test -x "$work/data/usr/share/nradio-ak798-bridge/store-remove"
+          test -s "$work/data/usr/lib/lua/luci/controller/nradio_adv/ak798_bridge.lua"
+          test -s "$work/data/usr/lib/lua/luci/view/nradio_ak798_bridge/index.htm"
+          test -s "$work/data/www/luci-static/nradio-ak798-bridge/panel.css"
+          test -s "$work/data/www/luci-static/nradio/images/icon/nradio-ak798-bridge.svg"
+          sh -n "$work/data/etc/init.d/nradio-ak798-bridge"
+          sh -n "$work/data/usr/libexec/nradio-ak798-refresh"
+          sh -n "$work/data/usr/share/nradio-ak798-bridge/store-remove"
+          python3 -m json.tool "$work/data/etc/nradio-ak798-bridge/config.json" > /dev/null
+          node --check "$work/data/www/luci-static/nradio-ak798-bridge/panel.js"
 
       - name: Verify QoS 1.0.24 application-store package
         run: |
@@ -466,6 +523,8 @@ jobs:
           grep -q '"/40-server-web/mayebano-support/nradio-ssh-manager.ipk"' vercel.json
           grep -q '"/nradio-mesh.ipk"' vercel.json
           grep -q '"/40-server-web/mayebano-support/nradio-mesh.ipk"' vercel.json
+          grep -q '"/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk"' vercel.json
+          grep -q '"/40-server-web/mayebano-support/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk"' vercel.json
           grep -q '"/nradio-qos-pro.ipk"' vercel.json
           grep -q '"/40-server-web/mayebano-support/nradio-qos-pro.ipk"' vercel.json
           grep -q '"/AK68-798-SSH-2222.nr"' vercel.json
@@ -482,6 +541,7 @@ jobs:
           test ! -e 40-server-web/mayebano-support/ssh-nradio-plugin-installer.sh
           test -s 40-server-web/mayebano-support/nradio-ssh-manager.ipk
           test -s 40-server-web/mayebano-support/nradio-mesh.ipk
+          test -s 40-server-web/mayebano-support/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk
           test -s 40-server-web/mayebano-support/nradio-qos-pro.ipk
           test -s 40-server-web/mayebano-support/AK68-798-SSH-2222.nr
           test -s 40-server-web/mayebano-support/nros-ssh-security-enable.png
@@ -491,14 +551,15 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'NRadio V3.1.0 release checksums' CHECKSUMS.txt
-          grep -q 'Generated from local file contents on 2026-09-12' CHECKSUMS.txt
+          grep -q 'NRadio V3.2.0 release checksums' CHECKSUMS.txt
+          grep -q 'Generated from local file contents on 2026-09-14' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt || exit 1
           records=0
           main_seen=0
           page_seen=0
           ipk_seen=0
           mesh_ipk_seen=0
+          ak798_ipk_seen=0
           qos_ipk_seen=0
           ak68_ssh_seen=0
           source_seen=0
@@ -513,6 +574,7 @@ jobs:
               40-server-web/mayebano-support/index.html) page_seen=$((page_seen + 1)) ;;
               40-server-web/mayebano-support/nradio-ssh-manager.ipk) ipk_seen=$((ipk_seen + 1)) ;;
               40-server-web/mayebano-support/nradio-mesh.ipk) mesh_ipk_seen=$((mesh_ipk_seen + 1)) ;;
+              40-server-web/mayebano-support/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk) ak798_ipk_seen=$((ak798_ipk_seen + 1)) ;;
               40-server-web/mayebano-support/nradio-qos-pro.ipk) qos_ipk_seen=$((qos_ipk_seen + 1)) ;;
               40-server-web/mayebano-support/AK68-798-SSH-2222.nr) ak68_ssh_seen=$((ak68_ssh_seen + 1)) ;;
               40-server-web/mayebano-support/ai_studio_code.html) source_seen=$((source_seen + 1)) ;;
@@ -520,11 +582,12 @@ jobs:
               *) exit 1 ;;
             esac
           done < <(grep -E '^[0-9a-f]{64}[[:space:]]+[0-9]+[[:space:]]+' CHECKSUMS.txt)
-          test "$records" -eq 8
+          test "$records" -eq 9
           test "$main_seen" -eq 1
           test "$page_seen" -eq 1
           test "$ipk_seen" -eq 1
           test "$mesh_ipk_seen" -eq 1
+          test "$ak798_ipk_seen" -eq 1
           test "$qos_ipk_seen" -eq 1
           test "$ak68_ssh_seen" -eq 1
           test "$source_seen" -eq 1
@@ -532,11 +595,15 @@ jobs:
 
       - name: Verify repository docs
         run: |
-          grep -q '## Mesh组网插件 1.20.1-2' README.md
+          grep -q '## Mesh组网插件 1.20.1-4' README.md
+          grep -q '## AK68-798 透传插件 1.2.0-5' README.md
           grep -q '## NRadio Mesh 1.0.14 - 2026-09-02' CHANGELOG.md
-          grep -q '当前版本：`V3.1.0`' README.md
+          grep -q '当前版本：`V3.2.0`' README.md
           grep -q '公开版本：以 GitHub Releases 页面为准' README.md
-          grep -q '## V3.1.0 更新' README.md
+          grep -q '## V3.2.0 更新' README.md
+          grep -q '## V3.2.0 - 2026-09-14（本地更新）' CHANGELOG.md
+          grep -q '## NRadio Mesh 1.20.1-4 - 2026-09-14（本地下载包更新）' CHANGELOG.md
+          grep -q '## AK68-798 透传插件 1.2.0-5 - 2026-09-14（本地下载包新增）' CHANGELOG.md
           grep -q '## V3.1.0 - 2026-09-12（正式发布）' CHANGELOG.md
           grep -q '## NRadio Mesh 1.20.1-2 - 2026-09-11（本地下载包更新）' CHANGELOG.md
           grep -q '## V3.0.7 更新' README.md

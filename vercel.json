@@ -37,6 +37,10 @@
       "destination": "/40-server-web/mayebano-support/nradio-mesh.ipk"
     },
     {
+      "source": "/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk",
+      "destination": "/40-server-web/mayebano-support/luci-app-nradio-ak798-bridge_1.2.0-5_all.ipk"
+    },
+    {
       "source": "/nradio-qos-pro.ipk",
       "destination": "/40-server-web/mayebano-support/nradio-qos-pro.ipk"
     },

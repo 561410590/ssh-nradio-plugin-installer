@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.1.0"
+SCRIPT_VERSION="V3.2.0"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-12"
+SCRIPT_RELEASE_DATE="2026-09-14"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -3156,7 +3156,7 @@ trap cleanup_uninstall_helper EXIT
 trap abort_uninstall_helper INT TERM HUP QUIT
 
 case "$plugin" in
-    openclash|webssh|adguardhome|openvpn|openlist|zerotier|easytier|fanctrl|qiyou|leigod|mosdns|ddnsgo|mt5700|docker)
+    openclash|openbox|webssh|adguardhome|openvpn|openlist|zerotier|easytier|fanctrl|qiyou|leigod|mosdns|ddnsgo|mt5700|docker)
         ;;
     '')
         die "缺少卸载插件参数"
@@ -3830,9 +3830,31 @@ cleanup_saved_openvpn_runtime_state() {
 cleanup_openclash() {
     stop_disable /etc/init.d/openclash
     kill_name clash
+    # Resolve links before opkg removes them.
+    oc_targets="$(readlink -f /etc/openclash 2>/dev/null || true)
+$(readlink -f /usr/share/openclash 2>/dev/null || true)
+$(readlink -f /tmp/openclash 2>/dev/null || true)"
     remove_pkg_if_present luci-app-openclash
-    rm -rf /etc/openclash/core 2>/dev/null || true
-    rm -f /etc/openclash/ASN.mmdb /etc/openclash/core_version 2>/dev/null || true
+    remove_pkg_if_present pkg-openclash-dep
+    for oc_real in $oc_targets; do
+        case "$oc_real" in
+            /mnt/rootfs_2nd_data/nradio-apps/etc/openclash|/mnt/rootfs_2nd_data/nradio-apps/usr/share/openclash)
+                rm -rf "$oc_real" || return 1 ;;
+        esac
+    done
+    # Remove only OpenClash's own trees, including its known expansion targets.
+    for oc_path in /etc/openclash /usr/share/openclash /tmp/openclash; do
+        oc_real="$(readlink -f "$oc_path" 2>/dev/null || true)"
+        case "$oc_real" in
+            /mnt/rootfs_2nd_data/nradio-apps/etc/openclash|/mnt/rootfs_2nd_data/nradio-apps/usr/share/openclash)
+                rm -rf "$oc_real" || return 1 ;;
+        esac
+        rm -rf "$oc_path" || return 1
+    done
+    rm -rf /usr/lib/lua/luci/model/cbi/openclash /usr/lib/lua/luci/view/openclash /tmp/openclash_ui /tmp/openclash.bak || return 1
+    rm -f /etc/config/openclash /etc/init.d/openclash /usr/lib/lua/luci/controller/openclash.lua \
+        /tmp/.uci/openclash /tmp/appcenter/luci/admin.services.openclash \
+        /tmp/lock/openclash_jobs.lock /tmp/lock/procd_openclash.lock || return 1
     remove_app_icon_file "openclash.png"
     remove_app_icon_file "openclash.svg"
     remove_app_icon_file "$OPENCLASH_ICON_NAME"
@@ -4523,6 +4545,11 @@ case "$plugin" in
     openclash)
         cleanup_openclash
         ;;
+    openbox)
+        [ -x /usr/libexec/nradio-openbox-uninstall ] || die "Open-Box 卸载器缺失，请重新安装后卸载"
+        /usr/libexec/nradio-openbox-uninstall || exit 1
+        cleanup_appcenter_entry "Open-Box" "luci-app-nradio-openbox" "nradioadv/system/openbox"
+        ;;
     webssh)
         cleanup_webssh
         ;;
@@ -4586,6 +4613,7 @@ local TASK_TIMEOUT_SECONDS = 7200
 local CODE_OK = 0
 local CODE_RUNNING = 2
 local CODE_FAILED = 13
+local response_capture
 
 function index()
     local function post_entry(path, handler, order)
@@ -4625,6 +4653,11 @@ local function json_response(code, msg, detail)
         result.error_detail = detail
     end
 
+    if response_capture then
+        response_capture.result = result
+        return
+    end
+
     http.prepare_content("application/json")
     http.write(jsonc.stringify({ result = result }))
 end
@@ -4658,6 +4691,8 @@ local function plugin_from_name(name)
 
     if name == "luci-app-openclash" or name == "openclash" then
         return "openclash"
+    elseif name == "Open-Box" or name == "openbox" or name == "luci-app-nradio-openbox" then
+        return "openbox"
     elseif name == "Web SSH" or name == "webssh" or name == "ttyd" then
         return "webssh"
     elseif name == "luci-app-adguardhome" or name == "adguardhome" then
@@ -4892,10 +4927,16 @@ local function with_task_request_lock(plugin, callback)
         json_response(CODE_RUNNING, "卸载请求正在处理；持续占用时请核对请求锁")
         return
     end
+    -- LuCI HTTP output yields; emit it after leaving Lua 5.1 pcall.
+    local pending = {}
+    response_capture = pending
     local ok, err = pcall(callback)
+    response_capture = nil
     os.execute("/bin/rmdir " .. shell_quote(guard) .. " >/dev/null 2>&1")
     if not ok then
         json_response(CODE_FAILED, "卸载请求异常", tostring(err))
+    elseif pending.result then
+        json_response(pending.result.code, pending.result.msg, pending.result.error_detail)
     end
 end
 
@@ -5020,6 +5061,7 @@ function uninstall_docker()
     start_plugin("docker")
 end
 EOF_PLUGIN_UNINSTALL_CONTROLLER
+    rm -f /tmp/luci-modulecache/6C7563692E636F6E74726F6C6C65722E6E726164696F5F6164762E706C7567696E5F756E696E7374616C6C /tmp/luci-indexcache 2>/dev/null || true
 }
 
 shell_quote() {
@@ -9276,6 +9318,8 @@ EOF
         $("#sub_frame").removeClass("nr-frame-ready").addClass("nr-frame-loading").attr("data-src", frame_src).attr("src", frame_src);
     }
     function nradio_plugin_uninstall_key(app_name){
+        if(app_name == "Open-Box" || app_name == "openbox" || app_name == "luci-app-nradio-openbox")
+            return "openbox";
         if(app_name == "luci-app-openclash" || app_name == "openclash")
             return "openclash";
         if(app_name == "Web SSH" || app_name == "webssh" || app_name == "ttyd")
@@ -19267,6 +19311,10 @@ nradio_5g_aggregation_print_mwan_weight() {
 }
 
 nradio_5g_aggregation_print_mwan_status() {
+    if [ -x /usr/libexec/nradio-multiwan ] && [ "$(uci -q get nradio_multiwan.main.enabled 2>/dev/null || true)" = 1 ]; then
+        /usr/libexec/nradio-multiwan status
+        return $?
+    fi
     if ! command -v mwan3 >/dev/null 2>&1; then
         log "mwan3:  未安装或命令不可用"
         return 1
@@ -19417,79 +19465,567 @@ nradio_5g_aggregation_light_repair() {
     sleep 5
 }
 
-nradio_5g_aggregation_fix_mwan_weight() {
-    agg_changed='0'
+nradio_multiwan_install_assets() {
+    for mwui_cmd in uci ifstatus jsonfilter iptables iptables-restore ip6tables ip6tables-restore flock; do
+        command -v "$mwui_cmd" >/dev/null 2>&1 || { log "缺少依赖: $mwui_cmd"; return 1; }
+    done
+    iptables -t mangle -S mwan3_hook 2>/dev/null | grep -q 'CONNMARK --restore-mark --nfmask 0xff00' || {
+        log "当前 mwan3 标记布局不兼容，需要 NROS 0xff00 IPv4 分流接口"; return 1;
+    }
+    ip6tables -t mangle -S mwan3_hook 2>/dev/null | grep -q 'CONNMARK --restore-mark --nfmask 0xff00' || {
+        log "当前 mwan3 缺少 NROS 0xff00 IPv6 分流接口"; return 1;
+    }
+    mkdir -p /usr/libexec || return 1
+    cat > /usr/libexec/nradio-multiwan.new <<'EOF_NRADIO_MULTIWAN'
+#!/bin/sh
+# NRadio IPv4/IPv6 multi-WAN, V3.2.0 (2026-09-14).
+# Reuse native WAN routing/NAT/health and the existing 0xff00 connmark mask.
+MW_RUN=/var/run/nradio-multiwan
+MW_HELPER=/usr/libexec/nradio-multiwan
 
-    selfcheck_print_header "负载均衡"
-    if ! nradio_5g_aggregation_model_supported; then
-        log "结果:   当前机型无 5G 聚合权重修复动作"
+mw_sections() {
+    uci -q show "$1" 2>/dev/null | awk -F '[.=]' -v kind="$2" '$0 ~ "=" kind "$" {print $2}'
+}
+
+mw_name() {
+    case "$1" in ''|*[!a-zA-Z0-9_]*) return 1 ;; esac
+    [ "${#1}" -le 15 ]
+}
+
+mw_weight() {
+    case "$1" in ''|*[!0-9]*|0*) return 1 ;; esac
+    [ "${#1}" -le 4 ] && [ "$1" -le 1000 ]
+}
+
+mw_ipv4() {
+    [ "$1" = '-' ] && return 0
+    case "$1" in ''|*[!0-9./]*) return 1 ;; esac
+    printf '%s\n' "$1" | awk '
+        /^[0-9.]+(\/[0-9]+)?$/ {
+            n=split($0,a,"/"); if(n>2 || (n==2 && (a[2]+0>32 || length(a[2])>2))) exit 1;
+            if(split(a[1],b,".")!=4) exit 1;
+            for(i=1;i<=4;i++) if(b[i]=="" || b[i]+0>255 || length(b[i])>3 || (length(b[i])>1 && substr(b[i],1,1)=="0")) exit 1;
+            ok=1
+        }
+        END {if(!ok) exit 1}'
+}
+
+mw_ports() {
+    [ "$1" = '-' ] && return 0
+    case "$1" in ''|*[!0-9:]*) return 1 ;; esac
+    printf '%s\n' "$1" | awk '
+        /^[0-9]+(:[0-9]+)?$/ {
+            n=split($0,a,":");
+            for(i=1;i<=n;i++) if(length(a[i])>5 || a[i]+0<1 || a[i]+0>65535 || substr(a[i],1,1)=="0") exit 1;
+            if(n==2 && a[1]+0>a[2]+0) exit 1; ok=1
+        }
+        END {if(!ok) exit 1}'
+}
+
+mw_ipv6() {
+    [ "$1" = '-' ] && return 0
+    case "$1" in ''|*[!0-9a-fA-F:/]*) return 1 ;; esac
+    printf '%s\n' "$1" | awk '
+        function groups(s, a,n,i) {
+            if(s=="") return 0; n=split(s,a,":");
+            for(i=1;i<=n;i++) if(length(a[i])<1 || length(a[i])>4) return -100;
+            return n
+        }
+        {n=split($0,p,"/"); if(n>2 || (n==2 && (p[2]!~/^[0-9]+$/ || length(p[2])>3 || p[2]+0>128))) exit 1;
+         s=p[1]; if(s!~/:/ || s~/:::/) exit 1;
+         compressed=gsub(/::/,"X",s); if(compressed>1) exit 1;
+         if(compressed) {split(s,a,"X"); l=groups(a[1]); r=groups(a[2]); ok=(l>=0 && r>=0 && l+r<8)}
+         else ok=(groups(s)==8)
+        } END {if(!ok) exit 1}'
+}
+
+mw_validate_rule() {
+    case "${6:-4}" in
+        4) mw_ipv4 "$1" && mw_ipv4 "$2" || return 1 ;;
+        6) mw_ipv6 "$1" && mw_ipv6 "$2" || return 1 ;;
+        *) return 1 ;;
+    esac
+    mw_ports "$4" && mw_name "$5" || return 1
+    case "$3" in tcp|udp) ;; all) [ "$4" = '-' ] || return 1 ;; *) return 1 ;; esac
+    # An all-destination/all-source/all-protocol rule would bypass balancing.
+    [ "$1/$2/$3/$4" != '-/-/all/-' ]
+}
+
+# IDs are positions among ALL native interface sections, including IPv6.
+mw_interfaces() {
+    local wanted="${1:-all}" iface id=0 family enabled dev state data checker af
+    for iface in $(mw_sections mwan3 interface); do
+        id=$((id + 1))
+        mw_name "$iface" || continue
+        family=$(uci -q get "mwan3.$iface.family")
+        enabled=$(uci -q get "mwan3.$iface.enabled")
+        case "$family/$enabled" in ipv4/1) af=4 ;; ipv6/1) af=6 ;; *) continue ;; esac
+        [ "$wanted" = all ] || [ "$af" = "$wanted" ] || continue
+        [ "$id" -lt 253 ] || continue
+        data=$(ifstatus "$iface" 2>/dev/null)
+        dev=$(printf '%s' "$data" | jsonfilter -e '@.l3_device' 2>/dev/null)
+        state=offline
+        checker=$iface
+        case "$iface" in cpe*_4) checker=${iface%_4} ;; esac
+        if [ "$(printf '%s' "$data" | jsonfilter -e '@.up' 2>/dev/null)" = true ] &&
+           [ "$(cat "/var/run/mwan3/iface_state/$iface" 2>/dev/null)" = online ] &&
+           [ -n "$(ip -"$af" route show table "$id" default 2>/dev/null)" ]; then
+            case "$(cat "/var/run/wanchk/iface_state/$checker" 2>/dev/null)" in
+                down|failed|offline) ;;
+                *) state=online ;;
+            esac
+        fi
+        printf '%s|%s|%s|%s\n' "$iface" "$id" "${dev:--}" "$state"
+    done
+}
+
+mw_snapshot() {
+    local wanted="${1:-4}" selected iface row weight all seen=' ' family
+    selected=$(uci -q get nradio_multiwan.main.interfaces)
+    all=$(mw_interfaces "$wanted")
+    for iface in $selected; do
+        mw_name "$iface" || return 1
+        case "$seen" in *" $iface "*) return 1 ;; esac
+        seen="$seen$iface "
+        row=$(printf '%s\n' "$all" | awk -F '|' -v name="$iface" '$1==name {print; exit}')
+        if [ -z "$row" ]; then
+            family=$(uci -q get "mwan3.$iface.family")
+            case "$wanted/$family" in 4/ipv6|6/ipv4) continue ;; *) return 1 ;; esac
+        fi
+        weight=$(uci -q get "nradio_multiwan.l_$iface.weight")
+        mw_weight "$weight" || return 1
+        printf '%s|%s\n' "$row" "$weight"
+    done
+}
+
+mw_rule_rows() {
+    local wanted="${1:-4}" rule src dst proto ports iface family
+    for rule in $(mw_sections nradio_multiwan rule); do
+        mw_name "$rule" || return 1
+        src=$(uci -q get "nradio_multiwan.$rule.src")
+        dst=$(uci -q get "nradio_multiwan.$rule.dst")
+        proto=$(uci -q get "nradio_multiwan.$rule.proto")
+        ports=$(uci -q get "nradio_multiwan.$rule.ports")
+        iface=$(uci -q get "nradio_multiwan.$rule.interface")
+        case "$(uci -q get "mwan3.$iface.family")" in ipv6) family=6 ;; ipv4) family=4 ;; *) return 1 ;; esac
+        [ "$family" = "$wanted" ] || continue
+        mw_validate_rule "$src" "$dst" "$proto" "$ports" "$iface" "$family" || return 1
+        printf '%s|%s|%s|%s|%s|%s\n' "$rule" "$src" "$dst" "$proto" "$ports" "$iface"
+    done
+}
+
+# Build a staging chain. Conditional probability uses remaining selected weight,
+# so three or more WANs keep the configured ratio as well as two WANs.
+# MW_SNAPSHOT / MW_RULES contain validated data; this function is read-only.
+mw_render() {
+    local chain="$1" iface id dev state weight total probability rule src dst proto ports target mark
+    total=$(printf '%s\n' "$MW_SNAPSHOT" | awk -F '|' '$4=="online" {n+=$5} END {print n+0}')
+    printf '*mangle\n:%s - [0:0]\n-F %s\n' "$chain" "$chain"
+    while IFS='|' read -r rule src dst proto ports target; do
+        [ -n "$rule" ] || continue
+        mark=$(printf '%s\n' "$MW_SNAPSHOT" | awk -F '|' -v name="$target" '$1==name && $4=="online" {printf "0x%x",$2*256; exit}')
+        [ -n "$mark" ] || continue
+        printf -- '-A %s -m mark --mark 0/0xff00' "$chain"
+        [ "$src" = '-' ] || printf ' -s %s' "$src"
+        [ "$dst" = '-' ] || printf ' -d %s' "$dst"
+        [ "$proto" = all ] || printf ' -p %s' "$proto"
+        [ "$ports" = '-' ] || printf ' -m %s --dport %s' "$proto" "$ports"
+        printf ' -m comment --comment nr-mw-%s -j MARK --set-xmark %s/0xff00\n' "$rule" "$mark"
+    done <<EOF_RULES
+$MW_RULES
+EOF_RULES
+    while IFS='|' read -r iface id dev state weight; do
+        [ "$state" = online ] || continue
+        mark=$(printf '0x%x' "$((id * 256))")
+        printf -- '-A %s -m mark --mark 0/0xff00' "$chain"
+        if [ "$weight" -lt "$total" ]; then
+            probability=$(awk -v w="$weight" -v t="$total" 'BEGIN {printf "%.10f",w/t}')
+            printf ' -m statistic --mode random --probability %s' "$probability"
+        fi
+        printf ' -m comment --comment nr-mw-%s -j MARK --set-xmark %s/0xff00\n' "$iface" "$mark"
+        total=$((total - weight))
+    done <<EOF_LINES
+$MW_SNAPSHOT
+EOF_LINES
+    # No selected WAN online: fail closed, instead of leaking to an unselected WAN.
+    printf -- '-A %s -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00\n' "$chain"
+}
+
+mw_nat6_render() {
+    local iface id dev state weight mark
+    printf '*nat\n:nr_mw_n6 - [0:0]\n-F nr_mw_n6\n'
+    while IFS='|' read -r iface id dev state weight; do
+        [ "$state" = online ] || continue
+        case "$dev" in ''|-|*[!a-zA-Z0-9_.:-]*) return 1 ;; esac
+        mark=$(printf '0x%x' "$((id * 256))")
+        printf -- '-A nr_mw_n6 -o %s -m mark --mark %s/0xff00 -j MASQUERADE\n' "$dev" "$mark"
+    done <<EOF_NAT6
+$MW_SNAPSHOT
+EOF_NAT6
+}
+
+mw_remove_family() {
+    local af="$1" ipt restore rules chain
+    if [ "$af" = 6 ]; then ipt=ip6tables; restore=ip6tables-restore; else ipt=iptables; restore=iptables-restore; fi
+    rules=$($ipt -w 5 -t mangle -S mwan3_rules 2>/dev/null)
+    {
+        printf '*mangle\n'
+        printf '%s\n' "$rules" | awk '/^-A / && /--comment "?nr-multiwan"? / {sub(/^-A /,"-D "); print}'
+        printf 'COMMIT\n'
+    } | $restore -w 5 --noflush || return 1
+    for chain in nr_mw_a nr_mw_b; do
+        $ipt -w 5 -t mangle -F "$chain" 2>/dev/null || true
+        $ipt -w 5 -t mangle -X "$chain" 2>/dev/null || true
+    done
+    if [ "$af" = 6 ]; then
+        rules=$(ip6tables -w 5 -t nat -S POSTROUTING 2>/dev/null)
+        {
+            printf '*nat\n'
+            printf '%s\n' "$rules" | awk '/^-A / && /--comment "?nr-multiwan6"? / {sub(/^-A /,"-D "); print}'
+            printf 'COMMIT\n'
+        } | ip6tables-restore -w 5 --noflush || return 1
+        ip6tables -w 5 -t nat -F nr_mw_n6 2>/dev/null || true
+        ip6tables -w 5 -t nat -X nr_mw_n6 2>/dev/null || true
+    fi
+    rm -f "$MW_RUN/signature$af" "$MW_RUN/lines$af"
+}
+
+mw_apply_family() {
+    local af="$1" ipt restore default policy rules position target signature chain nat_rules
+    if [ "$af" = 6 ]; then
+        ipt=ip6tables; restore=ip6tables-restore; default=default_rule6; policy=mwan3_policy_net6_switch
+    else
+        ipt=iptables; restore=iptables-restore; default=default_rule; policy=mwan3_policy_net_switch
+    fi
+    MW_SNAPSHOT=$(mw_snapshot "$af") || return 1
+    if [ -z "$MW_SNAPSHOT" ]; then
+        [ ! -f "$MW_RUN/signature$af" ] || mw_remove_family "$af"
         return 0
     fi
-    command -v uci >/dev/null 2>&1 || {
-        log "mwan3权重: 缺少 uci，无法修复"
-        return 1
-    }
-
-    printf '请输入副5G权重 [2]: '
-    if ui_read_line; then
-        agg_cpe1_weight="$UI_READ_RESULT"
-    else
-        agg_cpe1_weight=''
-    fi
-    [ -n "$agg_cpe1_weight" ] || agg_cpe1_weight='2'
-    case "$agg_cpe1_weight" in
-        *[!0-9]*|0)
-            log "mwan3权重: 副5G(cpe1_4)权重无效"
-            return 1
-            ;;
-    esac
-
-    printf '请输入蜂窝权重 [1]: '
-    if ui_read_line; then
-        agg_cpe_weight="$UI_READ_RESULT"
-    else
-        agg_cpe_weight=''
-    fi
-    [ -n "$agg_cpe_weight" ] || agg_cpe_weight='1'
-    case "$agg_cpe_weight" in
-        *[!0-9]*|0)
-            log "mwan3权重: 蜂窝(cpe_4)权重无效"
-            return 1
-            ;;
-    esac
-
-    log "负载均衡: 副5G:蜂窝 = ${agg_cpe1_weight}:${agg_cpe_weight}"
-
-    for agg_iface in cpe_4 cpe1_4; do
-        case "$agg_iface" in
-            cpe1_4)
-                agg_target_weight="$agg_cpe1_weight"
-                ;;
-            cpe_4)
-                agg_target_weight="$agg_cpe_weight"
-                ;;
-            *)
-                agg_target_weight='1'
-                ;;
-        esac
-        agg_members="$(nradio_5g_aggregation_mwan_members_for_iface "$agg_iface" 2>/dev/null || true)"
-        if [ -z "$agg_members" ]; then
-            log "mwan3权重: $agg_iface = 未找到 member"
-            continue
+    MW_RULES=$(mw_rule_rows "$af") || return 1
+    rules=$($ipt -w 5 -t mangle -S mwan3_rules 2>/dev/null) || return 1
+    position=$(printf '%s\n' "$rules" | awk -v rule="$default" -v policy="$policy" '
+        /^-A / && !/--comment "?nr-multiwan"? / {n++; if($0 ~ "--comment \"?" rule "\"? " && $NF==policy) {print n; exit}}')
+    [ -n "$position" ] || return 1
+    target=$(printf '%s\n' "$rules" | awk '/--comment "?nr-multiwan"? / {print $NF; exit}')
+    signature=$(printf '%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position")
+    if [ "$signature" = "$(cat "$MW_RUN/signature$af" 2>/dev/null)" ] &&
+       $ipt -w 5 -t mangle -C mwan3_rules -m mark --mark 0/0xff00 -m comment --comment nr-multiwan -j "$target" 2>/dev/null &&
+       $ipt -w 5 -t mangle -C "$target" -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00 2>/dev/null; then
+        if [ "$af" = 4 ] || ip6tables -w 5 -t nat -C POSTROUTING -m comment --comment nr-multiwan6 -j nr_mw_n6 2>/dev/null; then
+            return 0
         fi
-        for agg_member in $agg_members; do
-            log "mwan3权重: 设置 $agg_member ($agg_iface) weight=${agg_target_weight}"
-            uci set "mwan3.${agg_member}.weight=${agg_target_weight}" >/dev/null 2>&1 && agg_changed='1'
-        done
-    done
-
-    if [ "$agg_changed" = '1' ]; then
-        uci commit mwan3 >/dev/null 2>&1 || true
-        nradio_5g_aggregation_restart_mwan || true
-        sleep 3
-    else
-        log "mwan3权重: 未产生变更"
     fi
+    case "$target" in nr_mw_a) chain=nr_mw_b ;; *) chain=nr_mw_a ;; esac
+    {
+        mw_render "$chain"
+        printf '%s\n' "$rules" | awk '/^-A / && /--comment "?nr-multiwan"? / {sub(/^-A /,"-D "); print}'
+        printf -- '-I mwan3_rules %s -m mark --mark 0/0xff00 -m comment --comment nr-multiwan -j %s\nCOMMIT\n' "$position" "$chain"
+    } >"$MW_RUN/rules$af.next" || return 1
+    # Validate both tables before switching the IPv6 classifier.
+    $restore -w 5 --test --noflush <"$MW_RUN/rules$af.next" || return 1
+    if [ "$af" = 6 ]; then
+        nat_rules=$(ip6tables -w 5 -t nat -S POSTROUTING) || return 1
+        {
+            mw_nat6_render
+            printf '%s\n' "$nat_rules" | awk '/^-A / && /--comment "?nr-multiwan6"? / {sub(/^-A /,"-D "); print}'
+            printf -- '-I POSTROUTING 1 -m comment --comment nr-multiwan6 -j nr_mw_n6\nCOMMIT\n'
+        } >"$MW_RUN/nat6.next" || return 1
+        ip6tables-restore -w 5 --test --noflush <"$MW_RUN/nat6.next" || return 1
+        ip6tables-restore -w 5 --noflush <"$MW_RUN/nat6.next" || return 1
+    fi
+    $restore -w 5 --noflush <"$MW_RUN/rules$af.next" || return 1
+    printf '%s\n' "$signature" >"$MW_RUN/signature$af"
+    printf '%s\n' "$MW_SNAPSHOT" >"$MW_RUN/lines$af"
+    logger -t nr-multiwan "IPv$af policy refreshed: $(printf '%s\n' "$MW_SNAPSHOT" | tr '\n' ' ')"
+}
+
+mw_apply() (
+    mkdir -p "$MW_RUN" || exit 1
+    exec 9>"$MW_RUN/lock"
+    flock -w 10 9 || exit 1
+    [ "$(uci -q get nradio_multiwan.main.enabled)" = 1 ] || exit 0
+    result=0
+    for af in 4 6; do
+        mw_apply_family "$af" || { logger -t nr-multiwan "IPv$af policy apply failed"; result=1; }
+    done
+    exit "$result"
+)
+
+mw_stop() (
+    mkdir -p "$MW_RUN" || exit 1
+    exec 9>"$MW_RUN/lock"
+    flock -w 10 9 || exit 1
+    result=0
+    for af in 4 6; do mw_remove_family "$af" || result=1; done
+    rm -f "$MW_RUN/signature" "$MW_RUN/lines"
+    exit "$result"
+)
+
+mw_connections() {
+    local family="${1:-4}"
+    if [ -r /proc/net/nf_conntrack ]; then
+        cat /proc/net/nf_conntrack
+    elif command -v conntrack >/dev/null 2>&1; then
+        conntrack -L -f "ipv$family" 2>/dev/null
+    fi | awk -v family="$family" '
+        {for(i=1;i<=NF;i++) if($i ~ /^src=/) {is6=index($i,":")>0; break}; if((family==6)!=is6) next}
+        {for(i=1;i<=NF;i++) if($i ~ /^mark=[0-9]+$/) {split($i,a,"="); id=int(a[2]/256)%256; count[id]++; break}}
+        END {for(id in count) print id,count[id]}'
+}
+
+mw_status() {
+    local af snapshot counts iface id dev state weight count total share enabled running ipt
+    enabled=$(uci -q get nradio_multiwan.main.enabled)
+    case "$enabled" in 1) enabled=已启用 ;; *) enabled=已停用 ;; esac
+    running=$(ubus call service list '{"name":"nradio-multiwan"}' 2>/dev/null | jsonfilter -e '@["nradio-multiwan"].instances.*.running' 2>/dev/null)
+    case "$running" in *true*) running=运行中 ;; *) running=未运行 ;; esac
+    printf 'IPv4/IPv6 多线叠加：%s / 后台：%s\n' "$enabled" "$running"
+    for af in 4 6; do
+    snapshot=$(mw_snapshot "$af") || return 1
+    counts=$(mw_connections "$af")
+    printf 'IPv%s：\n' "$af"
+    total=$(printf '%s\n' "$snapshot" | awk -F '|' '$4=="online" {n+=$5} END {print n+0}')
+    printf '接口 | 状态 | 权重 | 新连接目标占比 | 当前连接数 | 设备\n'
+    while IFS='|' read -r iface id dev state weight; do
+        [ -n "$iface" ] || continue
+        count=$(printf '%s\n' "$counts" | awk -v id="$id" '$1==id {n=$2} END {print n+0}')
+        share=0
+        [ "$state" != online ] || share=$(awk -v w="$weight" -v t="$total" 'BEGIN {if(t>0) printf "%.1f",100*w/t; else print 0}')
+        printf '%s | %s | %s | %s%% | %s | %s\n' "$iface" "$state" "$weight" "$share" "$count" "$dev"
+    done <<EOF_STATUS
+$snapshot
+EOF_STATUS
+    printf '固定出口规则（编号|源地址|目的地址|协议|目的端口|出口）：\n'
+    mw_rule_rows "$af"
+    if [ "$af" = 6 ]; then ipt=ip6tables; else ipt=iptables; fi
+    $ipt -w 5 -t mangle -S mwan3_rules 2>/dev/null | grep -- '--comment nr-multiwan\|--comment "nr-multiwan"' || true
+    done
+}
+
+mw_rates() (
+    seconds=${1:-5}
+    case "$seconds" in 1|2|3|4|5|10|30) ;; *) exit 1 ;; esac
+    snapshot=$( { mw_snapshot 4; mw_snapshot 6; } | awk -F '|' '!seen[$3]++') || exit 1
+    printf '物理线路总速率（IPv4 + IPv6，设备去重）：\n'
+    counters() {
+        printf '%s\n' "$snapshot" | while IFS='|' read -r iface id dev state weight; do
+            [ -n "$iface" ] && [ -r "/sys/class/net/$dev/statistics/rx_bytes" ] || continue
+            printf '%s %s %s\n' "$iface" "$(cat "/sys/class/net/$dev/statistics/rx_bytes")" "$(cat "/sys/class/net/$dev/statistics/tx_bytes")"
+        done
+    }
+    before=$(counters)
+    start=$(cut -d ' ' -f 1 /proc/uptime)
+    sleep "$seconds"
+    after=$(counters)
+    end=$(cut -d ' ' -f 1 /proc/uptime)
+    printf '%s\n--\n%s\n' "$before" "$after" | awk -v elapsed="$(awk -v a="$start" -v b="$end" 'BEGIN {print b-a}')" '
+        $0=="--" {second=1;next}
+        !second {rx[$1]=$2;tx[$1]=$3;next}
+        $1 in rx && elapsed>0 {r=$2-rx[$1];t=$3-tx[$1]; if(r<0 || t<0) {print $1,"计数器重置";next}
+            printf "%s 下行 %.2f Mbps / 上行 %.2f Mbps\n",$1,r*8/elapsed/1000000,t*8/elapsed/1000000}'
+)
+
+case "${1:-status}" in
+    list) mw_interfaces "${2:-all}" ;;
+    validate-rule) shift; { [ "$#" = 5 ] || [ "$#" = 6 ]; } && mw_validate_rule "$@" ;;
+    apply) mw_apply ;;
+    stop) mw_stop ;;
+    status) mw_status ;;
+    rates) mw_rates "${2:-5}" ;;
+    daemon)
+        while :; do
+            mw_apply || logger -t nr-multiwan 'Waiting for valid configuration/native IPv4/IPv6 routing'
+            sleep 5
+        done
+        ;;
+    *) printf 'Usage: %s list|apply|stop|status|rates|daemon\n' "$0" >&2; exit 1 ;;
+esac
+EOF_NRADIO_MULTIWAN
+    chmod 755 /usr/libexec/nradio-multiwan.new || return 1
+    mv /usr/libexec/nradio-multiwan.new /usr/libexec/nradio-multiwan || return 1
+    cat > /etc/init.d/nradio-multiwan.new <<'EOF_MW_INIT'
+#!/bin/sh /etc/rc.common
+START=99
+STOP=10
+USE_PROCD=1
+start_service() {
+    [ "$(uci -q get nradio_multiwan.main.enabled)" = 1 ] || return 0
+    procd_open_instance
+    procd_set_param command /usr/libexec/nradio-multiwan daemon
+    procd_set_param respawn 3600 5 5
+    procd_set_param stdout 0
+    procd_set_param stderr 1
+    procd_close_instance
+}
+service_triggers() {
+    procd_add_reload_trigger nradio_multiwan
+}
+stop_service() {
+    /usr/libexec/nradio-multiwan stop
+}
+EOF_MW_INIT
+    chmod 755 /etc/init.d/nradio-multiwan.new || return 1
+    mv /etc/init.d/nradio-multiwan.new /etc/init.d/nradio-multiwan || return 1
+}
+
+nradio_multiwan_activate() {
+    /etc/init.d/nradio-multiwan enable || return 1
+    if /etc/init.d/nradio-multiwan status >/dev/null 2>&1; then
+        /etc/init.d/nradio-multiwan restart || return 1
+    else
+        /etc/init.d/nradio-multiwan start || return 1
+    fi
+    /usr/libexec/nradio-multiwan apply || { log "双栈分流规则应用失败，请检查对应地址族日志"; return 1; }
+    /usr/libexec/nradio-multiwan status
+}
+
+nradio_multiwan_configure() {
+    local mwui_rows mwui_selected mwui_defaults mwui_iface mwui_seen mwui_count mwui_weight mwui_existing mwui_member mwui_plan mwui_line mwui_peer mwui_count4=0 mwui_count6=0
+    mwui_rows=$(/usr/libexec/nradio-multiwan list) || return 1
+    printf '已注册的 IPv4/IPv6 出口（接口|路由ID|设备|状态）：\n%s\n' "$mwui_rows"
+    mwui_defaults=$(uci -q get nradio_multiwan.main.interfaces 2>/dev/null || true)
+    [ -n "$mwui_defaults" ] || mwui_defaults=$(printf '%s\n' "$mwui_rows" | awk -F '|' '$4=="online" {printf "%s%s",sep,$1;sep=" "}')
+    for mwui_iface in $mwui_defaults; do
+        case "$mwui_iface" in *_4) mwui_peer="${mwui_iface%_4}_6" ;; wan) mwui_peer=wan6 ;; *) continue ;; esac
+        [ "$(uci -q get "mwan3.$mwui_peer.family" 2>/dev/null || true)" = ipv6 ] || continue
+        case " $mwui_defaults " in *" $mwui_peer "*) ;; *) mwui_defaults="$mwui_defaults $mwui_peer" ;; esac
+    done
+    printf '参与叠加的接口，空格分隔 [%s]: ' "$mwui_defaults"
+    ui_read_line || return 1
+    mwui_selected="$UI_READ_RESULT"
+    [ -n "$mwui_selected" ] || mwui_selected="$mwui_defaults"
+    mwui_seen=' '
+    mwui_count=0
+    mwui_plan=''
+    for mwui_iface in $mwui_selected; do
+        case "$mwui_iface" in ''|*[!a-zA-Z0-9_]*) log "接口名称无效"; return 1 ;; esac
+        case "$mwui_seen" in *" $mwui_iface "*) log "接口重复: $mwui_iface"; return 1 ;; esac
+        printf '%s\n' "$mwui_rows" | awk -F '|' -v name="$mwui_iface" '$1==name {ok=1} END {exit !ok}' || {
+            log "接口尚未注册为 NROS 出口: $mwui_iface"; return 1;
+        }
+        mwui_seen="$mwui_seen$mwui_iface "
+        mwui_count=$((mwui_count + 1))
+        case "$(uci -q get "mwan3.$mwui_iface.family" 2>/dev/null || true)" in
+            ipv4) mwui_count4=$((mwui_count4 + 1)) ;;
+            ipv6) mwui_count6=$((mwui_count6 + 1)) ;;
+        esac
+        mwui_existing=$(uci -q get "nradio_multiwan.l_$mwui_iface.weight" 2>/dev/null || true)
+        if [ -z "$mwui_existing" ]; then
+            mwui_member=$(nradio_5g_aggregation_mwan_members_for_iface "$mwui_iface" | head -n 1)
+            [ -z "$mwui_member" ] || mwui_existing=$(uci -q get "mwan3.$mwui_member.weight" 2>/dev/null || true)
+        fi
+        [ -n "$mwui_existing" ] || mwui_existing=1
+        printf '%s 权重，1-1000 [%s]: ' "$mwui_iface" "$mwui_existing"
+        ui_read_line || return 1
+        mwui_weight="$UI_READ_RESULT"
+        [ -n "$mwui_weight" ] || mwui_weight="$mwui_existing"
+        case "$mwui_weight" in ''|*[!0-9]*|0*) log "权重须为 1-1000 的整数"; return 1 ;; esac
+        [ "$mwui_weight" -le 1000 ] 2>/dev/null || { log "权重超过 1000"; return 1; }
+        mwui_plan="$mwui_plan$mwui_iface=$mwui_weight "
+    done
+    [ "$mwui_count" -ge 2 ] && [ "$mwui_count4" -gt 0 ] && [ "$mwui_count6" -gt 0 ] || {
+        log "双栈配置须同时选择 IPv4 和 IPv6 出口；每个地址族至少一条"; return 1;
+    }
+    if [ -n "$(uci -q get network.globals.dividing_default 2>/dev/null || true)" ]; then
+        log "NROS 当前绑定了默认出口，请先在系统上网页切换为多线叠加"; return 1
+    fi
+    log "IPv4/IPv6 多连接叠加: $mwui_plan"
+    log "按权重分配新连接；单连接固定出口。离线线路退出，恢复后重新参与。"
+    log "现有系统固定出口规则优先；IPv4 与 IPv6 分别按各自在线线路分配。"
+    log "增强分流的 IPv6 出站连接使用所选线路的 IPv6 源地址（NAT66）。"
+    confirm_or_exit "确认应用以上双栈线路、权重及 IPv6 源地址转换吗？"
+    [ -f /etc/config/nradio_multiwan ] || : > /etc/config/nradio_multiwan || return 1
+    uci set nradio_multiwan.main=core || return 1
+    uci set nradio_multiwan.main.enabled=1 || return 1
+    uci set "nradio_multiwan.main.interfaces=$mwui_selected" || return 1
+    for mwui_line in $mwui_plan; do
+        mwui_iface=$(printf '%s' "$mwui_line" | cut -d = -f 1)
+        mwui_weight=$(printf '%s' "$mwui_line" | cut -d = -f 2)
+        uci set "nradio_multiwan.l_$mwui_iface=line" || return 1
+        uci set "nradio_multiwan.l_$mwui_iface.weight=$mwui_weight" || return 1
+    done
+    uci commit nradio_multiwan || return 1
+    nradio_multiwan_activate
+}
+
+nradio_multiwan_add_rule() {
+    local mwui_src mwui_dst mwui_proto mwui_ports mwui_iface mwui_selected mwui_id mwui_family
+    [ "$(uci -q get nradio_multiwan.main.enabled 2>/dev/null || true)" = 1 ] || { log "请先启用多线叠加"; return 1; }
+    printf '源 IPv4/IPv6/CIDR，全部填 - [-]: '; ui_read_line || return 1
+    mwui_src="$UI_READ_RESULT"; [ -n "$mwui_src" ] || mwui_src=-
+    printf '目的 IPv4/IPv6/CIDR，全部填 - [-]: '; ui_read_line || return 1
+    mwui_dst="$UI_READ_RESULT"; [ -n "$mwui_dst" ] || mwui_dst=-
+    printf '协议 tcp/udp/all [all]: '; ui_read_line || return 1
+    mwui_proto="$UI_READ_RESULT"; [ -n "$mwui_proto" ] || mwui_proto=all
+    printf '目的端口或范围，例如 443、8000:8100；全部填 - [-]: '; ui_read_line || return 1
+    mwui_ports="$UI_READ_RESULT"; [ -n "$mwui_ports" ] || mwui_ports=-
+    mwui_selected=$(uci -q get nradio_multiwan.main.interfaces)
+    printf '固定出口 [%s]，请输入接口名: ' "$mwui_selected"; ui_read_line || return 1
+    mwui_iface="$UI_READ_RESULT"
+    case " $mwui_selected " in *" $mwui_iface "*) ;; *) log "出口必须属于已选线路"; return 1 ;; esac
+    case "$(uci -q get "mwan3.$mwui_iface.family" 2>/dev/null || true)" in ipv6) mwui_family=6 ;; *) mwui_family=4 ;; esac
+    /usr/libexec/nradio-multiwan validate-rule "$mwui_src" "$mwui_dst" "$mwui_proto" "$mwui_ports" "$mwui_iface" "$mwui_family" || {
+        log "规则无效：地址须与出口地址族一致，并检查协议、端口；至少填写一个匹配条件"; return 1;
+    }
+    log "固定出口: $mwui_src → $mwui_dst / $mwui_proto / $mwui_ports → $mwui_iface"
+    log "固定线路离线时，匹配的新连接转入其他在线线路。"
+    confirm_or_exit "确认添加以上规则吗？"
+    mwui_id=$(date +%s)
+    while uci -q get "nradio_multiwan.r$mwui_id" >/dev/null 2>&1; do mwui_id=$((mwui_id + 1)); done
+    uci set "nradio_multiwan.r$mwui_id=rule" &&
+    uci set "nradio_multiwan.r$mwui_id.src=$mwui_src" &&
+    uci set "nradio_multiwan.r$mwui_id.dst=$mwui_dst" &&
+    uci set "nradio_multiwan.r$mwui_id.proto=$mwui_proto" &&
+    uci set "nradio_multiwan.r$mwui_id.ports=$mwui_ports" &&
+    uci set "nradio_multiwan.r$mwui_id.interface=$mwui_iface" &&
+    uci commit nradio_multiwan || return 1
+    nradio_multiwan_activate
+}
+
+nradio_multiwan_delete_rule() {
+    local mwui_id
+    /usr/libexec/nradio-multiwan status || return 1
+    printf '请输入要移除的固定出口规则编号: '; ui_read_line || return 1
+    mwui_id="$UI_READ_RESULT"
+    case "$mwui_id" in ''|*[!a-zA-Z0-9_]*) return 1 ;; esac
+    [ "$(uci -q get "nradio_multiwan.$mwui_id" 2>/dev/null || true)" = rule ] || { log "规则不存在"; return 1; }
+    confirm_or_exit "确认移除规则 $mwui_id 吗？"
+    uci delete "nradio_multiwan.$mwui_id" && uci commit nradio_multiwan || return 1
+    nradio_multiwan_activate
+}
+
+nradio_5g_aggregation_fix_mwan_weight() {
+    local mwui_choice
+    nradio_multiwan_install_assets || return 1
+    printf '\n5→5→2 / IPv4 + IPv6 多线宽带叠加\n'
+    printf '1. 启用或调整线路、权重\n2. 添加 IP/端口固定出口\n3. 移除固定出口规则\n4. 查看连接数与每线速率\n5. 停用增强分流，使用系统策略\n0. 返回\n请选择: '
+    ui_read_line || return 1
+    mwui_choice="$UI_READ_RESULT"
+    case "$mwui_choice" in
+        1) nradio_multiwan_configure || return 1 ;;
+        2) nradio_multiwan_add_rule || return 1 ;;
+        3) nradio_multiwan_delete_rule || return 1 ;;
+        4)
+            /usr/libexec/nradio-multiwan status || return 1
+            /usr/libexec/nradio-multiwan rates 5 || return 1
+            ;;
+        5)
+            if [ ! -f /etc/config/nradio_multiwan ]; then
+                log "增强分流尚未启用"
+                return 0
+            fi
+            confirm_or_exit "确认停用增强分流并使用原生 NROS 策略吗？"
+            uci set nradio_multiwan.main.enabled=0 && uci commit nradio_multiwan || return 1
+            /etc/init.d/nradio-multiwan stop || return 1
+            /etc/init.d/nradio-multiwan disable || return 1
+            log "增强分流已停用，系统原有策略生效"
+            ;;
+        0|'') return 0 ;;
+        *) log "菜单编号无效"; return 1 ;;
+    esac
+    record_action_history "5 > 5 > 2 > $mwui_choice" "IPv4/IPv6 多线叠加" "PASS" ""
+    MENU_ACTION_COMPLETED=1
 }
 
 nradio_5g_aggregation_print_hw_offload_state() {
@@ -20176,7 +20712,7 @@ run_5g_aggregation_repair_check() {
 
     printf '\n5G聚合修复检查:\n'
     printf '1. 轻量修复后复查\n'
-    printf '2. 负载均衡（副5G:蜂窝）\n'
+    printf '2. 多线宽带叠加（IPv4/IPv6 权重/固定出口/连接数）\n'
     printf '3. 30秒测速流量监控\n'
     printf '4. 开启硬件 offload 并验证\n'
     printf '5. 还原为软件 offload 并验证\n'
@@ -20198,10 +20734,7 @@ run_5g_aggregation_repair_check() {
             record_action_history "5 > 5 > 1" "5G聚合轻量修复后复查" "PASS" "$BACKUP_DIR"
             ;;
         2)
-            confirm_or_exit "确认直接设置负载均衡（副5G:蜂窝）吗？"
-            nradio_5g_aggregation_fix_mwan_weight
-            nradio_5g_aggregation_print_diagnostics
-            record_action_history "5 > 5 > 2" "5G聚合负载均衡设置" "PASS" "$BACKUP_DIR"
+            nradio_5g_aggregation_fix_mwan_weight || return 1
             ;;
         3)
             nradio_5g_aggregation_traffic_monitor 30
@@ -36584,6 +37117,451 @@ install_mt5700_webui() {
     log "后端包: $MT5700_PACKAGE_NAME $MT5700_PACKAGE_VERSION"
     log "路由:   $MT5700_ROUTE -> /5700/?v=$MT5700_UI_VERSION#/network/info"
     log "说明:   已接入 NRadio 应用商店打开与异步卸载；未安装上游标准 LuCI 菜单包"
+}
+
+resolve_openbox_storage_paths() {
+    local model="${CURRENT_DETECTED_MODEL:-$(detect_current_nradio_model_quiet)}"
+    if c2000_storage_swap_model_supported "$model"; then
+        OPENBOX_STORAGE_MOUNT="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+        [ -n "$OPENBOX_STORAGE_MOUNT" ] || die "请挂载存储卡后安装 Open-Box"
+        OPENBOX_INSTALL_ROOT="$OPENBOX_STORAGE_MOUNT/open-box"
+    else
+        OPENBOX_STORAGE_MOUNT="$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+        awk -v m="$OPENBOX_STORAGE_MOUNT" '$2 == m { found=1 } END { exit !found }' /proc/mounts || die "请挂载扩展盘后安装 Open-Box"
+        OPENBOX_INSTALL_ROOT="$ROOTFS_2ND_STORAGE_APPS_DIR/open-box"
+    fi
+}
+
+write_openbox_assets() {
+    mkdir -p /usr/libexec /usr/lib/lua/luci/controller/nradio_adv /usr/lib/lua/luci/view/nradio_openbox
+    cat > /usr/libexec/nradio-openbox-runtime.lua <<'EOF_OPENBOX_RUNTIME'
+-- Private Node loader; system programs keep the firmware's own libraries.
+local root = arg[1] or "/opt/open-box"
+local function edit(path, transform)
+    local f = io.open(path, "rb")
+    if not f then return end
+    local old = f:read("*a"); f:close()
+    local new = transform(old)
+    if new ~= old then
+        f = assert(io.open(path, "wb")); assert(f:write(new)); f:close()
+    end
+end
+local function replace_block(s, first, last, replacement)
+    local a = s:find(first, 1, true)
+    local b = a and s:find(last, a + #first, true)
+    if a and b then return s:sub(1, a - 1) .. replacement .. s:sub(b) end
+    return s
+end
+local f = io.open(root .. "/node/bin/node", "rb")
+if f then
+    local h = f:read(64)
+    local function uint(s, p, n)
+        local v = 0
+        for i = n - 1, 0, -1 do v = v * 256 + s:byte(p + i + 1) end
+        return v
+    end
+    if h and h:sub(1, 6) == "\127ELF\2\1" and uint(h, 18, 2) == 183 then
+        for i = 0, uint(h, 56, 2) - 1 do
+            f:seek("set", uint(h, 32, 8) + i * uint(h, 54, 2))
+            local ph = f:read(uint(h, 54, 2))
+            if uint(ph, 0, 4) == 3 then
+                local offset, size = uint(ph, 8, 8), uint(ph, 32, 8)
+                f:seek("set", offset)
+                local current = f:read(size):match("^[^%z]+")
+                local loader = "/opt/ob-libc.so"
+                if current == "/lib/ld-musl-aarch64.so.1" and size > #loader then
+                    f:close(); f = assert(io.open(root .. "/node/bin/node", "r+b"))
+                    f:seek("set", offset); assert(f:write(loader .. string.rep("\0", size - #loader)))
+                end
+                break
+            end
+        end
+    end
+    f:close()
+end
+edit(root .. "/panel/server/system/context-real.mjs", function(s)
+    s = s:gsub("execFile%(cmd, args, { timeout: timeoutMs },", "const env = { ...process.env }; delete env.LD_LIBRARY_PATH\n      execFile(cmd, args, { timeout: timeoutMs, env },")
+    return s
+end)
+edit(root .. "/panel/server/system/curl-fetch.mjs", function(s)
+    return (s:gsub("execFile%('curl', args, { timeout: timeoutMs, maxBuffer: 1024 %* 1024, windowsHide: true },", "const env = { ...process.env }; delete env.LD_LIBRARY_PATH\n  execFile('curl', args, { timeout: timeoutMs, maxBuffer: 1024 * 1024, windowsHide: true, env },"))
+end)
+edit(root .. "/panel/server/engine/config.mjs", function(s)
+    s = s:gsub("interface_name: 'tun0'", "interface_name: 'ob-tun'")
+    s = s:gsub("auto_route: true, strict_route:", "auto_route: true, iproute2_rule_index: 9000, strict_route:")
+    s = s:gsub("iproute2_rule_index:%s*7000", "iproute2_rule_index: 9000")
+    -- NROS fw3 has no nftables auto_redirect support.
+    local fw4 = io.open("/sbin/fw4", "rb")
+    if fw4 then fw4:close() else
+        s = s:gsub("const autoRedirect = Boolean%([^\n]+", "const autoRedirect = false")
+    end
+    return s
+end)
+edit(root .. "/panel/server/engine/routing.mjs", function(s)
+    return (s:gsub("auto_detect_interface: false, default_mark: 4194304,", "auto_detect_interface: true,"))
+end)
+edit(root .. "/etc/config.json", function(s)
+    local json = require "luci.jsonc"
+    local config = json.parse(s)
+    if not config then return s end
+    for _, inbound in ipairs(config.inbounds or {}) do
+        if inbound.type == "tun" then inbound.iproute2_rule_index = 9000 end
+    end
+    if config.route then
+        config.route.auto_detect_interface = true
+        if config.route.default_mark == 4194304 then config.route.default_mark = nil end
+    end
+    return json.stringify(config)
+end)
+edit("/etc/init.d/openbox-panel", function(s)
+    s = s:gsub('ENTRY="%$OPENBOX_ROOT/panel/server/index.mjs"', 'ENTRY="$(readlink -f "$OPENBOX_ROOT/panel/server/index.mjs")"')
+    if not s:find("nradio%-openbox%-runtime.lua") then
+        s = s:gsub("start_service%(%) {", "start_service() {\n    lua /usr/libexec/nradio-openbox-runtime.lua")
+    end
+    return s
+end)
+edit("/etc/init.d/openbox", function(s)
+    if not s:find("nradio%-openbox%-wan start") then
+        s = s:gsub("start_service%(%) {", "start_service() {\n    /usr/libexec/nradio-openbox-wan start")
+        s = s:gsub("\n\topenbox_cleanup\n", "\n\t/usr/libexec/nradio-openbox-wan stop\n\topenbox_cleanup\n")
+    end
+    return s
+end)
+edit(root .. "/panel/server/system/component-update.mjs", function(s)
+    -- NROS updates use component versions and file presence, without digest checks.
+    s = s:gsub("import { createHash } from 'node:crypto'\n", "")
+    s = s:gsub("const HASH = [^\n]+\n", "")
+    s = replace_block(s, "export const fileHash =", "export const validateManifest", "")
+    s = s:gsub(" || !HASH%.test%(c%.sha256%)", "")
+    s = s:gsub(" || !HASH%.test%(c%.manifestSha256%)", "")
+    s = s:gsub("!c%.files%?%.%[required%]", "!Object.hasOwn(c.files || {}, required)")
+    s = s:gsub(" && HASH%.test%(hash%)", "")
+    s = s:gsub("c%.asset, c%.sha256, c%.size", "c.asset, '-', c.size")
+    s = replace_block(s, "export const componentMatches =", "export const planUpdate", [[export const componentMatches = (root, kind, component) => {
+  try {
+    if (kind === 'app') return false
+    if (kind !== 'geo') {
+      const meta = readJson(path.join(root, 'meta.json'))
+      const version = kind === 'runtime' ? meta.nodeVersion : meta.singboxVersion
+      return version === component.version
+        && Object.keys(component.files).every(name => fs.existsSync(path.join(root, name)))
+    }
+    const dir = path.join(root, GEO_DIR)
+    const geo = readJson(path.join(dir, 'manifest.json'))
+    if (geo.version !== component.version || geo.schema !== 1) return false
+    const files = Object.keys(geo.files || {})
+    return files.length > 0 && ['geoip', 'geosite'].every(k => geo.counts?.[k] > 0
+      && geo.counts[k] === files.filter(name => name.startsWith(k + '-')).length)
+      && files.every(name => GEO_FILE.test(name) && !name.includes('..')
+        && fs.existsSync(path.join(dir, name)))
+  } catch { return false }
+}
+
+]])
+    return s
+end)
+edit(root .. "/panel/server/system/update-components.sh", function(s)
+    s = replace_block(s, '    # Names and hashes are validated', '    write_status extracting', '')
+    return (s:gsub("版本及文件校验一致", "版本一致且文件存在"))
+end)
+edit(root .. "/update.sh", function(s)
+    -- Probe the package URL itself; missing checksum assets must not block a channel.
+    s = replace_block(s, '  probe_url=$(build_url "$SHA_URL")', '\n}\n', [[  probe_url=$(build_url "$ASSET_URL")
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSI -L --connect-timeout 4 --max-time 8 "$probe_url" >/dev/null 2>&1
+  else
+    wget -q --spider -T 8 "$probe_url" >/dev/null 2>&1
+  fi]])
+    -- The full-package fallback downloads once, then extracts without a hash gate.
+    s = replace_block(s, '_dl_round=0\n', 'info "解包..."', [[check_cancel_and_abort
+info "下载发布包:$ASSET"
+ASSET_DL_URL=$(build_url "$ASSET_URL")
+ASSET_TOTAL=$(probe_content_length "$ASSET_DL_URL")
+case "$ASSET_TOTAL" in ''|*[!0-9]*) ASSET_TOTAL='' ;; esac
+download_with_progress "$ASSET_DL_URL" "$TMP_DL/$ASSET" "$ASSET_TOTAL" || die "下载升级包失败:$ASSET_URL。"
+check_cancel_and_abort
+write_status extracting "" "" ""
+
+]])
+    s = s:gsub('SHA_URL="%$ASSET_URL%.sha256"\n', '')
+    s = s:gsub("探测失败%(连接失败、超时,或返回内容不是预期的校验文件%)", "探测失败(连接失败或超时)")
+    -- The running updater uses a /tmp copy. Reapply NROS adapters before Node starts.
+    s = replace_block(s, "mkdir -p /www/luci-static/resources/view/openbox", 'info "启动面板..."',
+        'lua /usr/libexec/nradio-openbox-runtime.lua "$INSTALL_ROOT"\n\n')
+    -- Direct updates: retain data/etc; do not create component or init backups.
+    s = replace_block(s, 'SWAPPED_NEW=""\n', '# uninstall.sh 随产物分发', [[swap_failed() { die "$1"; }
+for comp in $COMPONENTS; do
+  rm -rf "$INSTALL_ROOT/$comp" || swap_failed "移除旧组件失败: $comp"
+  mv "$STAGE_DIR/$comp" "$INSTALL_ROOT/$comp" || swap_failed "安装组件失败: $comp"
+done
+mv "$STAGE_DIR/meta.json" "$INSTALL_ROOT/meta.json" || swap_failed "更新版本信息失败"
+]])
+    s = replace_block(s, 'for _initd in openbox openbox-panel; do', 'cp "$INSTALL_ROOT/openwrt/initd/openbox"', '')
+    s = replace_block(s, '# 组件和 init 脚本都换好了', '# ---- swap:end ----', '')
+    return s
+end)
+EOF_OPENBOX_RUNTIME
+    cat > /usr/libexec/nradio-openbox-line.lua <<'EOF_OPENBOX_LINE'
+local json = require "luci.jsonc"
+local function command(text)
+    local p = io.popen(text)
+    if not p then return "" end
+    local value = p:read("*a"); p:close()
+    return value
+end
+local function read(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local value = f:read("*a"); f:close()
+    return value
+end
+local path = "/opt/open-box/etc/config.json"
+local config = json.parse(read(path) or "")
+if not config or not config.dns then return end
+local device = command("ip -4 route show default"):match("dev%s+([%w_.%-]+)")
+local status = json.parse(command("ubus call network.interface dump")) or {}
+local server
+for _, interface in ipairs(status.interface or {}) do
+    if device and interface.up and interface.l3_device == device then
+        for _, address in ipairs(interface["dns-server"] or {}) do
+            if address:match("^%d+%.%d+%.%d+%.%d+$") and not address:match("^127%.") then
+                server = address
+                break
+            end
+        end
+    end
+    if server then break end
+end
+server = server or "223.5.5.5"
+local changed = false
+for _, resolver in ipairs(config.dns.servers or {}) do
+    if resolver.tag == "dns-direct" and resolver.type == "udp" and resolver.server ~= server then
+        resolver.server = server
+        changed = true
+    end
+end
+if not changed then return end
+local f = assert(io.open(path, "wb"))
+assert(f:write(json.stringify(config))); f:close()
+print("Open-Box direct DNS: " .. server .. " via " .. (device or "default"))
+if arg[1] == "start" then return end
+local services = json.parse(command("ubus call service list")) or {}
+for _, instance in pairs((services.openbox or {}).instances or {}) do
+    if instance.running then
+        if os.execute("/etc/init.d/openbox restart >/dev/null 2>&1") ~= 0 then os.exit(1) end
+        -- Release requests still waiting on the previous DNS through AdGuard.
+        local adguard_config = read("/etc/AdGuardHome.yaml") or ""
+        if adguard_config:find("127.0.0.1:7853", 1, true) then
+            for _, adguard in pairs((services.AdGuardHome or {}).instances or {}) do
+                local pid = tonumber(adguard.pid)
+                if adguard.running and adguard.respawn and pid then
+                    os.execute("kill -TERM " .. string.format("%d", pid))
+                end
+            end
+        end
+        os.exit(0)
+    end
+end
+EOF_OPENBOX_LINE
+    cat > /usr/libexec/nradio-openbox-wan <<'EOF_OPENBOX_WAN'
+#!/bin/sh
+# FakeIP and the TUN TCP return path precede MWAN; regular traffic keeps its WAN policy.
+case "${1:-apply}" in
+    start)
+        touch /var/run/nradio-openbox-wan.enabled
+        # Remove the previous Open-Box outbound mark override when reinstalling.
+        ip -4 rule del pref 6999 fwmark 0x400000/0x400000 2>/dev/null || true
+        iptables -t mangle -D mwan3_hook -m mark --mark 0x400000/0x40ff00 -j mwan3_rules 2>/dev/null || true
+        for source in $(uci -q get nradio_openbox.main.bypass); do
+            ip -4 rule del pref 6998 from "$source" lookup main 2>/dev/null || true
+            ip -4 rule add pref 6998 from "$source" lookup main
+        done ;;
+    stop)
+        rm -f /var/run/nradio-openbox-wan.enabled
+        for source in $(uci -q get nradio_openbox.main.bypass); do
+            ip -4 rule del pref 6998 from "$source" lookup main 2>/dev/null || true
+        done
+        ip -4 rule del pref 7998 to 172.19.0.0/30 lookup 2022 2>/dev/null || true
+        ip -4 rule del pref 7999 to 198.19.0.0/16 lookup 2022 2>/dev/null || true
+        ip -4 rule del pref 6999 fwmark 0x400000/0x400000 2>/dev/null || true
+        iptables -t mangle -D mwan3_hook -m mark --mark 0x400000/0x40ff00 -j mwan3_rules 2>/dev/null || true
+        exit 0 ;;
+esac
+[ -f /var/run/nradio-openbox-wan.enabled ] || exit 0
+lua /usr/libexec/nradio-openbox-line.lua "${1:-apply}"
+# The system TCP stack's SYN-ACK must return to the TUN peer before MWAN.
+ip -4 rule del pref 7998 to 172.19.0.0/30 lookup 2022 2>/dev/null || true
+ip -4 rule add pref 7998 to 172.19.0.0/30 lookup 2022
+ip -4 rule del pref 7999 to 198.19.0.0/16 lookup 2022 2>/dev/null || true
+ip -4 rule add pref 7999 to 198.19.0.0/16 lookup 2022
+exit 0
+EOF_OPENBOX_WAN
+    mkdir -p /etc/hotplug.d/iface
+    cat > /etc/hotplug.d/iface/99-nradio-openbox-wan <<'EOF_OPENBOX_WAN_HOTPLUG'
+#!/bin/sh
+case "${ACTION:-}" in ifup|ifdown|ifupdate) /usr/libexec/nradio-openbox-wan apply ;; esac
+EOF_OPENBOX_WAN_HOTPLUG
+    chmod 755 /usr/libexec/nradio-openbox-wan /etc/hotplug.d/iface/99-nradio-openbox-wan
+    uci set firewall.nradio_openbox_wan=include
+    uci set firewall.nradio_openbox_wan.path=/usr/libexec/nradio-openbox-wan
+    uci set firewall.nradio_openbox_wan.reload=1
+    uci commit firewall
+    cat > /etc/init.d/openbox-panel <<'EOF_OPENBOX_PANEL_INIT'
+#!/bin/sh /etc/rc.common
+USE_PROCD=1
+START=98
+STOP=11
+start_service() {
+    local root mount entry_path
+    root="$(uci -q get nradio_openbox.main.root)"
+    mount="$(uci -q get nradio_openbox.main.mount)"
+    awk -v m="$mount" '$2 == m { found=1 } END { exit !found }' /proc/mounts || return 0
+    lua /usr/libexec/nradio-openbox-runtime.lua "$root"
+    entry_path="$(readlink -f "$root/panel/server/index.mjs")"
+    mkdir -p "$root/data"
+    procd_open_instance openbox-panel
+    procd_set_param command "$root/node/bin/node" "$entry_path"
+    procd_set_param env PORT=2026 HOST=0.0.0.0 OPENBOX_ROOT="$root" LD_LIBRARY_PATH="$root/node/lib" ZASHBOARD_DB_PATH="$root/data/openbox.sqlite"
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param respawn 3600 5 3
+    procd_close_instance
+}
+EOF_OPENBOX_PANEL_INIT
+    cat > /usr/lib/lua/luci/controller/nradio_adv/openbox.lua <<'EOF_OPENBOX_CONTROLLER'
+module("luci.controller.nradio_adv.openbox", package.seeall)
+function index()
+    local page = entry({"nradioadv", "system", "openbox"}, template("nradio_openbox/panel"), nil, 94)
+    page.dependent = false
+    entry({"nradioadv", "system", "openbox", "status"}, call("action_status"), nil).leaf = true
+end
+function action_status()
+    local http = require "luci.http"
+    local body = require("luci.sys").exec("curl -fsS --max-time 3 http://127.0.0.1:2026/api/health 2>/dev/null")
+    local ok, data = pcall(require("luci.jsonc").parse, body)
+    http.header("Cache-Control", "no-store")
+    http.write_json({running = ok and type(data) == "table" and data.ok == true or false})
+end
+EOF_OPENBOX_CONTROLLER
+    cat > /usr/lib/lua/luci/view/nradio_openbox/panel.htm <<'EOF_OPENBOX_VIEW'
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open-Box</title>
+<style>html,body{height:100%;width:100%;margin:0;background:#f7f9fc;color:#1b3044;font:14px system-ui,sans-serif;overflow:hidden}*{box-sizing:border-box}#panel{position:absolute;inset:0;width:100%;height:100%;border:0;background:#f7f9fc}#message{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#f7f9fc;padding:24px;text-align:center}#message[hidden]{display:none}h1{margin:0;font-size:24px}p{margin:0;line-height:1.7;color:#516679}.actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}button,a{padding:10px 16px;border:1px solid #bad3dc;border-radius:8px;background:#e7f4f6;color:#174d58;text-decoration:none;font:inherit;cursor:pointer}</style></head>
+<body><iframe id="panel" title="Open-Box 管理面板"></iframe><div id="message" role="status"><h1>Open-Box</h1><p id="detail">正在连接管理面板…</p><div class="actions"><button type="button" id="retry">重新加载</button><a id="external" target="_blank" rel="noopener">独立打开</a></div></div>
+<script>
+(function(){
+    'use strict';
+    var frame=document.getElementById('panel'),box=document.getElementById('message'),detail=document.getElementById('detail');
+    var target=new URL(window.location.href);target.protocol='http:';target.port='2026';target.pathname='/';target.search='';target.hash='';
+    document.getElementById('external').href=target.href;
+    var timer=null,generation=0,loaded=false,healthy=false;
+    function reveal(){if(loaded&&healthy){box.hidden=true;clearTimeout(timer);}}
+    function load(){
+        var current=++generation;loaded=false;healthy=false;box.hidden=false;detail.textContent='正在连接管理面板…';clearTimeout(timer);
+        if(window.location.protocol==='https:'){detail.textContent='请通过“独立打开”访问管理面板。';return;}
+        frame.onload=function(){if(current!==generation)return;loaded=true;reveal();};
+        frame.onerror=function(){if(current===generation){box.hidden=false;detail.textContent='面板加载失败，请重试或独立打开。';}};
+        frame.src=target.href;
+        var request=new XMLHttpRequest();request.open('GET',"<%=luci.dispatcher.build_url('nradioadv','system','openbox','status')%>",true);request.timeout=5000;
+        request.onload=function(){if(current!==generation)return;try{healthy=request.status===200&&JSON.parse(request.responseText).running===true;}catch(e){healthy=false;}if(healthy)reveal();else detail.textContent='Open-Box 面板尚未就绪，请稍后重试。';};
+        request.onerror=request.ontimeout=function(){if(current===generation)detail.textContent='面板状态读取失败，请重试或独立打开。';};request.send();
+        timer=setTimeout(function(){if(current===generation&&!box.hidden)detail.textContent='面板加载超时，请重试或独立打开。';},12000);
+    }
+    document.getElementById('retry').onclick=load;load();
+})();
+</script></body></html>
+EOF_OPENBOX_VIEW
+    cat > /usr/libexec/nradio-openbox-uninstall <<'EOF_OPENBOX_UNINSTALL'
+#!/bin/sh
+root="$(uci -q get nradio_openbox.main.root)"
+[ -n "$root" ] || root="$(readlink -f /opt/open-box)"
+for service in openbox openbox-panel; do
+    [ ! -x "/etc/init.d/$service" ] || {
+        "/etc/init.d/$service" stop || exit 1
+        "/etc/init.d/$service" disable
+    }
+done
+if opkg status luci-app-nradio-openbox 2>/dev/null | grep -q '^Status:.* installed'; then
+    opkg remove luci-app-nradio-openbox || exit 1
+fi
+case "$root" in
+    /mnt/rootfs_2nd_data/nradio-apps/open-box|/mnt/app_data/open-box|/tmp/storage/*/open-box)
+        [ -z "$root" ] || rm -rf "$root" || exit 1 ;;
+    *) echo '无法定位 Open-Box 安装目录'; exit 1 ;;
+esac
+for section in openbox_panel openbox_dns openbox_tun_forward openbox_v6block nradio_openbox_wan; do
+    uci -q delete "firewall.$section" || true
+done
+uci commit firewall
+/etc/init.d/firewall reload >/dev/null 2>&1 || true
+for section in nradio_openbox nradio_openbox_luci; do
+    case "$(uci -q get "appcenter.$section.name")" in
+        Open-Box|luci-app-nradio-openbox) uci -q delete "appcenter.$section" ;;
+    esac
+done
+uci commit appcenter
+[ "$(readlink /opt/open-box)" != "$root" ] || rm -f /opt/open-box
+[ "$(readlink /opt/ob-libc.so)" != "$root/compat/ld-musl-aarch64.so.1" ] || rm -f /opt/ob-libc.so
+rm -f /etc/init.d/openbox /etc/init.d/openbox-panel /etc/config/nradio_openbox
+rm -f /usr/lib/lua/luci/controller/nradio_adv/openbox.lua /usr/lib/lua/luci/view/nradio_openbox/panel.htm
+rm -f /usr/libexec/nradio-openbox-runtime.lua /usr/libexec/nradio-openbox-appcenter
+rm -f /usr/libexec/nradio-openbox-wan /etc/hotplug.d/iface/99-nradio-openbox-wan
+rm -f /usr/libexec/nradio-openbox-line.lua
+rm -f /www/luci-static/nradio/images/icon/openbox.svg /tmp/luci-indexcache
+rm -f /usr/libexec/nradio-openbox-uninstall
+exit 0
+EOF_OPENBOX_UNINSTALL
+    chmod 755 /etc/init.d/openbox-panel /usr/libexec/nradio-openbox-uninstall
+    mkdir -p /www/luci-static/nradio/images/icon
+    cat > /www/luci-static/nradio/images/icon/openbox.svg <<'EOF_OPENBOX_ICON'
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#e7f4f6"/><path d="m32 8 23 13v24L32 58 9 45V21Z" fill="none" stroke="#24566a" stroke-width="4"/><path d="m9 21 23 14 23-14M32 35v23" fill="none" stroke="#24566a" stroke-width="4"/><circle cx="32" cy="23" r="7" fill="#39bd83"/></svg>
+EOF_OPENBOX_ICON
+}
+
+install_openbox() {
+    local root archive libc_work core_running=0 version=0.1.184
+    resolve_openbox_storage_paths
+    root="$OPENBOX_INSTALL_ROOT"
+    archive="$root/open-box-download.tar.gz"
+    libc_work="$root/compat"
+    log "Open-Box $version → $root"
+    mkdir -p "$root" "$libc_work" /opt
+    # Use the complete package: the app-only archive omits panel/server/resources/geodata.
+    download_from_urls "$archive" "https://github.com/liandu2024/Open-Box/releases/download/v$version/open-box-v$version-linux-arm64.tar.gz" || die "Open-Box 下载失败"
+    download_from_urls "$libc_work/libc.ipk" "https://downloads.openwrt.org/releases/24.10.3/targets/mediatek/filogic/packages/libc_1.2.5-r4_aarch64_cortex-a53.ipk" || die "Open-Box 运行库下载失败"
+    if [ -x /etc/init.d/openbox ] && /etc/init.d/openbox running >/dev/null 2>&1; then
+        core_running=1
+        # Stop the process for replacement without undoing the active DNS settings.
+        ubus call service delete '{"name":"openbox"}' >/dev/null 2>&1 || true
+    fi
+    [ ! -x /etc/init.d/openbox-panel ] || /etc/init.d/openbox-panel stop
+    tar -xzf "$archive" -C "$root" || die "Open-Box 解压失败"
+    rm -f "$archive"
+    tar -xzf "$libc_work/libc.ipk" -C "$libc_work" ./data.tar.gz || die "运行库解压失败"
+    tar -xzf "$libc_work/data.tar.gz" -C "$libc_work" ./lib/libc.so || die "运行库解压失败"
+    mv -f "$libc_work/lib/libc.so" "$libc_work/ld-musl-aarch64.so.1"
+    rm -f "$libc_work/libc.ipk" "$libc_work/data.tar.gz"
+    rmdir "$libc_work/lib" 2>/dev/null || true
+    ln -sfn "$root" /opt/open-box
+    ln -sfn "$libc_work/ld-musl-aarch64.so.1" /opt/ob-libc.so
+    touch /etc/config/nradio_openbox
+    uci set nradio_openbox.main=openbox
+    uci set "nradio_openbox.main.root=$root"
+    uci set "nradio_openbox.main.mount=$OPENBOX_STORAGE_MOUNT"
+    uci commit nradio_openbox
+    write_openbox_assets
+    [ -f /etc/init.d/openbox ] || cp "$root/openwrt/initd/openbox" /etc/init.d/openbox
+    lua /usr/libexec/nradio-openbox-runtime.lua "$root"
+    chmod 755 /etc/init.d/openbox "$root/node/bin/node" "$root/bin/sing-box" "$libc_work/ld-musl-aarch64.so.1"
+    /etc/init.d/openbox-panel enable
+    /etc/init.d/openbox-panel start
+    if [ "$core_running" = 1 ]; then /etc/init.d/openbox start; fi
+    write_plugin_uninstall_assets
+    patch_common_template
+    set_appcenter_entry 'Open-Box' 'luci-app-nradio-openbox' "$version" "$(du -sk "$root" | awk '{print $1}')" '/usr/lib/lua/luci/controller/nradio_adv/openbox.lua' 'nradioadv/system/openbox' 'openbox.svg'
+    uci set "appcenter.$pkg_sec.open=1"
+    uci commit appcenter
+    refresh_luci_appcenter
+    log "Open-Box 已安装到 $root；应用商店可打开、卸载。首次使用请在面板完成设置。"
 }
 
 generate_openlist_admin_password() {
@@ -68908,7 +69886,7 @@ c8_788_feature_allowed() {
 require_menu_feature_supported_for_current_model() {
     restricted_feature="$1"
     case "$restricted_feature" in
-        33) return 0 ;;
+        33|34) return 0 ;;
         31|32)
             lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
             ;;
@@ -68941,7 +69919,7 @@ run_menu_feature() {
     feature_choice="$1"
     show_support_page_hint='0'
 
-    [ "$feature_choice" = 33 ] || require_nradio_menu_environment
+    case "$feature_choice" in 33|34) ;; *) require_nradio_menu_environment ;; esac
     require_menu_feature_supported_for_current_model "$feature_choice"
 
     case "$feature_choice" in
@@ -69079,6 +70057,10 @@ run_menu_feature() {
         33)
             manage_nradio_hardware_acceleration || return $?
             ;;
+        34)
+            run_recorded_menu_feature "1 > 10" "Open-Box 安装" install_openbox
+            MENU_ACTION_COMPLETED='1'
+            ;;
         *)
             die_menu_input_issue "$feature_choice"
             ;;
@@ -69122,8 +70104,9 @@ common_plugin_menu() {
         print_menu_item 7 'DDNS-GO'
         print_menu_item 8 'Docker（C5800 系列 / C8-688）'
         print_menu_item 9 'MT5700 WebUI V3.0.0'
+        print_menu_item 10 'Open-Box'
         print_menu_item 0 '返回功能分类'
-        print_menu_prompt '0-9'
+        print_menu_prompt '0-10'
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 0 ;;
@@ -69136,6 +70119,7 @@ common_plugin_menu() {
             7) submenu_feature='18' ;;
             8) submenu_feature='22' ;;
             9) submenu_feature='30' ;;
+            10) submenu_feature='34' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         run_menu_feature "$submenu_feature"
