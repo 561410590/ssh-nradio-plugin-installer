@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.2.0"
+SCRIPT_VERSION="V3.2.1"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-14"
+SCRIPT_RELEASE_DATE="2026-09-23"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -9287,9 +9287,9 @@ EOF
             current_route = "admin/services/AdGuardHome/base";
 
         var tabs = [
-            {route: "admin/services/AdGuardHome/base", title: "Base Setting"},
-            {route: "admin/services/AdGuardHome/manual", title: "Manual Config"},
-            {route: "admin/services/AdGuardHome/log", title: "Log"}
+            {route: "admin/services/AdGuardHome/base", title: "基础设置"},
+            {route: "admin/services/AdGuardHome/manual", title: "手动配置"},
+            {route: "admin/services/AdGuardHome/log", title: "运行日志"}
         ];
 
         var sub_web_ht = "<div class='app_frame_box app_frame_tabs'><div class='app_frame_nav'>";
@@ -9307,7 +9307,7 @@ EOF
         if(is_openclash_route(route))
             return get_openclash_frame(route);
         if(is_adguardhome_route(route))
-            return get_adguardhome_frame(route);
+            return "<div class='app_frame_box app_frame_plain'>" + build_app_iframe(route) + "</div>";
         return "<div class='app_frame_box app_frame_plain'>" + build_app_iframe(route) + "</div>";
     }
     function switch_app_frame_route(obj){
@@ -24856,6 +24856,9 @@ install_openclash() {
         log "备注:     已跳过 smart core 下载"
     fi
 
+    # 哈基米 DNS 防泄露：fallback/节点域名/机场订阅域名改用加密 DNS 并持久化覆写
+    ensure_hakimi_dns_antileak || true
+
     log "安装完成"
     log "插件:   $OPENCLASH_DISPLAY_NAME"
     log "版本:  $oc_ver"
@@ -24979,10 +24982,6 @@ local user = uci:get("AdGuardHome", "AdGuardHome", "dashboard_user") or ""
 local pass = uci:get("AdGuardHome", "AdGuardHome", "dashboard_password") or ""
 local dashboard_base
 local cookiefile
-local login_body
-local login_body_file
-local login_cmd
-local login_out
 local data
 
 if not tostring(httpport):match("^%d+$") then
@@ -24999,32 +24998,49 @@ end
 if pass == "" then
 return nil, "未填写仪表盘认证密码"
 end
+
+local function adg_try_login(login_user, login_pass)
+local body = '{"name":"' .. adg_json_escape(login_user) .. '","password":"' .. adg_json_escape(login_pass) .. '"}'
+local body_file = sys.exec("mktemp /tmp/adg_dashboard_login.XXXXXX 2>/dev/null"):gsub("%s+$", "")
+if body_file == "" then
+return false
+end
+if not fs.writefile(body_file, body) then
+sys.exec("rm -f " .. adg_shell_quote(body_file))
+return false
+end
+fs.chmod(body_file, "0600")
+local cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
+	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
+	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
+	" --post-file=" .. adg_shell_quote(body_file) ..
+	" -O - " .. adg_shell_quote(dashboard_base .. "/control/login") .. " 2>/dev/null"
+local out = sys.exec(cmd)
+sys.exec("rm -f " .. adg_shell_quote(body_file))
+if out == nil or not out:find("OK", 1, true) then
+sys.exec("rm -f " .. adg_shell_quote(cookiefile))
+return false
+end
+return true
+end
+
 cookiefile = sys.exec("mktemp /tmp/adg_dashboard_cookie.XXXXXX 2>/dev/null"):gsub("%s+$", "")
 if cookiefile == "" then
 return nil, "无法安全创建仪表盘会话文件"
 end
 
-login_body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
-login_body_file = sys.exec("mktemp /tmp/adg_dashboard_login.XXXXXX 2>/dev/null"):gsub("%s+$", "")
-if login_body_file == "" then
+if not adg_try_login(user, pass) then
+local cooldown = "/var/run/adg_dashboard_lastfail"
+local cooldown_txt = fs.readfile(cooldown) or ""
+local cooldown_ts = tonumber(cooldown_txt:match("^(%d+)")) or 0
+local now = os.time()
+if now - cooldown_ts < 60 then
 sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return nil, "无法安全创建仪表盘登录请求"
+return nil, "3000 仪表盘登录失败，为避免连续失败被临时限制，稍后自动重试"
 end
-if not fs.writefile(login_body_file, login_body) then
-sys.exec("rm -f " .. adg_shell_quote(cookiefile) .. " " .. adg_shell_quote(login_body_file))
-return nil, "无法创建仪表盘登录请求"
-end
-fs.chmod(login_body_file, "0600")
-login_cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
-	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
-	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
-	" --post-file=" .. adg_shell_quote(login_body_file) ..
-	" -O - " .. adg_shell_quote(dashboard_base .. "/control/login") .. " 2>/dev/null"
-login_out = sys.exec(login_cmd)
-sys.exec("rm -f " .. adg_shell_quote(login_body_file))
-if not login_out:find("OK", 1, true) then
+fs.writefile(cooldown, tostring(now))
 sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return nil, "仪表盘登录失败"
+return nil, "3000 仪表盘登录失败：账号密码与 3000 不一致，请重新运行 1 > 4 引导设置账号密码，或在基础设置页填写与 3000 登录页一致的账号密码"
 end
 
 data = sys.exec(
@@ -25036,6 +25052,9 @@ sys.exec("rm -f " .. adg_shell_quote(cookiefile))
 if data == nil or data == "" then
 return nil, "仪表盘数据读取失败"
 end
+
+-- 读取成功后清除失败冷却标记，避免残留的"稍后自动重试"提示
+fs.unlink("/var/run/adg_dashboard_lastfail")
 
 return data
 end
@@ -25240,6 +25259,13 @@ if tab ~= "base" and tab ~= "manual" and tab ~= "log" then
     tab = "base"
 end
 local frame_url = base_url .. "/" .. tab
+-- 为 iframe 内层页面补建应用商店标记，避免其渲染 NRadio 顶栏/页脚
+-- 与右侧自定义标签页重复冲突（dispatcher 依 /tmp/appcenter/luci/<route> 判定 _INNTER_PAGE）
+local fs = require "nixio.fs"
+fs.mkdirr("/tmp/appcenter/luci")
+for _, inner_name in ipairs({ "base", "manual", "log" }) do
+    fs.writefile("/tmp/appcenter/luci/admin.services.AdGuardHome." .. inner_name, "")
+end
 %>
 <%+header%>
 <style>
@@ -26151,7 +26177,7 @@ function adgApplyRuntime(runtime, status) {
 			: ((status && status.listen_text) || "未读取"));
 	var protectText = runtimeOk
 		? adgProtectText(runtime && runtime.protection_enabled)
-		: ((status && status.dashboard_auth_ready) ? "未读取" : "需填密码");
+		: ((status && status.dashboard_auth_ready) ? "待同步" : "需填密码");
 	window.adgDashboardHttpPort = String(httpPort || "3000");
 
 	if (shellNode) {
@@ -30817,6 +30843,20 @@ normalize_adguard_yaml_defaults() {
     yaml_file="$1"
     [ -s "$yaml_file" ] || return 0
 
+    # 修复重复 users 键：固件升级或异常合并可能产生两个 users 键，导致核心配置解析失败。
+    # 只保留最后一个含密码的 users 段，并移动到文件末尾。
+    if [ "$(grep -c '^users:' "$yaml_file" 2>/dev/null)" -gt 1 ]; then
+        log "提示:     检测到 AdGuardHome 配置存在重复 users 键，正在自动修复"
+        awk '
+            /^users:[[:space:]]*$/ { if (cur != "" && haspw) lastpw = cur; cur = "users:\n"; haspw = 0; next }
+            /^users:[[:space:]]*\[[[:space:]]*\]/ { if (cur != "" && haspw) lastpw = cur; cur = "users: []\n"; haspw = 0; next }
+            cur != "" && /^[^[:space:]#-]/ { if (haspw) lastpw = cur; cur = ""; print; next }
+            cur != "" { cur = cur $0 "\n"; if ($0 ~ /password:/) haspw = 1; next }
+            { print }
+            END { if (cur != "" && haspw) printf "%s", cur; else if (lastpw != "") printf "%s", lastpw; else if (cur != "") printf "%s", cur }
+        ' "$yaml_file" > "$yaml_file.fixusers" 2>/dev/null && mv "$yaml_file.fixusers" "$yaml_file"
+    fi
+
     adg_defaults_tmp="$WORKDIR/adguard-defaults.$$"
     awk '
         function print_antiad_filter() {
@@ -30832,6 +30872,8 @@ normalize_adguard_yaml_defaults() {
             in_filters = 0
             saw_filters = 0
         }
+
+        /^users:[[:space:]]*\[[[:space:]]*\]/ { next }
 
         /^users:[[:space:]]*$/ {
             in_users = 1
@@ -30856,18 +30898,26 @@ normalize_adguard_yaml_defaults() {
         }
 
         /^[[:space:]]*session_ttl:[[:space:]]*/ {
-            sub(/session_ttl:[[:space:]].*/, "session_ttl: 720h", $0)
-            print
+            if (!saw_session_ttl) {
+                print "session_ttl: 720h"
+                saw_session_ttl = 1
+            }
             next
         }
 
         /^auth_attempts:[[:space:]]*/ {
-            print "auth_attempts: 0"
+            if (!saw_auth_attempts) {
+                print "auth_attempts: 0"
+                saw_auth_attempts = 1
+            }
             next
         }
 
         /^block_auth_min:[[:space:]]*/ {
-            print "block_auth_min: 0"
+            if (!saw_block_auth_min) {
+                print "block_auth_min: 0"
+                saw_block_auth_min = 1
+            }
             next
         }
 
@@ -31420,6 +31470,72 @@ ensure_adguard_openclash_dns_chain() {
     return 0
 }
 
+# 哈基米 DNS 防泄露：fallback、节点域名解析、机场订阅域名全部改用加密 DNS，
+# 并通过 openclash 自定义覆写脚本持久化（订阅重载后自动重新应用）。
+ensure_hakimi_dns_antileak() {
+    local hook_path config_path tmp_hook
+    hook_path='/etc/openclash/custom/openclash_custom_overwrite.sh'
+    [ -x /etc/init.d/openclash ] || return 0
+    [ -f "$hook_path" ] || return 0
+    tmp_hook="$WORKDIR/openclash-custom-overwrite.tmp"
+
+    # 重排 hook：去掉旧防泄露块与尾部 exit 0，随后把新块插在 exit 0 之前
+    # （OpenClash 的覆写脚本以 exit 0 结尾，追加在其后的内容不会被执行）
+    awk '
+        /^# nradio-dns-antileak:begin$/ { in_block = 1; next }
+        /^# nradio-dns-antileak:end$/ { in_block = 0; next }
+        in_block { next }
+        { n++; lines[n] = $0 }
+        END {
+            for (i = 1; i <= n; i++) {
+                if (i == n && lines[i] ~ /^exit 0[[:space:]]*$/) continue
+                print lines[i]
+            }
+        }
+    ' "$hook_path" > "$tmp_hook" 2>/dev/null
+    cat >> "$tmp_hook" <<'EOF_NRADIO_DNS_ANTILEAK'
+# nradio-dns-antileak:begin
+ruby -ryaml - "$1" >> /tmp/openclash.log 2>&1 <<'NRADIO_DNS_ANTILEAK_RUBY'
+begin
+  require 'yaml'
+  config = YAML.load_file(ARGV.fetch(0))
+  dns = config['dns'] ||= {}
+  dns['fallback'] = ['https://dns.google/dns-query', 'tls://1.1.1.1']
+  dns['proxy-server-nameserver'] = ['https://doh.pub/dns-query', 'https://dns.alidns.com/dns-query']
+  policy = dns['nameserver-policy'] ||= {}
+  (dns['fake-ip-filter'] || []).each do |entry|
+    next unless entry.is_a?(String) && entry.start_with?('+.')
+    domain = entry[2..]
+    next if domain.empty? || domain.match?(/\A(lan|local|arpa)\z/)
+    policy[domain] ||= ['https://doh.pub/dns-query']
+  end
+  File.write(ARGV.fetch(0), YAML.dump(config))
+rescue StandardError => error
+  warn '[NRadio] DNS 防泄露覆写失败: ' + error.class.to_s
+  exit 1
+end
+NRADIO_DNS_ANTILEAK_RUBY
+# nradio-dns-antileak:end
+EOF_NRADIO_DNS_ANTILEAK
+    printf 'exit 0\n' >> "$tmp_hook"
+    sh -n "$tmp_hook" 2>/dev/null || { rm -f "$tmp_hook"; return 1; }
+    cat "$tmp_hook" > "$hook_path" 2>/dev/null || { rm -f "$tmp_hook"; return 1; }
+    chmod 755 "$hook_path" 2>/dev/null || true
+    rm -f "$tmp_hook"
+    log "DNS:    已写入哈基米 DNS 防泄露覆写（fallback/节点/机场域名改用加密 DNS）"
+
+    config_path='/etc/openclash/clash-all-smart.yaml'
+    [ -f "$config_path" ] || return 0
+    if ! ruby -ryaml -e 'c=YAML.load_file(ARGV[0])["dns"]; fb=c["fallback"]; pn=c["proxy-server-nameserver"]; exit((fb && fb.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) && (pn && pn.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) ? 0 : 1)' "$config_path" 2>/dev/null; then
+        sh "$hook_path" "$config_path" >> /tmp/openclash.log 2>&1
+        log "DNS:    已把运行配置的明文 DNS 替换为加密 DNS，正在重载哈基米核心..."
+        /etc/init.d/openclash restart >/dev/null 2>&1
+        log "DNS:    哈基米 DNS 防泄露已生效"
+    else
+        log "DNS:    哈基米 DNS 防泄露配置已生效，无需重载"
+    fi
+}
+
 read_adguard_primary_user_from_config() {
     configpath="$(get_adguard_configpath)"
     [ -s "$configpath" ] || return 1
@@ -31457,28 +31573,182 @@ ensure_adguard_dashboard_auth_defaults() {
         uci commit AdGuardHome >/dev/null 2>&1 || true
     fi
 
-    if [ -z "$dashboard_password" ] && { [ -t 0 ] || can_use_ui_tty; }; then
-        if confirm_default_yes "是否现在写入 AdGuardHome 原版仪表盘密码供应用商店页读取统计？"; then
-            prompt_with_default "Dashboard API user" "$dashboard_user"
-            dashboard_user="$PROMPT_RESULT"
-            ui_read_secret 'Dashboard API password（与 3000 登录密码一致）: ' || die "input cancelled"
-            dashboard_password="$UI_READ_RESULT"
-
-            if [ -n "$dashboard_password" ]; then
-                uci set AdGuardHome.AdGuardHome.dashboard_user="$dashboard_user" >/dev/null 2>&1 || true
-                uci set AdGuardHome.AdGuardHome.dashboard_password="$dashboard_password" >/dev/null 2>&1 || true
-                uci commit AdGuardHome >/dev/null 2>&1 || true
-                log "备注:     已写入 AdGuardHome 应用商店页统计认证信息"
-                return 0
-            fi
-
-            log "备注:     未输入 Dashboard API password，应用商店页将仅显示本地运行态与监听"
-        fi
-    fi
-
+    # 账号密码由 1 > 4 结尾的引导一次性设置（写 3000 并同步 UCI），此处不再重复询问
     if [ -z "$dashboard_password" ]; then
-        log "备注:     AdGuardHome 应用商店页已可读取本地运行态与监听；如需同步 3000 原版统计，请在设置页填写 Dashboard API password（与 3000 登录密码一致）"
+        log "备注:     AdGuardHome 应用商店页已可读取本地运行态与监听；如需同步 3000 原版统计，将由后续引导统一设置账号密码"
     fi
+}
+
+# 引导设置 3000 仪表盘账号密码：账号默认 admin，密码由用户输入。
+# 全程零哈希：通过 AdGuardHome 首次配置接口 /control/install/configure 写入，
+# 密码哈希由 AdGuardHome 内部生成；任何失败都不会锁死账号或中断安装链。
+adg_dashboard_login_ok() {
+    local _u="$1" _p="$2" _cookie _body _out _port
+    _port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
+    case "$_port" in ''|*[!0-9]*) _port='3000';; esac
+    _cookie="$(mktemp /tmp/adg_login_ck.XXXXXX 2>/dev/null || true)"
+    _body="$(mktemp /tmp/adg_login_bd.XXXXXX 2>/dev/null || true)"
+    [ -n "$_cookie" ] && [ -n "$_body" ] || { rm -f "$_cookie" "$_body" 2>/dev/null || true; return 1; }
+    printf '{"name":"%s","password":"%s"}\n' \
+        "$(printf '%s' "$_u" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+        "$(printf '%s' "$_p" | sed 's/\\/\\\\/g; s/"/\\"/g')" > "$_body" 2>/dev/null || { rm -f "$_cookie" "$_body" 2>/dev/null || true; return 1; }
+    chmod 600 "$_body" 2>/dev/null || true
+    _out="$(wget -q --save-cookies="$_cookie" --keep-session-cookies --header='Content-Type: application/json' --post-file="$_body" -O - "http://127.0.0.1:$_port/control/login" 2>/dev/null || true)"
+    rm -f "$_cookie" "$_body" 2>/dev/null || true
+    case "$_out" in
+        *OK*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+guide_adguard_dashboard_account() {
+    local binpath configpath workdir dash_user dash_pass adg_port
+    local web_ip dns_port backup_yaml json_body guide_rc guide_pid
+    binpath="$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)"
+    [ -x "$binpath" ] || binpath='/usr/bin/AdGuardHome/AdGuardHome'
+    [ -x "$binpath" ] || return 0
+    configpath="$(get_adguard_configpath)"
+    [ -f "$configpath" ] || return 0
+    workdir="$(uci -q get AdGuardHome.AdGuardHome.workdir 2>/dev/null || true)"
+    [ -n "$workdir" ] || workdir='/usr/bin/AdGuardHome'
+
+    dash_user="$(uci -q get AdGuardHome.AdGuardHome.dashboard_user 2>/dev/null || true)"
+    dash_pass="$(uci -q get AdGuardHome.AdGuardHome.dashboard_password 2>/dev/null || true)"
+    [ -n "$dash_user" ] || dash_user='admin'
+
+    # 现有账号密码已与 3000 一致则无需重新引导
+    if [ -n "$dash_pass" ] && adg_dashboard_login_ok "$dash_user" "$dash_pass"; then
+        log "备注:     3000 仪表盘账号密码与设置一致，跳过重新引导"
+        return 0
+    fi
+
+    if ! confirm_default_yes "是否现在引导设置 3000 仪表盘账号密码（写入 AdGuardHome）？"; then
+        log "备注:     已跳过 3000 仪表盘账号密码引导；弹窗如需读取统计，请在基础设置页填写与 3000 登录页一致的账号密码"
+        return 0
+    fi
+
+    prompt_with_default "仪表盘账号（默认 admin）" "admin"
+    dash_user="$PROMPT_RESULT"
+    [ -n "$dash_user" ] || dash_user='admin'
+    ui_read_secret "仪表盘密码（至少 8 位，不会显示）: " || return 1
+    dash_pass="$UI_READ_RESULT"
+    if [ "${#dash_pass}" -lt 8 ]; then
+        log "提示:     密码至少 8 位，本次引导已取消，可重新运行 1 > 4"
+        return 1
+    fi
+
+    adg_port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
+    case "$adg_port" in ''|*[!0-9]*) adg_port='3000';; esac
+
+    web_ip="$(sed -n 's/^[[:space:]]*address:[[:space:]]*//p' "$configpath" | sed -n '1p' | sed 's/:.*$//')"
+    case "$web_ip" in ''|'::'|'*') web_ip='0.0.0.0';; esac
+    dns_port="$(awk '/^dns:[[:space:]]*$/{ind=1;next} ind&&/^[[:space:]]*port:[[:space:]]*/{gsub(/[[:space:]]*port:[[:space:]]*/,"");print;exit}' "$configpath")"
+    case "$dns_port" in ''|*[!0-9]*) dns_port='554';; esac
+
+    backup_yaml="$(mktemp /tmp/adg_guide_yaml.XXXXXX 2>/dev/null || true)"
+    [ -n "$backup_yaml" ] || { log "提示:     无法创建引导临时备份，跳过账号密码引导"; return 1; }
+    cp -f "$configpath" "$backup_yaml" 2>/dev/null || { log "提示:     AdGuardHome 配置备份失败，跳过账号密码引导"; rm -f "$backup_yaml"; return 1; }
+
+    /etc/init.d/AdGuardHome stop >/dev/null 2>&1
+    # 移走配置文件使核心进入首次配置模式（firstRun 仅由配置文件是否存在判定）
+    mv "$configpath" "$configpath.pre-firstrun" 2>/dev/null || {
+        log "提示:     无法移开配置文件，跳过账号密码引导"
+        rm -f "$backup_yaml"
+        return 1
+    }
+
+    "$binpath" -c "$configpath" -w "$workdir" -p "$adg_port" >/tmp/adg_guide_firstrun.log 2>&1 &
+    guide_pid=$!
+    sleep 1
+
+    guide_rc=1
+    local _i=0
+    while [ "$_i" -lt 30 ]; do
+        # firstRun 下 /control/status 未认证会返回 401/404，只要服务器有 HTTP 响应即视为就绪
+        wget -q -S -O - "http://127.0.0.1:$adg_port/control/status" 2>&1 | grep -q 'HTTP/' && { guide_rc=0; break; }
+        sleep 1
+        _i=$((_i + 1))
+    done
+    if [ "$guide_rc" -ne 0 ]; then
+        log "提示:     3000 仪表盘未响应，首次配置实例日志："
+        tail -6 /tmp/adg_guide_firstrun.log 2>/dev/null || true
+        log "提示:     正在恢复原配置"
+        kill "$guide_pid" >/dev/null 2>&1
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml"
+        return 1
+    fi
+
+    json_body="$(mktemp /tmp/adg_guide_body.XXXXXX 2>/dev/null || true)"
+    [ -n "$json_body" ] || {
+        log "提示:     无法创建引导请求文件，正在恢复原配置"
+        cp -f "$backup_yaml" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome restart >/dev/null 2>&1
+        rm -f "$backup_yaml"
+        return 1
+    }
+    printf '{"language":"","password":"%s","username":"%s","web":{"ip":"%s","port":%s},"dns":{"ip":"0.0.0.0","port":%s}}\n' \
+        "$(printf '%s' "$dash_pass" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+        "$(printf '%s' "$dash_user" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+        "$web_ip" "$adg_port" "$dns_port" > "$json_body" 2>/dev/null
+    wget -q --header='Content-Type: application/json' --post-file="$json_body" -O /tmp/adg_guide_out "http://127.0.0.1:$adg_port/control/install/configure" 2>/dev/null
+    guide_rc=$?
+    rm -f "$json_body"
+    if [ "$guide_rc" -ne 0 ]; then
+        log "提示:     仪表盘配置提交失败（rc=$guide_rc），正在恢复原配置"
+        kill "$guide_pid" >/dev/null 2>&1
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out 2>/dev/null
+        return 1
+    fi
+
+    # configure 已把新账号密码写入 $configpath；停掉首次实例，
+    # 把新 users 段合并回原配置，保留过滤列表、上游、归一化等全部原有设置
+    kill "$guide_pid" >/dev/null 2>&1
+    sleep 2
+    awk '/^users:[[:space:]]*$/{inu=1;print;next} inu&&/^[^[:space:]#-]/{exit} inu{print}' "$configpath" > /tmp/adg_users_block 2>/dev/null
+    if [ ! -s /tmp/adg_users_block ]; then
+        log "提示:     无法提取新账号密码配置，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out /tmp/adg_users_block 2>/dev/null
+        return 1
+    fi
+    awk '
+        /^users:[[:space:]]*$/ { in_users = 1; next }
+        /^users:[[:space:]]*\[[[:space:]]*\]/ { next }
+        in_users && /^[^[:space:]#-]/ { in_users = 0 }
+        !in_users { print }
+    ' "$configpath.pre-firstrun" > "$configpath.merged" 2>/dev/null
+    cat /tmp/adg_users_block >> "$configpath.merged" 2>/dev/null
+    if [ "$(grep -c '^users:' "$configpath.merged" 2>/dev/null)" != "1" ]; then
+        log "提示:     合并后账号配置校验未通过，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out /tmp/adg_users_block "$configpath.merged" 2>/dev/null
+        return 1
+    fi
+    mv "$configpath.merged" "$configpath" 2>/dev/null
+    rm -f "$configpath.pre-firstrun" /tmp/adg_users_block /tmp/adg_guide_out 2>/dev/null
+    /etc/init.d/AdGuardHome start >/dev/null 2>&1
+
+    if adg_dashboard_login_ok "$dash_user" "$dash_pass"; then
+        uci set AdGuardHome.AdGuardHome.dashboard_user="$dash_user" >/dev/null 2>&1 || true
+        uci set AdGuardHome.AdGuardHome.dashboard_password="$dash_pass" >/dev/null 2>&1 || true
+        uci commit AdGuardHome >/dev/null 2>&1 || true
+        ensure_adguard_openclash_dns_chain || true
+        log "备注:     3000 仪表盘账号密码已按引导设置（账号 $dash_user），应用商店弹窗可正常读取统计"
+        rm -f "$backup_yaml" /tmp/adg_guide_out 2>/dev/null
+        return 0
+    fi
+
+    log "提示:     3000 仪表盘账号密码校验未通过，正在恢复原配置"
+    cp -f "$backup_yaml" "$configpath" 2>/dev/null
+    /etc/init.d/AdGuardHome restart >/dev/null 2>&1
+    rm -f "$backup_yaml" /tmp/adg_guide_out 2>/dev/null
+    return 1
 }
 
 fix_adguard_runtime_if_possible() {
@@ -32264,6 +32534,10 @@ storage_expand_build_migrate_menu_list() {
         src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
         target="$(storage_expand_target_for_path "$src")"
 
+        if storage_expand_migration_is_pending "$src" "$target"; then
+            printf '%s\t%s\t%s\n' "$app_key" "$label（继续迁移）" "$src" >> "$list_file"
+            continue
+        fi
         if ! storage_expand_appcenter_has_installed_app "$app_key" &&
            ! storage_expand_runtime_has_installed_app "$app_key" "$src"; then
             storage_expand_path_needs_relink "$src" "$target" || continue
@@ -33335,9 +33609,94 @@ storage_expand_restore_migration_backup() {
     return 0
 }
 
+storage_expand_migration_is_pending() {
+    local src="$1"
+    local target="$2"
+    local pending_src
+
+    [ -f "$target.nradio-migration-pending" ] || return 1
+    IFS= read -r pending_src < "$target.nradio-migration-pending" || return 1
+    [ "$pending_src" = "$src" ] && [ -e "$target" ] && [ ! -L "$target" ]
+}
+
+storage_expand_payload_matches_target() {
+    local src="$1"
+    local target="$2"
+    local target_root="$3"
+    local item name
+
+    if [ -L "$src" ]; then
+        storage_expand_link_points_under "$src" "$target_root" && return 0
+        [ -L "$target" ] || return 1
+        [ "$(readlink "$src")" = "$(readlink "$target")" ]
+    elif [ -d "$src" ]; then
+        [ -d "$target" ] && [ ! -L "$target" ] || return 1
+        for item in "$src"/* "$src"/.[!.]* "$src"/..?*; do
+            [ -e "$item" ] || [ -L "$item" ] || continue
+            name="${item##*/}"
+            storage_expand_payload_matches_target "$item" "$target/$name" "$target_root" || return 1
+        done
+    elif [ -f "$src" ]; then
+        [ -f "$target" ] && [ ! -L "$target" ] || return 1
+        cmp -s "$src" "$target"
+    else
+        return 1
+    fi
+}
+
+storage_expand_complete_migration() {
+    local app_key="$1"
+    local label="$2"
+    local service="$3"
+    local src="$4"
+    local target="$5"
+    local kind="$6"
+    local pending="$target.nradio-migration-pending"
+    local resume_running
+
+    storage_expand_recreated_payload_valid_at_path "$app_key" "$target" || {
+        storage_expand_start_service "$service" || true
+        die "$label 扩展盘运行文件不完整，迁移数据保留于：$target"
+    }
+    if storage_expand_migration_is_pending "$src" "$target"; then
+        resume_running="$(sed -n '2p' "$pending")"
+        [ "$resume_running" != '1' ] || STORAGE_EXPAND_SERVICE_WAS_RUNNING=1
+    fi
+    if ! storage_expand_path_is_migrated "$src" "$target"; then
+        if [ -e "$src" ] || [ -L "$src" ]; then
+            [ ! -L "$src" ] || die "$label 原路径已被其他软链接占用：$src"
+            storage_expand_payload_matches_target "$src" "$target" "$target" || {
+                storage_expand_start_service "$service" || true
+                die "$label 迁移数据不一致，源路径与扩展盘数据均已保留"
+            }
+        fi
+        if storage_expand_relink_service_is_running "$app_key" "$service"; then
+            die "$label 服务在复制期间重新启动，已停止切换"
+        fi
+        printf '%s\n%s\n' "$src" "${STORAGE_EXPAND_SERVICE_WAS_RUNNING:-0}" > "$pending" || {
+            storage_expand_start_service "$service" || true
+            die "$label 写入迁移续接状态失败，源路径保留"
+        }
+        sync
+        # The verified destination is the migration payload. Renaming the source
+        # inside overlay would retain every data block and can make ln fail ENOSPC.
+        rm -rf "$src" || die "$label 释放原路径未完成；数据保留于 $target，请重新选择此迁移项"
+        sync
+        ln -s "$target" "$src" || die "$label 创建软链接失败；数据保留于 $target，请重新选择此迁移项"
+    fi
+    storage_expand_path_is_migrated "$src" "$target" || die "$label 迁移链接未接通；数据保留于：$target"
+    storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind" || {
+        storage_expand_start_service "$service" || true
+        die "$label 迁移清单更新失败；数据已接入 $target，请重新选择此迁移项"
+    }
+    storage_expand_start_service "$service" || die "$label 数据已接入 $target，但服务未能恢复，请重新选择此迁移项"
+    rm -f "$pending" || log "警告: $label 迁移完成，续接状态清理失败：$pending"
+    log "完成: $label 已迁移到扩展盘"
+}
+
 storage_expand_migrate_one_app() {
     local app_key="$1"
-    local spec label service src target target_parent tmp_target backup_src kind src_real target_real
+    local spec label service src target target_parent tmp_target kind src_real target_real
 
     storage_expand_require_active
     spec="$(storage_expand_app_spec "$app_key")" || die "未知迁移项：$app_key"
@@ -33347,6 +33706,12 @@ storage_expand_migrate_one_app() {
     target="$(storage_expand_target_for_path "$src")"
     target_parent="$(dirname "$target")"
 
+    if storage_expand_migration_is_pending "$src" "$target"; then
+        log "继续迁移: $label -> $target"
+        storage_expand_stop_service "$service" || die "$label 服务未能确认停止，拒绝继续迁移"
+        storage_expand_complete_migration "$app_key" "$label" "$service" "$src" "$target" "link"
+        return 0
+    fi
     [ -e "$src" ] || {
         log "跳过: $label 源路径不存在：$src"
         return 0
@@ -33376,34 +33741,7 @@ storage_expand_migrate_one_app() {
             storage_expand_start_service "$service" || log "警告: $label 同步失败后未能恢复服务状态：$service"
             die "$label 同步到扩展盘失败"
         }
-        backup_src="$src.nradio-storage-backup-$TS"
-        mv "$src" "$backup_src" || {
-            storage_expand_start_service "$service" || log "警告: $label 移动失败后未能恢复服务状态：$service"
-            die "$label 移动原路径失败：$src"
-        }
-        ln -s "$target" "$src" || {
-            mv "$backup_src" "$src" 2>/dev/null || true
-            storage_expand_start_service "$service" || log "警告: $label 软链接失败后未能恢复服务状态：$service"
-            die "$label 创建软链接失败"
-        }
-        if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
-            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 运行文件校验失败且自动回滚未完成：$backup_src"
-            storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-            die "$label 运行文件校验失败，已恢复原路径"
-        fi
-        if ! storage_expand_start_service "$service"; then
-            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 服务启动失败且自动回滚未完成：$backup_src"
-            storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
-            die "$label 迁移后服务启动失败，已恢复原路径"
-        fi
-        if ! storage_expand_record_migration "$label" "$service" "$src" "$target" "link"; then
-            storage_expand_stop_service "$service" || die "$label 迁移清单更新失败且服务无法停止；保留原路径备份：$backup_src"
-            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 迁移清单更新失败且自动回滚未完成：$backup_src"
-            storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-            die "$label 迁移清单更新失败，已恢复原路径"
-        fi
-        rm -rf "$backup_src" || log "警告: $label 迁移成功，但原路径备份清理失败：$backup_src"
-        log "完成: $label 已迁移到扩展盘"
+        storage_expand_complete_migration "$app_key" "$label" "$service" "$src" "$target" "link"
         return 0
     fi
     storage_expand_path_has_self_loop_child_links "$src" && die "$label 原路径含自指软链接，拒绝迁移：$src"
@@ -33438,37 +33776,7 @@ storage_expand_migrate_one_app() {
         die "$label 写入扩展盘目标失败"
     }
 
-    backup_src="$src.nradio-storage-backup-$TS"
-    mv "$src" "$backup_src" || {
-        rm -rf "$target" 2>/dev/null || true
-        storage_expand_start_service "$service" || log "警告: $label 移动失败后未能恢复服务状态：$service"
-        die "$label 移动原路径失败：$src"
-    }
-    ln -s "$target" "$src" || {
-        mv "$backup_src" "$src" 2>/dev/null || true
-        rm -rf "$target" 2>/dev/null || true
-        storage_expand_start_service "$service" || log "警告: $label 软链接失败后未能恢复服务状态：$service"
-        die "$label 创建软链接失败"
-    }
-
-    if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
-        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 运行文件校验失败且自动回滚未完成：$backup_src"
-        storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-        die "$label 运行文件校验失败，已恢复原路径"
-    fi
-    if ! storage_expand_start_service "$service"; then
-        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 服务启动失败且自动回滚未完成：$backup_src"
-        storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
-        die "$label 迁移后服务启动失败，已恢复原路径"
-    fi
-    if ! storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind"; then
-        storage_expand_stop_service "$service" || die "$label 迁移清单更新失败且服务无法停止；保留原路径备份：$backup_src"
-        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 迁移清单更新失败且自动回滚未完成：$backup_src"
-        storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-        die "$label 迁移清单更新失败，已恢复原路径"
-    fi
-    rm -rf "$backup_src" || log "警告: $label 迁移成功，但原路径备份清理失败：$backup_src"
-    log "完成: $label 已迁移到扩展盘"
+    storage_expand_complete_migration "$app_key" "$label" "$service" "$src" "$target" "$kind"
 }
 
 storage_expand_restore_one_app() {
@@ -34719,6 +35027,9 @@ install_adguardhome() {
     else
         log "备注:     已跳过 AdGuardHome 核心下载"
     fi
+
+    # 安装内核后引导设置仪表盘账号密码（账号默认 admin，除非用户设置）
+    guide_adguard_dashboard_account || true
 
     log "安装完成"
     log "插件:   AdGuardHome"
@@ -36610,11 +36921,14 @@ EOF_MT5700_SPEED_DISPLAY
     done
 }
 
-write_mt5700_c2000max_atsd_proxy() {
-    [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000MAX' ] || return 0
-    [ -x /usr/sbin/atsd_cli ] || die "C2000MAX 缺少 NROS atsd_cli，无法建立共享 AT 通道"
-    [ -x /usr/bin/lua ] || die "C2000MAX 缺少 Lua，无法建立共享 AT 通道"
-    /usr/bin/lua -e 'require("socket")' >/dev/null 2>&1 || die "C2000MAX 缺少 LuaSocket，无法建立共享 AT 通道"
+write_mt5700_c2000_atsd_proxy() {
+    case "${CURRENT_DETECTED_MODEL:-}" in
+        NRadio_C2000MAX|NRadio_C2000Ultra) ;;
+        *) return 0 ;;
+    esac
+    [ -x /usr/sbin/atsd_cli ] || die "当前机型缺少 NROS atsd_cli，无法建立共享 AT 通道"
+    [ -x /usr/bin/lua ] || die "当前机型缺少 Lua，无法建立共享 AT 通道"
+    /usr/bin/lua -e 'require("socket")' >/dev/null 2>&1 || die "当前机型缺少 LuaSocket，无法建立共享 AT 通道"
     write_mt5700_atsd_proxy_program
 
     cat > "$MT5700_ATSD_PROXY_INIT" <<'EOF_MT5700_ATSD_PROXY_INIT'
@@ -36639,15 +36953,15 @@ EOF_MT5700_ATSD_PROXY_INIT
 
     mt5700_config_backup="$mt5700_workdir/at-webserver.config.before-c2000max"
     cp -p "$MT5700_CONFIG_FILE" "$mt5700_config_backup" || die "备份 MT5700 WebUI 原配置失败"
-    uci set at-webserver.config.connection_type='NETWORK' || die "设置 C2000MAX AT 连接类型失败"
-    uci set at-webserver.config.network_host='127.0.0.1' || die "设置 C2000MAX AT 共享地址失败"
-    uci set "at-webserver.config.network_port=$MT5700_ATSD_PROXY_PORT" || die "设置 C2000MAX AT 共享端口失败"
-    uci commit at-webserver || die "保存 C2000MAX AT 共享配置失败"
+    uci set at-webserver.config.connection_type='NETWORK' || die "设置 C2000 系列 AT 连接类型失败"
+    uci set at-webserver.config.network_host='127.0.0.1' || die "设置 C2000 系列 AT 共享地址失败"
+    uci set "at-webserver.config.network_port=$MT5700_ATSD_PROXY_PORT" || die "设置 C2000 系列 AT 共享端口失败"
+    uci commit at-webserver || die "保存 C2000 系列 AT 共享配置失败"
 
     "$MT5700_ATSD_PROXY_INIT" enable || die "MT5700 AT 共享桥开机启动配置失败"
     "$MT5700_ATSD_PROXY_INIT" stop >/dev/null 2>&1 || true
     "$MT5700_ATSD_PROXY_INIT" start || die "MT5700 AT 共享桥启动失败"
-    log "适配: C2000MAX 使用 NROS atsd_cli 共享 AT 通道（127.0.0.1:$MT5700_ATSD_PROXY_PORT）"
+    log "适配: C2000MAX/C2000Ultra 使用 NROS atsd_cli 共享 AT 通道（127.0.0.1:$MT5700_ATSD_PROXY_PORT）"
 }
 
 write_mt5700_c5800_dual() {
@@ -37091,7 +37405,7 @@ install_mt5700_webui() {
     patch_mt5700_version_display
     patch_mt5700_boot_fallback
     patch_mt5700_speed_display
-    write_mt5700_c2000max_atsd_proxy
+    write_mt5700_c2000_atsd_proxy
     write_mt5700_c5800_dual
 
     log_stage 4 5 "写入 NROS 打开入口、图标、应用商店与异步卸载链"
