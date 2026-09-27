@@ -2,15 +2,15 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V3.2.0`（2026-09-14）
+- 当前版本：`V3.2.3`（2026-09-27）
 - 公开版本：以 GitHub Releases 页面为准
-- 当前状态：本地总脚本、支持页和检查规则同步到 V3.2.0，配套 Mesh 1.20.1-4 与 AK68-798 透传插件 1.2.0-5。
+- 当前功能：Argon 8080、iStore 插件接入、AdGuardHome 密码设置与四标签弹窗、应用商店顶部和“更多”入口。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-本地总脚本、支持页、仓库资料与检查规则使用 `V3.2.0`。脚本代理下载读取 GitHub main；支持页的 Mesh 与 AK68-798 透传插件使用同站文件。本地更新不代表已经发布到公网。
+本地总脚本、支持页、仓库资料与检查规则使用 `V3.2.3`。脚本代理下载读取 GitHub main；支持页的 Mesh 与 AK68-798 透传插件使用同站文件。本地更新不代表已经发布到公网。
 
 ## Mesh组网插件 1.20.1-4
 
@@ -31,7 +31,7 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 - VPN 与双线路联动：启停、VPN 重连和后台检查同步站点路由的 mwan3 排除集合；失败显示诊断，VPN-only 恢复保留限速队列。
 - C8-788：依据 `HC-WT9302 / HCMT7987-NAND / NROS 2.2.12.n0.c1` 实机输出适配 `eth3` 蜂窝出口及原厂双栈全宽 mark 分类顺序。
 - 合并 IPv6 多地址跟踪、减少队列重建、未保存输入保护和请求超时处理。本地回归与安装包检查通过；实机 VPN 连通性和限速数值需按设备验收。
-- 本节是独立 QoS 插件更新，当前本地总脚本版本为 `V3.2.0`。
+- 本节是独立 QoS 插件更新，当前本地总脚本版本为 `V3.2.3`。
 
 ## 适用设备
 
@@ -78,11 +78,34 @@ cd /tmp && wget -O ssh-nradio-plugin-installer.sh https://ghproxy.vip/https://gi
 
 | 功能分类 | 内容 |
 | --- | --- |
-| 常用插件安装 | swap（C2000MAX / C2000Ultra）、哈基米、Web SSH、AdGuardHome、OpenList、MosDNS、DDNS-GO、MT5700 WebUI V3.0.0、Docker（仅 C8/C5800 扩展盘） |
+| 常用插件安装 | swap（C2000MAX / C2000Ultra）、哈基米、Web SSH、AdGuardHome、OpenList、MosDNS、DDNS-GO、MT5700 WebUI、Open-Box、Docker（仅 C8/C5800 扩展盘） |
 | VPN / 组网 / 路由向导 | EasyTier、ZeroTier、OpenVPN |
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
-| 应用商店与页面美化 | 卡片视觉、状态徽标、手机保存按钮兼容、原厂还原、C2000Pro / AK68-798 轻量应用商店、OpenWrt LuCI 8080 |
+| 应用商店与页面美化 | 卡片视觉、状态徽标、手机保存按钮兼容、原厂还原、C2000Pro / AK68-798 轻量应用商店、OpenWrt LuCI 8080、Argon 主题与 iStore 插件接入 |
 | 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、智能频段 v7、首页 CPU/5G 温度、5G 连接监听、硬件加速管理 |
+
+## V3.2.3 更新
+
+- `4 > 4` 使用 Argon 登录页，恢复 OpenClash 六个中文标签及静态资源；AdGuardHome、OpenVPN 使用原生 LuCI 配置页面。
+- 概况恢复动态数据和 WAN 信息，型号保留 `NRadio_` 前缀；5800 按实际线路显示单或双 WAN，其他机型显示单 WAN。Swap 分开显示总容量、已用和空闲。
+- 缺少 iStore 时自动安装；安装插件后刷新 8080 路由、所属菜单和静态资源。文件变化检测通过 Lua 文件接口读取，取消对 `stat` 命令的依赖。
+- 修复 OpenVPN 配置导入、AdGuardHome 配置重载失败提示；重复安装复用缓存包，资源准备完成后更新页面。
+- AdGuardHome 密码只需输入一次，由核心生成并应用密码；等待服务就绪后确认登录，再同步后台账号。商店弹窗提供概览、基础设置、手动配置和运行日志四个标签。
+- `4 > 1` 适配完整应用商店的顶部与“更多”入口。MAX / Ultra 使用顶部布局须满足 NROS 2.3.3.1 及以上且存在原厂顶部入口；其余沿用原布局。桌面三列，加入工具栏吸顶、刷新重试、标签左右切换及长名称展开。
+
+### Argon 8080 安装
+
+在脚本中选择 `4 > 4`，完成后访问 `http://路由器LAN地址:8080/`。已有实例再次选择此项即可更新；更新后可按 `Ctrl + F5` 刷新页面。iStore 安装的插件可从商店“打开”或对应菜单进入。
+
+## V3.2.2 更新
+
+- 加入 `4 > 4` Argon 8080 入口，首次安装可直接创建 Argon 实例。
+- 完善应用商店卡片、插件弹窗和轻量商店 IPK 上传。
+
+## V3.2.1 更新
+
+- 加入 AdGuardHome 后台账号引导，修复商店弹窗数据读取与重复导航。
+- 完善 OpenClash 加密 DNS 设置和 Ultra MT5700 信号读取。
 
 ## V3.2.0 更新
 
@@ -332,9 +355,9 @@ cd /tmp && wget -O ssh-nradio-plugin-installer.sh https://ghproxy.vip/https://gi
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V3.2.0 本地总脚本，已内嵌双栈多线分流、智能频段 v7 与 5G 连接监听 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V3.2.3 本地总脚本，包含 Argon 8080、iStore 插件同步、双栈多线分流与设备维护 |
 | `00-current/nradio-smart-band.sh` | 历史独立开发校验源；当前运行代码以总脚本内嵌 v7 为准，不是运行或发布依赖 |
-| `40-server-web/mayebano-support/index.html` | V3.2.0 本地支持页入口 |
+| `40-server-web/mayebano-support/index.html` | V3.2.3 本地支持页入口 |
 | `40-server-web/mayebano-support/AK68-798-SSH-2222.nr` | AK68-798 SSH 2222 配置恢复包 |
 | `40-server-web/mayebano-support/nradio-ssh-manager.ipk` | C8-788 在 NRadio 应用商店本地安装的 SSH 管理包 |
 | `40-server-web/mayebano-support/nradio-mesh.ipk` | NROS 应用商店本地安装的 Mesh 组网包 |
@@ -372,15 +395,15 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 bash -n 00-current/ssh-nradio-plugin-installer.sh
 ```
 
-`CHECKSUMS.txt` 记录 V3.2.0 本地配套文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布前重新核对总脚本、支持页、AK68-798 SSH 配置包、四个插件 IPK 和 `vercel.json` 的 hash 与大小。
+`CHECKSUMS.txt` 记录 V3.2.3 本地配套文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布前重新核对总脚本、支持页、AK68-798 SSH 配置包、四个插件 IPK 和 `vercel.json` 的 hash 与大小。
 
 ## 脚本校验
 
 当前脚本：
 
 ```text
-SHA256  62f248a924e7b05ccb5c1053ddc800835e075f3697d9221196eac1a0993c8ed8
-Bytes   2878882
+SHA256  957a2b20d6bc3f61682eb1237750b4a51ee963cfed811a667cbb3337764ca31a
+Bytes   3396682
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

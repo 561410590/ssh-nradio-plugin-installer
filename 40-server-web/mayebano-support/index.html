@@ -3,15 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="NRadio NROS 插件脚本 V3.2.0，支持 IPv4/IPv6 多线加权分流、固定出口与线路状态查看，提供插件下载、安装教程、适配机型和更新记录。">
+    <meta name="description" content="NRadio NROS 插件脚本 V3.2.3，提供 Argon 8080、iStore 插件接入、AdGuardHome、应用商店和双栈多线分流，包含下载、安装教程、适配机型和更新记录。">
     <meta name="robots" content="index,follow">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="color-scheme" content="light">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="NRadio 插件工具 V3.2.0">
-    <meta property="og:description" content="V3.2.0 / 2026-09-14：5 → 5 → 2 新增 IPv4/IPv6 多线加权分流、IP/端口固定出口、连接数与线路速率查看；C5800-688 双线路双栈访问已验证。">
+    <meta property="og:title" content="NRadio 插件工具 V3.2.3">
+    <meta property="og:description" content="V3.2.3 / 2026-09-27：完善 Argon 8080 登录、概况和插件页面，接入 iStore 插件菜单；修复 AdGuardHome 密码设置，适配应用商店顶部与更多入口。">
     <meta name="theme-color" content="#fff1f2">
-    <title>NRadio 插件脚本 V3.2.0 | 支持页</title>
+    <title>NRadio 插件脚本 V3.2.3 | 支持页</title>
     <style>
         /* 
          * ============================================================
@@ -714,7 +714,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">更新记录</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info" aria-label="当前版本">V3.2.0</div>
+            <div class="nav-v-info" aria-label="当前版本">V3.2.3</div>
         </nav>
     </div>
 
@@ -731,7 +731,9 @@
                     <a href="https://github.com/561410590/ssh-nradio-plugin-installer" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="btn btn-outline">GitHub 开源</a>
                 </div>
                 <div class="badge-list">
-                    <div class="badge-item">V3.2.0 / 2026-09-14</div>
+                    <div class="badge-item">V3.2.3 / 2026-09-27</div>
+                    <div class="badge-item">Argon 8080 · iStore</div>
+                    <div class="badge-item">应用商店双入口</div>
                     <div class="badge-item">IPv4 / IPv6 多线分流</div>
                     <div class="badge-item">Mesh 1.20.1-4</div>
                     <div class="badge-item">GitHub 下载加速</div>
@@ -743,8 +745,8 @@
                     <div class="badge-item">C2000Ultra · SD 卡 / Swap</div>
                 </div>
                 <div class="release-panel" aria-label="当前版本信息">
-                    <div class="release-stat"><span>脚本版本</span><strong>V3.2.0</strong></div>
-                    <div class="release-stat"><span>更新日期</span><strong>2026-09-14</strong></div>
+                    <div class="release-stat"><span>脚本版本</span><strong>V3.2.3</strong></div>
+                    <div class="release-stat"><span>更新日期</span><strong>2026-09-27</strong></div>
                     <div class="release-stat"><span>运行方式</span><strong>SSH 终端</strong></div>
                     <div class="release-stat"><span>适配机型</span><strong>10 款 NRadio 机型</strong></div>
                 </div>
@@ -754,27 +756,27 @@
         <section class="release-notes" id="release" aria-labelledby="release-title">
             <div class="release-notes-head">
                 <div>
-                    <p class="release-kicker">V3.2.0 · 2026-09-14</p>
-                    <h2 id="release-title">IPv4 / IPv6 双栈多线分流</h2>
+                    <p class="release-kicker">V3.2.3 · 2026-09-27</p>
+                    <h2 id="release-title">Argon 8080 与应用商店</h2>
                 </div>
-                <div class="release-date-chip">2026-09-14</div>
+                <div class="release-date-chip">2026-09-27</div>
             </div>
             <div class="fix-grid">
-                <article class="fix-card"><span>5 → 5 → 2 · 多线叠加</span><strong>IPv4 / IPv6 按权重分配新连接</strong><p>使用 NROS 已有 WAN 线路，双栈分别选择出口与权重；IPv6 支持 NAT66 出站。多个连接可共同使用多条线路，单个连接保持同一出口。</p></article>
-                <article class="fix-card"><span>5 → 5 → 2 · 固定出口</span><strong>按 IP、网段与端口指定线路</strong><p>支持 IPv4/IPv6 地址或网段，以及 TCP、UDP 和目标端口规则；可添加、删除并查看当前固定出口设置。</p></article>
-                <article class="fix-card"><span>5 → 5 → 2 · 线路状态</span><strong>双栈连接数与线路速率</strong><p>分别显示 IPv4、IPv6 连接数，线路速率合并统计双栈流量；后台跟踪线路上下线，调整新连接出口。C5800-688 双线路双栈访问已验证。</p></article>
-                <article class="fix-card"><span>5 → 11 · 硬件加速</span><strong>HNAT 开关与实际绑定状态</strong><p>开启原厂 HNAT，关闭后保留软件加速；分别展示开关、IPv4/IPv6 卸载规则与硬件绑定数量。</p></article>
-                <article class="fix-card"><span>5 → 3 · DNS</span><strong>域名分流与加密解析</strong><p>添加域名分流时，可同时设置加密 DNS，并在重载后清理路由器 DNS 缓存。</p></article>
-                <article class="fix-card"><span>5 → 3 · 订阅</span><strong>同步订阅下载策略</strong><p>可为匹配域名的 HTTP 订阅设置下载出口，修复分流后订阅仍走直连的问题。</p></article>
-                <article class="fix-card"><span>5 → 3 · 重载</span><strong>分流重载修复</strong><p>已有规则可继续重载，重载后检查分流、订阅与 DNS 设置。</p></article>
+                <article class="fix-card"><span>4 → 4 · Argon 8080</span><strong>Argon 登录与菜单</strong><p>安装 Argon 2.2.9.4，使用 Argon 登录页；整理状态、系统和服务菜单，隐藏重复项、计划任务与 LED 配置。</p></article>
+                <article class="fix-card"><span>8080 · OpenClash</span><strong>中文标签与页面资源</strong><p>恢复运行状态、插件设置、覆写设置、配置订阅、配置管理和运行日志六个标签，补齐样式、脚本与图标。</p></article>
+                <article class="fix-card"><span>8080 · 插件页面</span><strong>AdGuardHome 与 OpenVPN</strong><p>使用原生 LuCI 配置页面；修复 OpenVPN 配置文件导入，并在 AdGuardHome 配置重载失败时显示错误。</p></article>
+                <article class="fix-card"><span>8080 · iStore</span><strong>商店安装与插件菜单接入</strong><p>缺少 iStore 时自动安装。商店安装插件后，8080 刷新插件路由、所属菜单和静态资源，修复“未注册页面”问题。</p></article>
+                <article class="fix-card"><span>8080 · 状态概况</span><strong>动态数据与 WAN 信息</strong><p>恢复时间、内存、连接数和租约显示，型号保留 NRadio_ 前缀；5800 按实际线路显示单或双 WAN，其他机型显示单 WAN。Swap 分别显示总容量、已用与空闲。</p></article>
+                <article class="fix-card"><span>1 → 4 · AdGuardHome</span><strong>安装密码设置修复</strong><p>引导中输入一次密码，由 AdGuardHome 核心生成并应用密码，后台账号同步保存；等待服务就绪后确认登录，设置失败时报告错误。</p></article>
+                <article class="fix-card"><span>AdGuardHome · 商店弹窗</span><strong>四个中文标签</strong><p>概览、基础设置、手动配置、运行日志分栏显示；恢复仪表盘统计，统一配置区样式，修复关闭按钮位置。</p></article>
                 <article class="fix-card"><span>Mesh 1.20.1-4</span><strong>级联组网与断线恢复</strong><p>完善 Q6000 级联组网、节点拓扑，以及无线重载、换信道后的重连。</p></article>
                 <article class="fix-card"><span>ghproxy.vip</span><strong>下载加速</strong><p>脚本、插件和配置包下载统一使用 ghproxy.vip。</p></article>
                 <article class="fix-card"><span>C2000Ultra</span><strong>SD 卡与 Swap 适配</strong><p>HC-WT9500 接入 SD 卡检测与 Swap 管理；新建默认 512 MiB，可扩容至 2048 MiB，应用商店同步显示实际总量与使用量。</p></article>
-                <article class="fix-card"><span>AdGuardHome</span><strong>安装后同步 DNS 设置</strong><p>与哈基米联用时，统一路由器本机和局域网普通查询的 AdGuardHome DNS 链，保留域名专用上游；按实际配置变化重启对应服务。</p></article>
-                <article class="fix-card"><span>下载体验</span><strong>进度与断点续传</strong><p>下载进度取自实际传输，结合断点续传与备用地址回退；终端菜单和提示同步适配手机操作，减少重复等待。</p></article>
+                <article class="fix-card"><span>5 → 5 → 2 · 多线分流</span><strong>IPv4 / IPv6 出口与权重</strong><p>双栈分别选择线路和权重，支持按 IP、网段、端口固定出口，并查看连接数与线路速率。多个连接可使用多条线路，单个连接保持同一出口。</p></article>
+                <article class="fix-card"><span>8080 · 安装更新</span><strong>缓存安装包与自动同步</strong><p>重复安装复用已有安装包，资源准备完成后更新页面；持续检测插件文件变化，自动同步 8080 页面和资源。</p></article>
                 <article class="fix-card"><span>MT5700 WebUI</span><strong>5800 双线路页面</strong><p>C5800-650 / C5800-688 检测到双线路时并列展示信号，详情可切换线路，AT 连接与计划独立管理；插件安装登记仅更新自身条目。</p></article>
-                <article class="fix-card"><span>应用商店 V3</span><strong>卡片与弹窗优化</strong><p>应用卡片等高排列、操作按钮对齐，手机按钮更易点击；弹窗随可用高度伸展，精简顶部空白，统一插件名称和状态展示。</p></article>
-                <article class="fix-card"><span>LuCI / 温度</span><strong>系统总览与温度切换</strong><p>完善 8080 原生 LuCI 登录与系统总览，隔离主题设置；支持机型的 CPU / 5G 温度切换即时刷新，并记住所选温源。</p></article>
+                <article class="fix-card"><span>4 → 1 · 应用商店</span><strong>顶部与“更多”双入口</strong><p>MAX / Ultra 在 NROS 2.3.3.1 及以上且带原厂顶部入口时使用顶部布局，其余完整商店沿用“更多”入口。桌面默认三列，工具栏吸顶，刷新失败可重试，应用标签支持左右切换。</p></article>
+                <article class="fix-card"><span>首页温度</span><strong>CPU / 5G 温度切换</strong><p>支持机型可切换 CPU 与 5G 温度，4G 线路显示 4G；即时刷新温度数值，并记住所选温源。</p></article>
                 <article class="fix-card"><span>5G 连接监听</span><strong>记录与任务状态完善</strong><p>补齐事件写入失败后的记录和自动、手动任务结果，增加频段停留筛选；支持 C5800-650 / C5800-688 / C2000MAX，智能频段仅向 C5800-688 开放。</p></article>
             </div>
         </section>
@@ -923,7 +925,7 @@
                         <div class="step-index">04</div>
                         <div class="step-content">
                             <h3>配置双栈多线分流</h3>
-                            <p>在 V3.2.0 脚本进入 <code>5 → 5 → 2</code>。先在 NROS 配好可用 WAN，再选择 IPv4、IPv6 出口及各自权重。</p>
+                            <p>在脚本进入 <code>5 → 5 → 2</code>。先在 NROS 配好可用 WAN，再选择 IPv4、IPv6 出口及各自权重。</p>
                             <div class="data-card" style="background:white; border-style:dashed; margin-top:20px;">
                                 <ul style="list-style:none; font-size:15px; display:grid; gap:8px;">
                                     <li>• <strong>1</strong>：配置并启用线路与权重</li>
@@ -936,6 +938,21 @@
                         </div>
                     </div>
 
+                    <div class="step-item">
+                        <div class="step-index">05</div>
+                        <div class="step-content">
+                            <h3>安装 Argon 8080</h3>
+                            <p>在脚本选择 <code>4 → 4</code>。安装完成后，用浏览器打开 <code>http://路由器LAN地址:8080/</code>，例如 <code>http://192.168.66.1:8080/</code>。</p>
+                            <div class="data-card" style="background:white; border-style:dashed; margin-top:20px;">
+                                <ul style="list-style:none; font-size:15px; display:grid; gap:8px;">
+                                    <li>• 首次安装自动创建 Argon 8080 实例，缺少 iStore 时一并安装。</li>
+                                    <li>• 在 iStore 安装插件后，从商店“打开”或对应菜单进入。</li>
+                                    <li>• 更新后若仍显示旧页面，按 <code>Ctrl + F5</code> 强制刷新。</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
             </div>
@@ -945,7 +962,7 @@
             <div class="container">
                 <div class="guide-header">
                     <h2 style="color:white;">适配机型</h2>
-                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">V3.2.0 已识别 10 款机型，功能按机型开放</p>
+                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">V3.2.3 已识别 10 款机型，功能按机型开放</p>
                 </div>
                 <div class="device-grid">
                     <div class="device-card"><strong>NRadio_C8-688</strong><span>已适配</span></div>
@@ -969,7 +986,10 @@
                 <h2>更新记录</h2>
             </div>
             <div class="history-grid" id="historyGrid">
-                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.2.0 · 2026-09-14</h5><p>5 → 5 → 2 加入 IPv4/IPv6 多线加权分流、双栈 IP/端口固定出口、IPv6 NAT66，以及连接数与线路速率查看；跟踪线路上下线，C5800-688 双线路双栈访问已验证。</p></div>
+                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.2.3 · 2026-09-27</h5><p>完善 Argon 8080 登录、概况、中文标签和原生插件页面；修复 iStore 插件路由与资源同步。修复 AdGuardHome 安装密码设置，调整四标签弹窗；应用商店适配顶部与“更多”入口，增加工具栏吸顶、刷新重试和标签切换。</p></div>
+                <div class="v-card"><h5>V3.2.2 · 2026-09-25</h5><p>加入 4 → 4 Argon 8080 安装入口，支持直接创建独立实例；完善应用商店弹窗、卡片显示与轻量商店 IPK 上传。</p></div>
+                <div class="v-card"><h5>V3.2.1 · 2026-09-23</h5><p>加入 AdGuardHome 后台账号引导，修复应用商店弹窗数据读取与重复导航；完善 OpenClash 加密 DNS 设置和 Ultra MT5700 信号读取。</p></div>
+                <div class="v-card"><h5>V3.2.0 · 2026-09-14</h5><p>5 → 5 → 2 加入 IPv4/IPv6 多线加权分流、双栈 IP/端口固定出口、IPv6 NAT66，以及连接数与线路速率查看；跟踪线路上下线，C5800-688 双线路双栈访问已验证。</p></div>
                 <div class="v-card"><h5>V3.1.0 · 2026-09-12</h5><p>5 → 11 硬件加速管理，开启原厂 HNAT，关闭后保留软件卸载；核对运行开关、卸载规则与硬件绑定，提供配置备份及失败恢复。</p></div>
                 <div class="v-card"><h5>V3.0.9 · 2026-09-11</h5><p>分流助手加入域名加密 DNS 与订阅下载策略联动，修复重复规则跳过重载并增加生效核验；同步提供 Mesh 1.20.1-2。</p></div>
                 <div class="v-card"><span class="v-badge">V3.0.7</span><h5>2026-09-07 · 下载与存储适配</h5><p>GitHub 下载接入 gh-proxy 优先与官方回退；C2000Ultra 补齐 SD 卡检测、Swap 扩容与状态显示，同步优化 AdGuardHome 安装设置、MT5700 双线路页面及应用商店体验。</p></div>
@@ -1034,7 +1054,7 @@
                     <p>本项目用于增强 NRadio 原厂系统功能，并尽量减少对原厂文件和用户配置的影响。</p>
                     <p>代码公开，可查看脚本内容后再决定是否使用。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面：V3.2.0 / 2026-09-14｜IPv4 / IPv6 多线分流</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面：V3.2.3 / 2026-09-27｜Argon 8080 与应用商店</p>
                     </div>
                 </div>
             </div>
@@ -1045,7 +1065,7 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">总脚本 V3.2.0 / 2026-09-14 · 双栈多线分流入口 5 → 5 → 2。</p>
+        <p class="footer-pause">总脚本 V3.2.3 / 2026-09-27 · Argon 8080：4 → 4 · 应用商店美化：4 → 1。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 

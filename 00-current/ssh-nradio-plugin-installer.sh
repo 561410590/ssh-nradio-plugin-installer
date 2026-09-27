@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.2.0"
+SCRIPT_VERSION="V3.2.3"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-14"
+SCRIPT_RELEASE_DATE="2026-09-27"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -43,7 +43,7 @@ NRADIO_HOME_TEMP_JS="/www/luci-static/nradio/js/nradio-home-temperature-switch.j
 NRADIO_HOME_TEMP_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_HOME_TEMP_MARKER_BEGIN="<!-- nradio-home-temperature-switch:start -->"
 NRADIO_HOME_TEMP_MARKER_END="<!-- nradio-home-temperature-switch:end -->"
-NRADIO_CPEOPT_VERSION="20260906-1"
+NRADIO_CPEOPT_VERSION="20260927-1"
 NRADIO_CPEOPT_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua"
 NRADIO_CPEOPT_VIEW="/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm"
 NRADIO_CPEOPT_ICON="/www/luci-static/nradio/images/icon/cpeopt.svg"
@@ -89,6 +89,7 @@ OPENWRT_LUCI_8080_SYSAUTH=""
 OPENWRT_LUCI_8080_INDEX_CACHE="/tmp/luci-indexcache-bootstrap"
 OPENWRT_LUCI_8080_THEME_VERSION="git-20.356.64372-1259bb1-1"
 OPENWRT_LUCI_8080_THEME_URL="https://downloads.openwrt.org/releases/18.06.9/packages/aarch64_cortex-a53/luci/luci-theme-bootstrap_git-20.356.64372-1259bb1-1_all.ipk"
+OPENWRT_LUCI_8080_ARGON_URL="https://github.com/jerrykuku/luci-theme-argon/releases/download/v2.2.9.4/luci-theme-argon-master_2.2.9.4_all.ipk"
 TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
 OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
@@ -2573,7 +2574,7 @@ download_openlist_from_urls() {
 }
 
 backup_file() {
-    # 用户要求所有安装、修复和页面操作直接写入，不在路由器上生成持久备份。
+    # Persistent backups are disabled.
     return 0
 }
 
@@ -2805,7 +2806,6 @@ nradio_print_backup_inventory_summary() {
         fi
     fi
 
-    log "说明:   新版脚本已禁用持久备份；此处只列出旧版本可能遗留的文件"
 }
 
 nradio_print_action_history_summary() {
@@ -7092,11 +7092,84 @@ function index()
 	entry({"nradioadv", "system", "appcenter", "list"}, call("action_list"), nil, nil, true).leaf = true
 	entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory"), nil, nil, true).leaf = true
 	entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status"), nil, nil, true).leaf = true
+	local upload = entry({"nradioadv", "system", "appcenter", "upload"}, call("action_upload"), nil, nil, true)
+	upload.leaf = true
+	-- action_upload sets the file handler before checking the POST token.
 end
 
 function action_list()
 	local apps = appcenter_apps()
 	json_response({ result = { applist = apps }, applist = apps })
+end
+
+function action_upload()
+	local http = require "luci.http"
+	local fs = require "nixio.fs"
+	local sys = require "luci.sys"
+	local max_bytes = 32 * 1024 * 1024
+	local upload_dir, upload_path, fp, active, seen, bytes, upload_error = nil, nil, nil, false, false, 0, nil
+	local function cleanup()
+		if fp then fp:close(); fp = nil end
+		if upload_path then fs.unlink(upload_path) end
+		if upload_dir then
+			fs.unlink(upload_dir .. "/install.log")
+			sys.call("rmdir " .. shell_quote(upload_dir) .. " 2>/dev/null")
+		end
+	end
+	local function reply(code, message, detail)
+		cleanup()
+		json_response({result = {code = code, msg = message, detail = detail or ""}})
+	end
+	http.setfilehandler(function(meta, chunk, eof)
+		if meta and meta.name == "image" and not seen then
+			seen = true
+			local filename = tostring(meta.file or "")
+			if not filename:lower():match("%.ipk$") then
+				upload_error = "请选择 .ipk 安装包"
+			else
+				upload_dir = (sys.exec("mktemp -d /tmp/nradio-appcenter-ipk.XXXXXX 2>/dev/null") or ""):match("^(/tmp/nradio%-appcenter%-ipk%.[%w]+)")
+				if not upload_dir then
+					upload_error = "无法创建临时上传目录"
+				else
+					upload_path = upload_dir .. "/upload.ipk"
+					fp = io.open(upload_path, "wb")
+					if not fp then upload_error = "无法保存上传文件" else active = true end
+				end
+			end
+		end
+		if active and chunk and not upload_error then
+			bytes = bytes + #chunk
+			if bytes > max_bytes then
+				upload_error = "IPK 超过 32 MiB 上限"
+			else
+				local written = fp:write(chunk)
+				if not written then upload_error = "临时空间不足，上传失败" end
+			end
+		end
+		if active and eof then
+			active = false
+			if fp then fp:close(); fp = nil end
+		end
+	end)
+	if not luci.dispatcher.test_post_security() then
+		cleanup()
+		return
+	end
+	if upload_error then return reply(1, upload_error) end
+	if not seen or bytes == 0 or not upload_path or not fs.access(upload_path) then
+		return reply(1, "没有收到有效的 IPK 文件")
+	end
+	local log_path = upload_dir .. "/install.log"
+	local rc = sys.call("opkg install " .. shell_quote(upload_path) .. " >" .. shell_quote(log_path) .. " 2>&1")
+	local log_file = io.open(log_path, "r")
+	local detail = log_file and (log_file:read("*a") or "") or ""
+	if log_file then log_file:close() end
+	detail = detail:sub(-2500)
+	fs.unlink("/tmp/luci-indexcache")
+	if rc == 0 then
+		return reply(0, "IPK 安装完成", detail)
+	end
+	return reply(2, "IPK 安装失败，请检查依赖和可用空间", detail)
 end
 
 function action_memory()
@@ -7157,6 +7230,8 @@ write_c2000pro_compat_appcenter_template() {
 .nr-c2000pro-appcenter{max-width:1280px;margin:18px auto 30px;padding:0 16px;color:#172033}
 .nr-c2000pro-shell{border:1px solid #d8e2ef;border-radius:8px;background:#f7faff;box-shadow:0 18px 48px rgba(15,23,42,.10);overflow:hidden}
 .nr-c2000pro-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;background:#101827;color:#eef8ff}
+.nr-c2000pro-brand{display:flex;align-items:center;gap:14px;min-width:0}
+.nr-c2000pro-store-logo{width:48px;height:48px;flex:0 0 auto;filter:drop-shadow(0 8px 18px rgba(14,165,233,.22))}
 .nr-c2000pro-title{margin:0;font-size:22px;font-weight:900;letter-spacing:0}
 .nr-c2000pro-sub{margin-top:5px;color:#9fb8d0;font-size:12px;line-height:1.5}
 .nr-c2000pro-status{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
@@ -7169,6 +7244,15 @@ write_c2000pro_compat_appcenter_template() {
 .nr-c2000pro-btn:hover{border-color:#7bc3ef;color:#075985;text-decoration:none}
 .nr-c2000pro-btn-primary{border-color:#0284c7;background:#0284c7;color:#fff}
 .nr-c2000pro-btn-primary:hover{border-color:#0369a1;background:#0369a1;color:#fff}
+.nr-c2000pro-btn:disabled{opacity:.55;cursor:not-allowed}
+.nr-c2000pro-upload{display:grid;gap:9px;margin:0 0 16px;padding:14px;border:1px solid #dce6f2;border-radius:8px;background:#fff}
+.nr-c2000pro-upload label{font-size:13px;font-weight:900;color:#111827}
+.nr-c2000pro-uploadrow{display:flex;align-items:center;gap:10px;min-width:0}
+.nr-c2000pro-upload input[type=file]{flex:1 1 auto;min-width:0;max-width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:7px;background:#f8fbff;color:#172033}
+.nr-c2000pro-upload-note{margin:0;color:#64748b;font-size:12px;line-height:1.5}
+.nr-c2000pro-upload-status{white-space:pre-wrap;overflow-wrap:anywhere;border-radius:7px;padding:10px 12px;background:#e8f4fd;color:#075985;font-size:12px;line-height:1.55}
+.nr-c2000pro-upload-status:empty{display:none}
+.nr-c2000pro-upload-status.is-error{background:#fef2f2;color:#b91c1c}
 .nr-c2000pro-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
 .nr-c2000pro-card{display:flex;flex-direction:column;gap:12px;min-height:178px;border:1px solid #dce6f2;border-radius:8px;background:#fff;padding:14px;box-shadow:0 10px 26px rgba(15,23,42,.06)}
 .nr-c2000pro-cardtop{display:flex;align-items:center;gap:12px;min-width:0}
@@ -7190,14 +7274,18 @@ write_c2000pro_compat_appcenter_template() {
 .nr-c2000pro-frame{display:block;flex:1 1 auto;min-height:0;width:100%;height:100%;border:0;background:#101018;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain}
 @supports(height:100dvh){.nr-c2000pro-modalbox{height:92dvh}}
 @media(max-width:860px){.nr-c2000pro-body{grid-template-columns:1fr}.nr-c2000pro-side{border-left:0;border-top:1px solid #dbe5f0}.nr-c2000pro-head,.nr-c2000pro-toolbar{align-items:flex-start;flex-direction:column}.nr-c2000pro-status{justify-content:flex-start}.nr-c2000pro-modal{padding:0}.nr-c2000pro-modalbox{height:100vh;border-radius:0}}
+@media(max-width:560px){.nr-c2000pro-uploadrow{align-items:stretch;flex-direction:column}.nr-c2000pro-uploadrow .nr-c2000pro-btn{width:100%;min-height:44px}.nr-c2000pro-store-logo{width:42px;height:42px}}
 @supports(height:100dvh){@media(max-width:860px){.nr-c2000pro-modalbox{height:100dvh}}}
 </style>
 <div class="nr-c2000pro-appcenter">
   <div class="nr-c2000pro-shell">
     <div class="nr-c2000pro-head">
-      <div>
-        <h2 class="nr-c2000pro-title">NRadio 应用商店</h2>
-        <div class="nr-c2000pro-sub">C2000Pro 轻量商店，管理已登记插件；不提供原厂软件下载服务。</div>
+      <div class="nr-c2000pro-brand">
+        <svg class="nr-c2000pro-store-logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="nr-store-bg" x2="1" y2="1"><stop stop-color="#19c7e8"/><stop offset="1" stop-color="#0875d1"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="17" fill="url(#nr-store-bg)"/><path d="M17 25h30l-3 25H20l-3-25Z" fill="#fff" fill-opacity=".96"/><path d="M25 27v-7a7 7 0 0 1 14 0v7" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M27 37h10m-5-5v10" stroke="#0875d1" stroke-width="4" stroke-linecap="round"/></svg>
+        <div>
+          <h2 class="nr-c2000pro-title">NRadio 应用商店</h2>
+          <div class="nr-c2000pro-sub">C2000Pro 轻量商店，管理已登记插件，可上传本地 IPK 安装。</div>
+        </div>
       </div>
       <div class="nr-c2000pro-status">
         <span class="nr-c2000pro-pill">机型 <span id="nr-model">-</span></span>
@@ -7211,6 +7299,15 @@ write_c2000pro_compat_appcenter_template() {
           <h3>已安装应用</h3>
           <button class="nr-c2000pro-btn" type="button" onclick="nrReloadApps()">刷新</button>
         </div>
+        <form id="nr-ipk-form" class="nr-c2000pro-upload" method="post" enctype="multipart/form-data" onsubmit="return nrInstallIpk(event)">
+          <label for="nr-ipk-file">上传并安装 IPK</label>
+          <div class="nr-c2000pro-uploadrow">
+            <input id="nr-ipk-file" name="image" type="file" accept=".ipk" required>
+            <button id="nr-ipk-submit" class="nr-c2000pro-btn nr-c2000pro-btn-primary" type="submit" disabled>安装 IPK</button>
+          </div>
+          <p class="nr-c2000pro-upload-note">仅安装可信 IPK，最大 32 MiB；安装结果由系统包管理器返回。</p>
+          <div id="nr-ipk-status" class="nr-c2000pro-upload-status" role="status" aria-live="polite"></div>
+        </form>
         <div id="nr-app-grid" class="nr-c2000pro-grid"></div>
         <div id="nr-app-empty" class="nr-c2000pro-empty">暂无已安装应用</div>
       </main>
@@ -7220,7 +7317,7 @@ write_c2000pro_compat_appcenter_template() {
         <div class="nr-c2000pro-kv"><span>温度</span><strong id="nr-temp">-</strong></div>
         <div class="nr-c2000pro-kv"><span>内存</span><strong id="nr-mem-detail">-</strong></div>
         <div class="nr-c2000pro-kv"><span>插件数</span><strong id="nr-app-count">0</strong></div>
-        <div class="nr-c2000pro-kv"><span>接口</span><strong>list / memory / sys_status</strong></div>
+        <div class="nr-c2000pro-kv"><span>安装方式</span><strong>本地 IPK</strong></div>
       </aside>
     </div>
   </div>
@@ -7242,6 +7339,7 @@ write_c2000pro_compat_appcenter_template() {
 var NR_CONTROLLER = "<%=controller%>";
 var NR_LIST_URL = "<%=url('nradioadv/system/appcenter/list')%>";
 var NR_STATUS_URL = "<%=url('nradioadv/system/appcenter/sys_status')%>";
+var NR_UPLOAD_URL = "<%=url('nradioadv/system/appcenter/upload')%>";
 var NR_UNINSTALL_URL = NR_CONTROLLER + "nradioadv/system/plugin_uninstall/start";
 var NR_TOKEN = "<%=require('luci.dispatcher').context.authtoken%>";
 var NR_ICON_BASE = "/luci-static/nradio/images/icon/";
@@ -7318,6 +7416,58 @@ function nrUninstall(name){
     }
     request(false);
 }
+var NR_IPK_BUSY = false;
+function nrIpkStatus(message, error){
+    var node=document.getElementById("nr-ipk-status");
+    node.textContent=message;
+    node.className="nr-c2000pro-upload-status"+(error?" is-error":"");
+}
+function nrSyncIpkButton(){
+    var input=document.getElementById("nr-ipk-file"),file=input.files&&input.files[0];
+    document.getElementById("nr-ipk-submit").disabled=NR_IPK_BUSY||!file||!(/\.ipk$/i).test(file.name)||file.size===0||file.size>32*1024*1024;
+}
+function nrInstallIpk(event){
+    if(event)event.preventDefault();
+    if(NR_IPK_BUSY)return false;
+    var input=document.getElementById("nr-ipk-file"),button=document.getElementById("nr-ipk-submit");
+    var file=input.files&&input.files[0];
+    if(!file||!(/\.ipk$/i).test(file.name)){nrIpkStatus("请选择 .ipk 安装包",true);return false;}
+    if(file.size===0||file.size>32*1024*1024){nrIpkStatus("IPK 必须大于 0 且不超过 32 MiB",true);return false;}
+    var body=new FormData();
+    body.append("token",NR_TOKEN);
+    body.append("image",file,file.name);
+    var xhr=new XMLHttpRequest(),finished=false;
+    NR_IPK_BUSY=true;button.disabled=true;input.disabled=true;
+    nrIpkStatus("正在上传 "+file.name+"…",false);
+    function finish(message,error){
+        if(finished)return;
+        finished=true;NR_IPK_BUSY=false;input.disabled=false;
+        nrIpkStatus(message,error);
+        if(!error){input.value="";nrReloadApps();}
+        nrSyncIpkButton();
+    }
+    xhr.open("POST",NR_UPLOAD_URL,true);
+    xhr.timeout=300000;
+    xhr.upload.onprogress=function(e){if(e.lengthComputable)nrIpkStatus("正在上传 "+Math.floor(e.loaded*100/e.total)+"%",false);};
+    xhr.upload.onload=function(){if(!finished)nrIpkStatus("上传完成，正在安装…",false);};
+    xhr.onload=function(){
+        if(xhr.status<200||xhr.status>=300){finish("安装请求失败：HTTP "+xhr.status,true);return;}
+        var data;
+        try{data=JSON.parse(xhr.responseText||"{}");}catch(e){finish("安装接口返回格式异常，请确认登录状态",true);return;}
+        var result=data.result||data;
+        var success=Number(result.code)===0;
+        finish((result.msg||(success?"IPK 安装完成":"IPK 安装失败"))+(success?"":(result.detail?"\n"+result.detail:"")),!success);
+    };
+    xhr.onerror=function(){finish("上传或安装连接中断",true);};
+    xhr.ontimeout=function(){finish("安装等待超时，请刷新应用列表确认结果",true);};
+    xhr.send(body);
+    return false;
+}
+document.getElementById("nr-ipk-file").addEventListener("change",function(){
+    nrSyncIpkButton();
+    var file=this.files&&this.files[0];
+    nrIpkStatus(file&&document.getElementById("nr-ipk-submit").disabled?"仅支持 0–32 MiB 的 .ipk 文件":"",!!file&&document.getElementById("nr-ipk-submit").disabled);
+});
 var NR_APPS = [];
 function nrBindAppButtons(){var opens=document.querySelectorAll("[data-nr-open]");var uninstalls=document.querySelectorAll("[data-nr-uninstall]");for(var i=0;i<opens.length;i++){opens[i].onclick=function(){var app=NR_APPS[Number(this.getAttribute("data-nr-open"))]||{};nrOpenFrame(nrAppName(app),app.luci_module_route||"");};}for(var j=0;j<uninstalls.length;j++){uninstalls[j].onclick=function(){var app=NR_APPS[Number(this.getAttribute("data-nr-uninstall"))]||{};nrUninstall(nrAppName(app));};}}
 function nrRenderApps(resp){var data=resp.result||resp||{};var apps=data.applist||data.apps||[];var grid=document.getElementById("nr-app-grid");var empty=document.getElementById("nr-app-empty");var html=[];NR_APPS=apps;document.getElementById("nr-app-count").textContent=String(apps.length);for(var i=0;i<apps.length;i++){var app=apps[i];var name=nrAppName(app);var route=app.luci_module_route||"";var icon=nrIconUrl(app.icon||"");html.push('<section class="nr-c2000pro-card"><div class="nr-c2000pro-cardtop">'+(icon?'<img class="nr-c2000pro-icon" src="'+nrEsc(icon)+'" onerror="this.style.visibility=&quot;hidden&quot;">':'<div class="nr-c2000pro-icon"></div>')+'<div><div class="nr-c2000pro-name">'+nrEsc(name)+'</div><div class="nr-c2000pro-version">'+nrEsc(app.version||app.pkg_name||"-")+'</div></div></div><div class="nr-c2000pro-route">'+nrEsc(route||"无 LuCI 路由")+'</div><div class="nr-c2000pro-actions">'+(route?'<button class="nr-c2000pro-btn nr-c2000pro-btn-primary" type="button" data-nr-open="'+i+'">打开</button>':'')+'<button class="nr-c2000pro-btn" type="button" data-nr-uninstall="'+i+'">卸载</button></div></section>');}grid.innerHTML=html.join("");empty.style.display=apps.length?"none":"block";nrBindAppButtons();}
@@ -7380,10 +7530,14 @@ verify_c2000pro_compat_appcenter() {
     grep -q 'NRadio C2000Pro compatibility appcenter layer' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing marker"
     grep -q 'entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing memory route"
     grep -q 'entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing sys_status route"
+    grep -q 'call("action_upload")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing IPK upload route"
     grep -q 'function action_list()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing list action"
+    grep -q 'function action_upload()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing IPK installer"
     grep -q 'installed_package_version("luci-app-openclash")' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing OpenClash runtime version sync"
     grep -q 'route = "admin/services/openclash"' "$APPCENTER_CONTROLLER" 2>/dev/null || die "C2000Pro appcenter controller verify failed: missing OpenClash route fallback"
     grep -q 'NR_LIST_URL' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing list xhr"
+    grep -q 'id="nr-ipk-form"' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing IPK form"
+    grep -Fq '<svg class="nr-c2000pro-store-logo"' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing store logo"
     grep -q 'sub_frame' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing iframe"
     grep -q 'scrolling="auto"' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing mobile iframe scrolling"
     grep -q 'touch-action:pan-x pan-y' "$TPL" 2>/dev/null || die "C2000Pro appcenter template verify failed: missing mobile touch scrolling"
@@ -7487,6 +7641,9 @@ controller = replace_function(controller, "index", "action_list", [[function ind
     entry({"nradioadv", "system", "appcenter", "list"}, call("action_list"), nil, nil, true).leaf = true
     entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory"), nil, nil, true).leaf = true
     entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status"), nil, nil, true).leaf = true
+    local upload = entry({"nradioadv", "system", "appcenter", "upload"}, call("action_upload"), nil, nil, true)
+    upload.leaf = true
+    -- The upload action checks POST security after installing its file handler.
 end]])
 controller = replace_function(controller, "action_memory", "action_sys_status", [[function action_memory()
     local stat = require("nixio.fs").statvfs("/overlay")
@@ -7517,18 +7674,18 @@ write("plugin_uninstall.lua", "-- " .. marker .. "\n" .. uninstall)
 write("nradio-plugin-uninstall", (read("nradio-plugin-uninstall"):gsub("NRadio C2000Pro compatibility appcenter layer", marker)))
 
 local view = read("appcenter.htm"):gsub("NRadio C2000Pro compatibility appcenter layer", marker)
-view = replace_once(view, "C2000Pro 轻量商店，管理已登记插件；不提供原厂软件下载服务。",
+view = replace_once(view, "C2000Pro 轻量商店，管理已登记插件，可上传本地 IPK 安装。",
     "AK68-798 轻量商店，管理已登记插件。16 MiB 闪存，安装插件前请核对体积与依赖。")
 view = replace_once(view,
-    '<div class="nr-c2000pro-kv"><span>接口</span><strong>list / memory / sys_status</strong></div>',
-    '<div class="nr-c2000pro-kv"><span>持久空间</span><strong id="nr-overlay">读取中</strong></div><p id="nr-storage-warning" style="font-size:12px;line-height:1.6;color:#92400e">/tmp 是内存空间，重启后丢失；本页面管理已登记插件，不提供原厂软件下载服务。</p>')
+    '<div class="nr-c2000pro-kv"><span>安装方式</span><strong>本地 IPK</strong></div>',
+    '<div class="nr-c2000pro-kv"><span>持久空间</span><strong id="nr-overlay">读取中</strong></div><p id="nr-storage-warning" style="font-size:12px;line-height:1.6;color:#92400e">/tmp 是内存空间，重启后丢失；上传本地 IPK 前请核对体积与依赖。</p>')
 view = replace_once(view, 'nrReloadApps();window.setInterval(function(){nrJson(NR_STATUS_URL,nrRenderStatus);},2000);', [[var NR_MEMORY_URL = "<%=url('nradioadv/system/appcenter/memory')%>";
 function nrFmtStorage(kib){kib=Number(kib);return kib<1024?kib.toFixed(0)+" KiB":(kib/1024).toFixed(2)+" MiB";}
 function nrRenderStorage(resp){
     var d=resp.result||resp||{},el=document.getElementById("nr-overlay"),warning=document.getElementById("nr-storage-warning");
     if(d.storage_available!==true){el.textContent="无法读取 /overlay";return;}
     el.textContent="剩余 "+nrFmtStorage(d.available_memory)+" / "+nrFmtStorage(d.total_memory);
-    warning.textContent=(Number(d.available_memory)<Number(d.reserve_memory)?"剩余空间低于 256 KiB，请先释放空间。":"16 MiB 小闪存：大型插件需要额外存储，安装前须核对体积与依赖。")+" /tmp 是内存，重启后丢失；这里管理已登记插件，不提供原厂软件下载服务。";
+    warning.textContent=(Number(d.available_memory)<Number(d.reserve_memory)?"剩余空间低于 256 KiB，请先释放空间。":"16 MiB 小闪存：大型插件需要额外存储，安装前须核对体积与依赖。")+" /tmp 是内存，重启后丢失；这里支持上传本地 IPK。";
 }
 nrReloadApps();nrJson(NR_MEMORY_URL,nrRenderStorage);
 window.setInterval(function(){nrJson(NR_STATUS_URL,nrRenderStatus);nrJson(NR_MEMORY_URL,nrRenderStorage);},5000);]])
@@ -7618,8 +7775,6 @@ ensure_ak798_compat_appcenter() {
     refresh_ak798_appcenter
     verify_luci_route "nradioadv/system/appcenter" "AK68-798 轻量应用商店"
     log "AK68-798 轻量应用商店已创建/更新，入口: /cgi-bin/luci/nradioadv/system/appcenter"
-    log "功能: 已登记插件列表、打开、卸载、系统状态、持久空间提示"
-    log "说明: 使用已有 Lua 依赖；插件本体仍需按 AK68-798 容量和硬件逐项适配"
 }
 
 remove_ak798_compat_appcenter() {
@@ -8827,6 +8982,14 @@ EOF
             ".modal.app_frame .app_frame_nav_item_active{color:#10bdf2!important;background:rgba(0,136,204,.12)!important;border-color:rgba(0,136,204,.32)!important;border-bottom-color:#0088cc!important;}",
             ".modal.app_frame .app_frame_origin_button{margin-left:auto!important;min-height:30px!important;padding:0 13px!important;border:1px solid rgba(0,136,204,.55)!important;border-radius:4px!important;background:#0088cc!important;color:#fff!important;cursor:pointer!important;font-weight:700!important;line-height:1.2!important;box-shadow:0 4px 12px rgba(0,136,204,.18)!important;}",
             ".modal.app_frame .app_frame_origin_button:hover{background:#009fe8!important;border-color:#16b8f2!important;}",
+            ".modal.app_frame.nr-adguard-modal{overflow:hidden!important;}",
+            ".modal.app_frame.nr-adguard-modal .modal-content,.modal.app_frame.nr-adguard-modal .modal-header,.modal.app_frame.nr-adguard-modal .modal-body,.modal.app_frame.nr-adguard-modal .bootstrap-dialog-message,.modal.app_frame.nr-adguard-modal .app_frame_adguard{background:#202833!important;}",
+            ".modal.app_frame.nr-adguard-modal .modal-content{border:1px solid #405064!important;border-radius:14px!important;}",
+            ".modal.app_frame.nr-adguard-modal .app_frame_nav{gap:4px!important;padding:6px 14px!important;border-bottom:1px solid #405064!important;background:#202833!important;}",
+            ".modal.app_frame.nr-adguard-modal .app_frame_nav_item{min-height:36px!important;padding:0 14px!important;border:1px solid transparent!important;border-radius:8px!important;background:transparent!important;color:#b5c5d6!important;font-size:14px!important;font-weight:650!important;box-shadow:none!important;}",
+            ".modal.app_frame.nr-adguard-modal .app_frame_nav_item_active{border-color:#3c6b87!important;background:#2a3d50!important;color:#71d8f7!important;}",
+            ".modal.app_frame.nr-adguard-modal .app_frame_nav_item:focus-visible{outline:2px solid #71d8f7!important;outline-offset:2px!important;}",
+            ".modal.app_frame.nr-adguard-modal #sub_frame{background:#202833!important;}",
             ".modal.app_frame .app_frame_openclash .app_frame_nav{flex-wrap:nowrap!important;gap:8px!important;min-width:0!important;padding:10px 12px!important;overflow-x:auto!important;scrollbar-width:thin!important;scrollbar-color:rgba(76,198,216,.38) transparent!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior-x:contain!important;background:#101e2d!important;}",
             ".modal.app_frame .app_frame_openclash .app_frame_nav_item,.modal.app_frame .app_frame_openclash .app_frame_origin_button{flex:0 0 auto!important;justify-content:center!important;min-height:38px!important;padding:0 14px!important;border:1px solid rgba(128,157,184,.22)!important;border-radius:9px!important;background:rgba(128,157,184,.06)!important;color:#c5d2de!important;font-size:13px!important;font-weight:600!important;line-height:1.25!important;white-space:nowrap!important;appearance:none!important;box-shadow:none!important;text-shadow:none!important;transition:background-color .16s ease,border-color .16s ease,color .16s ease!important;}",
             ".modal.app_frame .app_frame_openclash .app_frame_nav_item:hover,.modal.app_frame .app_frame_openclash .app_frame_origin_button:hover{background:rgba(76,198,216,.13)!important;border-color:rgba(76,198,216,.45)!important;color:#edfaff!important;}",
@@ -9282,24 +9445,25 @@ EOF
         return sub_web_ht;
     }
     function get_adguardhome_frame(route){
-        var current_route = route && route.length > 0 ? route : "admin/services/AdGuardHome/base";
-        if(current_route == "admin/services/AdGuardHome")
-            current_route = "admin/services/AdGuardHome/base";
+        var current_route = route && route.length > 0 ? route : "admin/services/AdGuardHome/overview";
+        if(current_route == "admin/services/AdGuardHome" || current_route == "admin/services/AdGuardHome/oem" || current_route == "admin/services/AdGuardHome/base")
+            current_route = "admin/services/AdGuardHome/overview";
 
         var tabs = [
-            {route: "admin/services/AdGuardHome/base", title: "Base Setting"},
-            {route: "admin/services/AdGuardHome/manual", title: "Manual Config"},
-            {route: "admin/services/AdGuardHome/log", title: "Log"}
+            {route: "admin/services/AdGuardHome/overview", title: "概览"},
+            {route: "admin/services/AdGuardHome/settings", title: "基础设置"},
+            {route: "admin/services/AdGuardHome/manual", title: "手动配置"},
+            {route: "admin/services/AdGuardHome/log", title: "运行日志"}
         ];
 
-        var sub_web_ht = "<div class='app_frame_box app_frame_tabs'><div class='app_frame_nav'>";
+        var sub_web_ht = "<div class='app_frame_box app_frame_tabs app_frame_adguard'><nav class='app_frame_nav' aria-label='AdGuardHome 页面导航'>";
         $.each(tabs, function(index, tab){
             var active_class = "";
             if(tab.route == current_route)
                 active_class = " app_frame_nav_item_active";
-            sub_web_ht += "<span class='app_frame_nav_item" + active_class + "' data-route='" + tab.route + "' onclick='switch_app_frame_route(this)'>" + tab.title + "</span>";
+            sub_web_ht += "<button type='button' class='app_frame_nav_item" + active_class + "' aria-pressed='" + (tab.route == current_route ? "true" : "false") + "' data-route='" + tab.route + "' onclick='switch_app_frame_route(this)'>" + tab.title + "</button>";
         });
-        sub_web_ht += "</div>" + build_app_iframe(current_route) + "</div>";
+        sub_web_ht += "</nav>" + build_app_iframe(current_route) + "</div>";
 
         return sub_web_ht;
     }
@@ -9472,7 +9636,7 @@ EOF
         sub_dialogDeal = BootstrapDialog.show({
             type: BootstrapDialog.TYPE_DEFAULT,
             closeByBackdrop: true,
-            cssClass:'app_frame',
+            cssClass: is_adguardhome_route(route) ? 'app_frame nr-adguard-modal' : 'app_frame',
             title: '',
             message: sub_web_ht,
             onhide:function(){
@@ -9853,6 +10017,7 @@ EOF
     verify_template_marker "'.menu-top'" 'iframe 厂商顶部隐藏选择器'
     verify_template_marker "'.sub_icon_list'" 'iframe 厂商图标栏隐藏选择器'
     verify_template_marker 'nr-frame-loading' 'iframe 首帧隐藏状态'
+    verify_template_marker 'return get_adguardhome_frame(route);' 'AdGuardHome 单层弹窗入口'
     verify_template_marker 'app_frame_box app_frame_tabs' 'iframe 标签页弹窗容器'
     verify_template_marker 'app_frame_box app_frame_plain' 'iframe 普通弹窗容器'
     verify_template_marker "scrolling='auto'" 'iframe 自动滚动'
@@ -15261,7 +15426,7 @@ EOF_APPCENTER_EMPTY_STATE_JS
 
     verify_template_marker 'NRadio appcenter card polish: visual-only layer' '应用商店卡片美化 CSS'
     verify_template_marker 'NRadio appcenter card polish V2.0.70 full repair layer' '应用商店 V2.0.70 修复美化 CSS'
-    verify_template_marker 'NRadio appcenter router hot polish: user pass 2' '应用商店本轮热更精修 CSS'
+    verify_template_marker 'NRadio appcenter router hot polish: user pass 2' '应用商店样式'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 3' '应用商店 pass 3 精修 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 4 final' '应用商店 pass 4 final 精修 CSS'
     verify_template_marker 'NRadio appcenter router hot polish: user pass 5 deep finish' '应用商店 pass 5 deep finish 精修 CSS'
@@ -15306,6 +15471,37 @@ EOF_APPCENTER_EMPTY_STATE_JS
     verify_template_marker 'typeof start_app_status_polling == "function"' '应用商店系统状态刷新保护入口'
 }
 
+appcenter_top_nav_supported() {
+    local revision suffix branch build
+    case "$(detect_current_nradio_model_quiet 2>/dev/null || true)" in
+        NRadio_C2000MAX|NRadio_C2000Ultra) ;;
+        *) return 1 ;;
+    esac
+    nros_revision_at_least 2 3 3 || return 1
+    nros_revision_at_least 2 3 4 && return 0
+
+    revision="$(detect_current_nros_revision_quiet)"
+    revision="${revision%%-*}"
+    suffix="${revision#2.3.3}"
+    case "$suffix" in
+        .n*.c*)
+            branch="${suffix#.n}"
+            build="${branch#*.c}"
+            branch="${branch%%.c*}"
+            case "$branch" in ''|*[!0-9]*) return 1 ;; esac
+            case "$build" in ''|*[!0-9]*) return 1 ;; esac
+            [ "$branch" -gt 0 ] || [ "$build" -ge 1 ]
+            ;;
+        .*)
+            build="${suffix#.}"
+            build="${build%%.*}"
+            case "$build" in ''|*[!0-9]*) return 1 ;; esac
+            [ "$build" -ge 1 ]
+            ;;
+        *) return 1 ;;
+    esac
+}
+
 patch_appcenter_card_polish_v3() {
     require_nradio_oem_appcenter
 
@@ -15313,9 +15509,16 @@ patch_appcenter_card_polish_v3() {
     v3_css="$WORKDIR/appcenter-v3.css"
     v3_js="$WORKDIR/appcenter-v3.js"
     v3_lua="$WORKDIR/appcenter-v3-transform.lua"
+    v3_top_nav_model=0
+    if appcenter_top_nav_supported; then v3_top_nav_model=1; fi
 
     cat > "$v3_css" <<'EOF_APPCENTER_V3_CSS'
     /* NRadio appcenter v3: begin */
+    /* Keep the header quick menu above app tabs and below Bootstrap modals. */
+    body > header{
+        position: relative;
+        z-index: 10;
+    }
     .appcontainer, #app_top_menu{
         --nr-v3-bg: #07101b;
         --nr-v3-panel: #0f1d2b;
@@ -15396,6 +15599,29 @@ patch_appcenter_card_polish_v3() {
         -webkit-overflow-scrolling: touch;
     }
     #app_top_menu .nr_tabs_scroller::-webkit-scrollbar{ display: none; }
+    #app_top_menu .nr_tabs_nav{
+        display: none;
+        flex: 0 0 30px;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        min-height: 36px;
+        padding: 0;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 8px;
+        background: rgba(128,157,184,.06);
+        color: var(--nr-v3-text-soft);
+        font-size: 20px;
+        cursor: pointer;
+    }
+    #app_top_menu.nr_tabs_overflow .nr_tabs_nav{ display: inline-flex; }
+    #app_top_menu .nr_tabs_nav:disabled{ opacity: .35; cursor: default; }
+    #app_top_menu .nr_tabs_nav:not(:disabled):hover,
+    #app_top_menu .nr_tabs_nav:focus-visible{
+        border-color: var(--nr-v3-line-strong);
+        color: #e7fbff;
+        outline: none;
+    }
     #app_top_menu .nr_tabs_viewport::before,
     #app_top_menu .nr_tabs_viewport::after{
         position: absolute;
@@ -15717,6 +15943,36 @@ patch_appcenter_card_polish_v3() {
         color: #f1fdff;
         -webkit-text-fill-color: currentColor;
     }
+    .nr_app_list_feedback{
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 7px 10px;
+        border: 1px solid rgba(76,198,216,.25);
+        border-radius: 8px;
+        background: rgba(76,198,216,.07);
+        color: var(--nr-v3-text-soft);
+        font-size: 12px;
+    }
+    .nr_app_list_feedback[hidden],
+    .nr_app_list_retry[hidden]{ display: none !important; }
+    .nr_app_list_feedback.nr_app_list_error{
+        border-color: rgba(223,125,130,.38);
+        background: rgba(223,125,130,.09);
+        color: #f4c8ce;
+    }
+    .nr_app_list_retry{
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid currentColor;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+    }
+    .nr_app_list_retry:focus-visible{ outline: 2px solid var(--nr-v3-cyan); outline-offset: 2px; }
     .container_left{
         grid-area: menu;
         position: sticky;
@@ -15797,7 +16053,7 @@ patch_appcenter_card_polish_v3() {
         grid-area: content;
         display: grid;
         grid-template-columns: repeat(3,minmax(0,1fr));
-        grid-auto-rows: 1fr;
+        grid-auto-rows: auto;
         align-items: stretch;
         gap: 16px;
         float: none !important;
@@ -15913,6 +16169,25 @@ patch_appcenter_card_polish_v3() {
         line-height: 1.4;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    .container_right .app_name.nr_text_expandable,
+    .container_right .app_version.nr_text_expandable{
+        cursor: pointer;
+    }
+    .container_right .app_name.nr_text_expandable:focus-visible,
+    .container_right .app_version.nr_text_expandable:focus-visible{
+        outline: 2px solid var(--nr-v3-cyan);
+        outline-offset: 2px;
+    }
+    .container_right .app_name.nr_text_expanded{
+        display: block;
+        overflow: visible;
+        -webkit-line-clamp: unset;
+    }
+    .container_right .app_version.nr_text_expanded{
+        overflow: visible;
+        overflow-wrap: anywhere;
+        white-space: normal;
     }
     .container_right .app_meta_row{
         grid-column: 2;
@@ -16464,6 +16739,66 @@ patch_appcenter_card_polish_v3() {
         border-radius: 0 0 14px 14px;
         background: #0d1a29;
     }
+    .modal.bootstrap-dialog.nr_import_dialog .modal-dialog{
+        width: 520px;
+        max-width: calc(100vw - 32px) !important;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog .modal-body{
+        padding: 16px !important;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog .bootstrap-dialog-message{
+        padding: 0 !important;
+        text-align: left;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog .modal-footer{
+        display: none !important;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog fieldset,
+    .modal.bootstrap-dialog.nr_import_dialog form,
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file,
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .cbi-value,
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle{
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        box-sizing: border-box;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file{
+        margin-top: 0;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle{
+        display: flex !important;
+        align-items: stretch;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle .group-span-filestyle{
+        flex: 0 0 auto;
+        width: auto;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle .form-control{
+        flex: 1 1 auto;
+        width: 1% !important;
+        min-width: 0 !important;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .cbi-value{
+        margin-bottom: 0;
+        padding: 0;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file input.btn_save_stand_width{
+        display: block;
+        float: none !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100%;
+        margin: 12px 0 0 !important;
+        box-sizing: border-box;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file input.btn_save_stand_width:disabled{
+        opacity: .5;
+        cursor: not-allowed;
+    }
     .modal.bootstrap-dialog .bootstrap-dialog-close-button .close{
         display: inline-flex;
         align-items: center;
@@ -16484,6 +16819,16 @@ patch_appcenter_card_polish_v3() {
     }
     @keyframes nr-dialog-spin{
         to{ transform: rotate(360deg); }
+    }
+    @media (min-width: 861px){
+        .app_btn_box{
+            position: sticky;
+            top: 0;
+            z-index: 6;
+        }
+        .container_left{
+            top: calc(var(--nr-app-toolbar-height, 70px) + 12px);
+        }
     }
     @media (max-width: 1180px){
         .container_right{
@@ -16519,6 +16864,7 @@ patch_appcenter_card_polish_v3() {
     @media (max-width: 680px){
         #app_top_menu{ padding: 4px 6px !important; gap: 5px; }
         #app_top_menu .top_menu{ min-height: 44px; }
+        #app_top_menu .nr_tabs_nav{ flex-basis: 44px; width: 44px; min-height: 44px; }
         #app_top_menu .nr_top_name{ max-width: 120px; }
         .nr_app_search_clear{ width: 44px; height: 44px; right: 48px; }
         .app_status_toggle{ min-height: 44px; }
@@ -16666,17 +17012,113 @@ patch_appcenter_card_polish_v3() {
             transition-duration: .01ms !important;
             animation-duration: .01ms !important;
         }
+        .bootstrap-dialog-message .nr_dialog_spinner{
+            animation: none !important;
+        }
+    }
+    /* MAX / Ultra with the OEM top-level appcenter entry. */
+    @media (min-width: 768px){
+        body.nr-appcenter-topnav .main.nr-appcenter-main{
+            height: var(--nr-appcenter-height, auto) !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin-top: 12px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            scrollbar-gutter: stable;
+        }
+        body.nr-appcenter-topnav .nr-appcenter-main > .main-content{
+            padding: 12px 18px 16px;
+        }
+        body.nr-appcenter-topnav #app_top_menu{
+            min-height: 46px;
+            margin-bottom: 10px !important;
+            padding: 4px 8px !important;
+        }
+        body.nr-appcenter-topnav .appcontainer{
+            gap: 12px;
+            padding-bottom: 0;
+        }
+        body.nr-appcenter-topnav .app_btn_box{ padding: 9px 12px; }
+        body.nr-appcenter-topnav .container_right{ gap: 12px; }
+        body.nr-appcenter-topnav .container_right .app_box{
+            grid-template-rows: minmax(90px,1fr) auto;
+            min-height: 180px;
+            padding: 14px;
+        }
+        body.nr-appcenter-topnav .container_right .app_des{ margin-top: 8px; }
+        body.nr-appcenter-topnav .container_right .app_action{
+            margin-top: 10px;
+            padding-top: 10px;
+        }
     }
     /* NRadio appcenter v3: end */
 EOF_APPCENTER_V3_CSS
 
     cat > "$v3_js" <<'EOF_APPCENTER_V3_JS'
-    function nr_appcenter_display_name(name){
+    var NR_APP_DISPLAY_NAMES = {};
+    var NR_APP_ICON_CACHE_TAG = "__NR_ICON_CACHE_TAG__";
+    var NR_UPLOAD_CHECK_SEQ = 0;
+    var NR_APP_TOP_NAV = __NR_TOP_NAV_MODEL__ === 1 && typeof top_menu !== "undefined" &&
+        Array.isArray(top_menu) && top_menu.some(function(item){ return item && item.name === "appcenter"; });
+    function nr_sync_toolbar_height(){
+        var toolbar = document.querySelector(".appcontainer > .app_btn_box");
+        if(!toolbar) return;
+        toolbar.parentNode.style.setProperty("--nr-app-toolbar-height", toolbar.offsetHeight + "px");
+    }
+    function nr_init_sticky_toolbar(){
+        var toolbar = document.querySelector(".appcontainer > .app_btn_box");
+        if(!toolbar) return;
+        nr_sync_toolbar_height();
+        window.addEventListener("resize", nr_sync_toolbar_height);
+        if(window.ResizeObserver) new window.ResizeObserver(nr_sync_toolbar_height).observe(toolbar);
+    }
+    function nr_init_topnav_layout(){
+        if(!NR_APP_TOP_NAV) return;
+        var main = $(".appcontainer").closest(".main")[0];
+        if(!main) return;
+        document.body.classList.add("nr-appcenter-topnav");
+        main.classList.add("nr-appcenter-main");
+        var footer = document.querySelector("body > footer.footer");
+        var pending = false;
+        function update_height(){
+            pending = false;
+            if(window.innerWidth < 768){
+                main.style.removeProperty("--nr-appcenter-height");
+                return;
+            }
+            var footer_space = 0;
+            if(footer){
+                var style = window.getComputedStyle(footer);
+                footer_space = footer.getBoundingClientRect().height +
+                    (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+            }
+            var top = main.getBoundingClientRect().top + (window.pageYOffset || 0);
+            var bottom = parseFloat(window.getComputedStyle(main).marginBottom) || 0;
+            var height = Math.max(160, Math.floor(window.innerHeight - top - bottom - footer_space - 8));
+            main.style.setProperty("--nr-appcenter-height", height + "px");
+        }
+        function schedule_height(){
+            if(pending) return;
+            pending = true;
+            window.requestAnimationFrame(update_height);
+        }
+        update_height();
+        window.addEventListener("resize", schedule_height);
+        window.addEventListener("load", schedule_height);
+        if(window.ResizeObserver){
+            var observer = new window.ResizeObserver(schedule_height);
+            var header = document.querySelector("body > header");
+            if(header) observer.observe(header);
+            if(footer) observer.observe(footer);
+        }
+    }
+    function nr_appcenter_display_name(name, translated){
         var key = (name || "").toLowerCase();
         if(key == "luci-app-openclash" || key == "openclash") return "哈基米";
         if(key == "luci-app-adguardhome") return "AdGuardHome";
         if(key == "luci-app-ddns-go") return "DDNS-GO";
-        return name || "未命名应用";
+        return translated || NR_APP_DISPLAY_NAMES[key] || name || "未命名应用";
     }
 
     function nr_escape_html(value){
@@ -16697,11 +17139,17 @@ EOF_APPCENTER_V3_CSS
     }
 
     var NR_ACTIVE_APP_NAME = "";
-    function nr_update_tab_edges(){
+    function nr_update_tab_edges(remeasure){
         var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
         if(!scroller) return;
-        $(scroller.parentNode).toggleClass("nr_tabs_before", scroller.scrollLeft > 2)
-            .toggleClass("nr_tabs_after", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2);
+        var menu = $("#app_top_menu");
+        if(remeasure === true) menu.removeClass("nr_tabs_overflow");
+        menu.toggleClass("nr_tabs_overflow", scroller.scrollWidth > scroller.clientWidth + 2);
+        var before = scroller.scrollLeft > 2;
+        var after = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2;
+        $(scroller.parentNode).toggleClass("nr_tabs_before", before).toggleClass("nr_tabs_after", after);
+        $("#app_top_menu .nr_tabs_prev").prop("disabled", !before);
+        $("#app_top_menu .nr_tabs_next").prop("disabled", !after);
     }
 
     function nr_sync_top_tabs(id, reveal){
@@ -16776,6 +17224,50 @@ EOF_APPCENTER_V3_CSS
         return '<div class="nr_search_empty" role="status"><strong>没有找到匹配应用</strong><span>换个名称、版本或功能关键词试试</span><button type="button" class="nr_search_reset">清空搜索</button></div>';
     }
 
+    var NR_APP_LIST_BUSY = false;
+    var NR_APP_LIST_PENDING = false;
+    var NR_APP_LIST_FEEDBACK_TIMER = null;
+    function nr_list_feedback(state){
+        var box = $("#nr_app_list_feedback");
+        if(!box.length) return;
+        if(NR_APP_LIST_FEEDBACK_TIMER) window.clearTimeout(NR_APP_LIST_FEEDBACK_TIMER);
+        var message = state === "busy" ? "应用列表刷新中" : state === "error" ?
+            "列表刷新失败，当前显示上次结果" : "应用列表已更新";
+        box.prop("hidden", false).toggleClass("nr_app_list_error", state === "error");
+        box.find(".nr_app_list_message").text(message);
+        box.find(".nr_app_list_retry").prop("hidden", state !== "error");
+        nr_sync_toolbar_height();
+        if(state === "ok") NR_APP_LIST_FEEDBACK_TIMER = window.setTimeout(function(){
+            box.prop("hidden", true);
+            nr_sync_toolbar_height();
+        }, 2500);
+    }
+    function nr_refresh_app_list(){
+        if(NR_APP_LIST_BUSY){ NR_APP_LIST_PENDING = true; return; }
+        NR_APP_LIST_BUSY = true;
+        nr_list_feedback("busy");
+        $.ajax({
+            type: "POST",
+            url: '<%=controller%>nradioadv/system/appcenter/list',
+            data: {token:'<%=token%>'},
+            dataType: "json",
+            timeout: 10000,
+            success: function(response){
+                if(!response || !response.result || !Array.isArray(response.result.applist)){
+                    nr_list_feedback("error");
+                    return;
+                }
+                try { show_app_data(response); nr_list_feedback("ok"); }
+                catch(e){ nr_list_feedback("error"); }
+            },
+            error: function(){ nr_list_feedback("error"); },
+            complete: function(){
+                NR_APP_LIST_BUSY = false;
+                if(NR_APP_LIST_PENDING){ NR_APP_LIST_PENDING = false; nr_refresh_app_list(); }
+            }
+        });
+    }
+
     var NR_APP_STATUS_LAST = null;
     var NR_APP_STATUS_BUSY = false;
     var NR_APP_STATUS_TIMER = null;
@@ -16821,7 +17313,7 @@ EOF_APPCENTER_V3_CSS
         '    <div class="app_status_tile"><strong>'+opened+'</strong><span>后台</span></div>'+
         '    <div class="app_status_tile"><strong>'+all+'</strong><span>全部</span></div>'+
         '  </div>'+
-        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>CPU 温度</span><strong class="app_status_temp">--</strong></div><div class="app_status_bar"><span class="app_status_temp_bar"></span></div></div>'+
+        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>设备最高温度</span><strong class="app_status_temp">--</strong></div><div class="app_status_bar"><span class="app_status_temp_bar"></span></div></div>'+
         '  <div class="app_status_metric"><div class="app_status_metric_row"><span>CPU 使用率</span><strong class="app_status_cpu">采样中</strong></div><div class="app_status_bar"><span class="app_status_cpu_bar"></span></div></div>'+
         '  <div class="app_status_metric"><div class="app_status_metric_row"><span>内存占用</span><strong class="app_status_mem">--</strong></div><div class="app_status_bar"><span class="app_status_mem_bar"></span></div></div>'+
         '  <div class="app_status_metric app_status_swap_metric" style="display:none"><div class="app_status_metric_row"><span>Swap 虚拟内存</span><strong class="app_status_swap">--</strong></div><div class="app_status_bar"><span class="app_status_swap_bar"></span></div></div>'+
@@ -16933,6 +17425,16 @@ EOF_APPCENTER_V3_CSS
         menus.eq(1).append('<span class="nr_menu_count">'+all+'</span>');
     }
 
+    function nr_mark_expandable_text(){
+        $(".container_right:not(.hide) .app_name, .container_right:not(.hide) .app_version").each(function(){
+            if(this.classList.contains("nr_text_expanded")) return;
+            var clipped = this.scrollWidth > this.clientWidth + 1 || this.scrollHeight > this.clientHeight + 1;
+            $(this).toggleClass("nr_text_expandable", clipped);
+            if(clipped) $(this).attr({role:"button", tabindex:"0", "aria-expanded":"false"});
+            else $(this).removeAttr("role tabindex aria-expanded");
+        });
+    }
+
     function nr_apply_app_search(){
         var query = $.trim($("#nr_app_search_input").val() || "").toLowerCase();
         var active = $(".container_right:not(.hide)");
@@ -16948,6 +17450,7 @@ EOF_APPCENTER_V3_CSS
         $("#nr_app_search_clear").attr("aria-hidden", query.length > 0 ? "false" : "true").attr("tabindex", query.length > 0 ? "0" : "-1");
         var count = nr_update_app_count();
         if(query.length > 0 && count.total > 0 && count.visible === 0) active.append(nr_appcenter_search_empty());
+        nr_mark_expandable_text();
     }
 
     function show_app_data(data){
@@ -16959,21 +17462,25 @@ EOF_APPCENTER_V3_CSS
         var old_scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
         var old_scroll = old_scroller ? old_scroller.scrollLeft : 0;
         var active_name = NR_ACTIVE_APP_NAME, active_index = null;
-        var top_menu_ht = '<button type="button" class="top_menu nr_store_tab top_menu_active" aria-current="page"><%:AppCenterTitle%></button><div class="nr_tabs_viewport"><div class="nr_tabs_scroller" role="navigation" aria-label="已打开的应用">';
+        var store_label = NR_APP_TOP_NAV ? "<%:应用列表%>" : "<%:AppCenterTitle%>";
+        var top_menu_ht = '<button type="button" class="top_menu nr_store_tab top_menu_active" aria-current="page">'+nr_escape_html(store_label)+'</button><button type="button" class="nr_tabs_nav nr_tabs_prev" aria-label="向左查看已打开应用" title="向左查看已打开应用">‹</button><div class="nr_tabs_viewport"><div class="nr_tabs_scroller" role="navigation" aria-label="已打开的应用">';
         $.each(data.result.applist, function(index, db){
             var optht = '';
             var icon_name = db.icon && db.icon.length ? db.icon : "app_default.png";
             var open_route = db.luci_module_route || "";
-            var display_name = nr_appcenter_display_name(db.name);
+            var translated_name = db.name_lng && db.name_lng.length ? db.name_lng : "";
+            NR_APP_DISPLAY_NAMES[(db.name || "").toLowerCase()] = translated_name || db.name || "";
+            var display_name = nr_appcenter_display_name(db.name, translated_name);
             var display_version = nr_appcenter_display_version(db.name, db.version);
-            var des_info = db.des && db.des.length ? db.des : nr_appcenter_desc_fallback(db.name);
+            var des_info = db.description_lng && db.description_lng.length ? db.description_lng :
+                (db.des && db.des.length ? db.des : nr_appcenter_desc_fallback(db.name));
             var status_label = "未知";
             var open_badge = "";
             var icon_fallback = "this.onerror=null;this.src='/luci-static/nradio/images/icon/app_default.png';";
             var open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="app_action(\''+db.name+'\',\'open\',\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
             if(db.open == 1){
                 if(db.name === active_name) active_index = index;
-                top_menu_ht += '<div class="top_menu_inner" data-app-name="'+nr_escape_html(db.name)+'"><span class="top_menu" role="button" tabindex="0" data-index="'+index+'" title="'+nr_escape_html(display_name)+'" onclick="'+nr_escape_html("callback("+JSON.stringify(String(index))+","+JSON.stringify(open_route)+")")+'"><img class="nr_top_icon" src="/luci-static/nradio/images/icon/'+nr_escape_html(icon_name)+'" alt="" onerror="'+nr_escape_html(icon_fallback)+'"><span class="nr_top_name">'+nr_escape_html(display_name)+'</span></span><button type="button" aria-label="'+nr_escape_html("关闭 "+display_name)+'" title="'+nr_escape_html("关闭 "+display_name)+'" onclick="'+nr_escape_html("app_action("+JSON.stringify(db.name)+",\"close\")")+'" class="top_menu_inner_icon">×</button></div>';
+                top_menu_ht += '<div class="top_menu_inner" data-app-name="'+nr_escape_html(db.name)+'"><span class="top_menu" role="button" tabindex="0" data-index="'+index+'" title="'+nr_escape_html(display_name)+'" onclick="'+nr_escape_html("callback("+JSON.stringify(String(index))+","+JSON.stringify(open_route)+")")+'"><img class="nr_top_icon" src="/luci-static/nradio/images/icon/'+nr_escape_html(icon_name)+'?v='+encodeURIComponent(NR_APP_ICON_CACHE_TAG)+'" alt="" onerror="'+nr_escape_html(icon_fallback)+'"><span class="nr_top_name">'+nr_escape_html(display_name)+'</span></span><button type="button" aria-label="'+nr_escape_html("关闭 "+display_name)+'" title="'+nr_escape_html("关闭 "+display_name)+'" onclick="'+nr_escape_html("app_action("+JSON.stringify(db.name)+",\"close\")")+'" class="top_menu_inner_icon">×</button></div>';
                 open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="callback(\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
                 open_badge = '<span class="app_open_badge">后台</span>';
             }
@@ -16995,8 +17502,9 @@ EOF_APPCENTER_V3_CSS
                 display_version: nr_escape_html(display_version),
                 des: nr_escape_html(des_info),
                 search_text: nr_escape_html([db.name,display_name,db.version,des_info].join(" ")),
-                icon: icon_name,
-                icon_fallback: icon_fallback,
+                icon: nr_escape_html(icon_name),
+                icon_cache_tag: NR_APP_ICON_CACHE_TAG,
+                icon_fallback: nr_escape_html(icon_fallback),
                 opt: optht,
                 index: index,
                 status: db.status,
@@ -17008,7 +17516,7 @@ EOF_APPCENTER_V3_CSS
         });
         if(!htm_installed) htm_installed = nr_appcenter_empty_state("暂无已安装应用");
         if(!htm) htm = nr_appcenter_empty_state("暂无应用");
-        $("#app_top_menu").html(top_menu_ht + '</div></div>');
+        $("#app_top_menu").removeClass("nr_tabs_overflow").html(top_menu_ht + '</div></div><button type="button" class="nr_tabs_nav nr_tabs_next" aria-label="向右查看已打开应用" title="向右查看已打开应用">›</button>');
         var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
         scroller.scrollLeft = old_scroll;
         scroller.addEventListener("scroll", nr_update_tab_edges);
@@ -17026,15 +17534,29 @@ EOF_APPCENTER_V3_CSS
         $("#nr_app_search_input").val("").focus();
         nr_apply_app_search();
     });
+    $(document).on("click", "#nr_app_list_feedback .nr_app_list_retry", nr_refresh_app_list);
     $(document).on("click", ".app_des[role='button']", function(){
         var expanded = $(this).attr("aria-expanded") !== "true";
         $(this).toggleClass("nr_desc_expanded", expanded).attr("aria-expanded", expanded ? "true" : "false");
+    });
+    $(document).on("click", ".container_right .nr_text_expandable", function(){
+        var expanded = !this.classList.contains("nr_text_expanded");
+        $(this).toggleClass("nr_text_expanded", expanded).attr("aria-expanded", expanded ? "true" : "false");
+        if(!expanded) nr_mark_expandable_text();
     });
     $(document).on("click", "#app_top_menu .nr_store_tab", function(){
         if(typeof sub_dialogDeal !== "undefined" && sub_dialogDeal) sub_dialogDeal.close();
         nr_sync_top_tabs(null, false);
     });
-    window.addEventListener("resize", nr_update_tab_edges);
+    $(document).on("click", "#app_top_menu .nr_tabs_nav", function(){
+        var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
+        if(!scroller || this.disabled) return;
+        var direction = this.classList.contains("nr_tabs_prev") ? -1 : 1;
+        scroller.scrollLeft += direction * Math.max(160, Math.round(scroller.clientWidth * .7));
+        nr_update_tab_edges();
+    });
+    window.addEventListener("resize", function(){ nr_update_tab_edges(true); nr_mark_expandable_text(); });
+    window.addEventListener("load", function(){ nr_update_tab_edges(true); nr_mark_expandable_text(); });
     $(document).on("click", ".app_menu", function(){ window.setTimeout(nr_apply_app_search, 0); });
     $(document).on("click", ".app_status_toggle", function(){
         NR_APP_STATUS_EXPANDED = !NR_APP_STATUS_EXPANDED;
@@ -17047,7 +17569,7 @@ EOF_APPCENTER_V3_CSS
             event.preventDefault();
         }
     });
-    $(document).on("keydown", ".action_list_li, .app_menu, .app_btn_class, .app_des[role='button'], #app_top_menu .top_menu[role='button']", function(event){
+    $(document).on("keydown", ".action_list_li, .app_menu, .app_btn_class, .app_des[role='button'], .nr_text_expandable, #app_top_menu .top_menu[role='button']", function(event){
         if(event.key === "Enter" || event.key === " "){
             event.preventDefault();
             $(this).trigger("click");
@@ -17058,8 +17580,10 @@ EOF_APPCENTER_V3_CSS
 EOF_APPCENTER_V3_JS
 
     cat > "$v3_lua" <<'EOF_APPCENTER_V3_LUA'
-local tpl_path, css_path, js_path = arg[1], arg[2], arg[3]
-assert(tpl_path and css_path and js_path, "missing transform arguments")
+local tpl_path, css_path, js_path, icon_cache_tag, top_nav_model = arg[1], arg[2], arg[3], arg[4], arg[5]
+assert(tpl_path and css_path and js_path and icon_cache_tag, "missing transform arguments")
+assert(icon_cache_tag:match("^[%w._-]+$"), "invalid icon cache tag")
+assert(top_nav_model == "0" or top_nav_model == "1", "invalid top navigation model flag")
 
 local function read_all(path)
     local file = assert(io.open(path, "rb"), "open failed: " .. path)
@@ -17071,6 +17595,12 @@ end
 local html = read_all(tpl_path)
 local css = read_all(css_path)
 local renderer = read_all(js_path)
+local icon_marker_count
+renderer, icon_marker_count = renderer:gsub("__NR_ICON_CACHE_TAG__", icon_cache_tag)
+assert(icon_marker_count == 1, "icon cache tag marker not found")
+local top_nav_marker_count
+renderer, top_nav_marker_count = renderer:gsub("__NR_TOP_NAV_MODEL__", top_nav_model)
+assert(top_nav_marker_count == 1, "top navigation model marker not found")
 
 local function strip_style_from(marker)
     local start_pos = html:find(marker, 1, true)
@@ -17086,6 +17616,8 @@ html = html:gsub("[ \t]*<div id=\"app_status_mount\"></div>\r\n", "")
 html = html:gsub("[ \t]*<div id=\"app_status_mount\"></div>\n", "")
 html = html:gsub("[ \t]*<div class=\"nr_app_search\">.-</div>\r\n", "")
 html = html:gsub("[ \t]*<div class=\"nr_app_search\">.-</div>\n", "")
+html = html:gsub("[ \t]*<div id=\"nr_app_list_feedback\".-</div>\r\n", "")
+html = html:gsub("[ \t]*<div id=\"nr_app_list_feedback\".-</div>\n", "")
 
 local style_close = assert(html:find("</style>", 1, true), "style close not found")
 html = html:sub(1, style_close - 1) .. css .. "\n" .. html:sub(style_close)
@@ -17119,6 +17651,10 @@ html = html:sub(1, storage_pos - 1) .. storage_markup .. html:sub(toolbar_pos)
 toolbar_pos = assert(html:find(toolbar_anchor, storage_pos, true), "toolbar anchor not found after storage rebuild")
 local search_markup = '        <div class="nr_app_search"><input id="nr_app_search_input" type="search" autocomplete="off" aria-label="搜索应用" placeholder="搜索应用、版本或功能"><button id="nr_app_search_clear" class="nr_app_search_clear" type="button" aria-label="清除搜索" aria-hidden="true" tabindex="-1" title="清除搜索">×</button><span id="nr_app_search_count" class="nr_app_search_count" aria-live="polite">0 / 0</span></div>\n'
 html = html:sub(1, toolbar_pos - 1) .. search_markup .. html:sub(toolbar_pos)
+toolbar_pos = assert(html:find(toolbar_anchor, toolbar_pos, true), "toolbar anchor not found after search insertion")
+local toolbar_close = assert(html:find("\n    </div>\n", toolbar_pos, true), "toolbar close not found")
+local feedback_markup = '\n        <div id="nr_app_list_feedback" class="nr_app_list_feedback" role="status" aria-live="polite" hidden><span class="nr_app_list_message"></span><button type="button" class="nr_app_list_retry" hidden>重试</button></div>'
+html = html:sub(1, toolbar_close - 1) .. feedback_markup .. html:sub(toolbar_close)
 
 local menu_anchor = '    <div class="container_left">'
 local menu_pos = assert(html:find(menu_anchor, 1, true), "menu anchor not found")
@@ -17128,14 +17664,14 @@ local row_start = assert(html:find("    var APPTableRow = ''+", 1, true), "APPTa
 local error_start = assert(html:find("    var APPErrorRow = ''+", row_start, true), "APPErrorRow start not found")
 local row = [[    var APPTableRow = ''+
     '<div class="app_box app_item{{index}}" data-status="{{status}}" data-search="{{search_text}}">'+
-        '    <div class="app_icon"><img class="app_icon_img" src="/luci-static/nradio/images/icon/{{icon}}" alt="{{display_name}}" onerror="{{icon_fallback}}"></div>'+
+        '    <div class="app_icon"><img class="app_icon_img" src="/luci-static/nradio/images/icon/{{icon}}?v={{icon_cache_tag}}" alt="" onerror="{{icon_fallback}}"></div>'+
         '    <div class="app_info">'+
         '        <div class="app_title">'+
         '            <div class="app_name" title="{{display_name}}" data-nr-text="{{display_name}}">{{display_name}}</div>'+
         '            <div class="app_version" title="{{version}}" data-nr-text="{{display_version}}">{{display_version}}</div>'+
         '            <div class="app_meta_row"><span class="app_state_badge app_state_{{status}}">{{status_label}}</span>{{open_badge}}</div>'+
         '        </div>'+
-        '        <div class="app_des" title="{{des}}" data-nr-text="{{des}}" role="button" tabindex="0" aria-expanded="false" aria-label="展开或收起应用说明">{{des}}</div>'+
+        '        <div class="app_des" title="{{des}}" data-nr-text="{{des}}" role="button" tabindex="0" aria-expanded="false" aria-label="{{display_name}}，应用说明：{{des}}">{{des}}</div>'+
         '    </div>'+
         '    <div class="app_action"><ul class="action_list">{{opt}}</ul></div>'+
         '</div>';
@@ -17146,6 +17682,10 @@ html = html:sub(1, row_start - 1) .. row .. html:sub(error_start)
 local show_start = assert(html:find("    function show_app_data(data){", 1, true), "show_app_data start not found")
 local loading_start = assert(html:find("    var loading_htm = ", show_start, true), "loading_htm start not found")
 html = html:sub(1, show_start - 1) .. renderer .. html:sub(loading_start)
+
+local refresh_start = assert(html:find("    function refresh_data(){", 1, true), "refresh_data start not found")
+local refresh_end = assert(html:find('\n    $(".app_menu").click', refresh_start, true), "refresh_data end not found")
+html = html:sub(1, refresh_start - 1) .. '    function refresh_data(){ nr_refresh_app_list(); }' .. html:sub(refresh_end)
 
 loading_start = assert(html:find("    var loading_htm = ", 1, true), "loading_htm start not found after renderer")
 local loading_end = assert(html:find("\n", loading_start, true), "loading_htm end not found")
@@ -17174,6 +17714,20 @@ polish_function("app_action", {
     {"message: loading_htm", "message: nr_appcenter_loading(action, app_name)"},
     {"dialogDeal.setMessage(loading_htm);", "dialogDeal.setTitle(nr_escape_html(nr_operation_title(action, app_name))); dialogDeal.setMessage(nr_appcenter_loading(action, app_name));"}
 })
+polish_function("import_pkg", {
+    {"cssClass: 'list-dialog dialog_box',", "cssClass: 'list-dialog dialog_box nr_import_dialog',"},
+    {'type="submit" value="<%:APPImportBTn%>"', 'type="submit" disabled="disabled" value="<%:APPImportBTn%>"'}
+})
+polish_function("check_upload", {
+    {"var data = {};", 'var data = {};\n        var upload_check_id = ++NR_UPLOAD_CHECK_SEQ;\n        var upload_button = $("#import_box_file input[type=submit]");\n        var note = $(obj).closest(".cbi-value").find(".note_info");\n        upload_button.prop("disabled", true);\n        note.text("");'},
+    {"if (!obj.files){", "if (!obj.files || !obj.files.length){"},
+    {"var filestatus = null;", "if(upload_check_id !== NR_UPLOAD_CHECK_SEQ || !obj.files || !obj.files.length) return;\n            var filestatus = null;"},
+    {'$("input[type=submit]")', 'upload_button'},
+    {'$(obj).parent().children(".note_info")', 'note'}
+})
+assert(html:find("cssClass: 'list-dialog dialog_box nr_import_dialog',", 1, true), "import dialog class not found")
+assert(html:find('type="submit" disabled="disabled" value="<%:APPImportBTn%>"', 1, true), "initial upload button state not found")
+assert(html:find("if (!obj.files || !obj.files.length){", 1, true), "empty file guard not found")
 polish_function("check_version", {
     {'loading_htm+"<br><%:APPVerisonCheckNote%>"', 'nr_appcenter_loading("check", "")'},
     {'message: loading_htm', 'message: nr_appcenter_loading("check", "")'},
@@ -17193,8 +17747,10 @@ polish_function("process_deal", {
     {'refresh_data();', 'if(dialogDeal && !callback) nr_appcenter_result(dialogDeal, true, action, name, nr_escape_html(msg)); refresh_data();'},
     {'var htm = genarate_loading_box(error_info,0);', 'var htm = nr_appcenter_loading(action, name);'},
     {"title: '',", 'title: nr_escape_html(nr_operation_title(action, name)),'},
-    {'message: \'<i class="far fa-nradio-note fa-fw icon_disable" ></i>\'+error_info,', 'message: nr_result_markup(false, nr_escape_html(error_info)),'}
+    {'message: \'<i class="far fa-nradio-note fa-fw icon_disable" ></i>\'+error_info,', 'message: nr_result_markup(false, nr_escape_html(error_info)),'},
+    {'if(dialogDeal){\n                    setTimeout(function(){ dialogDeal.close();if(callback)callback(id,route);}, 1000);\n                }', 'if(dialogDeal && (code != 0 || callback)){\n                    setTimeout(function(){ dialogDeal.close(); if(code == 0 && action == "open" && callback) callback(id,route); }, 1000);\n                }'}
 })
+assert(html:find('if(dialogDeal && (code != 0 || callback))', 1, true), "persistent operation result not found")
 polish_function("show_error", {
     {'daillog.setMessage(err_info);', 'nr_appcenter_result(daillog, result.code == APPCENTER_OK, "install", "", err_info);'},
     {'message:err_info,', 'message:nr_result_markup(result.code == APPCENTER_OK, err_info),'},
@@ -17202,7 +17758,7 @@ polish_function("show_error", {
 })
 
 local ready_count
-html, ready_count = html:gsub("        get_memory%(%)%;", "        get_memory();\n        nr_start_status_polling();", 1)
+html, ready_count = html:gsub("        get_memory%(%)%;", "        get_memory();\n        nr_init_topnav_layout();\n        nr_init_sticky_toolbar();\n        nr_start_status_polling();", 1)
 assert(ready_count == 1, "document ready hook not found")
 html = html:gsub("9%.9 G / 99%.9 G", "-- / --"):gsub("0%.0 G / 0%.0 G", "-- / --")
 
@@ -17213,7 +17769,7 @@ output:close()
 assert(os.rename(tmp_path, tpl_path), "atomic template replace failed")
 EOF_APPCENTER_V3_LUA
 
-    lua "$v3_lua" "$TPL" "$v3_css" "$v3_js" || die "应用商店 V3 模板重构失败"
+    lua "$v3_lua" "$TPL" "$v3_css" "$v3_js" "${SCRIPT_RELEASE_DATE}-${SCRIPT_VERSION}" "$v3_top_nav_model" || die "应用商店 V3 模板重构失败"
     chmod 644 "$TPL" 2>/dev/null || true
 
     grep -Fq 'NRadio appcenter v3: begin' "$TPL" 2>/dev/null || die "应用商店 V3 CSS 校验失败"
@@ -17225,6 +17781,8 @@ EOF_APPCENTER_V3_LUA
     grep -Fq 'app_state_badge app_state_{{status}}' "$TPL" 2>/dev/null || die "应用商店 V3 状态徽标校验失败"
     grep -Fq 'function nr_apply_app_search()' "$TPL" 2>/dev/null || die "应用商店 V3 搜索逻辑校验失败"
     grep -Fq 'id="nr_app_search_clear"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索清除按钮校验失败"
+    grep -Fq 'cssClass: '"'"'list-dialog dialog_box nr_import_dialog'"'"'' "$TPL" 2>/dev/null || die "应用商店 V3 手动安装弹窗校验失败"
+    grep -Fq 'icon_cache_tag: NR_APP_ICON_CACHE_TAG' "$TPL" 2>/dev/null || die "应用商店 V3 图标缓存参数校验失败"
     grep -Fq 'class="nr_search_empty"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索空状态校验失败"
     grep -Fq 'class="top_menu_inner_icon">×</button>' "$TPL" 2>/dev/null || die "应用商店 V3 顶部关闭按钮校验失败"
     grep -Fq 'class="mem_track nr-storage-track"' "$TPL" 2>/dev/null || die "应用商店 V3 双空间容器校验失败"
@@ -17247,7 +17805,6 @@ install_lightweight_appcenter() {
     if is_c2000pro_appcenter_environment; then
         log_stage 1 5 "检查 C2000Pro 兼容应用商店环境"
         ensure_c2000pro_compat_appcenter
-        log "说明: 轻量商店管理已登记插件，不提供原厂软件下载服务"
 
         log_stage 2 5 "写入应用商店异步卸载接口"
         write_plugin_uninstall_assets
@@ -17265,7 +17822,6 @@ install_lightweight_appcenter() {
 
         log "C2000Pro 兼容应用商店层已创建/刷新"
         log "入口: nradioadv/system/appcenter"
-        log "说明: 保留 /etc/config/appcenter 插件记录；不修改原厂 nradio/app.lua 手机 API"
         return 0
     fi
     die "未检测到 C2000Pro / AK68-798 轻量应用商店环境"
@@ -17279,14 +17835,8 @@ install_appcenter_polish() {
     log_stage 1 5 "检查 NRadio 应用商店模板"
     require_nradio_oem_appcenter
     verify_file_exists "$TPL" "NRadio 应用商店模板"
-    log "说明: 直接美化应用商店，不创建事务备份或文件备份"
 
-    log_stage 2 5 "更新应用商店 V3、系统状态与鲲鹏智能体兼容"
-    if nros_revision_at_least 2 2 12 && appcenter_has_native_mobile_save_support; then
-        log "检测:   NROS 2.2.12+ 已有手机保存应用按钮，保留原有规则"
-    else
-        log "检测:   原厂模板没有手机保存应用按钮规则，已添加"
-    fi
+    log_stage 2 5 "更新应用商店页面与系统状态"
     write_plugin_uninstall_assets
     write_original_appcenter_template
     patch_common_template
@@ -17294,7 +17844,6 @@ install_appcenter_polish() {
     patch_appcenter_card_polish_v3
     case "${CURRENT_DETECTED_MODEL:-}" in
         NRadio_C8-688|NRadio_C5800-650|NRadio_C5800-688|NRadio_NBCPE)
-            log "当前机型支持 rootfs_2nd，正在接入应用商店双空间数据"
             patch_appcenter_storage_expand_display
             ;;
     esac
@@ -17313,10 +17862,6 @@ install_appcenter_polish() {
     verify_luci_route "nradioadv/system/appcenter" "应用商店美化"
 
     log "应用商店 V3 更新完成"
-    log "存储: C8-688/C5800/NBCPE 显示系统空间和 rootfs_2nd 空间"
-    log "内容: 搜索、卡片、状态、系统信息、响应式布局、按钮、图标和弹窗"
-    log "兼容: 鲲鹏智能体 0.0.2 / ZeroClaw 缺少的接口，安装后检查控制器与 OAF 技能"
-    log "说明: 不改插件下载、安装和卸载；安装或更新成功后写入兼容配置，重复执行不会重复写入"
 }
 
 copy_factory_appcenter_file() {
@@ -17363,7 +17908,6 @@ remove_lightweight_appcenter() {
     fi
     if is_c2000pro_appcenter_environment; then
         log_stage 1 4 "检查 C2000Pro 兼容应用商店层"
-        log "说明: C2000Pro 无旧版 /rom 应用商店模板；直接移除脚本生成的兼容 controller/template，不创建备份"
 
         log_stage 2 4 "移除脚本生成的 C2000Pro 兼容文件"
         remove_c2000pro_compat_appcenter
@@ -17392,7 +17936,6 @@ restore_appcenter_original() {
 
     log_stage 1 4 "检查 NRadio 应用商店原厂还原环境"
     require_nradio_oem_appcenter
-    log "说明: 直接使用 /rom 只读原厂应用商店模板和控制器；不创建备份，不覆盖 /etc/config/appcenter"
 
     log_stage 2 4 "直接回写原厂应用商店文件"
     write_original_appcenter_template
@@ -24856,6 +25399,9 @@ install_openclash() {
         log "备注:     已跳过 smart core 下载"
     fi
 
+    # 哈基米 DNS 防泄露：fallback/节点域名/机场订阅域名改用加密 DNS 并持久化覆写
+    ensure_hakimi_dns_antileak || true
+
     log "安装完成"
     log "插件:   $OPENCLASH_DISPLAY_NAME"
     log "版本:  $oc_ver"
@@ -24881,9 +25427,11 @@ local uci=require"luci.model.uci".cursor()
 function index()
 entry({"admin", "services", "AdGuardHome"},alias("admin", "services", "AdGuardHome", "oem"),_("AdGuardHome"), 10).dependent = true
 entry({"admin","services","AdGuardHome","oem"},template("AdGuardHome/oem_wrapper"),_("总览"),0).leaf = true
-entry({"admin","services","AdGuardHome","base"},cbi("AdGuardHome/base"),_("基础设置"),1).leaf = true
-entry({"admin","services","AdGuardHome","log"},form("AdGuardHome/log"),_("运行日志"),2).leaf = true
+entry({"admin","services","AdGuardHome","overview"},cbi("AdGuardHome/overview"),_("概览"),1).leaf = true
+entry({"admin","services","AdGuardHome","base"},cbi("AdGuardHome/base")).leaf = true
+entry({"admin","services","AdGuardHome","settings"},cbi("AdGuardHome/base"),_("基础设置"),2).leaf = true
 entry({"admin","services","AdGuardHome","manual"},cbi("AdGuardHome/manual"),_("手动配置"),3).leaf = true
+entry({"admin","services","AdGuardHome","log"},form("AdGuardHome/log"),_("运行日志"),4).leaf = true
 entry({"admin", "services", "AdGuardHome", "status"},call("act_status")).leaf=true
 entry({"admin", "services", "AdGuardHome", "dashboard_stats"},call("act_dashboard_stats")).leaf=true
 entry({"admin", "services", "AdGuardHome", "dashboard_runtime"},call("act_dashboard_runtime")).leaf=true
@@ -24979,10 +25527,6 @@ local user = uci:get("AdGuardHome", "AdGuardHome", "dashboard_user") or ""
 local pass = uci:get("AdGuardHome", "AdGuardHome", "dashboard_password") or ""
 local dashboard_base
 local cookiefile
-local login_body
-local login_body_file
-local login_cmd
-local login_out
 local data
 
 if not tostring(httpport):match("^%d+$") then
@@ -24999,32 +25543,47 @@ end
 if pass == "" then
 return nil, "未填写仪表盘认证密码"
 end
+
+local cooldown = "/var/run/adg_dashboard_lastfail"
+local cooldown_ts = tonumber((fs.readfile(cooldown) or ""):match("^(%d+)")) or 0
+if os.time() - cooldown_ts < 60 then
+return nil, "3000 仪表盘登录失败，为避免连续失败被临时限制，稍后自动重试"
+end
+
+local function adg_try_login(login_user, login_pass)
+local body = '{"name":"' .. adg_json_escape(login_user) .. '","password":"' .. adg_json_escape(login_pass) .. '"}'
+local body_file = sys.exec("mktemp /tmp/adg_dashboard_login.XXXXXX 2>/dev/null"):gsub("%s+$", "")
+if body_file == "" then
+return false
+end
+if not fs.writefile(body_file, body) then
+sys.exec("rm -f " .. adg_shell_quote(body_file))
+return false
+end
+fs.chmod(body_file, "0600")
+local cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
+	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
+	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
+	" --post-file=" .. adg_shell_quote(body_file) ..
+	" -O - " .. adg_shell_quote(dashboard_base .. "/control/login") .. " 2>/dev/null"
+local out = sys.exec(cmd)
+sys.exec("rm -f " .. adg_shell_quote(body_file))
+if out == nil or not out:find("OK", 1, true) then
+sys.exec("rm -f " .. adg_shell_quote(cookiefile))
+return false
+end
+return true
+end
+
 cookiefile = sys.exec("mktemp /tmp/adg_dashboard_cookie.XXXXXX 2>/dev/null"):gsub("%s+$", "")
 if cookiefile == "" then
 return nil, "无法安全创建仪表盘会话文件"
 end
 
-login_body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
-login_body_file = sys.exec("mktemp /tmp/adg_dashboard_login.XXXXXX 2>/dev/null"):gsub("%s+$", "")
-if login_body_file == "" then
+if not adg_try_login(user, pass) then
+fs.writefile(cooldown, tostring(os.time()))
 sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return nil, "无法安全创建仪表盘登录请求"
-end
-if not fs.writefile(login_body_file, login_body) then
-sys.exec("rm -f " .. adg_shell_quote(cookiefile) .. " " .. adg_shell_quote(login_body_file))
-return nil, "无法创建仪表盘登录请求"
-end
-fs.chmod(login_body_file, "0600")
-login_cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
-	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
-	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
-	" --post-file=" .. adg_shell_quote(login_body_file) ..
-	" -O - " .. adg_shell_quote(dashboard_base .. "/control/login") .. " 2>/dev/null"
-login_out = sys.exec(login_cmd)
-sys.exec("rm -f " .. adg_shell_quote(login_body_file))
-if not login_out:find("OK", 1, true) then
-sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return nil, "仪表盘登录失败"
+return nil, "3000 仪表盘登录失败：账号密码与 3000 不一致，请重新运行 1 > 4 引导设置账号密码，或在基础设置页填写与 3000 登录页一致的账号密码"
 end
 
 data = sys.exec(
@@ -25036,6 +25595,9 @@ sys.exec("rm -f " .. adg_shell_quote(cookiefile))
 if data == nil or data == "" then
 return nil, "仪表盘数据读取失败"
 end
+
+-- 读取成功后清除失败冷却标记，避免残留的"稍后自动重试"提示
+fs.unlink("/var/run/adg_dashboard_lastfail")
 
 return data
 end
@@ -25079,7 +25641,7 @@ end
 function reload_config()
 fs.remove("/tmp/AdGuardHometmpconfig.yaml")
 http.prepare_content("application/json")
-http.write('')
+http.write_json({ok=not fs.access("/tmp/AdGuardHometmpconfig.yaml")})
 end
 function act_status()
 local e={}
@@ -25180,6 +25742,15 @@ end
 
 function get_log()
 local logfile=uci:get("AdGuardHome","AdGuardHome","logfile")
+http.prepare_content("text/plain; charset=utf-8")
+if logfile=="syslog" then
+if sys.call("command -v logread >/dev/null 2>&1")~=0 then
+http.write("当前系统不提供 logread，无法在此页读取 syslog\n")
+return
+end
+http.write(sys.exec("logread 2>/dev/null | tail -c 1048576") or "")
+return
+end
 logfile=adg_safe_logfile(logfile, false)
 if logfile==nil then
 http.write("no log available\n")
@@ -25199,12 +25770,18 @@ end
 function do_dellog()
 local logfile=uci:get("AdGuardHome","AdGuardHome","logfile")
 logfile=adg_safe_logfile(logfile, false)
-if logfile then
-local handle=io.open(logfile,"wb")
-if handle then handle:close() end
-end
 http.prepare_content("application/json")
-http.write('')
+if not logfile then
+http.write_json({ok=false,error="当前日志路径不可清空"})
+return
+end
+local handle=io.open(logfile,"wb")
+if not handle then
+http.write_json({ok=false,error="清空日志失败，请检查文件权限"})
+return
+end
+handle:close()
+http.write_json({ok=true})
 end
 function check_update()
 local e={}
@@ -25235,11 +25812,11 @@ EOF_ADG_CONTROLLER
 local dispatcher = require "luci.dispatcher"
 local http = require "luci.http"
 local base_url = dispatcher.build_url("admin", "services", "AdGuardHome")
-local tab = http.formvalue("tab") or "base"
-if tab ~= "base" and tab ~= "manual" and tab ~= "log" then
-    tab = "base"
+local tab = http.formvalue("tab") or "overview"
+if tab ~= "overview" and tab ~= "base" and tab ~= "manual" and tab ~= "log" then
+    tab = "overview"
 end
-local frame_url = base_url .. "/" .. tab
+local frame_url = base_url .. "/" .. (tab == "base" and "settings" or tab)
 %>
 <%+header%>
 <style>
@@ -25479,90 +26056,81 @@ local frame_url = base_url .. "/" .. tab
             transition: none;
         }
     }
-    /* NRadio AdGuardHome wrapper polish 2026-05-23: denser tabs, steadier iframe frame, mobile safe spacing. */
+    /* Keep the embedded dashboard compact; the inner page owns vertical scrolling. */
     .adg-shell {
-        border-radius: 18px;
-        padding: 16px;
-        background:
-            radial-gradient(circle at 0% 0%, rgba(47, 211, 238, 0.13), transparent 30%),
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.13), transparent 32%),
-            linear-gradient(180deg, rgba(31, 37, 52, 0.985), rgba(18, 23, 34, 0.985));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 26px 68px rgba(0,0,0,0.30);
-        isolation: isolate;
+        margin: 0;
+        padding: 12px;
+        border: 0;
+        border-radius: 12px;
+        background: #202833;
+        box-shadow: none;
     }
+    .adg-shell::before,
     .adg-shell::after {
-        content: "";
-        position: absolute;
-        left: 16px;
-        right: 16px;
-        top: 0;
-        height: 3px;
-        border-radius: 0 0 999px 999px;
-        background: linear-gradient(90deg, rgba(47,211,238,.0), rgba(47,211,238,.86), rgba(108,162,255,.86), rgba(47,211,238,.0));
-        pointer-events: none;
+        display: none;
     }
     .adg-head {
         align-items: center;
-        margin-bottom: 12px;
+        gap: 10px;
+        margin-bottom: 10px;
     }
     .adg-title {
-        letter-spacing: -0.02em;
+        font-size: 18px;
+        letter-spacing: 0;
     }
     .adg-sub {
-        max-width: 62ch;
-        color: #b4c5dd;
+        margin-top: 4px;
+        color: #aab8cc;
     }
     .adg-tabs {
-        gap: 5px;
-        padding: 5px;
-        background: rgba(6, 10, 18, 0.34);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        gap: 4px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
     }
     .adg-tab {
-        min-height: 38px;
-        padding: 0 14px;
-        font-weight: 800;
+        min-height: 34px;
+        padding: 0 11px;
+        border-radius: 8px;
+        background: transparent;
+        box-shadow: none;
+        font-weight: 600;
+    }
+    .adg-tab.active {
+        border-color: rgba(76, 169, 231, 0.38);
+        background: rgba(76, 169, 231, 0.16);
+        box-shadow: none;
+    }
+    .adg-tab.active::after {
+        display: none;
     }
     .adg-frame-wrap {
-        min-height: 660px;
-        border-radius: 16px;
-        border-color: rgba(84, 104, 142, 0.68);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 22px 52px rgba(0,0,0,0.22);
+        min-height: 0;
+        border: 0;
+        border-radius: 10px;
+        background: #202833;
+        box-shadow: none;
     }
     .adg-frame {
-        min-height: 760px;
-        background: #151923;
-    }
-    @media (min-width: 1280px) {
-        .adg-shell {
-            padding: 18px;
-        }
-        .adg-frame {
-            min-height: 800px;
-        }
+        min-height: 0;
+        background: #202833;
     }
     @media (max-width: 720px) {
         .adg-head {
             align-items: stretch;
-            gap: 12px;
+            gap: 8px;
         }
         .adg-tabs {
-            border-radius: 16px;
+            width: 100%;
         }
         .adg-tab {
-            min-height: 40px;
+            min-height: 36px;
         }
     }
     @media (max-width: 480px) {
         .adg-shell {
-            margin: 0 -2px 16px;
-            padding: 10px;
-        }
-        .adg-frame-wrap {
-            border-radius: 13px;
-        }
-        .adg-frame {
-            min-height: 640px;
+            padding: 8px;
         }
     }
 </style>
@@ -25570,9 +26138,10 @@ local frame_url = base_url .. "/" .. tab
     <div class="adg-head">
         <div class="adg-copy">
             <h2 name="content" class="adg-title">AdGuardHome</h2>
-            <div class="adg-sub">基础设置、手动配置、运行日志。</div>
+            <div class="adg-sub">运行概览与配置维护。</div>
         </div>
         <div class="adg-tabs">
+            <a class="adg-tab<%= tab == 'overview' and ' active' or '' %>"<%= tab == 'overview' and ' aria-current="page"' or '' %> data-tab="overview" href="<%=base_url%>?tab=overview">概览</a>
             <a class="adg-tab<%= tab == 'base' and ' active' or '' %>"<%= tab == 'base' and ' aria-current="page"' or '' %> data-tab="base" href="<%=base_url%>?tab=base">基础设置</a>
             <a class="adg-tab<%= tab == 'manual' and ' active' or '' %>"<%= tab == 'manual' and ' aria-current="page"' or '' %> data-tab="manual" href="<%=base_url%>?tab=manual">手动配置</a>
             <a class="adg-tab<%= tab == 'log' and ' active' or '' %>"<%= tab == 'log' and ' aria-current="page"' or '' %> data-tab="log" href="<%=base_url%>?tab=log">运行日志</a>
@@ -25595,7 +26164,8 @@ function adgResizeFrame() {
         var d = frame.contentWindow.document;
         var h1 = d.body ? d.body.scrollHeight : 0;
         var h2 = d.documentElement ? d.documentElement.scrollHeight : 0;
-        var height = Math.max(h1, h2, 760);
+        var available = Math.max(260, (window.innerHeight || document.documentElement.clientHeight || 760) - 170);
+        var height = Math.max(260, Math.min(Math.max(h1, h2, 260), available));
         frame.style.height = height + 'px';
     } catch (e) {}
 }
@@ -25728,8 +26298,43 @@ window.addEventListener('resize', function() {
 <%+footer%>
 EOF
 
+    cat > /usr/lib/lua/luci/view/AdGuardHome/ui_skin.htm <<'EOF_ADG_UI_SKIN'
+<script type="text/javascript">
+if (window.parent && window.parent !== window)
+    document.documentElement.className += " adg-ui-embedded";
+</script>
+<style>
+html.adg-ui-embedded,
+html.adg-ui-embedded body { background:#202833!important; color:#ebf2fa!important; }
+html.adg-ui-embedded .cbi-map { margin:0!important; padding:12px 16px!important; border:0!important; background:transparent!important; box-shadow:none!important; }
+html.adg-ui-embedded .cbi-map > h2,
+html.adg-ui-embedded .cbi-map > .cbi-map-descr { display:none!important; }
+html.adg-ui-embedded .cbi-section { margin:0 0 12px!important; padding:16px 18px!important; border:1px solid #405064!important; border-radius:12px!important; background:#273241!important; box-shadow:none!important; }
+html.adg-ui-embedded .cbi-value { border-color:#3b4a5c!important; }
+html.adg-ui-embedded .cbi-value-title { color:#e0eaf5!important; font-size:14px!important; font-weight:650!important; text-shadow:none!important; }
+html.adg-ui-embedded .cbi-value-description,
+html.adg-ui-embedded .cbi-section-descr { color:#aabbd0!important; font-size:12px!important; line-height:1.5!important; }
+html.adg-ui-embedded .cbi-input-text,
+html.adg-ui-embedded .cbi-input-password,
+html.adg-ui-embedded select,
+html.adg-ui-embedded textarea { border:1px solid #4b5b70!important; border-radius:8px!important; background:#303d4d!important; color:#edf4fb!important; box-shadow:none!important; }
+html.adg-ui-embedded .cbi-button { border:1px solid #52657b!important; border-radius:8px!important; background:#34465a!important; color:#eaf2fa!important; font-weight:650!important; box-shadow:none!important; }
+html.adg-ui-embedded .cbi-button-apply { border-color:#338dc3!important; background:#246a9e!important; color:#f7fbff!important; }
+html.adg-ui-embedded .cbi-button:focus-visible,
+html.adg-ui-embedded .cbi-input-text:focus-visible,
+html.adg-ui-embedded .cbi-input-password:focus-visible { outline:2px solid #67d8fb!important; outline-offset:2px!important; }
+@media(max-width:720px) {
+    html.adg-ui-embedded .cbi-map { padding:8px!important; }
+    html.adg-ui-embedded .cbi-section { padding:12px!important; }
+}
+</style>
+EOF_ADG_UI_SKIN
+
     cat > /usr/lib/lua/luci/view/AdGuardHome/AdGuardHome_status.htm <<'EOF_ADG_STATUS'
+<% local adg_requestpath = require("luci.dispatcher").context.requestpath or {}; local adg_show_overview = adg_requestpath[#adg_requestpath] ~= "settings" %>
+<%+AdGuardHome/ui_skin%>
 <script type="text/javascript">//<![CDATA[
+var adgShowOverview = <%=adg_show_overview and "true" or "false"%>;
 function adgFormatNumber(value) {
 	var text = String(value || 0);
 	return text.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -25791,6 +26396,13 @@ function adgHasStatsPayload(data) {
 	));
 }
 
+function adgAuthState(error) {
+	error = String(error || "");
+	if (error.indexOf("未填写") >= 0) return "待填写";
+	if (error.indexOf("登录失败") >= 0) return "认证失败";
+	return "读取失败";
+}
+
 function adgSetRefreshState(loading) {
 	var button = document.getElementById("adg-stats-refresh");
 	if (!button) {
@@ -25801,7 +26413,7 @@ function adgSetRefreshState(loading) {
 		button.className += " adg-button-loading";
 	}
 	button.disabled = !!loading;
-	button.value = loading ? "刷新中..." : "刷新统计数据";
+	button.value = loading ? "刷新中..." : "刷新统计";
 	button.setAttribute("aria-busy", loading ? "true" : "false");
 	button.setAttribute("title", loading ? "正在刷新统计数据" : "刷新仪表盘统计数据");
 }
@@ -25925,7 +26537,7 @@ function adgLocalizeOuterTabs(root) {
 	root = root || document;
 	var nodes = root.querySelectorAll("a, span, li");
 	var map = {
-		"Overview": "总览",
+		"Overview": "概览",
 		"Base Setting": "基础设置",
 		"Manual Config": "手动配置",
 		"Log": "运行日志"
@@ -25951,12 +26563,9 @@ function adgPolishParentShell() {
 		doc = window.parent.document;
 		adgLocalizeOuterTabs(doc);
 		css = [
-			".modal.app_frame .modal-body,.modal.app_frame .bootstrap-dialog-message,.modal.app_frame .app_frame_box{background:#2e2e38!important;}",
-			".modal.app_frame{overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior-y:contain!important;}",
-			".modal.app_frame .modal-body,.modal.app_frame .bootstrap-dialog-message{scrollbar-color:rgba(111,202,255,.55) rgba(255,255,255,.08)!important;scrollbar-width:thin!important;}",
-			".modal.app_frame .app_frame_nav{border-bottom-color:rgba(255,255,255,.12)!important;}",
-			".modal.app_frame iframe,.modal.app_frame #sub_frame,.modal.app_frame iframe[name='subpage']{display:block!important;border:0!important;background:#2e2e38!important;}",
-			".modal-backdrop,.bootstrap-dialog-backdrop{background:rgba(3,6,12,.82)!important;}"
+			".modal.app_frame.nr-adguard-modal .modal-body,.modal.app_frame.nr-adguard-modal .bootstrap-dialog-message,.modal.app_frame.nr-adguard-modal .app_frame_box{background:#202833!important;}",
+			".modal.app_frame.nr-adguard-modal{overflow:hidden!important;}",
+			".modal.app_frame.nr-adguard-modal iframe,.modal.app_frame.nr-adguard-modal #sub_frame{display:block!important;border:0!important;background:#202833!important;}"
 		].join(" ");
 		style = doc.getElementById("adg-parent-shell-polish");
 		if (!style) {
@@ -26132,14 +26741,15 @@ function adgApplyRuntime(runtime, status) {
 	var listenNode = document.getElementById("adg-runtime-listen");
 	var portNode = document.getElementById("adg-runtime-port");
 	var coreNode = document.getElementById("adg-runtime-core");
-	var glanceModeNode = document.getElementById("adg-glance-mode");
-	var glanceAuthNode = document.getElementById("adg-glance-auth");
-	var glanceListenNode = document.getElementById("adg-glance-listen");
+	var authNode = document.getElementById("adg-runtime-auth");
 	var shellNode = document.getElementById("adg-dashboard-shell");
 	var openButton = document.getElementById("adg-open-dashboard");
 	var runtimeOk = adgHasRuntimePayload(runtime);
-	var running = runtimeOk ? !!runtime.running : !!(status && status.running);
-	var tone = running ? "ok" : "bad";
+	var runningKnown = (runtimeOk && typeof runtime.running !== "undefined") ||
+		(status && typeof status.running !== "undefined");
+	var running = runtimeOk && typeof runtime.running !== "undefined"
+		? !!runtime.running : !!(status && status.running);
+	var tone = runningKnown ? (running ? "ok" : "bad") : "unknown";
 	var httpPort = (runtimeOk && runtime.http_port) || (status && status.httpport) || "3000";
 	var dnsPort = (runtimeOk && runtime.dns_port) || (status && status.dnsport) || "?";
 	var redirectText = adgRedirectText(status && status.redirect_mode, status && status.redirect);
@@ -26149,20 +26759,26 @@ function adgApplyRuntime(runtime, status) {
 		: ((status && status.listen_hosts && status.listen_hosts.length)
 			? adgListenText(status.listen_hosts)
 			: ((status && status.listen_text) || "未读取"));
-	var protectText = runtimeOk
-		? adgProtectText(runtime && runtime.protection_enabled)
-		: ((status && status.dashboard_auth_ready) ? "未读取" : "需填密码");
+	var protectText = runtimeOk && typeof runtime.protection_enabled !== "undefined"
+		? adgProtectText(runtime.protection_enabled)
+		: (status && typeof status.dashboard_auth_ready !== "undefined"
+			? (status.dashboard_auth_ready ? "待同步" : "需填密码") : "读取失败");
+	var authText = runtimeOk ? "已认证" :
+		adgAuthState(runtime && runtime.error);
 	window.adgDashboardHttpPort = String(httpPort || "3000");
 
 	if (shellNode) {
 		shellNode.className = "adg-dashboard-shell adg-tone-" + tone;
 	}
 	if (openButton) {
-		openButton.value = "打开 " + window.adgDashboardHttpPort + " 原版完整版";
+		openButton.value = "原版页面 · " + window.adgDashboardHttpPort;
 		openButton.disabled = false;
 	}
 	if (runNode) {
-		runNode.textContent = adgStatusText(running);
+		runNode.textContent = runningKnown ? adgStatusText(running) : "读取失败";
+	}
+	if (authNode) {
+		authNode.textContent = authText;
 	}
 	if (protectNode) {
 		protectNode.textContent = protectText;
@@ -26179,29 +26795,19 @@ function adgApplyRuntime(runtime, status) {
 	if (coreNode) {
 		coreNode.textContent = coreText;
 	}
-	if (glanceModeNode) {
-		glanceModeNode.textContent = redirectText;
-	}
-	if (glanceAuthNode) {
-		glanceAuthNode.textContent = (status && status.dashboard_auth_ready) ? "已填写" : "待填写";
-	}
-	if (glanceListenNode) {
-		glanceListenNode.textContent = "DNS " + dnsPort;
-	}
 }
 
 function adgApplyDashboardStats(data) {
 	var totalNode = document.getElementById("adg-stats-total");
 	var blockedNode = document.getElementById("adg-stats-blocked");
 	var metaNode = document.getElementById("adg-stats-meta");
-	var glanceTotalNode = document.getElementById("adg-glance-total");
-	var glanceRatioNode = document.getElementById("adg-glance-ratio");
-	var totalPercentNode = document.getElementById("adg-stats-total-percent");
 	var blockedPercentNode = document.getElementById("adg-stats-blocked-percent");
+	var authNode = document.getElementById("adg-runtime-auth");
 	var total;
 	var blocked;
 	var ratio;
 	var ratioText;
+	var authState;
 
 	if (data && data.ok === false) {
 		var errText = data.error || "未填写仪表盘 API 密码。";
@@ -26211,20 +26817,15 @@ function adgApplyDashboardStats(data) {
 		if (blockedNode) {
 			blockedNode.textContent = "—";
 		}
-		if (totalPercentNode) {
-			totalPercentNode.textContent = "—";
-		}
 		if (blockedPercentNode) {
 			blockedPercentNode.textContent = "—";
 		}
 		if (metaNode) {
 			metaNode.textContent = "等待仪表盘认证";
 		}
-		if (glanceTotalNode) {
-			glanceTotalNode.textContent = "待认证";
-		}
-		if (glanceRatioNode) {
-			glanceRatioNode.textContent = "待认证";
+		authState = adgAuthState(errText);
+		if (authNode && authState !== "读取失败") {
+			authNode.textContent = authState;
 		}
 		adgSetInlineNote(errText, "warn");
 		adgApplyChart("adg-chart-total-line", "adg-chart-total-area", []);
@@ -26239,22 +26840,13 @@ function adgApplyDashboardStats(data) {
 		if (blockedNode) {
 			blockedNode.textContent = "—";
 		}
-		if (totalPercentNode) {
-			totalPercentNode.textContent = "等待";
-		}
 		if (blockedPercentNode) {
-			blockedPercentNode.textContent = "等待";
+			blockedPercentNode.textContent = "—";
 		}
 		if (metaNode) {
-			metaNode.textContent = "等待统计数据";
+			metaNode.textContent = "统计读取失败";
 		}
-		if (glanceTotalNode) {
-			glanceTotalNode.textContent = "等待";
-		}
-		if (glanceRatioNode) {
-			glanceRatioNode.textContent = "等待数据";
-		}
-		adgSetInlineNote("等待仪表盘统计返回。", "soft");
+		adgSetInlineNote("仪表盘统计读取失败。", "warn");
 		adgApplyChart("adg-chart-total-line", "adg-chart-total-area", []);
 		adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", []);
 		return;
@@ -26268,23 +26860,17 @@ function adgApplyDashboardStats(data) {
 	if (totalNode) {
 		totalNode.textContent = adgFormatNumber(total);
 	}
-	if (totalPercentNode) {
-		totalPercentNode.textContent = ratioText;
-	}
 	if (blockedNode) {
 		blockedNode.textContent = adgFormatNumber(blocked);
 	}
 	if (blockedPercentNode) {
-		blockedPercentNode.textContent = ratioText;
+		blockedPercentNode.textContent = "拦截率 " + ratioText;
 	}
 	if (metaNode) {
 		metaNode.textContent = "最近 24 小时";
 	}
-	if (glanceTotalNode) {
-		glanceTotalNode.textContent = adgFormatNumber(total);
-	}
-	if (glanceRatioNode) {
-		glanceRatioNode.textContent = "拦截率 " + ratioText;
+	if (authNode) {
+		authNode.textContent = "已认证";
 	}
 
 	adgSetInlineNote("已同步仪表盘统计。", "ok");
@@ -26386,39 +26972,34 @@ function adgApplyPageSkin() {
 	}
 }
 
+var adgRefreshTimer = null;
+var adgRefreshBusy = false;
 function adgRefreshAll() {
+	if (adgRefreshBusy) return;
+	if (adgRefreshTimer) window.clearTimeout(adgRefreshTimer);
+	adgRefreshBusy = true;
 	adgSetRefreshState(true);
 	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtime]])%>', { _: Date.now() }, function(x, runtime) {
 		XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', { _: Date.now() }, function(y, status) {
 			adgApplyRuntime(runtime || {}, status || {});
 			adgApplyPageSkin();
+			XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', { _: Date.now() }, function(z, data) {
+				adgApplyDashboardStats(data);
+				adgApplyPageSkin();
+				adgSetRefreshState(false);
+				adgRefreshBusy = false;
+				adgRefreshTimer = window.setTimeout(adgRefreshAll, 20000);
+			});
 		});
 	});
-	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', { _: Date.now() }, function(x, data) {
-		adgSetRefreshState(false);
-		adgApplyDashboardStats(data);
-		adgApplyPageSkin();
-	});
 }
-
-XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtime]])%>', null, function(x, runtime) {
-	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', { _: Date.now() }, function(y, status) {
-		adgApplyRuntime(runtime || {}, status || {});
-		adgApplyPageSkin();
-	});
-});
-
-XHR.poll(5, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', null, function(x, data) {
-	adgApplyDashboardStats(data);
-	adgApplyPageSkin();
-});
 
 window.setTimeout(adgApplyPageSkin, 60);
 window.setTimeout(adgApplyPageSkin, 260);
 window.setTimeout(adgApplyPageSkin, 860);
 window.setTimeout(adgApplyPageSkin, 1800);
 window.setTimeout(adgPolishParentShell, 2200);
-window.setTimeout(adgRefreshAll, 120);
+if (adgShowOverview) window.setTimeout(adgRefreshAll, 120);
 window.setTimeout(adgInstallUpdatePanelGuard, 180);
 window.setTimeout(adgInstallUpdatePanelGuard, 680);
 window.setTimeout(adgInstallUpdatePanelGuard, 1600);
@@ -30197,158 +30778,260 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		}
 	}
 
-		/* NRadio AdGuardHome status polish 2026-05-23: compact dashboard, stronger hierarchy, safer overflow. */
-		#adg-dashboard-shell {
-			padding: 14px 16px 18px;
-		}
-
+/* Shared compact layout for the AdGuard overview and settings. */
+	html,
+	body {
+		background: #202833 !important;
+	}
+	#adg-dashboard-shell {
+		padding: 16px 18px 20px !important;
+		background: #202833 !important;
+	}
+	#adg-dashboard-shell .adg-overview-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 12px;
+		margin: 0 0 12px;
+	}
+	#adg-dashboard-shell .adg-overview-head .adg-panel-kicker {
+		font-size: 12px !important;
+		color: #88b9d6 !important;
+	}
+	#adg-dashboard-shell .adg-overview-head .adg-panel-title {
+		font-size: 22px !important;
+		line-height: 1.2 !important;
+	}
+	#adg-dashboard-shell .adg-hero-grid {
+		grid-template-columns: minmax(0, 1fr) !important;
+		gap: 0 !important;
+		margin: 0 0 12px !important;
+	}
+	#adg-dashboard-shell .adg-dashboard-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px !important;
+	}
+	#adg-dashboard-shell .adg-runtime-panel,
+	#adg-dashboard-shell .adg-dashboard-card {
+		min-height: 0;
+		padding: 14px 16px !important;
+		border: 1px solid #405064 !important;
+		border-radius: 12px !important;
+		background: #273241 !important;
+		box-shadow: none !important;
+		transform: none !important;
+	}
+	#adg-dashboard-shell .adg-runtime-panel::before,
+	#adg-dashboard-shell .adg-runtime-panel::after,
+	#adg-dashboard-shell .adg-dashboard-card::before,
+	#adg-dashboard-shell .adg-dashboard-card::after {
+		display: none !important;
+	}
+	#adg-dashboard-shell .adg-panel-title {
+		font-size: 18px !important;
+		letter-spacing: 0 !important;
+		text-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-panel-sub {
+		margin-top: 4px;
+		font-size: 12px;
+		line-height: 1.45;
+	}
+	#adg-dashboard-shell .adg-runtime-wrap {
+		gap: 7px !important;
+		margin-top: 0 !important;
+	}
+	#adg-dashboard-shell .adg-runtime-pill,
+	#adg-dashboard-shell .adg-runtime-item {
+		min-height: 30px !important;
+		padding: 4px 9px !important;
+		border: 1px solid #495c70 !important;
+		border-radius: 7px !important;
+		background: #303d4d !important;
+		box-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-runtime-dot {
+		animation: none !important;
+		filter: none !important;
+		box-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-action-group {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px !important;
+		margin-top: 0 !important;
+	}
+	#adg-dashboard-shell .adg-action-group .cbi-button {
+		width: auto !important;
+		height: 36px !important;
+		min-height: 36px !important;
+		padding: 0 13px !important;
+		line-height: 34px !important;
+		border-radius: 8px !important;
+		background: #246a9e !important;
+		box-shadow: none !important;
+		font-size: 13px !important;
+		font-weight: 650 !important;
+	}
+	#adg-dashboard-shell .adg-action-group .cbi-button:first-child {
+		border-color: #52657b !important;
+		background: #34465a !important;
+	}
+	#adg-dashboard-shell .adg-inline-note {
+		margin: 0 0 12px !important;
+		border: 1px solid #405064 !important;
+		background: #273241 !important;
+		box-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-inline-note-ok {
+		display: none !important;
+	}
+	#adg-dashboard-shell .adg-inline-note::before,
+	#adg-dashboard-shell .adg-dashboard-meta::before {
+		animation: none !important;
+		box-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-dashboard-head {
+		margin: 0 0 8px !important;
+	}
+	#adg-dashboard-shell .adg-dashboard-label,
+	#adg-dashboard-shell .adg-dashboard-meta {
+		color: #b7d4e8 !important;
+		text-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-dashboard-number {
+		font-size: 30px !important;
+		color: #f2f7fb !important;
+		text-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-card-blocked .adg-dashboard-number {
+		color: #f2f7fb !important;
+	}
+	#adg-dashboard-shell .adg-dashboard-sub-ratio {
+		color: #b8c9d9 !important;
+		text-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-chart-shell {
+		margin-top: 10px !important;
+		border: 1px solid #35475b !important;
+		background: #202a36 !important;
+		box-shadow: none !important;
+	}
+	#adg-dashboard-shell .adg-chart-shell::before {
+		display: none !important;
+	}
+	#AdGuardHome_status_fieldset.cbi-section {
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section {
+		margin: 0 auto 12px !important;
+		width: min(100%, 1040px) !important;
+		box-sizing: border-box !important;
+		padding: 10px 20px !important;
+		border: 1px solid #405064 !important;
+		border-radius: 12px !important;
+		background: #273241 !important;
+		box-shadow: none !important;
+		transform: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section::before,
+	.cbi-map.adg-themed-map .adg-themed-section::after {
+		display: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section:hover {
+		border-color: #405064 !important;
+		box-shadow: none !important;
+		transform: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+		grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) !important;
+		column-gap: 16px !important;
+		padding: 10px 0 !important;
+		border-color: #3b4a5c !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		filter: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value::before {
+		display: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > label.cbi-value-title {
+		min-height: 40px !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value > .cbi-value-field {
+		max-width: 560px !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="text"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > input[type="password"],
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > select,
+	.cbi-map.adg-themed-map .adg-themed-section .cbi-value-field > textarea {
+		max-width: 560px !important;
+		border-color: #4b5b70 !important;
+		border-radius: 8px !important;
+		background: #303d4d !important;
+		box-shadow: none !important;
+	}
+	.cbi-map.adg-themed-map .adg-themed-section .adg-value-boolean .cbi-value-field .checkbox {
+		width: max-content !important;
+		max-width: 100% !important;
+		min-height: 36px !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+	}
+	@media (max-width: 960px) {
 		#adg-dashboard-shell .adg-hero-grid {
-			grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.78fr);
-			gap: 14px;
-			margin-bottom: 14px;
+			grid-template-columns: 1fr !important;
 		}
-
-		#adg-dashboard-shell .adg-runtime-panel,
-		#adg-dashboard-shell .adg-action-panel,
-		#adg-dashboard-shell .adg-glance-card,
-		#adg-dashboard-shell .adg-dashboard-card {
-			border-radius: 18px;
-			box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 38px rgba(0,0,0,0.18);
+	}
+	@media (max-width: 720px) {
+		#adg-dashboard-shell {
+			padding: 10px 8px 16px !important;
 		}
-
-		#adg-dashboard-shell .adg-runtime-panel::after,
-		#adg-dashboard-shell .adg-action-panel::after,
-		#adg-dashboard-shell .adg-glance-card::after,
-		#adg-dashboard-shell .adg-dashboard-card::after {
-			content: "";
-			position: absolute;
-			left: 16px;
-			right: 16px;
-			top: 0;
-			height: 2px;
-			border-radius: 0 0 999px 999px;
-			background: linear-gradient(90deg, transparent, rgba(var(--adg-polish-cyan-rgb), .72), rgba(var(--adg-polish-blue-rgb), .70), transparent);
-			pointer-events: none;
+		#adg-dashboard-shell .adg-overview-head {
+			align-items: flex-start;
 		}
-
-		#adg-dashboard-shell .adg-panel-title {
-			font-size: 21px;
-			letter-spacing: -0.02em;
+		#adg-dashboard-shell .adg-action-group {
+			width: 100%;
 		}
-
-		#adg-dashboard-shell .adg-panel-sub {
-			max-width: 42ch;
-		}
-
-		#adg-dashboard-shell .adg-runtime-wrap {
-			gap: 8px;
-			margin-top: 14px;
-		}
-
-		#adg-dashboard-shell .adg-runtime-pill,
-		#adg-dashboard-shell .adg-runtime-item {
-			min-height: 38px;
-			padding: 8px 12px;
-		}
-
-		#adg-dashboard-shell .adg-glance-grid {
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-			gap: 10px;
-			margin-top: 12px;
-		}
-
-		#adg-dashboard-shell .adg-glance-card {
-			min-height: 112px;
-			padding: 13px 14px 12px;
-		}
-
-		#adg-dashboard-shell .adg-glance-value {
-			font-size: clamp(20px, 2.3vw, 27px);
-			letter-spacing: -0.03em;
-		}
-
 		#adg-dashboard-shell .adg-dashboard-grid {
-			gap: 12px;
+			grid-template-columns: 1fr !important;
 		}
-
-		#adg-dashboard-shell .adg-dashboard-card {
-			min-width: 0;
+		.cbi-map.adg-themed-map .adg-themed-section {
+			margin: 0 8px 10px !important;
+			width: calc(100% - 16px) !important;
+			padding: 12px !important;
 		}
-
-		#adg-dashboard-shell .adg-chart-wrap {
-			min-height: 148px;
+		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
+			grid-template-columns: 1fr !important;
+			row-gap: 6px !important;
 		}
-
-		#adg-dashboard-shell svg,
-		#adg-dashboard-shell canvas,
-		#adg-dashboard-shell pre,
-		#adg-dashboard-shell code {
-			max-width: 100%;
-		}
-
-		#adg-dashboard-shell .adg-dashboard-head {
-			margin: 14px 0 10px;
-		}
-
-		#adg-dashboard-shell .adg-action-panel .cbi-button {
-			height: 46px;
-			min-height: 46px;
-			line-height: 44px;
-		}
-
-		@media (min-width: 1320px) {
-			#adg-dashboard-shell {
-				padding: 16px 18px 20px;
-			}
-
-			#adg-dashboard-shell .adg-dashboard-grid {
-				grid-template-columns: repeat(2, minmax(0, 1fr));
-			}
-		}
-
-		@media (max-width: 960px) {
-			#adg-dashboard-shell .adg-hero-grid,
-			#adg-dashboard-shell .adg-dashboard-grid {
-				grid-template-columns: 1fr;
-			}
-
-			#adg-dashboard-shell .adg-glance-grid {
-				grid-template-columns: repeat(2, minmax(0, 1fr));
-			}
-		}
-
-		@media (max-width: 520px) {
-			#adg-dashboard-shell {
-				padding: 10px 8px 14px;
-			}
-
-			#adg-dashboard-shell .adg-runtime-panel,
-			#adg-dashboard-shell .adg-action-panel,
-			#adg-dashboard-shell .adg-glance-card,
-			#adg-dashboard-shell .adg-dashboard-card {
-				border-radius: 14px;
-			}
-
-			#adg-dashboard-shell .adg-glance-grid {
-				grid-template-columns: 1fr;
-			}
-
-			#adg-dashboard-shell .adg-runtime-pill,
-			#adg-dashboard-shell .adg-runtime-item {
-				width: 100%;
-				justify-content: space-between;
-			}
-		}
+	}
 </style>
+<% if adg_show_overview then %>
 <fieldset id="AdGuardHome_status_fieldset" class="cbi-section">
 	<div id="adg-dashboard-shell" class="adg-dashboard-shell" aria-live="polite">
+		<div class="adg-overview-head">
+			<div>
+				<div class="adg-panel-kicker">概览</div>
+				<div class="adg-panel-title">AdGuardHome</div>
+			</div>
+			<div class="adg-action-group">
+				<input id="adg-open-dashboard" class="cbi-button" type="button" value="打开原版页面" aria-label="打开 AdGuardHome 原版页面" onclick="adgOpenOriginalDashboard()" disabled="disabled" />
+				<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计" aria-label="刷新 AdGuardHome 统计数据" onclick="adgRefreshAll()" />
+			</div>
+		</div>
 		<div class="adg-hero-grid">
 			<div class="adg-runtime-panel">
-				<div class="adg-panel-kicker">状态</div>
-				<div class="adg-panel-title">AdGuardHome 状态</div>
-				<div class="adg-panel-sub">运行态、监听、端口、核心版本。</div>
 				<div class="adg-runtime-wrap">
 					<div class="adg-runtime-pill"><span class="adg-runtime-dot"></span><span id="adg-runtime-running">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">认证</span><span id="adg-runtime-auth" class="adg-runtime-value">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">保护</span><span id="adg-runtime-protect" class="adg-runtime-value">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">重定向</span><span id="adg-runtime-redirect" class="adg-runtime-value">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">监听</span><span id="adg-runtime-listen" class="adg-runtime-value">读取中</span></div>
@@ -30356,39 +31039,8 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 					<div class="adg-runtime-item"><span class="adg-runtime-key">核心</span><span id="adg-runtime-core" class="adg-runtime-value">读取中</span></div>
 				</div>
 			</div>
-			<div class="adg-action-panel">
-				<div class="adg-panel-kicker">入口</div>
-				<div class="adg-panel-title">统计与原版入口</div>
-				<div class="adg-panel-sub">刷新统计，保留原版入口。</div>
-				<div class="adg-action-group">
-					<input id="adg-open-dashboard" class="cbi-button" type="button" value="打开原版页面" aria-label="打开 AdGuardHome 原版页面" onclick="adgOpenOriginalDashboard()" disabled="disabled" />
-					<input id="adg-stats-refresh" class="cbi-button cbi-button-apply" type="button" value="刷新统计数据" aria-label="刷新 AdGuardHome 统计数据" onclick="adgRefreshAll()" />
-				</div>
-			</div>
 		</div>
 		<div id="adg-inline-note" class="adg-inline-note adg-inline-note-soft" role="status" aria-live="polite">正在读取统计…</div>
-		<div class="adg-glance-grid">
-			<div class="adg-glance-card">
-				<div class="adg-glance-label">当前模式</div>
-				<strong id="adg-glance-mode" class="adg-glance-value">读取中</strong>
-				<div class="adg-glance-sub">重定向方式</div>
-			</div>
-			<div class="adg-glance-card">
-				<div class="adg-glance-label">认证状态</div>
-				<strong id="adg-glance-auth" class="adg-glance-value">读取中</strong>
-				<div class="adg-glance-sub">仪表盘认证</div>
-			</div>
-			<div class="adg-glance-card">
-				<div class="adg-glance-label">24h 总查询</div>
-				<strong id="adg-glance-total" class="adg-glance-value">读取中</strong>
-				<div class="adg-glance-sub">24 小时统计</div>
-			</div>
-			<div class="adg-glance-card">
-				<div class="adg-glance-label">监听端口 / 拦截率</div>
-				<strong id="adg-glance-listen" class="adg-glance-value">读取中</strong>
-				<div id="adg-glance-ratio" class="adg-glance-sub">读取中</div>
-			</div>
-		</div>
 		<div class="adg-dashboard-head">
             <div id="adg-stats-meta" class="adg-dashboard-meta">最近 24 小时</div>
 
@@ -30400,8 +31052,6 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
 				</div>
                 <div id="adg-stats-total" class="adg-dashboard-number">--</div>
-                <div id="adg-stats-total-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div>
-                <div class="adg-dashboard-sub">仪表盘查询统计</div>
 				<div class="adg-chart-shell adg-chart-empty">
 					<div class="adg-chart-grid"></div>
 					<svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
@@ -30417,7 +31067,6 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
                 </div>
                 <div id="adg-stats-blocked" class="adg-dashboard-number">--</div>
                 <div id="adg-stats-blocked-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div>
-                <div class="adg-dashboard-sub">过滤器拦截统计</div>
                 <div class="adg-chart-shell adg-chart-empty">
                     <div class="adg-chart-grid"></div>
                     <svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
@@ -30429,13 +31078,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		</div>
 	</div>
 </fieldset>
-<div class="adg-settings-bridge">
-	<div class="adg-settings-copy">
-		<div class="adg-settings-kicker">配置区</div>
-		<div class="adg-settings-title">基础配置区</div>
-		<div class="adg-settings-sub">认证、端口、路径、日志与维护选项。</div>
-	</div>
-</div>
+<% end %>
 EOF_ADG_STATUS
 
     cat > /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua <<'EOF_ADG_BASE'
@@ -30479,7 +31122,7 @@ o.placeholder=3000
 o.default=3000
 o.datatype="port"
 o.optional = false
-o.description = translate("<input type=\"button\" class=\"cbi-button adg-origin-button\" value=\"打开原版页面（"..httpport.."）\" onclick=\"(function(p){var h=window.location.hostname||'127.0.0.1';if(h.indexOf(':')>=0&&h.charAt(0)!='['){h='['+h+']';}window.open('http://'+h+':'+p+'/');})('"..httpport.."')\"/>")
+o.description = translate("原版仪表盘 Web 端口；入口位于概览页。")
 ---- dashboard user
 o = s:option(Value, "dashboard_user", translate("仪表盘 API 用户"), translate("状态页用于读取原版仪表盘运行态和 24 小时统计"))
 o.default = "admin"
@@ -30750,6 +31393,223 @@ function m.on_commit(map)
 end
 return m
 EOF_ADG_BASE
+
+    cat > /usr/lib/lua/luci/model/cbi/AdGuardHome/overview.lua <<'EOF_ADG_OVERVIEW'
+local m = Map("AdGuardHome", "AdGuardHome")
+m:section(SimpleSection).template = "AdGuardHome/AdGuardHome_status"
+return m
+EOF_ADG_OVERVIEW
+
+    cat > /usr/lib/lua/luci/view/AdGuardHome/yamleditor.htm <<'EOF_ADG_YAMLEDITOR'
+<%+cbi/valueheader%>
+<%+AdGuardHome/ui_skin%>
+<script src="/luci-static/resources/codemirror/lib/codemirror.js"></script>
+<link rel="stylesheet" href="/luci-static/resources/codemirror/lib/codemirror.css"/>
+<script src="/luci-static/resources/codemirror/mode/yaml/yaml.js"></script>
+<link rel="stylesheet" href="/luci-static/resources/codemirror/theme/dracula.css"/>
+<link rel="stylesheet" href="/luci-static/resources/codemirror/addon/fold/foldgutter.css"/>
+<script src="/luci-static/resources/codemirror/addon/fold/foldcode.js"></script>
+<script src="/luci-static/resources/codemirror/addon/fold/foldgutter.js"></script>
+<script src="/luci-static/resources/codemirror/addon/fold/indent-fold.js"></script>
+<style>
+.adg-manual-note {margin:0 0 10px;color:#aebed3;font-size:12px;line-height:1.5;}
+.adg-manual-toolbar {display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
+.adg-manual-message {min-height:18px;margin:4px 0 0;color:#aebed3;font-size:12px;}
+.adg-manual-message.error {color:#ffc2a8;}
+.adg-manual-page .CodeMirror {width:100%;min-height:280px;border:1px solid #46566e;border-radius:10px;background:#202735;box-shadow:none;}
+.adg-manual-page .CodeMirror-gutters {border-right:1px solid #3b495d;background:#202735;}
+.adg-manual-page .CodeMirror-scroll {min-height:280px;}
+</style>
+<div class="adg-manual-note">编辑 YAML 后使用页面下方的保存/应用按钮。重新载入会丢弃未保存的修改。</div>
+<div class="adg-manual-toolbar">
+<% local fs = require "nixio.fs" %>
+<% if fs.access("/tmp/AdGuardHometmpconfig.yaml") then %>
+<input type="button" class="cbi-button" value="重新载入配置" onclick="return reload_config()" />
+<% end %>
+<input type="button" class="cbi-button" value="载入模板" onclick="return use_template()" />
+</div>
+<div id="adg-manual-message" class="adg-manual-message" role="status" aria-live="polite"></div>
+<script type="text/javascript">//<![CDATA[
+var adgManualTextarea = document.getElementById("cbid.AdGuardHome.AdGuardHome.escconf");
+var editor = null;
+if (adgManualTextarea && window.CodeMirror) {
+    editor = CodeMirror.fromTextArea(adgManualTextarea, {
+        mode: "text/yaml",
+        lineNumbers: true,
+        theme: "dracula",
+        lineWrapping: true,
+        foldGutter: true,
+        gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+        matchBrackets: true
+    });
+    function adgSizeEditor() {
+        editor.setSize(null, Math.min(620, Math.max(280, Math.round(window.innerHeight * 0.58))));
+    }
+    adgSizeEditor();
+    window.addEventListener("resize", adgSizeEditor);
+    if (adgManualTextarea.form) {
+        adgManualTextarea.form.addEventListener("submit", function() { editor.save(); });
+    }
+}
+if (document.body) document.body.className += " adg-manual-page";
+function adgManualMessage(message, error) {
+    var node = document.getElementById("adg-manual-message");
+    if (!node) return;
+    node.textContent = message;
+    node.className = "adg-manual-message" + (error ? " error" : "");
+}
+function reload_config() {
+    XHR.post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[reloadconfig]])%>',
+        {token:'<%=require("luci.dispatcher").context.authtoken%>'}, function(x, result) {
+            if (x && x.status === 200 && result && result.ok) location.reload();
+            else adgManualMessage("重新载入失败，请重试。", true);
+        });
+    return false;
+}
+function use_template() {
+    XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[gettemplateconfig]])%>', null, function(x) {
+        if (!x || x.status !== 200 || !x.responseText) {
+            adgManualMessage("模板读取失败。", true);
+            return;
+        }
+        if (editor) editor.setValue(x.responseText);
+        else if (adgManualTextarea) adgManualTextarea.value = x.responseText;
+        adgManualMessage("模板已载入，保存/应用后才会写入配置。", false);
+    });
+    return false;
+}
+//]]></script>
+<%+cbi/valuefooter%>
+EOF_ADG_YAMLEDITOR
+
+    cat > /usr/lib/lua/luci/view/AdGuardHome/log.htm <<'EOF_ADG_LOG'
+<%+cbi/valueheader%>
+<%+AdGuardHome/ui_skin%>
+<% local uci = require "luci.model.uci".cursor(); local logmode = uci:get("AdGuardHome", "AdGuardHome", "logfile") or "" %>
+<style>
+.adg-log-page .cbi-value-field {display:block!important;max-width:none!important;}
+.adg-log-toolbar {display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:0 0 10px;}
+.adg-log-toolbar label {display:inline-flex;align-items:center;gap:6px;color:#c5d3e6;font-size:12px;white-space:nowrap;}
+.adg-log-toolbar label input {margin:0;}
+.adg-log-actions {display:flex;flex-wrap:wrap;gap:8px;margin-left:auto;}
+.adg-log-page .adg-log-actions .cbi-button {width:auto!important;min-height:36px!important;padding:0 12px!important;border-radius:8px!important;line-height:34px!important;}
+.adg-log-status {min-height:18px;margin:0 0 8px;color:#aebed3;font-size:12px;}
+.adg-log-status.error {color:#ffc2a8;}
+.adg-log-page textarea.cbi-input-textarea {display:block!important;width:100%!important;height:min(58vh,560px)!important;min-height:260px!important;max-height:560px!important;margin:0!important;padding:12px!important;border-radius:10px!important;resize:vertical!important;font-family:Consolas,"Courier New",monospace!important;font-size:12px!important;line-height:1.5!important;white-space:pre!important;overflow:auto!important;}
+@media(max-width:560px) {
+    .adg-log-actions {width:100%;margin-left:0;}
+    .adg-log-page .adg-log-actions .cbi-button {flex:1 1 auto;}
+    .adg-log-page textarea.cbi-input-textarea {height:45vh!important;min-height:220px!important;}
+}
+</style>
+<div class="adg-log-toolbar">
+    <label><input id="adg-log-reverse" type="checkbox" checked="checked" onchange="adgRenderLog()" />最新在前</label>
+    <% if self.timereplace then %>
+    <label><input id="adg-log-localtime" type="checkbox" checked="checked" onchange="adgRenderLog()" />本地时间</label>
+    <% end %>
+    <div class="adg-log-actions">
+        <input type="button" class="cbi-button" value="刷新" onclick="return adgFetchLog()" />
+        <input type="button" class="cbi-button" value="下载日志" onclick="return download_log()" />
+        <input type="button" class="cbi-button" value="清空日志" onclick="return apply_del_log()" <%= (not self.pollcheck or logmode == "syslog") and 'disabled="disabled"' or '' %> />
+    </div>
+</div>
+<div id="adg-log-status" class="adg-log-status" role="status" aria-live="polite">正在读取运行日志…</div>
+<textarea id="cbid.logview.1.conf" class="cbi-input-textarea" rows="18" readonly="readonly" aria-label="AdGuardHome 运行日志"></textarea>
+<script type="text/javascript">//<![CDATA[
+if (document.body) document.body.className += " adg-log-page";
+var adgLogRaw = "";
+var adgLogUrl = '<%=url([[admin]], [[services]], [[AdGuardHome]], [[getlog]])%>';
+function adgLogMessage(message, error) {
+    var node = document.getElementById("adg-log-status");
+    if (!node) return;
+    node.textContent = message;
+    node.className = "adg-log-status" + (error ? " error" : "");
+}
+function adgLogPad(n) { return n < 10 ? "0" + n : String(n); }
+function adgLocalLogLine(line) {
+    var match = line.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    if (!match) return line;
+    var date = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3], +match[4], +match[5], +match[6]));
+    if (isNaN(date.getTime())) return line;
+    return date.getFullYear() + "/" + adgLogPad(date.getMonth() + 1) + "/" + adgLogPad(date.getDate()) +
+        " " + adgLogPad(date.getHours()) + ":" + adgLogPad(date.getMinutes()) + ":" +
+        adgLogPad(date.getSeconds()) + line.slice(match[0].length);
+}
+function adgRenderLog() {
+    var field = document.getElementById("cbid.logview.1.conf");
+    if (!field) return;
+    var lines = adgLogRaw.replace(/\r\n/g, "\n").split("\n");
+    if (lines[lines.length - 1] === "") lines.pop();
+    var localtime = document.getElementById("adg-log-localtime");
+    if (localtime && localtime.checked) lines = lines.map(adgLocalLogLine);
+    var reverse = document.getElementById("adg-log-reverse");
+    if (reverse && reverse.checked) lines.reverse();
+    var display = lines.join("\n");
+    if (field.value === display) return;
+    var nearTop = field.scrollTop < 24;
+    var nearEnd = field.scrollTop + field.clientHeight >= field.scrollHeight - 24;
+    var priorScroll = field.scrollTop;
+    field.value = display;
+    if (reverse && reverse.checked && nearTop) field.scrollTop = 0;
+    else if ((!reverse || !reverse.checked) && nearEnd) field.scrollTop = field.scrollHeight;
+    else field.scrollTop = priorScroll;
+}
+function adgReceiveLog(x) {
+    if (!x || x.status !== 200) {
+        adgLogMessage("日志读取失败，请重试。", true);
+        return;
+    }
+    var text = x.responseText || "";
+    if (text !== adgLogRaw) {
+        adgLogRaw = text;
+        adgRenderLog();
+    }
+    if (/^(no log available|log unavailable|can't open|当前系统不提供)/.test(text)) {
+        adgLogMessage(text.trim(), true);
+    } else {
+        adgLogMessage(text ? "日志已更新" : "暂无日志", false);
+    }
+}
+function adgFetchLog() {
+    XHR.get(adgLogUrl, {_: Date.now()}, adgReceiveLog);
+    return false;
+}
+function download_log() {
+    var blob = new Blob([adgLogRaw], {type:"text/plain;charset=utf-8"});
+    var link = document.createElement("a");
+    var url = URL.createObjectURL(blob);
+    var now = new Date();
+    link.href = url;
+    link.download = "AdGuardHome-" + now.getFullYear() + adgLogPad(now.getMonth() + 1) +
+        adgLogPad(now.getDate()) + "-" + adgLogPad(now.getHours()) + adgLogPad(now.getMinutes()) + ".log";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    return false;
+}
+function apply_del_log() {
+    XHR.post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dodellog]])%>',
+        {token:'<%=require("luci.dispatcher").context.authtoken%>'}, function(x, result) {
+            if (!x || x.status !== 200 || !result || !result.ok) {
+                adgLogMessage(result && result.error ? result.error : "清空日志失败。", true);
+                return;
+            }
+            adgLogRaw = "";
+            adgRenderLog();
+            adgLogMessage("日志已清空", false);
+        });
+    return false;
+}
+<% if self.pollcheck then %>
+adgFetchLog();
+XHR.poll(10, adgLogUrl, null, adgReceiveLog);
+<% else %>
+adgLogMessage("先在基础设置中填写运行日志路径。", true);
+<% end %>
+//]]></script>
+<%+cbi/valuefooter%>
+EOF_ADG_LOG
 }
 
 patch_adguard_enable_hook() {
@@ -30816,9 +31676,25 @@ cleanup_adguard_placeholder_config() {
 normalize_adguard_yaml_defaults() {
     yaml_file="$1"
     [ -s "$yaml_file" ] || return 0
+    adg_template_user='0'
+    [ "$yaml_file" = '/usr/share/AdGuardHome/AdGuardHome_template.yaml' ] && adg_template_user='1'
+
+    # 修复重复 users 键：固件升级或异常合并可能产生两个 users 键，导致核心配置解析失败。
+    # 只保留最后一个含密码的 users 段，并移动到文件末尾。
+    if [ "$(grep -c '^users:' "$yaml_file" 2>/dev/null)" -gt 1 ]; then
+        log "提示:     检测到 AdGuardHome 配置存在重复 users 键，正在自动修复"
+        awk '
+            /^users:[[:space:]]*$/ { if (cur != "" && haspw) lastpw = cur; cur = "users:\n"; haspw = 0; next }
+            /^users:[[:space:]]*\[[[:space:]]*\]/ { if (cur != "" && haspw) lastpw = cur; cur = "users: []\n"; haspw = 0; next }
+            cur != "" && /^[^[:space:]#-]/ { if (haspw) lastpw = cur; cur = ""; print; next }
+            cur != "" { cur = cur $0 "\n"; if ($0 ~ /password:/) haspw = 1; next }
+            { print }
+            END { if (cur != "" && haspw) printf "%s", cur; else if (lastpw != "") printf "%s", lastpw; else if (cur != "") printf "%s", cur }
+        ' "$yaml_file" > "$yaml_file.fixusers" 2>/dev/null && mv "$yaml_file.fixusers" "$yaml_file"
+    fi
 
     adg_defaults_tmp="$WORKDIR/adguard-defaults.$$"
-    awk '
+    awk -v template_user="$adg_template_user" '
         function print_antiad_filter() {
             print "filters:"
             print "  - enabled: true"
@@ -30833,6 +31709,8 @@ normalize_adguard_yaml_defaults() {
             saw_filters = 0
         }
 
+        /^users:[[:space:]]*\[[[:space:]]*\]/ { next }
+
         /^users:[[:space:]]*$/ {
             in_users = 1
             print
@@ -30844,30 +31722,38 @@ normalize_adguard_yaml_defaults() {
         }
 
         in_users && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ {
-            sub(/name:.*/, "name: admin")
+            if (template_user == "1") sub(/name:.*/, "name: admin")
             print
             next
         }
 
         in_users && /^[[:space:]]*name:[[:space:]]*/ {
-            sub(/name:.*/, "name: admin")
+            if (template_user == "1") sub(/name:.*/, "name: admin")
             print
             next
         }
 
         /^[[:space:]]*session_ttl:[[:space:]]*/ {
-            sub(/session_ttl:[[:space:]].*/, "session_ttl: 720h", $0)
-            print
+            if (!saw_session_ttl) {
+                print "session_ttl: 720h"
+                saw_session_ttl = 1
+            }
             next
         }
 
         /^auth_attempts:[[:space:]]*/ {
-            print "auth_attempts: 0"
+            if (!saw_auth_attempts) {
+                print "auth_attempts: 0"
+                saw_auth_attempts = 1
+            }
             next
         }
 
         /^block_auth_min:[[:space:]]*/ {
-            print "block_auth_min: 0"
+            if (!saw_block_auth_min) {
+                print "block_auth_min: 0"
+                saw_block_auth_min = 1
+            }
             next
         }
 
@@ -31420,6 +32306,72 @@ ensure_adguard_openclash_dns_chain() {
     return 0
 }
 
+# 哈基米 DNS 防泄露：fallback、节点域名解析、机场订阅域名全部改用加密 DNS，
+# 并通过 openclash 自定义覆写脚本持久化（订阅重载后自动重新应用）。
+ensure_hakimi_dns_antileak() {
+    local hook_path config_path tmp_hook
+    hook_path='/etc/openclash/custom/openclash_custom_overwrite.sh'
+    [ -x /etc/init.d/openclash ] || return 0
+    [ -f "$hook_path" ] || return 0
+    tmp_hook="$WORKDIR/openclash-custom-overwrite.tmp"
+
+    # 重排 hook：去掉旧防泄露块与尾部 exit 0，随后把新块插在 exit 0 之前
+    # （OpenClash 的覆写脚本以 exit 0 结尾，追加在其后的内容不会被执行）
+    awk '
+        /^# nradio-dns-antileak:begin$/ { in_block = 1; next }
+        /^# nradio-dns-antileak:end$/ { in_block = 0; next }
+        in_block { next }
+        { n++; lines[n] = $0 }
+        END {
+            for (i = 1; i <= n; i++) {
+                if (i == n && lines[i] ~ /^exit 0[[:space:]]*$/) continue
+                print lines[i]
+            }
+        }
+    ' "$hook_path" > "$tmp_hook" 2>/dev/null
+    cat >> "$tmp_hook" <<'EOF_NRADIO_DNS_ANTILEAK'
+# nradio-dns-antileak:begin
+ruby -ryaml - "$1" >> /tmp/openclash.log 2>&1 <<'NRADIO_DNS_ANTILEAK_RUBY'
+begin
+  require 'yaml'
+  config = YAML.load_file(ARGV.fetch(0))
+  dns = config['dns'] ||= {}
+  dns['fallback'] = ['https://dns.google/dns-query', 'tls://1.1.1.1']
+  dns['proxy-server-nameserver'] = ['https://doh.pub/dns-query', 'https://dns.alidns.com/dns-query']
+  policy = dns['nameserver-policy'] ||= {}
+  (dns['fake-ip-filter'] || []).each do |entry|
+    next unless entry.is_a?(String) && entry.start_with?('+.')
+    domain = entry[2..]
+    next if domain.empty? || domain.match?(/\A(lan|local|arpa)\z/)
+    policy[domain] ||= ['https://doh.pub/dns-query']
+  end
+  File.write(ARGV.fetch(0), YAML.dump(config))
+rescue StandardError => error
+  warn '[NRadio] DNS 防泄露覆写失败: ' + error.class.to_s
+  exit 1
+end
+NRADIO_DNS_ANTILEAK_RUBY
+# nradio-dns-antileak:end
+EOF_NRADIO_DNS_ANTILEAK
+    printf 'exit 0\n' >> "$tmp_hook"
+    sh -n "$tmp_hook" 2>/dev/null || { rm -f "$tmp_hook"; return 1; }
+    cat "$tmp_hook" > "$hook_path" 2>/dev/null || { rm -f "$tmp_hook"; return 1; }
+    chmod 755 "$hook_path" 2>/dev/null || true
+    rm -f "$tmp_hook"
+    log "DNS:    已写入哈基米 DNS 防泄露覆写（fallback/节点/机场域名改用加密 DNS）"
+
+    config_path='/etc/openclash/clash-all-smart.yaml'
+    [ -f "$config_path" ] || return 0
+    if ! ruby -ryaml -e 'c=YAML.load_file(ARGV[0])["dns"]; fb=c["fallback"]; pn=c["proxy-server-nameserver"]; exit((fb && fb.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) && (pn && pn.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) ? 0 : 1)' "$config_path" 2>/dev/null; then
+        sh "$hook_path" "$config_path" >> /tmp/openclash.log 2>&1
+        log "DNS:    已把运行配置的明文 DNS 替换为加密 DNS，正在重载哈基米核心..."
+        /etc/init.d/openclash restart >/dev/null 2>&1
+        log "DNS:    哈基米 DNS 防泄露已生效"
+    else
+        log "DNS:    哈基米 DNS 防泄露配置已生效，无需重载"
+    fi
+}
+
 read_adguard_primary_user_from_config() {
     configpath="$(get_adguard_configpath)"
     [ -s "$configpath" ] || return 1
@@ -31457,28 +32409,320 @@ ensure_adguard_dashboard_auth_defaults() {
         uci commit AdGuardHome >/dev/null 2>&1 || true
     fi
 
-    if [ -z "$dashboard_password" ] && { [ -t 0 ] || can_use_ui_tty; }; then
-        if confirm_default_yes "是否现在写入 AdGuardHome 原版仪表盘密码供应用商店页读取统计？"; then
-            prompt_with_default "Dashboard API user" "$dashboard_user"
-            dashboard_user="$PROMPT_RESULT"
-            ui_read_secret 'Dashboard API password（与 3000 登录密码一致）: ' || die "input cancelled"
-            dashboard_password="$UI_READ_RESULT"
+    # 账号密码由 1 > 4 结尾的引导一次性设置（写 3000 并同步 UCI），此处不再重复询问
+    if [ -z "$dashboard_password" ]; then
+        log "备注:     AdGuardHome 应用商店页已可读取本地运行态与监听；如需同步 3000 原版统计，将由后续引导统一设置账号密码"
+    fi
+}
 
-            if [ -n "$dashboard_password" ]; then
-                uci set AdGuardHome.AdGuardHome.dashboard_user="$dashboard_user" >/dev/null 2>&1 || true
-                uci set AdGuardHome.AdGuardHome.dashboard_password="$dashboard_password" >/dev/null 2>&1 || true
-                uci commit AdGuardHome >/dev/null 2>&1 || true
-                log "备注:     已写入 AdGuardHome 应用商店页统计认证信息"
-                return 0
-            fi
+# 引导设置 3000 仪表盘账号密码：账号默认 admin，密码由用户输入。
+# 通过 AdGuardHome 首次配置接口 /control/install/configure 写入，
+# 密码哈希由 AdGuardHome 内部生成，再用实际登录和会话读取确认。
+adg_dashboard_login_ok() {
+    local _u="$1" _p="$2" _cookie _body _out _status _port
+    _port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
+    case "$_port" in ''|*[!0-9]*) _port='3000';; esac
+    _cookie="$(mktemp /tmp/adg_login_ck.XXXXXX 2>/dev/null || true)"
+    _body="$(mktemp /tmp/adg_login_bd.XXXXXX 2>/dev/null || true)"
+    [ -n "$_cookie" ] && [ -n "$_body" ] || { rm -f "$_cookie" "$_body" 2>/dev/null || true; return 1; }
+    printf '{"name":"%s","password":"%s"}\n' \
+        "$(printf '%s' "$_u" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+        "$(printf '%s' "$_p" | sed 's/\\/\\\\/g; s/"/\\"/g')" > "$_body" 2>/dev/null || { rm -f "$_cookie" "$_body" 2>/dev/null || true; return 1; }
+    chmod 600 "$_body" 2>/dev/null || true
+    _out="$(wget -q --save-cookies="$_cookie" --keep-session-cookies --header='Content-Type: application/json' --post-file="$_body" -O - "http://127.0.0.1:$_port/control/login" 2>/dev/null)" || {
+        rm -f "$_cookie" "$_body" 2>/dev/null || true
+        return 1
+    }
+    case "$_out" in
+        *OK*) ;;
+        *) rm -f "$_cookie" "$_body" 2>/dev/null || true; return 1 ;;
+    esac
+    _status="$(wget -q --load-cookies="$_cookie" -O - "http://127.0.0.1:$_port/control/status" 2>/dev/null)" || {
+        rm -f "$_cookie" "$_body" 2>/dev/null || true
+        return 1
+    }
+    rm -f "$_cookie" "$_body" 2>/dev/null || true
+    [ -n "$_status" ]
+}
 
-            log "备注:     未输入 Dashboard API password，应用商店页将仅显示本地运行态与监听"
+adg_dashboard_wait_login() {
+    local _u="$1" _p="$2" _port _seconds=0 _attempts=0
+    _port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
+    case "$_port" in ''|*[!0-9]*) _port='3000';; esac
+    while [ "$_seconds" -lt 60 ]; do
+        if wget -q -S -O /dev/null "http://127.0.0.1:$_port/control/status" 2>&1 | grep -q 'HTTP/'; then
+            # 核心刚监听时鉴权可能尚未就绪；间隔重试，保留完整 60 秒窗口
+            while [ "$_attempts" -lt 3 ]; do
+                adg_dashboard_login_ok "$_u" "$_p" && return 0
+                _attempts=$((_attempts + 1))
+                [ "$_attempts" -lt 3 ] || return 2
+                sleep 30
+            done
+        fi
+        sleep 1
+        _seconds=$((_seconds + 1))
+    done
+    return 1
+}
+
+adg_guide_pid_running() {
+    local _pid="$1" _state
+    case "$_pid" in ''|*[!0-9]*) return 1 ;; esac
+    [ -r "/proc/$_pid/stat" ] || return 1
+    _state="$(sed 's/^.*) //' "/proc/$_pid/stat" 2>/dev/null | awk '{print $1}')"
+    case "$_state" in ''|Z|X) return 1 ;; *) return 0 ;; esac
+}
+
+adg_stop_guide_instance() {
+    local _pid="$1" _seconds=0
+    kill "$_pid" >/dev/null 2>&1 || true
+    while adg_guide_pid_running "$_pid" && [ "$_seconds" -lt 10 ]; do
+        sleep 1
+        _seconds=$((_seconds + 1))
+    done
+    if adg_guide_pid_running "$_pid"; then
+        kill -9 "$_pid" >/dev/null 2>&1 || true
+        sleep 1
+    fi
+    adg_guide_pid_running "$_pid" && return 1
+    wait "$_pid" 2>/dev/null || true
+    return 0
+}
+
+guide_adguard_dashboard_account() {
+    local binpath configpath workdir dash_user dash_pass adg_port
+    local web_ip dns_port backup_yaml json_body guide_rc guide_pid old_dash_user old_dash_pass stop_wait
+    binpath="$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)"
+    [ -x "$binpath" ] || binpath='/usr/bin/AdGuardHome/AdGuardHome'
+    [ -x "$binpath" ] || return 0
+    configpath="$(get_adguard_configpath)"
+    [ -f "$configpath" ] || return 0
+    workdir="$(uci -q get AdGuardHome.AdGuardHome.workdir 2>/dev/null || true)"
+    [ -n "$workdir" ] || workdir='/usr/bin/AdGuardHome'
+
+    dash_user="$(uci -q get AdGuardHome.AdGuardHome.dashboard_user 2>/dev/null || true)"
+    dash_pass="$(uci -q get AdGuardHome.AdGuardHome.dashboard_password 2>/dev/null || true)"
+    [ -n "$dash_user" ] || dash_user='admin'
+    old_dash_user="$dash_user"
+    old_dash_pass="$dash_pass"
+
+    # 已验证的非默认账号密码可复用；admin/admin 必须进入设密引导
+    if [ "${NRADIO_ADG_FORCE_DASHBOARD_GUIDE:-0}" != '1' ] &&
+       [ -n "$dash_pass" ] &&
+       { [ "$dash_user" != 'admin' ] || [ "$dash_pass" != 'admin' ]; } &&
+       [ -z "$(uci -q get AdGuardHome.AdGuardHome.hashpass 2>/dev/null || true)" ] &&
+       adg_dashboard_login_ok "$dash_user" "$dash_pass"; then
+        log "备注:     3000 仪表盘账号密码与设置一致，跳过重新引导"
+        return 0
+    fi
+
+    if ! confirm_default_yes "是否现在引导设置 3000 仪表盘账号密码（写入 AdGuardHome）？"; then
+        log "备注:     已跳过 3000 仪表盘账号密码引导；弹窗如需读取统计，请在基础设置页填写与 3000 登录页一致的账号密码"
+        return 0
+    fi
+
+    prompt_with_default "仪表盘账号（默认 admin）" "admin"
+    dash_user="$PROMPT_RESULT"
+    [ -n "$dash_user" ] || dash_user='admin'
+    ui_read_secret "仪表盘密码（至少 8 位，不会显示）: " || return 1
+    dash_pass="$UI_READ_RESULT"
+    if [ "${#dash_pass}" -lt 8 ]; then
+        log "提示:     密码至少 8 位，本次引导已取消，可重新运行 1 > 4"
+        return 1
+    fi
+
+    adg_port="$(uci -q get AdGuardHome.AdGuardHome.httpport 2>/dev/null || true)"
+    case "$adg_port" in ''|*[!0-9]*) adg_port='3000';; esac
+
+    web_ip="$(sed -n 's/^[[:space:]]*address:[[:space:]]*//p' "$configpath" | sed -n '1p' | sed 's/:.*$//')"
+    case "$web_ip" in ''|'::'|'*') web_ip='0.0.0.0';; esac
+    dns_port="$(awk '/^dns:[[:space:]]*$/{ind=1;next} ind&&/^[[:space:]]*port:[[:space:]]*/{gsub(/[[:space:]]*port:[[:space:]]*/,"");print;exit}' "$configpath")"
+    case "$dns_port" in ''|*[!0-9]*) dns_port='554';; esac
+
+    backup_yaml="$(mktemp /tmp/adg_guide_yaml.XXXXXX 2>/dev/null || true)"
+    [ -n "$backup_yaml" ] || { log "提示:     无法创建引导临时备份，跳过账号密码引导"; return 1; }
+    cp -f "$configpath" "$backup_yaml" 2>/dev/null || { log "提示:     AdGuardHome 配置备份失败，跳过账号密码引导"; rm -f "$backup_yaml"; return 1; }
+
+    /etc/init.d/AdGuardHome stop >/dev/null 2>&1 || true
+    stop_wait=0
+    while is_local_port_listening "$adg_port" && [ "$stop_wait" -lt 10 ]; do
+        sleep 1
+        stop_wait=$((stop_wait + 1))
+    done
+    if is_local_port_listening "$adg_port"; then
+        log "提示:     原 3000 实例未停止，跳过账号密码引导"
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" 2>/dev/null
+        return 1
+    fi
+    # 移走配置文件使核心进入首次配置模式（firstRun 仅由配置文件是否存在判定）
+    mv "$configpath" "$configpath.pre-firstrun" 2>/dev/null || {
+        log "提示:     无法移开配置文件，跳过账号密码引导"
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml"
+        return 1
+    }
+
+    "$binpath" -c "$configpath" -w "$workdir" -p "$adg_port" >/tmp/adg_guide_firstrun.log 2>&1 &
+    guide_pid=$!
+    sleep 1
+
+    guide_rc=1
+    local _i=0
+    while [ "$_i" -lt 30 ]; do
+        # firstRun 下 /control/status 未认证会返回 401/404，只要服务器有 HTTP 响应即视为就绪
+        wget -q -S -O - "http://127.0.0.1:$adg_port/control/status" 2>&1 | grep -q 'HTTP/' && { guide_rc=0; break; }
+        sleep 1
+        _i=$((_i + 1))
+    done
+    if [ "$guide_rc" -ne 0 ]; then
+        log "提示:     3000 仪表盘未响应，首次配置实例日志："
+        tail -6 /tmp/adg_guide_firstrun.log 2>/dev/null || true
+        log "提示:     正在恢复原配置"
+        adg_stop_guide_instance "$guide_pid" || true
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml"
+        return 1
+    fi
+
+    json_body="$(mktemp /tmp/adg_guide_body.XXXXXX 2>/dev/null || true)"
+    [ -n "$json_body" ] || {
+        log "提示:     无法创建引导请求文件，正在恢复原配置"
+        adg_stop_guide_instance "$guide_pid" || true
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml"
+        return 1
+    }
+    chmod 600 "$json_body" 2>/dev/null || true
+    printf '{"language":"","password":"%s","username":"%s","web":{"ip":"%s","port":%s},"dns":{"ip":"0.0.0.0","port":%s}}\n' \
+        "$(printf '%s' "$dash_pass" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+        "$(printf '%s' "$dash_user" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+        "$web_ip" "$adg_port" "$dns_port" > "$json_body" 2>/dev/null
+    if wget -q --header='Content-Type: application/json' --post-file="$json_body" -O /tmp/adg_guide_out "http://127.0.0.1:$adg_port/control/install/configure" 2>/dev/null; then
+        guide_rc=0
+    else
+        guide_rc=$?
+    fi
+    rm -f "$json_body"
+    if [ "$guide_rc" -ne 0 ]; then
+        log "提示:     仪表盘配置提交失败（rc=$guide_rc），正在恢复原配置"
+        adg_stop_guide_instance "$guide_pid" || true
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out 2>/dev/null
+        return 1
+    fi
+
+    # configure 已把新账号密码写入 $configpath；停掉首次实例，
+    # 把新 users 段合并回原配置，保留过滤列表、上游、归一化等全部原有设置
+    if ! adg_stop_guide_instance "$guide_pid"; then
+        log "提示:     首次配置实例未退出，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null || cp -f "$backup_yaml" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome restart >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out 2>/dev/null
+        return 1
+    fi
+    stop_wait=0
+    while is_local_port_listening "$adg_port" && [ "$stop_wait" -lt 10 ]; do
+        sleep 1
+        stop_wait=$((stop_wait + 1))
+    done
+    if is_local_port_listening "$adg_port"; then
+        log "提示:     首次配置实例仍占用 3000，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null || cp -f "$backup_yaml" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome restart >/dev/null 2>&1 || true
+        rm -f "$backup_yaml" /tmp/adg_guide_out 2>/dev/null
+        return 1
+    fi
+    awk '/^users:[[:space:]]*$/{inu=1;print;next} inu&&/^[^[:space:]#-]/{exit} inu{print}' "$configpath" > /tmp/adg_users_block 2>/dev/null || true
+    if [ ! -s /tmp/adg_users_block ]; then
+        log "提示:     无法提取新账号密码配置，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out /tmp/adg_users_block 2>/dev/null
+        return 1
+    fi
+    if ! awk '
+        /^users:[[:space:]]*$/ { in_users = 1; next }
+        /^users:[[:space:]]*\[[[:space:]]*\]/ { next }
+        in_users && /^[^[:space:]#-]/ { in_users = 0 }
+        !in_users { print }
+    ' "$configpath.pre-firstrun" > "$configpath.merged" 2>/dev/null ||
+       ! cat /tmp/adg_users_block >> "$configpath.merged" 2>/dev/null; then
+        log "提示:     账号配置合并失败，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null || cp -f "$backup_yaml" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1 || true
+        rm -f "$backup_yaml" /tmp/adg_guide_out /tmp/adg_users_block "$configpath.merged" 2>/dev/null
+        return 1
+    fi
+    if [ "$(grep -c '^users:' "$configpath.merged" 2>/dev/null)" != "1" ]; then
+        log "提示:     合并后账号配置校验未通过，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out /tmp/adg_users_block "$configpath.merged" 2>/dev/null
+        return 1
+    fi
+    if ! mv "$configpath.merged" "$configpath" 2>/dev/null; then
+        log "提示:     新账号配置写入失败，正在恢复原配置"
+        mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null || cp -f "$backup_yaml" "$configpath" 2>/dev/null
+        /etc/init.d/AdGuardHome start >/dev/null 2>&1
+        rm -f "$backup_yaml" /tmp/adg_guide_out /tmp/adg_users_block "$configpath.merged" 2>/dev/null
+        return 1
+    fi
+    chmod 600 "$configpath" 2>/dev/null || true
+    rm -f /tmp/adg_users_block /tmp/adg_guide_out 2>/dev/null
+
+    # LuCI 的旧 hashpass 会在 init start 时覆盖新 users.password，先清掉待应用旧值。
+    if [ -n "$(uci -q get AdGuardHome.AdGuardHome.hashpass 2>/dev/null || true)" ]; then
+        if ! uci set AdGuardHome.AdGuardHome.hashpass='' >/dev/null 2>&1 ||
+           ! uci commit AdGuardHome >/dev/null 2>&1; then
+            log "提示:     旧密码变更项清理失败，正在恢复原配置"
+            mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null || cp -f "$backup_yaml" "$configpath" 2>/dev/null
+            /etc/init.d/AdGuardHome start >/dev/null 2>&1
+            rm -f "$backup_yaml" 2>/dev/null
+            return 1
         fi
     fi
+    /etc/init.d/AdGuardHome start >/dev/null 2>&1 || true
 
-    if [ -z "$dashboard_password" ]; then
-        log "备注:     AdGuardHome 应用商店页已可读取本地运行态与监听；如需同步 3000 原版统计，请在设置页填写 Dashboard API password（与 3000 登录密码一致）"
+    guide_rc=1
+    if adg_dashboard_wait_login "$dash_user" "$dash_pass"; then
+        if uci set AdGuardHome.AdGuardHome.dashboard_user="$dash_user" >/dev/null 2>&1 &&
+           uci set AdGuardHome.AdGuardHome.dashboard_password="$dash_pass" >/dev/null 2>&1 &&
+           uci commit AdGuardHome >/dev/null 2>&1 &&
+           [ "$(uci -q get AdGuardHome.AdGuardHome.dashboard_user 2>/dev/null)" = "$dash_user" ] &&
+           [ "$(uci -q get AdGuardHome.AdGuardHome.dashboard_password 2>/dev/null)" = "$dash_pass" ]; then
+            ensure_adguard_openclash_dns_chain || true
+            if adg_dashboard_wait_login "$dash_user" "$dash_pass"; then
+                rm -f "$configpath.pre-firstrun" "$backup_yaml" 2>/dev/null
+                log "备注:     3000 仪表盘密码已由核心生成哈希，后台账号密码已同步（账号 $dash_user）"
+                return 0
+            fi
+            guide_rc=3
+        else
+            guide_rc=2
+        fi
+    else
+        guide_rc=$?
+        [ "$guide_rc" -eq 2 ] && guide_rc=4
     fi
+
+    case "$guide_rc" in
+        1) log "提示:     3000 仪表盘未就绪，正在恢复原配置" ;;
+        2) log "提示:     后台账号密码保存失败，正在恢复原配置" ;;
+        3) log "提示:     后台同步后 3000 登录校验失败，正在恢复原配置" ;;
+        4) log "提示:     3000 仪表盘拒绝新账号密码，正在恢复原配置" ;;
+        *) log "提示:     3000 仪表盘新密码登录校验未通过，正在恢复原配置" ;;
+    esac
+    uci set AdGuardHome.AdGuardHome.dashboard_user="$old_dash_user" >/dev/null 2>&1 || true
+    uci set AdGuardHome.AdGuardHome.dashboard_password="$old_dash_pass" >/dev/null 2>&1 || true
+    uci commit AdGuardHome >/dev/null 2>&1 || true
+    mv "$configpath.pre-firstrun" "$configpath" 2>/dev/null || cp -f "$backup_yaml" "$configpath" 2>/dev/null
+    /etc/init.d/AdGuardHome restart >/dev/null 2>&1
+    rm -f "$backup_yaml" 2>/dev/null
+    return 1
 }
 
 fix_adguard_runtime_if_possible() {
@@ -31553,7 +32797,7 @@ download_adguardhome_core() {
     uci set AdGuardHome.AdGuardHome.coreversion='latest' >/dev/null 2>&1 || true
     uci commit AdGuardHome >/dev/null 2>&1 || true
 
-    log "安装完成"
+    log "核心安装完成"
     log "核心:     AdGuardHome"
     log "版本:  latest"
     log "arch:     $core_arch"
@@ -32264,6 +33508,10 @@ storage_expand_build_migrate_menu_list() {
         src="$(printf '%s\n' "$spec" | awk -F '\t' '{ print $3 }')"
         target="$(storage_expand_target_for_path "$src")"
 
+        if storage_expand_migration_is_pending "$src" "$target"; then
+            printf '%s\t%s\t%s\n' "$app_key" "$label（继续迁移）" "$src" >> "$list_file"
+            continue
+        fi
         if ! storage_expand_appcenter_has_installed_app "$app_key" &&
            ! storage_expand_runtime_has_installed_app "$app_key" "$src"; then
             storage_expand_path_needs_relink "$src" "$target" || continue
@@ -33335,9 +34583,94 @@ storage_expand_restore_migration_backup() {
     return 0
 }
 
+storage_expand_migration_is_pending() {
+    local src="$1"
+    local target="$2"
+    local pending_src
+
+    [ -f "$target.nradio-migration-pending" ] || return 1
+    IFS= read -r pending_src < "$target.nradio-migration-pending" || return 1
+    [ "$pending_src" = "$src" ] && [ -e "$target" ] && [ ! -L "$target" ]
+}
+
+storage_expand_payload_matches_target() {
+    local src="$1"
+    local target="$2"
+    local target_root="$3"
+    local item name
+
+    if [ -L "$src" ]; then
+        storage_expand_link_points_under "$src" "$target_root" && return 0
+        [ -L "$target" ] || return 1
+        [ "$(readlink "$src")" = "$(readlink "$target")" ]
+    elif [ -d "$src" ]; then
+        [ -d "$target" ] && [ ! -L "$target" ] || return 1
+        for item in "$src"/* "$src"/.[!.]* "$src"/..?*; do
+            [ -e "$item" ] || [ -L "$item" ] || continue
+            name="${item##*/}"
+            storage_expand_payload_matches_target "$item" "$target/$name" "$target_root" || return 1
+        done
+    elif [ -f "$src" ]; then
+        [ -f "$target" ] && [ ! -L "$target" ] || return 1
+        cmp -s "$src" "$target"
+    else
+        return 1
+    fi
+}
+
+storage_expand_complete_migration() {
+    local app_key="$1"
+    local label="$2"
+    local service="$3"
+    local src="$4"
+    local target="$5"
+    local kind="$6"
+    local pending="$target.nradio-migration-pending"
+    local resume_running
+
+    storage_expand_recreated_payload_valid_at_path "$app_key" "$target" || {
+        storage_expand_start_service "$service" || true
+        die "$label 扩展盘运行文件不完整，迁移数据保留于：$target"
+    }
+    if storage_expand_migration_is_pending "$src" "$target"; then
+        resume_running="$(sed -n '2p' "$pending")"
+        [ "$resume_running" != '1' ] || STORAGE_EXPAND_SERVICE_WAS_RUNNING=1
+    fi
+    if ! storage_expand_path_is_migrated "$src" "$target"; then
+        if [ -e "$src" ] || [ -L "$src" ]; then
+            [ ! -L "$src" ] || die "$label 原路径已被其他软链接占用：$src"
+            storage_expand_payload_matches_target "$src" "$target" "$target" || {
+                storage_expand_start_service "$service" || true
+                die "$label 迁移数据不一致，源路径与扩展盘数据均已保留"
+            }
+        fi
+        if storage_expand_relink_service_is_running "$app_key" "$service"; then
+            die "$label 服务在复制期间重新启动，已停止切换"
+        fi
+        printf '%s\n%s\n' "$src" "${STORAGE_EXPAND_SERVICE_WAS_RUNNING:-0}" > "$pending" || {
+            storage_expand_start_service "$service" || true
+            die "$label 写入迁移续接状态失败，源路径保留"
+        }
+        sync
+        # The verified destination is the migration payload. Renaming the source
+        # inside overlay would retain every data block and can make ln fail ENOSPC.
+        rm -rf "$src" || die "$label 释放原路径未完成；数据保留于 $target，请重新选择此迁移项"
+        sync
+        ln -s "$target" "$src" || die "$label 创建软链接失败；数据保留于 $target，请重新选择此迁移项"
+    fi
+    storage_expand_path_is_migrated "$src" "$target" || die "$label 迁移链接未接通；数据保留于：$target"
+    storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind" || {
+        storage_expand_start_service "$service" || true
+        die "$label 迁移清单更新失败；数据已接入 $target，请重新选择此迁移项"
+    }
+    storage_expand_start_service "$service" || die "$label 数据已接入 $target，但服务未能恢复，请重新选择此迁移项"
+    rm -f "$pending" || log "警告: $label 迁移完成，续接状态清理失败：$pending"
+    log "完成: $label 已迁移到扩展盘"
+}
+
 storage_expand_migrate_one_app() {
     local app_key="$1"
-    local spec label service src target target_parent tmp_target backup_src kind src_real target_real
+    local spec label service src target target_parent tmp_target kind src_real target_real
 
     storage_expand_require_active
     spec="$(storage_expand_app_spec "$app_key")" || die "未知迁移项：$app_key"
@@ -33347,6 +34680,12 @@ storage_expand_migrate_one_app() {
     target="$(storage_expand_target_for_path "$src")"
     target_parent="$(dirname "$target")"
 
+    if storage_expand_migration_is_pending "$src" "$target"; then
+        log "继续迁移: $label -> $target"
+        storage_expand_stop_service "$service" || die "$label 服务未能确认停止，拒绝继续迁移"
+        storage_expand_complete_migration "$app_key" "$label" "$service" "$src" "$target" "link"
+        return 0
+    fi
     [ -e "$src" ] || {
         log "跳过: $label 源路径不存在：$src"
         return 0
@@ -33376,34 +34715,7 @@ storage_expand_migrate_one_app() {
             storage_expand_start_service "$service" || log "警告: $label 同步失败后未能恢复服务状态：$service"
             die "$label 同步到扩展盘失败"
         }
-        backup_src="$src.nradio-storage-backup-$TS"
-        mv "$src" "$backup_src" || {
-            storage_expand_start_service "$service" || log "警告: $label 移动失败后未能恢复服务状态：$service"
-            die "$label 移动原路径失败：$src"
-        }
-        ln -s "$target" "$src" || {
-            mv "$backup_src" "$src" 2>/dev/null || true
-            storage_expand_start_service "$service" || log "警告: $label 软链接失败后未能恢复服务状态：$service"
-            die "$label 创建软链接失败"
-        }
-        if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
-            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 运行文件校验失败且自动回滚未完成：$backup_src"
-            storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-            die "$label 运行文件校验失败，已恢复原路径"
-        fi
-        if ! storage_expand_start_service "$service"; then
-            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 服务启动失败且自动回滚未完成：$backup_src"
-            storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
-            die "$label 迁移后服务启动失败，已恢复原路径"
-        fi
-        if ! storage_expand_record_migration "$label" "$service" "$src" "$target" "link"; then
-            storage_expand_stop_service "$service" || die "$label 迁移清单更新失败且服务无法停止；保留原路径备份：$backup_src"
-            storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '0' || die "$label 迁移清单更新失败且自动回滚未完成：$backup_src"
-            storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-            die "$label 迁移清单更新失败，已恢复原路径"
-        fi
-        rm -rf "$backup_src" || log "警告: $label 迁移成功，但原路径备份清理失败：$backup_src"
-        log "完成: $label 已迁移到扩展盘"
+        storage_expand_complete_migration "$app_key" "$label" "$service" "$src" "$target" "link"
         return 0
     fi
     storage_expand_path_has_self_loop_child_links "$src" && die "$label 原路径含自指软链接，拒绝迁移：$src"
@@ -33438,37 +34750,7 @@ storage_expand_migrate_one_app() {
         die "$label 写入扩展盘目标失败"
     }
 
-    backup_src="$src.nradio-storage-backup-$TS"
-    mv "$src" "$backup_src" || {
-        rm -rf "$target" 2>/dev/null || true
-        storage_expand_start_service "$service" || log "警告: $label 移动失败后未能恢复服务状态：$service"
-        die "$label 移动原路径失败：$src"
-    }
-    ln -s "$target" "$src" || {
-        mv "$backup_src" "$src" 2>/dev/null || true
-        rm -rf "$target" 2>/dev/null || true
-        storage_expand_start_service "$service" || log "警告: $label 软链接失败后未能恢复服务状态：$service"
-        die "$label 创建软链接失败"
-    }
-
-    if ! storage_expand_recreated_payload_valid_at_path "$app_key" "$src"; then
-        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 运行文件校验失败且自动回滚未完成：$backup_src"
-        storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-        die "$label 运行文件校验失败，已恢复原路径"
-    fi
-    if ! storage_expand_start_service "$service"; then
-        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 服务启动失败且自动回滚未完成：$backup_src"
-        storage_expand_start_service "$service" || log "警告: $label 回滚后仍未能恢复服务状态：$service"
-        die "$label 迁移后服务启动失败，已恢复原路径"
-    fi
-    if ! storage_expand_record_migration "$label" "$service" "$src" "$target" "$kind"; then
-        storage_expand_stop_service "$service" || die "$label 迁移清单更新失败且服务无法停止；保留原路径备份：$backup_src"
-        storage_expand_restore_migration_backup "$src" "$target" "$backup_src" '1' || die "$label 迁移清单更新失败且自动回滚未完成：$backup_src"
-        storage_expand_start_service "$service" || log "警告: $label 回滚后未能恢复服务状态：$service"
-        die "$label 迁移清单更新失败，已恢复原路径"
-    fi
-    rm -rf "$backup_src" || log "警告: $label 迁移成功，但原路径备份清理失败：$backup_src"
-    log "完成: $label 已迁移到扩展盘"
+    storage_expand_complete_migration "$app_key" "$label" "$service" "$src" "$target" "$kind"
 }
 
 storage_expand_restore_one_app() {
@@ -34704,6 +35986,8 @@ install_adguardhome() {
     verify_file_exists /usr/lib/lua/luci/controller/AdGuardHome.lua "AdGuardHome"
     grep -Fq 'function adgEnableTouchScroll(d)' /usr/lib/lua/luci/view/AdGuardHome/oem_wrapper.htm 2>/dev/null || die "AdGuardHome 手机 iframe 触摸滚动兼容内容缺失"
     verify_luci_route admin/services/AdGuardHome "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/overview "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/settings "AdGuardHome"
     verify_luci_route admin/services/AdGuardHome/base "AdGuardHome"
     verify_luci_route admin/services/AdGuardHome/manual "AdGuardHome"
     verify_luci_route admin/services/AdGuardHome/log "AdGuardHome"
@@ -34719,6 +36003,9 @@ install_adguardhome() {
     else
         log "备注:     已跳过 AdGuardHome 核心下载"
     fi
+
+    # 安装内核后引导设置仪表盘账号密码（账号默认 admin，除非用户设置）
+    guide_adguard_dashboard_account || die "AdGuardHome 已安装，但 3000 仪表盘账号密码未设置成功；请检查上方错误后重跑 1 > 4"
 
     log "安装完成"
     log "插件:   AdGuardHome"
@@ -36084,8 +37371,7 @@ install_ddnsgo() {
     ddnsgo_target_arch="$(get_primary_arch)"
     [ -n "$ddnsgo_target_arch" ] || die "无法识别 opkg 架构，停止安装 DDNS-GO"
     [ "$ddnsgo_target_arch" = "$DDNSGO_PACKAGE_ARCH" ] || die "DDNS-GO 当前集成包适配 $DDNSGO_PACKAGE_ARCH，当前设备为 $ddnsgo_target_arch"
-    log "说明: 将下载 DDNS-GO OpenWrt 三件套，写入 OEM 包装页，并注册到 NRadio 应用商店"
-    log "说明: 目标版本 DDNS-GO $DDNSGO_PACKAGE_VERSION / LuCI $DDNSGO_LUCI_VERSION / 中文包 $DDNSGO_I18N_VERSION"
+    log "版本: DDNS-GO $DDNSGO_PACKAGE_VERSION / LuCI $DDNSGO_LUCI_VERSION / 中文包 $DDNSGO_I18N_VERSION"
     confirm_or_exit "确认继续安装 DDNS-GO 并修改系统吗？"
 
     log_stage 2 7 "下载并检查 DDNS-GO OpenWrt 三件套"
@@ -36247,7 +37533,6 @@ install_ddnsgo() {
         log "下载源: GitHub OpenWrt 包"
     fi
     log "包大小: $ddnsgo_archive_size bytes"
-    log "说明:   已安装核心、LuCI、中文包，写入 OEM 包装页、图标、应用商店多包条目、异步卸载链和虚拟内存接入"
 }
 
 write_mt5700_nradio_controller() {
@@ -36610,11 +37895,14 @@ EOF_MT5700_SPEED_DISPLAY
     done
 }
 
-write_mt5700_c2000max_atsd_proxy() {
-    [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000MAX' ] || return 0
-    [ -x /usr/sbin/atsd_cli ] || die "C2000MAX 缺少 NROS atsd_cli，无法建立共享 AT 通道"
-    [ -x /usr/bin/lua ] || die "C2000MAX 缺少 Lua，无法建立共享 AT 通道"
-    /usr/bin/lua -e 'require("socket")' >/dev/null 2>&1 || die "C2000MAX 缺少 LuaSocket，无法建立共享 AT 通道"
+write_mt5700_c2000_atsd_proxy() {
+    case "${CURRENT_DETECTED_MODEL:-}" in
+        NRadio_C2000MAX|NRadio_C2000Ultra) ;;
+        *) return 0 ;;
+    esac
+    [ -x /usr/sbin/atsd_cli ] || die "当前机型缺少 NROS atsd_cli，无法建立共享 AT 通道"
+    [ -x /usr/bin/lua ] || die "当前机型缺少 Lua，无法建立共享 AT 通道"
+    /usr/bin/lua -e 'require("socket")' >/dev/null 2>&1 || die "当前机型缺少 LuaSocket，无法建立共享 AT 通道"
     write_mt5700_atsd_proxy_program
 
     cat > "$MT5700_ATSD_PROXY_INIT" <<'EOF_MT5700_ATSD_PROXY_INIT'
@@ -36639,15 +37927,15 @@ EOF_MT5700_ATSD_PROXY_INIT
 
     mt5700_config_backup="$mt5700_workdir/at-webserver.config.before-c2000max"
     cp -p "$MT5700_CONFIG_FILE" "$mt5700_config_backup" || die "备份 MT5700 WebUI 原配置失败"
-    uci set at-webserver.config.connection_type='NETWORK' || die "设置 C2000MAX AT 连接类型失败"
-    uci set at-webserver.config.network_host='127.0.0.1' || die "设置 C2000MAX AT 共享地址失败"
-    uci set "at-webserver.config.network_port=$MT5700_ATSD_PROXY_PORT" || die "设置 C2000MAX AT 共享端口失败"
-    uci commit at-webserver || die "保存 C2000MAX AT 共享配置失败"
+    uci set at-webserver.config.connection_type='NETWORK' || die "设置 C2000 系列 AT 连接类型失败"
+    uci set at-webserver.config.network_host='127.0.0.1' || die "设置 C2000 系列 AT 共享地址失败"
+    uci set "at-webserver.config.network_port=$MT5700_ATSD_PROXY_PORT" || die "设置 C2000 系列 AT 共享端口失败"
+    uci commit at-webserver || die "保存 C2000 系列 AT 共享配置失败"
 
     "$MT5700_ATSD_PROXY_INIT" enable || die "MT5700 AT 共享桥开机启动配置失败"
     "$MT5700_ATSD_PROXY_INIT" stop >/dev/null 2>&1 || true
     "$MT5700_ATSD_PROXY_INIT" start || die "MT5700 AT 共享桥启动失败"
-    log "适配: C2000MAX 使用 NROS atsd_cli 共享 AT 通道（127.0.0.1:$MT5700_ATSD_PROXY_PORT）"
+    log "适配: C2000MAX/C2000Ultra 使用 NROS atsd_cli 共享 AT 通道（127.0.0.1:$MT5700_ATSD_PROXY_PORT）"
 }
 
 write_mt5700_c5800_dual() {
@@ -37048,8 +38336,6 @@ install_mt5700_webui() {
     mt5700_ipk=''
 
     log "前端: $MT5700_UI_NAME（上游最新成功构建）"
-    log "说明: 只安装包含该前端的上游 Go 核心包，不安装不兼容 NROS 的标准 luci-app-at-webserver"
-    log "说明: 应用商店入口使用 NROS 传统 Lua 控制器，打开后直接跳转 /5700/，不嵌套第二层 iframe"
     log "来源: $MT5700_UI_SOURCE_URL"
     confirm_or_exit "确认下载安装 MT5700 WebUI 上游最新版本并接入 NRadio 应用商店吗？"
 
@@ -37091,7 +38377,7 @@ install_mt5700_webui() {
     patch_mt5700_version_display
     patch_mt5700_boot_fallback
     patch_mt5700_speed_display
-    write_mt5700_c2000max_atsd_proxy
+    write_mt5700_c2000_atsd_proxy
     write_mt5700_c5800_dual
 
     log_stage 4 5 "写入 NROS 打开入口、图标、应用商店与异步卸载链"
@@ -37116,7 +38402,6 @@ install_mt5700_webui() {
     log "前端:   $MT5700_UI_NAME V$MT5700_UI_VERSION"
     log "后端包: $MT5700_PACKAGE_NAME $MT5700_PACKAGE_VERSION"
     log "路由:   $MT5700_ROUTE -> /5700/?v=$MT5700_UI_VERSION#/network/info"
-    log "说明:   已接入 NRadio 应用商店打开与异步卸载；未安装上游标准 LuCI 菜单包"
 }
 
 resolve_openbox_storage_paths() {
@@ -37630,7 +38915,6 @@ install_openlist() {
         log "提示: C2000MAX 使用存储卡临时目录: $openlist_workdir"
         log "说明: 这样可以减少 /tmp 内存占用，降低因文件过大导致安装失败的概率"
     fi
-    log "说明: 将下载 OpenList 官方发布包，并自动接入 OEM 应用商店"
     confirm_or_exit "确认继续安装 OpenList 并修改系统吗？"
 
     log_stage 2 5 "通过 GitHub 加速源下载 OpenList 官方安装包"
@@ -37775,7 +39059,6 @@ install_openlist() {
     else
         log "下载源: GitHub 官方 CDN"
     fi
-    log "说明:   已写入二进制、init.d、UCI 配置、OEM 页面和应用商店入口"
     if [ "$openlist_admin_initialized" = '1' ]; then
         log "初始账号: admin"
         log "初始密码: $openlist_admin_password"
@@ -38049,7 +39332,6 @@ install_zerotier() {
     else
         log "下载源: CDN"
     fi
-    log "说明:   已下载 ZeroTier 安装包、安装核心、写入 OEM 设置页并接入应用商店"
     log "说明:   如需联网请进入设置页填写网络 ID 后点“启动/重启服务”"
 }
 
@@ -38072,7 +39354,6 @@ install_easytier() {
     [ -n "$easytier_official_ping_hosts" ] || easytier_official_ping_hosts="$EASYTIER_STABLE_HOST_ORDER"
     easytier_official_ping_hosts="$(printf '%s\n' "$easytier_official_ping_hosts" | sed 's/[[:space:]][[:space:]]*/ /g; s/^[[:space:]]*//; s/[[:space:]]*$//')"
     log "提示: $EASYTIER_DISPLAY_NAME 下载优先使用 gh-proxy，官方地址和其他镜像作为后备"
-    log "说明: 将下载 $EASYTIER_DISPLAY_NAME 官方发布包，并自动接入 OEM 应用商店"
     confirm_or_exit "确认继续安装 $EASYTIER_DISPLAY_NAME 并修改系统吗？"
 
     log_stage 2 5 "通过 GitHub 加速源下载 $EASYTIER_DISPLAY_NAME 官方安装包"
@@ -38211,7 +39492,6 @@ install_easytier() {
     else
         log "下载源: GitHub 官方 CDN"
     fi
-    log "说明:   已下载官方发布包、安装核心与 LuCI、修正原生控制器并接入 OEM 应用商店"
     log "说明:   如页面未立即刷新，请关闭应用商店弹窗后按 Ctrl+F5 再重新打开 $EASYTIER_DISPLAY_NAME"
 }
 
@@ -39175,7 +40455,6 @@ install_fanctrl() {
     log "插件:   $FANCTRL_DISPLAY_NAME"
     log "版本:   builtin"
     log "路由:   $FANCTRL_ROUTE"
-    log "说明:   支持 NRadio_C8-688 / NRadio_C2000MAX / NRadio_C8-788；已启用响应式仪表盘、完整控制项与实时状态联动"
 }
 
 load_easytier_route_state() {
@@ -56704,7 +57983,6 @@ die_menu_input_issue() {
 print_support_page_hint() {
     log "如果这个脚本帮到了你，可自愿支持后续维护与更新:"
     log "$SUPPORT_PAGE_URL"
-    log "说明: 页面仅提供自愿支持入口，不影响脚本功能使用"
 }
 
 print_startup_disclaimer_text() {
@@ -57207,9 +58485,7 @@ install_nradio_operator_display_fix() {
     refresh_nradio_operator_display_fix
     log "结果:   LuCI 运营商与卡名显示修复已安装或更新"
     log "版本:   $NRADIO_OPERATOR_FIX_VERSION"
-    log "规则:   运营商拒绝 none/unknown 并回退 PLMN；卡名按用户 ICCID 映射、固件原生、有效 ICCID 缓存排序"
     log "卡名:   $NRADIO_SIM_NAME_MAP_FILE"
-    log "备份:   disabled（仅使用同目录瞬时原子临时文件）"
 }
 
 show_nradio_operator_display_fix_status() {
@@ -57414,7 +58690,6 @@ configure_nradio_sim_name_mappings() {
         log "提示:   映射已保存；安装显示修复后生效"
     fi
     log "结果:   卡名映射已更新，共 $(nradio_sim_name_map_count) 条"
-    log "备份:   disabled（同目录瞬时原子临时文件）"
 }
 
 uninstall_nradio_operator_display_fix() {
@@ -58385,7 +59660,6 @@ install_nradio_home_temperature_switch() {
     refresh_nradio_home_temperature_switch
     log "结果:   LuCI 首页 CPU / 5G 温度切换已安装或更新"
     log "版本:   $NRADIO_HOME_TEMP_VERSION"
-    log "范围:   全部受支持 NROS；按首页 runtime 能力检测，不限制机型"
     log "显示:   双线路时副5G固定显示5G温度；仅副5G单线路时可切换CPU/5G温度"
     log "操作:   首页点击温度按钮切换，当前浏览器自动记住选择"
     log "手机:   温源按钮横排，状态卡片两列自适应高度"
@@ -59371,6 +60645,18 @@ update_settings() {
 	local freq_multi=$(uci -q get "network.${gNet}.freq_multi")
 	local compatibility_work=$(uci -q get "network.${gNet}.compatibility")
 	local blacklist_band=$(uci -q get "network.${gNet}.blacklist_band")
+	local freqfree=$(uci -q get "system.basic.freqfree")
+	local support_mobility=$(uci -q get "network.${gNet}.mobility")
+	local mobility=$(uci -q get "cpecfg.${gNet}sim$simIndex.mobility")
+	if [ "$support_mobility" == "1" ]; then
+		if [ "$freqfree" == "1" ]; then
+			[ -z "$mobility" ] && mobility="2"
+		else
+			[ -z "$mobility" ] && mobility="0"
+		fi
+	else
+		mobility=""
+	fi
 	echo "blacklist_band:$blacklist_band compatibility_work:$compatibility_work"
 	if [ "$_vendor" = "quectel_ysdk" ]; then
 		_info=$(cat "/var/run/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
@@ -59524,7 +60810,9 @@ update_settings() {
 
 			freq_tmp=$(format_freq_data "$freq" "$key" "$freq_multi")
 			if [ -z "$freq_tmp" ] ;then				
-				if [ "$compatibility_work" == "1" ] && [ "$compatibility" == "0" ] && [ "$key" == "nr" -o "$key" == "sa" -o "$key" == "nsa" ];then
+				if [ "$mobility" == "2" ];then
+					freq_tmp="${key}-"
+				elif [ "$compatibility_work" == "1" ] && [ "$compatibility" == "0" ] && [ "$key" == "nr" -o "$key" == "sa" -o "$key" == "nsa" ];then
 					freq_tmp="$key"-"$(skip_band_data "${data}" "$skip_band")"
 				else					
 					freq_tmp="$freq_item"
@@ -63468,7 +64756,12 @@ get_mobility_cfg(){
 	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
 	[ -z "$simIndex" ] && simIndex="1"
 	local mobility=$(uci -q get "cpecfg.${gNet}sim$simIndex.mobility")
-	[ -z "$mobility" ] && mobility="0"
+	local freqfree=$(uci -q get "system.basic.freqfree")
+	if [ "$freqfree" == "1" ];then
+		[ -z "$mobility" ] && mobility="1"
+	else
+		[ -z "$mobility" ] && mobility="0"
+	fi
 	echo "$mobility"
 }
 _earfcn_huawei_5glock(){
@@ -64452,6 +65745,7 @@ support_earfcn5 = uci:get("network",cpe_section,"earfcn5")
 support_earfcn4 = uci:get("network",cpe_section,"earfcn4")
 support_nr = nr.support_nr(cpe_section)
 support_lock_freq = nr.support_lock_freq(cpe_section)
+freqlock_free = uci:get("system","basic", "freqfree")
 
 freq_val = uci:get("network",cpe_section,"freq_val")
 
@@ -64672,10 +65966,16 @@ local support_mobility = uci:get("network",cpe_section,"mobility")
 local mobile_lock = uci:get("luci","main","mobile_lock")
 
 if support_mobility == "1" and mobile_lock ~="1" then
-    mobility = s:option(ListValue, "mobility", translate("Band Lock Policy"),translate("*If the device is moved after frequency lock, changes in the local base station environment may cause the lock to become ineffective. If \"Reselection & Handover Allowed\" is enabled, the device will automatically release the lock to maintain connectivity."))
+    mobility = s:option(ListValue, "mobility", translate("Band Lock Policy")," ")
     mobility.default = "0"
-    mobility:value("1",translate("Reselection & Handover Allowed"))
-    mobility:value("0",translate("Reselection & Handover Forbidden"))        
+    mobility:value("1",translate("Smart Mode"))
+    mobility:value("0",translate("Lock Mode"))
+    mobility:value("2",translate("No Preference Mode"))
+    mobility.widget = "radio"
+    mobility.direction = "horizontal"
+    if freqlock_free == "1" then
+        mobility.default = "2"
+    end
 end
 
 earfreq_mode = s:option(ListValue, "earfreq_mode", translate("LockType"))
@@ -64956,13 +66256,13 @@ EOF_NRADIO_CPEOPT_INDEX
     cat > "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" <<'EOF_NRADIO_CPEOPT_MONITOR'
 #!/usr/bin/lua
 
--- NRadio CPE background monitor 20260906-1
+-- NRadio CPE background monitor 20260927-1
 
 local nixio = require "nixio"
 local fs = require "nixio.fs"
 local util = require "luci.util"
 
-local VERSION = "20260906-1"
+local VERSION = "20260927-1"
 local INTERVAL = 10
 local LOG_LIMIT = 262144
 local LOG_PATH = "/etc/nradio-cpe-monitor/events.log"
@@ -65536,9 +66836,9 @@ function index()
 	)
 	page.icon = "signal-4"
 	if fs.access("/www/luci-static/nradio/images/icon/cpeopt.png") then
-		page.image = "/luci-static/nradio/images/icon/cpeopt.png?v=20260906-1"
+		page.image = "/luci-static/nradio/images/icon/cpeopt.png?v=20260927-1"
 	else
-		page.image = "/luci-static/nradio/images/icon/cpeopt.svg?v=20260906-1"
+		page.image = "/luci-static/nradio/images/icon/cpeopt.svg?v=20260927-1"
 	end
 	page.show = true
 	page.leaf = false
@@ -65758,7 +67058,7 @@ function action_status()
 	local smart_band = smart_band_summary(fs, model)
 	local result = {
 		ok = true,
-		version = "20260906-1",
+		version = "20260927-1",
 		model = model,
 		dial_logs = dial_logs,
 		dial_log_status = dial_log_status,
@@ -65787,6 +67087,10 @@ function action_status()
 			local net = uci:get_all("network", name) or {}
 			local sim_id = tostring(item.simno or "1")
 			local sim_cfg = uci:get_all("cpecfg", name .. "sim" .. sim_id) or {}
+			local mobility = tostring(sim_cfg.mobility or "")
+			if mobility == "" then
+				mobility = uci:get("system", "basic", "freqfree") == "1" and "2" or "0"
+			end
 
 			result.lines[#result.lines + 1] = {
 				name = name,
@@ -65804,7 +67108,8 @@ function action_status()
 				operator = item.sim_company or item.isp_company or "",
 				sim_name = item.sim_name or "",
 				ipaddr = wan_ip(runtime, name),
-				mobility = sim_cfg.mobility or "0",
+				mobility = mobility,
+				mobility_supported = tostring(net.mobility or "") == "1" and uci:get("luci", "main", "mobile_lock") ~= "1",
 				nrrc = sim_cfg.nrrc or "1",
 				disabled = net.disabled or "0",
 				blacklist_band = net.blacklist_band or "",
@@ -65845,6 +67150,7 @@ function action_smart_status()
 		["WOULD-RECOVER"] = 60,
 		["WOULD-SOFT-RECOVER-THEN-CFUN"] = 50,
 		["BLOCKED"] = 40,
+		["POLICY-HOLD"] = 35,
 		["WAIT"] = 30,
 		["UNHEALTHY"] = 20,
 		["HOLD"] = 10,
@@ -66045,7 +67351,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 @media(max-width:430px){.nr5g-hero{padding:18px;border-radius:16px}.nr5g-head h2{font-size:24px}.nr5g-summary{grid-template-columns:1fr 1fr}.nr5g-actions{width:100%;grid-template-columns:1fr}.nr5g-button-primary,.nr5g-button-stop{grid-column:auto}.nr5g-kv{grid-template-columns:1fr}.nr5g-foot{align-items:stretch;flex-direction:column}.nr5g-foot .cbi-button{width:100%}}
 </style>
 
-<div class="nr5g-wrap" data-nradio-cpeopt="20260906-1">
+<div class="nr5g-wrap" data-nradio-cpeopt="20260927-1">
 	<div class="nr5g-hero">
 		<div class="nr5g-head">
 			<div>
@@ -66277,6 +67583,9 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 			hit=kind==='lte'&&(!lock.band4||band===String(lock.band4))&&(!lock.earfcn4||String(line.earfcn)===String(lock.earfcn4))&&(!lock.pci4||String(line.pci)===String(lock.pci4));
 			return {label:hit?'精确锁定命中':'精确锁定偏离',detail:target,className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
 		}
+		if(line.mobility_supported&&line.mobility==='2'&&lock.custom_freq!=='1'){
+			return {label:'无偏好选网',detail:'当前频段由模组自行选择',className:'nr5g-lock-neutral'};
+		}
 		if(!kind||!band){return {label:'无法判断',detail:'当前网络或频段为空',className:'nr5g-lock-neutral'};}
 		if(kind==='nr'&&line.compatibility==='1'&&black.indexOf(band)!==-1){return {label:'黑名单未生效',detail:'当前频段 N'+band+' 在黑名单中',className:'nr5g-lock-warn'};}
 		var source=lock.custom_freq==='1'?lock.freq:line.freq_val;
@@ -66292,6 +67601,7 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		var token=raw.split(/\s+/)[0];
 		var labels={
 			'HOLD':'保持当前频段',
+			'POLICY-HOLD':'按固件锁频策略跳过频段干预',
 			'WAIT':'等待连续健康检查',
 			'WOULD-RECOVER':'预计恢复运营商优选频段',
 			'WOULD-SOFT-RECOVER-THEN-CFUN':'预计先软恢复再重连',
@@ -66403,7 +67713,8 @@ EOF_NRADIO_CPEOPT_CONTROLLER
 		addItem(kv,'SIM 卡',line.sim_name);
 		addItem(kv,'IPv4',line.ipaddr);
 		addItem(kv,'模组温度',line.temperature?line.temperature+' °C':'-');
-		addItem(kv,'允许重选',line.mobility==='1'?'是':'否');
+		var lockPolicies={'0':'锁定模式','1':'智能模式','2':'无偏好模式'};
+		addItem(kv,'锁频策略',line.mobility_supported?(lockPolicies[String(line.mobility)]||'未知'):'当前模组不支持');
 		addItem(kv,'NR 重连',line.nrrc==='1'?'启用':'关闭');
 		addItem(kv,'频段黑名单',line.compatibility==='1'&&line.blacklist_band?('NR N'+line.blacklist_band):'未启用');
 		addItem(kv,'频段策略',line.freq_val);
@@ -67037,6 +68348,7 @@ PREFERENCE_DATE=""
 PREFERENCE_LAST=0
 PREFERENCE_LOCK_IFACE=""
 PREFERENCE_LOCK_SIM="1"
+PREFERENCE_LOCK_SNAPSHOT=""
 IPV6_STATUS="unknown"
 EXEC_MODE="apply"
 MANUAL_RUN=0
@@ -67537,6 +68849,45 @@ check_band() {
     return 2
 }
 
+read_band_policy() {
+    local _iface="$1" _sim="$2" _section
+    case "$_iface" in cpe|cpe1) ;; *) return 1 ;; esac
+    is_uint "$_sim" && [ "$_sim" -gt 0 ] || return 1
+    _section="${_iface}sim${_sim}"
+    BAND_POLICY_SUPPORTED="$(uci -q get "network.${_iface}.mobility")"
+    BAND_POLICY_BLOCKED="$(uci -q get "luci.main.mobile_lock")"
+    BAND_POLICY_MODE="$(uci -q get "cpecfg.${_section}.mobility")"
+    if [ -z "$BAND_POLICY_MODE" ]; then
+        if [ "$(uci -q get "system.basic.freqfree")" = "1" ]; then
+            BAND_POLICY_MODE="2"
+        else
+            BAND_POLICY_MODE="0"
+        fi
+    fi
+    BAND_POLICY_CUSTOM_FREQ="$(uci -q get "cpecfg.${_section}.custom_freq")"
+    BAND_POLICY_CUSTOM_EARFCN4="$(uci -q get "cpecfg.${_section}.custom_earfcn4")"
+    BAND_POLICY_CUSTOM_EARFCN5="$(uci -q get "cpecfg.${_section}.custom_earfcn5")"
+    BAND_POLICY_SNAPSHOT="$(printf '%s|' \
+        "$BAND_POLICY_SUPPORTED" "$BAND_POLICY_BLOCKED" "$BAND_POLICY_MODE" \
+        "$BAND_POLICY_CUSTOM_FREQ" "$(uci -q get "cpecfg.${_section}.freq")" \
+        "$(uci -q get "cpecfg.${_section}.earfreq_mode")" \
+        "$BAND_POLICY_CUSTOM_EARFCN4" "$(uci -q get "cpecfg.${_section}.earfcn4")" \
+        "$(uci -q get "cpecfg.${_section}.pci4")" "$(uci -q get "cpecfg.${_section}.band4")" \
+        "$BAND_POLICY_CUSTOM_EARFCN5" "$(uci -q get "cpecfg.${_section}.earfcn5")" \
+        "$(uci -q get "cpecfg.${_section}.pci5")" "$(uci -q get "cpecfg.${_section}.band5")")"
+    return 0
+}
+
+band_policy_allows_recovery() {
+    read_band_policy "$1" "$2" || return 1
+    [ "$BAND_POLICY_SUPPORTED" = "1" ] &&
+        [ "$BAND_POLICY_BLOCKED" != "1" ] &&
+        [ "$BAND_POLICY_MODE" = "1" ] &&
+        [ "$BAND_POLICY_CUSTOM_FREQ" != "1" ] &&
+        [ "$BAND_POLICY_CUSTOM_EARFCN4" != "1" ] &&
+        [ "$BAND_POLICY_CUSTOM_EARFCN5" != "1" ]
+}
+
 native_band_profile() {
     local _iface="$1" _sim="$2" _target="$3" _out _rc _sim_before _sim_after
     [ "$EXEC_MODE" = "apply" ] || return 1
@@ -67545,6 +68896,14 @@ native_band_profile() {
     if [ -z "$_sim_before" ] || [ "$_sim_before" != "$_sim" ]; then
         log "${_iface}: SIM 状态已变化或无法确认；expected=${_sim}; current=${_sim_before:-unknown}; 拒绝执行频段命令"
         return 3
+    fi
+    if ! band_policy_allows_recovery "$_iface" "$_sim"; then
+        log "${_iface}: 当前锁频策略或手动锁目标不允许智能频段改动；跳过 target=${_target}"
+        return 4
+    fi
+    if [ -n "$PREFERENCE_LOCK_SNAPSHOT" ] && [ "$BAND_POLICY_SNAPSHOT" != "$PREFERENCE_LOCK_SNAPSHOT" ]; then
+        log "${_iface}: 锁频配置在本轮执行期间已变化；跳过 target=${_target}"
+        return 4
     fi
     if [ "$_target" = "auto" ]; then
         _out="$(/usr/bin/cpetools.sh -i "$_iface" -c freq_unlock -t 2 2>&1)"
@@ -67570,7 +68929,25 @@ native_band_profile() {
 }
 
 restore_auto_band() {
-    local _iface="$1" _sim="$2" _rc
+    local _iface="$1" _sim="$2" _rc _current_sim
+    _current_sim="$(current_sim_id "$_iface" 2>/dev/null || true)"
+    if [ -z "$_current_sim" ] || [ "$_current_sim" != "$_sim" ]; then
+        log "${_iface}: 待恢复记录所属 SIM 已变化；expected=${_sim}; current=${_current_sim:-unknown}; 保留待恢复记录"
+        return 3
+    fi
+    read_band_policy "$_iface" "$_sim" || return 3
+    if [ "$BAND_POLICY_SUPPORTED" != "1" ] || [ "$BAND_POLICY_BLOCKED" = "1" ] ||
+       [ "$BAND_POLICY_MODE" != "1" ] || [ "$BAND_POLICY_CUSTOM_FREQ" = "1" ] ||
+       [ "$BAND_POLICY_CUSTOM_EARFCN4" = "1" ] || [ "$BAND_POLICY_CUSTOM_EARFCN5" = "1" ] ||
+       { [ -n "$PREFERENCE_LOCK_SNAPSHOT" ] && [ "$BAND_POLICY_SNAPSHOT" != "$PREFERENCE_LOCK_SNAPSHOT" ]; }; then
+        log "${_iface}: 锁频策略或目标已变化；保留当前设置，不执行自动解锁"
+        rm -f "$PENDING_AUTO_FILE" || return 1
+        PREFERENCE_LOCK_IFACE=""
+        PREFERENCE_LOCK_SIM=""
+        PREFERENCE_LOCK_SNAPSHOT=""
+        PREFERENCE_ACTION="policy-changed"
+        return 0
+    fi
     native_band_profile "$_iface" "$_sim" auto
     _rc=$?
     if [ "$_rc" -eq 0 ]; then
@@ -67578,6 +68955,8 @@ restore_auto_band() {
         if [ "$PREFERENCE_LOCK_IFACE" = "$_iface" ]; then
             rm -f "$PENDING_AUTO_FILE" || return 1
             PREFERENCE_LOCK_IFACE=""
+            PREFERENCE_LOCK_SIM=""
+            PREFERENCE_LOCK_SNAPSHOT=""
         fi
     else
         log "${_iface}: 恢复自动选频失败 rc=${_rc}"
@@ -67667,13 +69046,21 @@ recover_rule_band() {
     PREFERENCE_ACTION="control-failed"
     if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
         restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" || return 2
+        [ "$PREFERENCE_ACTION" != "policy-changed" ] || return 0
     fi
+    if ! band_policy_allows_recovery "$_iface" "$_sim"; then
+        PREFERENCE_ACTION="policy-hold"
+        log "${_iface}: 固件锁频策略或手动锁目标已变化；跳过频段恢复"
+        return 0
+    fi
+    PREFERENCE_LOCK_SNAPSHOT="$BAND_POLICY_SNAPSHOT"
     # 命令即使返回失败也可能已经改变模组；先记下同一 SIM 的回退责任。
-    (umask 077; printf '%s %s\n' "$_iface" "$_sim" > "$PENDING_AUTO_FILE") || return 1
+    (umask 077; printf '%s %s %s\n' "$_iface" "$_sim" "$PREFERENCE_LOCK_SNAPSHOT" > "$PENDING_AUTO_FILE") || return 1
     PREFERENCE_LOCK_IFACE="$_iface"
     PREFERENCE_LOCK_SIM="$_sim"
     if ! native_band_profile "$_iface" "$_sim" "$_target"; then
         restore_auto_band "$_iface" "$_sim" || { PREFERENCE_ACTION="auto-restore-failed"; return 2; }
+        [ "$PREFERENCE_ACTION" != "policy-changed" ] || return 0
         return 1
     fi
 
@@ -67691,6 +69078,7 @@ recover_rule_band() {
     done
 
     restore_auto_band "$_iface" "$_sim" || { PREFERENCE_ACTION="auto-restore-failed"; return 2; }
+    [ "$PREFERENCE_ACTION" != "policy-changed" ] || return 0
     sleep 10
     if ! wait_preference_recovery "$_iface"; then
         PREFERENCE_ACTION="recovery-failed"
@@ -67724,6 +69112,15 @@ maybe_restore_preferred_band() {
         log "${_iface}: 无法确认当前 SIM，跳过本轮频段恢复"
         return 0
     fi
+    if ! band_policy_allows_recovery "$_iface" "$_sim"; then
+        PREFERENCE_ACTION="policy-hold"
+        if [ "$EXEC_MODE" != "apply" ]; then
+            echo "${_iface}=POLICY-HOLD mode=${EXEC_MODE} reason=firmware-lock-policy"
+        else
+            log "${_iface}: 当前锁频策略或手动锁目标由固件管理；跳过频段恢复"
+        fi
+        return 0
+    fi
 
     if [ "$EXEC_MODE" != "apply" ]; then
         PREFERENCE_ACTION="would-recover"
@@ -67735,7 +69132,9 @@ maybe_restore_preferred_band() {
     log "${_iface}: 运营商规则恢复 ${PREFERENCE_COUNT}/${PREFERENCE_MAX_DAILY}；operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}; current=${BAND_KEY}; target=N${RECOVERY_TARGET}; preferred=N${PREFERRED_BAND}; fallback=N${FALLBACK_BAND}; peer=${PEER_BAND}; reason=${RECOVERY_REASON}"
     recover_rule_band "$_iface" "$_sim" "$RECOVERY_TARGET"
     _rc=$?
-    if [ "$PREFERENCE_ACTION" = "control-failed" ]; then
+    if [ "$PREFERENCE_ACTION" = "control-failed" ] ||
+       [ "$PREFERENCE_ACTION" = "policy-hold" ] ||
+       [ "$PREFERENCE_ACTION" = "policy-changed" ]; then
         preference_refund_attempt "$_iface" "$PREFERENCE_ACTION" || { log "${_iface}: 退还频段偏好计数写入失败"; return 1; }
     else
         preference_update_result "$_iface" "$PREFERENCE_ACTION" || { log "${_iface}: 更新频段偏好结果失败"; return 1; }
@@ -68155,7 +69554,7 @@ if [ "$EXEC_MODE" = "apply" ]; then
     [ "$MANUAL_RUN" = "1" ] && RUN_SOURCE="manual"
     write_run_result "running" 0 0 || true
     if [ -e "$PENDING_AUTO_FILE" ]; then
-        read -r PREFERENCE_LOCK_IFACE PREFERENCE_LOCK_SIM < "$PENDING_AUTO_FILE"
+        read -r PREFERENCE_LOCK_IFACE PREFERENCE_LOCK_SIM PREFERENCE_LOCK_SNAPSHOT < "$PENDING_AUTO_FILE"
         case "$PREFERENCE_LOCK_IFACE" in cpe|cpe1) ;; *) PREFERENCE_LOCK_IFACE=""; exit 1 ;; esac
         is_uint "$PREFERENCE_LOCK_SIM" && [ "$PREFERENCE_LOCK_SIM" -gt 0 ] || { PREFERENCE_LOCK_IFACE=""; exit 1; }
         restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" || exit 1
@@ -68519,10 +69918,534 @@ install_openwrt_luci_8080_theme() {
     remove_legacy_openwrt_luci_8080_theme_guard
 }
 
+fetch_openwrt_luci_8080_package() {
+    local cache_key cache_file cache_dest
+    cache_key="$1"
+    cache_dest="$2"
+    shift 2
+    case "$cache_key" in ''|*[!A-Za-z0-9._-]*) die "无效的 8080 安装包名称" ;; esac
+    cache_file="${OPENWRT_LUCI_8080_PACKAGE_ROOT:-$OPENWRT_LUCI_8080_ROOT/packages}/$cache_key"
+    mkdir -p "$(dirname "$cache_file")" "$(dirname "$cache_dest")" || die "创建 8080 安装包目录失败"
+    if [ -s "$cache_file" ]; then
+        log "复用安装包: $cache_key"
+        cp "$cache_file" "$cache_dest" || die "读取 8080 安装包失败"
+    else
+        download_from_urls "$cache_dest" "$@" || die "下载 8080 安装包失败: $cache_key"
+        # Keep only completed downloads; a partial transfer is never a cache hit.
+        cp "$cache_dest" "$cache_file.part" && mv -f "$cache_file.part" "$cache_file" || die "保存 8080 安装包失败"
+    fi
+}
+
+prepare_openwrt_luci_8080_openvpn() {
+    local ovpn_stage ovpn_meta ovpn_rest ovpn_feed ovpn_file ovpn_urls
+    ovpn_stage="$WORKDIR/openvpn-8080"
+    [ ! -f "$ovpn_stage/ready" ] || return 0
+    ovpn_meta="$(resolve_package_meta_any_feed luci-app-openvpn 2>/dev/null || true)"
+    [ -n "$ovpn_meta" ] || ovpn_meta="$(cat "${OPENWRT_LUCI_8080_PACKAGE_ROOT:-$OPENWRT_LUCI_8080_ROOT/packages}/openvpn.meta" 2>/dev/null || true)"
+    [ -n "$ovpn_meta" ] || die "无法从当前软件源解析 OpenVPN 原生 LuCI 页面"
+    ovpn_rest="${ovpn_meta#*|}"
+    ovpn_feed="${ovpn_rest%%|*}"
+    ovpn_rest="${ovpn_rest#*|}"
+    ovpn_file="${ovpn_rest%%|*}"
+    ovpn_urls="$(build_package_download_urls_from_meta "$ovpn_feed" "$ovpn_file")"
+    mkdir -p "$ovpn_stage/data" || die "创建 OpenVPN 8080 准备目录失败"
+    fetch_openwrt_luci_8080_package "${ovpn_file##*/}" "$ovpn_stage/native.ipk" $ovpn_urls
+    extract_ipk_archive "$ovpn_stage/native.ipk" "$ovpn_stage/pkg"
+    tar -xzf "$ovpn_stage/pkg/data.tar.gz" -C "$ovpn_stage/data" || die "解包 OpenVPN 原生页面失败"
+    printf '%s\n' "$ovpn_meta" > "${OPENWRT_LUCI_8080_PACKAGE_ROOT:-$OPENWRT_LUCI_8080_ROOT/packages}/openvpn.meta"
+    touch "$ovpn_stage/ready"
+}
+
+prepare_openwrt_luci_8080_adguard() {
+    local adg_stage
+    adg_stage="$WORKDIR/adguard-8080"
+    [ ! -f "$adg_stage/ready" ] || return 0
+    mkdir -p "$adg_stage/data" || die "创建 AdGuardHome 8080 准备目录失败"
+    fetch_openwrt_luci_8080_package "luci-app-adguardhome_${ADGUARDHOME_VERSION}_all.ipk" "$adg_stage/native.ipk" $ADGUARDHOME_IPK_URLS
+    extract_ipk_archive "$adg_stage/native.ipk" "$adg_stage/pkg"
+    tar -xzf "$adg_stage/pkg/data.tar.gz" -C "$adg_stage/data" ./usr/lib/lua/luci/model/cbi/AdGuardHome ./usr/lib/lua/luci/view/AdGuardHome ./www/luci-static/resources || die "解包 AdGuardHome 原生页面失败"
+    touch "$adg_stage/ready"
+}
+
+prepare_openwrt_luci_8080_packages() {
+    if [ "${1:-}" = argon ]; then
+        fetch_openwrt_luci_8080_package "${OPENWRT_LUCI_8080_ARGON_URL##*/}" "$WORKDIR/argon-8080/luci-theme-argon.ipk" \
+            "https://gh-proxy.com/$OPENWRT_LUCI_8080_ARGON_URL" "$OPENWRT_LUCI_8080_ARGON_URL"
+        extract_ipk_archive "$WORKDIR/argon-8080/luci-theme-argon.ipk" "$WORKDIR/argon-8080/pkg"
+        mkdir -p "$WORKDIR/argon-8080/data"
+        tar -xzf "$WORKDIR/argon-8080/pkg/data.tar.gz" -C "$WORKDIR/argon-8080/data" ./www/luci-static/argon ./www/luci-static/resources/menu-argon.js ./usr/lib/lua/luci/view/themes/argon ./usr/libexec/argon/bing_wallpaper || die "解包 argon 主题资源失败"
+    fi
+    if [ -f /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua ]; then prepare_openwrt_luci_8080_adguard; fi
+    if [ -f /usr/lib/lua/luci/model/cbi/openvpn.lua ]; then prepare_openwrt_luci_8080_openvpn; fi
+}
+
+write_openwrt_luci_8080_openvpn() {
+    local ovpn_stage ovpn_lua ovpn_name
+    [ -f /usr/lib/lua/luci/model/cbi/openvpn.lua ] || return 0
+    prepare_openwrt_luci_8080_openvpn
+    ovpn_stage="$WORKDIR/openvpn-8080"
+    ovpn_lua="$ovpn_stage/data/usr/lib/lua/luci"
+    lua - "$ovpn_stage/data" <<'EOF_OPENWRT_LUCI_8080_OPENVPN'
+local fs = require "nixio.fs"
+local root = arg[1] .. "/usr/lib/lua/luci/"
+for _, pattern in ipairs({ "model/cbi/openvpn*.lua", "view/openvpn/*.htm" }) do
+	for path in fs.glob(root .. pattern) do
+		local data = assert(fs.readfile(path))
+		-- The installed NROS controller registers the native forms under services.
+		data = data:gsub('("admin"%s*,%s*)"vpn"(%s*,%s*"openvpn")', '%1"services"%2')
+		data = data:gsub('admin/vpn/openvpn', 'admin/services/openvpn')
+		if path == root .. "model/cbi/openvpn-file.lua" then
+			data = data:gsub('local auth_file = [^\r\n]+',
+				'local auth_file = cfg_file and ((cfg_file:match("(.+)%%..+") or cfg_file) .. ".auth")')
+		end
+		if path == root .. "model/cbi/openvpn.lua" then
+			data = data:gsub('local m = Map%("openvpn", translate%("OpenVPN"%)%)',
+				'local m = Map("openvpn", translate("OpenVPN"))\nm.message = require("luci.util").pcdata(luci.http.formvalue("upload_error") or "")')
+		end
+		assert(fs.writefile(path, data))
+		if path:match("%.lua$") then assert(loadfile(path))
+		else assert(require("luci.template.parser").parse(path)) end
+	end
+end
+EOF_OPENWRT_LUCI_8080_OPENVPN
+    [ "$?" -eq 0 ] || die "适配 OpenVPN 原生页面路径失败"
+    mkdir -p "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/model/cbi" "$OPENWRT_LUCI_8080_VIEWDIR/openvpn" || die "创建 OpenVPN 私有目录失败"
+    for ovpn_name in openvpn openvpn-basic openvpn-advanced openvpn-file; do
+        cp "$ovpn_lua/model/cbi/$ovpn_name.lua" "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/model/cbi/" || die "写入 OpenVPN 原生表单失败"
+    done
+    cp -R "$ovpn_lua/view/openvpn/." "$OPENWRT_LUCI_8080_VIEWDIR/openvpn/" || die "写入 OpenVPN 原生模板失败"
+}
+
+write_openwrt_luci_8080_adguard() {
+    local adg_stage adg_data adg_models adg_views adg_resources adg_asset
+    [ -f /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua ] || return 0
+    prepare_openwrt_luci_8080_adguard
+    adg_stage="$WORKDIR/adguard-8080"
+    adg_data="$adg_stage/data"
+    adg_models="$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/model/cbi/AdGuardHome"
+    adg_views="$OPENWRT_LUCI_8080_VIEWDIR/AdGuardHome"
+    adg_resources="$OPENWRT_LUCI_8080_DOCROOT/luci-static/resources"
+    mkdir -p "$adg_stage" "$adg_data" "$adg_models" "$adg_views" "$adg_resources" || die "创建 AdGuardHome 8080 原生页面目录失败"
+
+    # Keep upstream LuCI forms and layout; adapt their calls to the installed
+    # NROS controller's POST actions and snapshot-based log/update responses.
+    lua - "$adg_data" <<'EOF_OPENWRT_LUCI_8080_ADGUARD'
+local fs = require "nixio.fs"
+local root = arg[1] .. "/usr/lib/lua/luci/"
+local function edit(path, transform)
+	local data = assert(fs.readfile(root .. path))
+	assert(fs.writefile(root .. path, transform(data)))
+end
+local function replace(data, before, after)
+	local a, b = data:find(before, 1, true)
+	assert(a, "AdGuardHome native anchor missing: " .. before)
+	return data:sub(1, a - 1) .. after .. data:sub(b + 1)
+end
+local function between(data, first, last, replacement)
+	local a = assert(data:find(first, 1, true), first)
+	local b = assert(data:find(last, a + #first, true), last)
+	return data:sub(1, a - 1) .. replacement .. data:sub(b)
+end
+edit("model/cbi/AdGuardHome/base.lua", function(data)
+	data = between(data, 'local binmtime=', 'o=s:option(Button,"restart"', [[local e = uci:get("AdGuardHome", "AdGuardHome", "coreversion") or ""
+if e == "" then e = uci:get("AdGuardHome", "AdGuardHome", "version") or "" end
+if not fs.access(configpath) then e = e .. " " .. translate("no config") end
+if not fs.access(binpath) then e = e .. " " .. translate("no core") end
+]])
+	data = between(data, 'local port=luci.sys.exec(', '---- Redirect', [[local port = (fs.readfile(configpath) or ""):match("\n%s+port:%s*(%d+)") or "?"
+]])
+	data = data:gsub('fs%.rmdir%(value%)', '-- Invalid paths are reported by the native validator below.')
+	data = data:gsub('fs%.writefile%("/var/run/lucilogpos","0"%)', '')
+	return data
+end)
+edit("model/cbi/AdGuardHome/log.lua", function(data)
+	return (data:gsub('fs%.writefile%("/var/run/lucilogpos","0"%)', ''))
+end)
+edit("view/AdGuardHome/AdGuardHome_check.htm", function(data)
+	data = between(data, 'function apply_forceupdate(){', 'function reverselog(){', [=[var adgUpdateTimer = null;
+function adg_start_update(force) {
+	updatebtn.disabled = true;
+	forceupdatebtn.disabled = true;
+	(new XHR()).post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[doupdate]])%>',
+		{ force: force ? 1 : 0, token: '<%=token%>' }, function(x) {
+			var data = null;
+			try { data = JSON.parse(x.responseText); } catch (e) {}
+			if (!data || !data.ok) {
+				updatebtn.disabled = false;
+				forceupdatebtn.disabled = false;
+				document.getElementById('logview').style.display = 'block';
+				document.getElementById('cbid.logview.1.conf').value = data && data.error || '<%:Unknown error%>';
+				return;
+			}
+			poll_check();
+		});
+}
+function apply_forceupdate() { adg_start_update(true); }
+]=])
+	data = between(data, 'function apply_update(){', '<% if fs.access("/var/run/update_core") then %>', [=[function apply_update() { adg_start_update(false); }
+function poll_check() {
+	document.getElementById('logview').style.display = 'block';
+	if (adgUpdateTimer !== null) window.clearInterval(adgUpdateTimer);
+	function refresh_update() {
+		XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[check]])%>', null, function(x, data) {
+			if (!data) return;
+			var text = data.log || data.error || '';
+			document.getElementById('cbid.logview.1.conf').value = islogreverse ? text.split('\n').reverse().join('\n') : text;
+			var running = data.state === 'running';
+			updatebtn.disabled = running;
+			forceupdatebtn.disabled = running;
+			updatebtn.value = running ? '<%:Check...%>' : '<%:Update core version%>';
+			forceupdatebtn.style.display = running ? 'none' : 'inline';
+			if (!running) { window.clearInterval(adgUpdateTimer); adgUpdateTimer = null; }
+		});
+	}
+	adgUpdateTimer = window.setInterval(refresh_update, 3000);
+	refresh_update();
+}
+]=])
+	return (data:gsub('lv%.innerHTML', 'lv.value'))
+end)
+edit("view/AdGuardHome/log.htm", function(data)
+	data = between(data, 'function apply_del_log(){', 'function chlogtime(){', [=[function apply_del_log() {
+	(new XHR()).post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dodellog]])%>',
+		{ token: '<%=token%>' }, function(x) {
+			var data = null;
+			try { data = JSON.parse(x.responseText); } catch (e) {}
+			if (data && data.ok) document.getElementById('cbid.logview.1.conf').value = '';
+			else window.alert(data && data.error || '<%:Unknown error%>');
+		});
+}
+]=])
+	data = between(data, 'function poll_check(){', '<%if self.pollcheck then%>', [=[function poll_check() {
+	XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[getlog]])%>', null, function(x) {
+		var text = x.responseText || '';
+		var lines = isutc2local ? line_tolocal(text) : text.split('\n');
+		if (islogreverse) lines.reverse();
+		document.getElementById('cbid.logview.1.conf').value = lines.join('\n');
+	});
+}
+]=])
+	return (data:gsub('lv%.innerHTML', 'lv.value'))
+end)
+edit("view/AdGuardHome/yamleditor.htm", function(data)
+	data = replace(data, [=[XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[reloadconfig]])%>', null,]=],
+		[=[(new XHR()).post('<%=url([[admin]], [[services]], [[AdGuardHome]], [[reloadconfig]])%>', { token: '<%=token%>' },]=])
+	return replace(data, 'location.reload();', [[var result = null;
+	try { result = JSON.parse(x.responseText); } catch (e) {}
+	if (result && result.ok) location.reload();
+	else window.alert(result && result.error || '<%:Unknown error%>');]])
+end)
+for _, pattern in ipairs({ "model/cbi/AdGuardHome/*.lua", "view/AdGuardHome/*.htm" }) do
+	for path in fs.glob(root .. pattern) do
+		if path:match("%.lua$") then assert(loadfile(path))
+		else assert(require("luci.template.parser").parse(path)) end
+	end
+end
+EOF_OPENWRT_LUCI_8080_ADGUARD
+    [ "$?" -eq 0 ] || die "适配 AdGuardHome 原生页面接口失败"
+    cp -R "$adg_data/usr/lib/lua/luci/model/cbi/AdGuardHome/." "$adg_models/" || die "写入 AdGuardHome 原生表单失败"
+    cp -R "$adg_data/usr/lib/lua/luci/view/AdGuardHome/." "$adg_views/" || die "写入 AdGuardHome 原生模板失败"
+    for adg_asset in codemirror twin-bcrypt.min.js; do
+        if [ -L "$adg_resources/$adg_asset" ]; then rm -f "$adg_resources/$adg_asset"; fi
+        cp -R "$adg_data/www/luci-static/resources/$adg_asset" "$adg_resources/" || die "写入 AdGuardHome 静态资源失败"
+    done
+}
+
+write_openwrt_luci_8080_overview() {
+    detect_current_nradio_model_quiet > "$OPENWRT_LUCI_8080_ROOT/model.display" || die "读取 8080 设备型号失败"
+    cat > "$OPENWRT_LUCI_8080_ROOT/overview-network.lua" <<'EOF_OPENWRT_LUCI_8080_NETWORK'
+local util = require "luci.util"
+local fs = require "nixio.fs"
+local model = (fs.readfile(NRADIO_8080_INSTANCE_ROOT .. "/model.display") or ""):match("[^\r\n]+") or ""
+local limit = model:match("^NRadio_C5800%-") and 2 or 1
+local dump
+local function collect(ntm, family)
+	if not dump then dump = util.ubus("network.interface", "dump", {}) or {} end
+	local routes = {}
+	-- NROS keeps additional uplinks in policy tables, outside netifd's route list.
+	for _, scope in ipairs({ "", "table all " }) do
+		local output = util.exec("ip -" .. family .. " route show " .. scope .. "default 2>/dev/null") or ""
+		local group = {}
+		for line in output:gmatch("[^\r\n]+") do
+			local device = line:match("%sdev%s+(%S+)")
+			if line:match("^default%s") and device then
+				group[#group + 1] = {
+					device = device, gateway = line:match("%svia%s+(%S+)"),
+					metric = tonumber(line:match("%smetric%s+(%d+)")) or 0
+				}
+			end
+		end
+		table.sort(group, function(a, b)
+			if a.metric ~= b.metric then return a.metric < b.metric end
+			if a.device ~= b.device then return a.device < b.device end
+			return (a.gateway or "~") < (b.gateway or "~")
+		end)
+		for _, route in ipairs(group) do routes[#routes + 1] = route end
+	end
+	local result, seen = {}, {}
+	for _, route in ipairs(routes) do
+		for _, state in ipairs(dump.interface or {}) do
+			local device = state.l3_device or state.device
+			local addresses = state[family == 4 and "ipv4-address" or "ipv6-address"] or {}
+			local has_address = addresses[1] and addresses[1].address
+			if family == 6 then
+				has_address = has_address or (state["ipv6-prefix"] or {})[1] or
+					(state["ipv6-prefix-assignment"] or {})[1]
+			end
+			if state.up and state.interface and device == route.device and
+			   has_address and not seen[device] then
+				local net = ntm.network(state.interface, state.proto)
+				if route.gateway then
+					local gateway = route.gateway
+					if family == 4 then net.gwaddr = function() return gateway end
+					else net.gw6addr = function() return gateway end end
+				end
+				result[#result + 1], seen[device] = net, true
+				if #result == limit then return result end
+			end
+		end
+	end
+	if #result == 0 then
+		local native = family == 4 and ntm:get_wannet() or nil
+		if family == 6 then native = ntm:get_wan6net() end
+		if native then result[1] = native end
+	end
+	return result
+end
+return { collect = collect }
+EOF_OPENWRT_LUCI_8080_NETWORK
+
+    lua - "$OPENWRT_LUCI_8080_VIEWDIR/admin_status/index.htm" <<'EOF_OPENWRT_LUCI_8080_OVERVIEW'
+local fs = require "nixio.fs"
+local source = assert(fs.readfile("/usr/lib/lua/luci/view/admin_status/index.htm"), "Native overview template missing")
+local function replace(before, after)
+	local first, last = source:find(before, 1, true)
+	assert(first, "Native overview anchor missing: " .. before)
+	source = source:sub(1, first - 1) .. after .. source:sub(last + 1)
+end
+replace('local boardinfo = luci.util.ubus("system", "board") or { }', [[local boardinfo = luci.util.ubus("system", "board") or { }
+	local model = (fs.readfile(NRADIO_8080_INSTANCE_ROOT .. "/model.display") or ""):match("[^\r\n]+")
+	if model and model ~= "" then boardinfo.model = model end]])
+replace('local wan = ntm:get_wannet()\n\t\tlocal wan6 = ntm:get_wan6net()', [[local uplinks = dofile(NRADIO_8080_INSTANCE_ROOT .. "/overview-network.lua")
+		local wans = uplinks.collect(ntm, 4)
+		local wans6 = uplinks.collect(ntm, 6)]])
+replace('if wan then\n\t\t\trv.wan = {', 'rv.wans = {}\n\t\tfor _, wan in ipairs(wans) do\n\t\t\trv.wans[#rv.wans + 1] = {')
+replace('if wan6 then\n\t\t\trv.wan6 = {', 'rv.wans6 = {}\n\t\tfor _, wan6 in ipairs(wans6) do\n\t\t\trv.wans6[#rv.wans6 + 1] = {')
+replace('\n\t\tif has_dsl then', '\n\t\trv.wan, rv.wan6 = rv.wans[1], rv.wans6[1]\n\n\t\tif has_dsl then')
+replace('\tvar npoll = 1;', [[	function wanRows(prefix, count) {
+		var first = document.getElementById(prefix + '_i').parentNode;
+		var parent = first.parentNode;
+		while (parent.rows.length > count)
+			parent.removeChild(parent.rows[parent.rows.length - 1]);
+		while (parent.rows.length < count) {
+			var row = first.cloneNode(true);
+			row.cells[0].removeAttribute('id');
+			row.cells[1].removeAttribute('id');
+			parent.appendChild(row);
+		}
+		return parent.rows;
+	}
+
+	var npoll = 1;]])
+replace([[var si = document.getElementById('wan4_i');
+			var ss = document.getElementById('wan4_s');
+			var ifc = info.wan;]], [[var list4 = info.wans || (info.wan ? [info.wan] : []);
+			var rows4 = wanRows('wan4', Math.max(1, list4.length));
+			for (var w4 = 0; w4 < rows4.length; w4++) {
+			var si = rows4[w4].cells[0];
+			var ss = rows4[w4].cells[1];
+			var ifc = list4[w4];]])
+replace([[<% if has_ipv6 then %>
+			var si6 = document.getElementById('wan6_i');
+			var ss6 = document.getElementById('wan6_s');
+			var ifc6 = info.wan6;]], [[}
+			<% if has_ipv6 then %>
+			var list6 = info.wans6 || (info.wan6 ? [info.wan6] : []);
+			var rows6 = wanRows('wan6', Math.max(1, list6.length));
+			for (var w6 = 0; w6 < rows6.length; w6++) {
+			var si6 = rows6[w6].cells[0];
+			var ss6 = rows6[w6].cells[1];
+			var ifc6 = list6[w6];]])
+replace("ss6.innerHTML = '<em><%:Not connected%></em>';\n\t\t\t}", "ss6.innerHTML = '<em><%:Not connected%></em>';\n\t\t\t}\n\t\t\t}")
+-- Argon renders section headings as h3; the OEM overview still uses legends.
+replace('<legend><%:Swap%></legend>', '<h3>交换空间（Swap）</h3>')
+source = source:gsub('<legend>(.-)</legend>', '<h3>%1</h3>')
+replace([[<tr><td width="33%"><%:Total Available%></td><td id="swaptotal">-</td></tr>]],
+	[[<tr><td width="33%">总容量</td><td id="swaptotal">-</td></tr>
+		<tr><td width="33%">已用</td><td id="swapused">-</td></tr>]])
+replace([[<tr><td width="33%"><%:Free%></td><td id="swapfree">-</td></tr>]],
+	[[<tr><td width="33%">空闲</td><td id="swapfree">-</td></tr>]])
+replace([[if (e = document.getElementById('swaptotal'))
+				e.innerHTML = progressbar(
+					(info.swap.free / 1024) + " <%:kB%>",
+					(info.swap.total / 1024) + " <%:kB%>"
+				);]], [[if (e = document.getElementById('swaptotal'))
+				e.textContent = (info.swap.total / 1024) + " <%:kB%>";
+
+			if (e = document.getElementById('swapused'))
+				e.innerHTML = progressbar(
+					(Math.max(0, info.swap.total - info.swap.free) / 1024) + " <%:kB%>",
+					(info.swap.total / 1024) + " <%:kB%>"
+				);]])
+assert(fs.writefile(arg[1], source), "Could not write private overview template")
+EOF_OPENWRT_LUCI_8080_OVERVIEW
+    [ "$?" -eq 0 ] || die "生成 8080 原生概况模板失败"
+    chmod 644 "$OPENWRT_LUCI_8080_ROOT/model.display" "$OPENWRT_LUCI_8080_ROOT/overview-network.lua" "$OPENWRT_LUCI_8080_VIEWDIR/admin_status/index.htm" || die "设置 8080 概况文件权限失败"
+}
+
+write_openwrt_luci_8080_plugin_state() {
+    cat > "$OPENWRT_LUCI_8080_ROOT/plugin-state.lua" <<'EOF_OPENWRT_LUCI_8080_PLUGIN_STATE'
+local fs = require "nixio.fs"
+local M = {}
+local function record(rows, path)
+	local st = fs.stat(path)
+	if st then
+		rows[#rows + 1] = table.concat({ path, st.type or "", st.mtime or 0,
+			st.ctime or 0, st.size or 0 }, ":")
+	end
+	return st
+end
+local function index_rows()
+	local rows = { "luci8080-plugin-state-v1" }
+	record(rows, "/usr/lib/opkg/status")
+	for _, pattern in ipairs({ "/usr/lib/lua/luci/controller/*.lua",
+		"/usr/lib/lua/luci/controller/*/*.lua", "/usr/lib/opkg/meta/*.json" }) do
+		for path in (fs.glob(pattern) or function() end) do record(rows, path) end
+	end
+	return rows
+end
+function M.index_snapshot()
+	local rows = index_rows()
+	table.sort(rows)
+	return table.concat(rows, "\n")
+end
+function M.snapshot()
+	local rows, seen = index_rows(), {}
+	local function walk(path)
+		local st = record(rows, path)
+		if not st or st.type ~= "dir" then return end
+		local real = fs.realpath(path) or path
+		if seen[real] then return end
+		seen[real] = true
+		for name in (fs.dir(path) or function() end) do walk(path .. "/" .. name) end
+	end
+	for path in (fs.glob("/www/luci-static/*") or function() end) do
+		local name = path:match("([^/]+)$")
+		if name ~= "nradio" and name ~= "argon" and name ~= "bootstrap" then walk(path) end
+	end
+	for _, pattern in ipairs({ "/usr/lib/lua/luci/model/cbi/openvpn*.lua",
+		"/usr/lib/lua/luci/model/cbi/AdGuardHome/*" }) do
+		for path in (fs.glob(pattern) or function() end) do record(rows, path) end
+	end
+	table.sort(rows)
+	return table.concat(rows, "\n")
+end
+function M.connect_assets(root)
+	local protected = {
+		["menu-argon.js"]=true, ["cbi.js"]=true, ["luci.js"]=true, ["ui.js"]=true,
+		["fs.js"]=true, ["rpc.js"]=true, ["uci.js"]=true, ["validation.js"]=true,
+		["xhr.js"]=true, codemirror=true, ["twin-bcrypt.min.js"]=true
+	}
+	local function connect(src, dst)
+		local st, old = fs.stat(src), fs.lstat(dst)
+		if not st then return end
+		if old and old.type == "lnk" then
+			if fs.stat(dst) then return end
+			assert(fs.unlink(dst)); old = nil
+		end
+		if st.type == "dir" then
+			if not old then assert(fs.mkdirr(dst)); assert(fs.chmod(dst, "755")) end
+			for name in (fs.dir(src) or function() end) do connect(src .. "/" .. name, dst .. "/" .. name) end
+		elseif st.type == "reg" and not old then
+			local pending = dst .. ".nradio-new"
+			fs.unlink(pending)
+			assert(fs.copy(src, pending)); assert(fs.chmod(pending, "644")); assert(fs.rename(pending, dst))
+		end
+	end
+	local target = root .. "/www/luci-static"
+	for src in (fs.glob("/www/luci-static/*") or function() end) do
+		local name = src:match("([^/]+)$")
+		if name == "resources" then
+			for asset in (fs.dir(src) or function() end) do
+				if not protected[asset] then connect(src .. "/" .. asset, target .. "/resources/" .. asset) end
+			end
+		elseif name ~= "nradio" and name ~= "argon" and name ~= "bootstrap" then
+			connect(src, target .. "/" .. name)
+		end
+	end
+end
+function M.entries()
+	local entries = {}
+	local json = require "luci.jsonc"
+	for path in (fs.glob("/usr/lib/opkg/meta/*.json") or function() end) do
+		local ok, meta = pcall(json.parse, fs.readfile(path) or "")
+		if ok and type(meta) == "table" and type(meta.entry) == "string" then
+			local route = meta.entry:match("^/cgi%-bin/luci/(admin/[^?#]+)")
+			if route then
+				entries[#entries + 1] = { route = route:gsub("/+$", ""), title = meta.title }
+			end
+		end
+	end
+	return entries
+end
+if arg and arg[1] == "--snapshot" then io.write(M.snapshot(), "\n") end
+return M
+EOF_OPENWRT_LUCI_8080_PLUGIN_STATE
+    chmod 644 "$OPENWRT_LUCI_8080_ROOT/plugin-state.lua" || die "设置插件状态模块权限失败"
+}
+
 write_openwrt_luci_8080_files() {
     local shared_static static_name
-    mkdir -p "$OPENWRT_LUCI_8080_DOCROOT/cgi-bin" "$(dirname "$OPENWRT_LUCI_8080_DETAILS")" || die "创建 OpenWrt LuCI（8080）目录失败"
+    prepare_openwrt_luci_8080_packages
+    mkdir -p "$OPENWRT_LUCI_8080_DOCROOT/cgi-bin" "$(dirname "$OPENWRT_LUCI_8080_DETAILS")" "$OPENWRT_LUCI_8080_VIEWDIR/openclash" || die "创建 OpenWrt LuCI（8080）目录失败"
     ensure_dir_writable "$OPENWRT_LUCI_8080_ROOT" "OpenWrt LuCI（8080）应用目录"
+    write_openwrt_luci_8080_overview
+    write_openwrt_luci_8080_adguard
+    write_openwrt_luci_8080_openvpn
+    write_openwrt_luci_8080_plugin_state
+
+    cat > "$OPENWRT_LUCI_8080_ROOT/openvpn-upload.lua" <<'EOF_OPENWRT_LUCI_8080_UPLOAD'
+-- Receive the complete multipart body before inspecting form fields.
+local http = require "luci.http"
+local dispatcher = require "luci.dispatcher"
+local fs = require "nixio.fs"
+local uci = require("luci.model.uci").cursor()
+local function failure(message)
+	http.redirect(dispatcher.build_url("admin", "services", "openvpn") ..
+		"?upload_error=" .. http.urlencode(message))
+end
+if http.getenv("REQUEST_METHOD") ~= "POST" then return failure("请通过导入表单上传配置") end
+local chunks, size, seen, too_large = {}, 0, false, false
+http.setfilehandler(function(meta, chunk)
+	if meta and meta.name == "ovpn_file" then
+		seen = true
+		chunk = chunk or ""
+		size = size + #chunk
+		if size <= 2 * 1024 * 1024 then chunks[#chunks + 1] = chunk
+		else too_large = true end
+	end
+end)
+local name = http.formvalue("instance_name2")
+if not dispatcher.test_post_security() then return end
+if type(name) ~= "string" or #name < 1 or #name > 20 or name:find("[^A-Za-z0-9_]") then
+	return failure("实例名须为 1—20 位字母、数字或下划线")
+end
+if too_large then return failure("配置文件超过 2 MiB") end
+local data = table.concat(chunks):gsub("\r\n", "\n")
+if not seen or not data:match("%S") or data:find("%z") then return failure("请选择有效的文本 .ovpn 配置") end
+local path = "/etc/openvpn/" .. name .. ".ovpn"
+if uci:get("openvpn", name) or fs.lstat(path) then return failure("该实例名或配置文件已存在") end
+fs.mkdirr("/etc/openvpn")
+if not fs.writefile(path, data) then return failure("写入配置文件失败") end
+if not fs.chmod(path, "600") then fs.unlink(path); return failure("设置配置权限失败") end
+if not uci:section("openvpn", "openvpn", name, { config = path, enabled = "0" }) or
+	 not uci:save("openvpn") or not uci:commit("openvpn") then
+	uci:revert("openvpn")
+	fs.unlink(path)
+	return failure("保存实例失败")
+end
+http.redirect(dispatcher.build_url("admin", "services", "openvpn"))
+EOF_OPENWRT_LUCI_8080_UPLOAD
 
     [ ! -L "$OPENWRT_LUCI_8080_DOCROOT/luci-static" ] || die "LuCI 静态资源目录尚未隔离"
     mkdir -p "$OPENWRT_LUCI_8080_DOCROOT/luci-static" || die "创建 LuCI 静态资源目录失败"
@@ -68542,12 +70465,16 @@ write_openwrt_luci_8080_files() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="0; url=/cgi-bin/luci/admin/status/details">
+<meta http-equiv="refresh" content="0; url=/cgi-bin/luci/admin/status/overview">
 <title>OpenWrt LuCI</title>
 </head>
-<body><a href="/cgi-bin/luci/admin/status/details">进入 OpenWrt LuCI</a></body>
+<body><a href="/cgi-bin/luci/admin/status/overview">进入 OpenWrt LuCI</a></body>
 </html>
 EOF_OPENWRT_LUCI_8080_INDEX
+
+    cat > "$OPENWRT_LUCI_8080_VIEWDIR/openclash/nradio_tabs.htm" <<'EOF_OPENWRT_LUCI_8080_OPENCLASH_TABS'
+<%# The native Argon tab menu renders OpenClash child routes. -%>
+EOF_OPENWRT_LUCI_8080_OPENCLASH_TABS
 
     cat > "$OPENWRT_LUCI_8080_CGI" <<'EOF_OPENWRT_LUCI_8080_WRAPPER'
 #!/usr/bin/lua
@@ -68563,10 +70490,27 @@ if not instance_root or instance_root == "" then
 	io.write("Status: 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInvalid CGI path\n")
 	return
 end
+NRADIO_8080_INSTANCE_ROOT = instance_root
 local private_viewdir = instance_root .. "/usr/lib/lua/luci/view"
 
-require "luci.cacheloader"
+-- Load installed sources directly: the OEM module cache ignores file changes.
 require "luci.sgi.cgi"
+
+local http = require "luci.http"
+local original_getenv = http.getenv
+local request_uri = os.getenv("REQUEST_URI")
+if not request_uri or request_uri == "" then
+	request_uri = (os.getenv("SCRIPT_NAME") or "/cgi-bin/luci") .. (os.getenv("PATH_INFO") or "")
+	local query = os.getenv("QUERY_STRING") or ""
+	if query ~= "" then request_uri = request_uri .. "?" .. query end
+end
+function http.getenv(name)
+	if name == "REQUEST_URI" then
+		local value = original_getenv(name)
+		return (value and value ~= "") and value or request_uri
+	end
+	return original_getenv(name)
+end
 
 local template = require "luci.template"
 local parser = require "luci.template.parser"
@@ -68576,8 +70520,14 @@ function parser.parse(path, ...)
 	if path:sub(1, #shared_view_prefix) == shared_view_prefix then
 		local name = path:sub(#shared_view_prefix + 1)
 		if name:match("^themes/bootstrap/") or
+		   name:match("^themes/argon/") or
+		   name == "admin_status/index.htm" or
 		   name == "admin_status/nradio_details.htm" or
-		   name == "admin_status/nradio_8080_sysauth.htm" then
+		   name == "admin_status/nradio_8080_sysauth.htm" or
+		   name == "openclash/nradio_tabs.htm" or
+		   (name:match("^AdGuardHome/") and require("nixio.fs").access(private_viewdir .. "/" .. name)) or
+		   (name:match("^openvpn/") and require("nixio.fs").access(private_viewdir .. "/" .. name)) or
+		   name:match("^argon%-config/") then
 			path = private_viewdir .. "/" .. name
 		end
 	end
@@ -68594,11 +70544,14 @@ end
 local original_httpdispatch = luci.dispatcher.httpdispatch
 local original_createtree = luci.dispatcher.createtree
 
--- The stock system form writes the shared luci.main.mediaurlbase setting.
--- Disable that field only in this CGI, including crafted form submissions.
 local cbi = require "luci.cbi"
 local original_cbi_load = cbi.load
 function cbi.load(model, ...)
+	if model == "AdGuardHome/base" or model == "AdGuardHome/manual" or model == "AdGuardHome/log" or
+	   model == "openvpn" or model == "openvpn-basic" or model == "openvpn-advanced" or model == "openvpn-file" then
+		local private_model = instance_root .. "/usr/lib/lua/luci/model/cbi/" .. model .. ".lua"
+		if require("nixio.fs").access(private_model) then model = private_model end
+	end
 	local maps = original_cbi_load(model, ...)
 	if model == "admin_system/system" then
 		for _, map in ipairs(maps) do
@@ -68614,149 +70567,177 @@ function cbi.load(model, ...)
 	return maps
 end
 
-local function route_node(tree, path)
-	local node = tree
-	for _, name in ipairs(path) do
-		node = type(node) == "table" and node.nodes and node.nodes[name]
-		if type(node) ~= "table" then return nil end
+local function active_theme_name()
+	local flag = io.open(instance_root .. "/theme.active", "r")
+	if flag then
+		local name = flag:read("*l")
+		flag:close()
+		if name == "argon" then return "argon" end
 	end
-	return node
+	return "bootstrap"
 end
 
-local function route_exists(tree, path)
-	local node = route_node(tree, path)
-	return node ~= nil and node.target ~= nil and not node.hidden
+local function set_active_theme(node, theme_name)
+	node.mediaurlbase = "/luci-static/" .. theme_name
+	for _, child in pairs(node.nodes or {}) do
+		if type(child) == "table" then set_active_theme(child, theme_name) end
+	end
 end
 
-local function add_admin_alias(tree, menu, name, title, order, path)
-	if not route_exists(tree, path) then
-		return
+local main_menu = {
+	status = true, system = true, store = true,
+	services = true, network = true, logout = true
+}
+local system_menu_hidden = {
+	Secondsystem = true, clock_status = true, tasks = true,
+	reset = true, security = true, crontab = true, leds = true,
+	ttyd = true
+}
+local function menu_visible(parent, name, node)
+	if type(node) ~= "table" or node.hidden or not node.target or not node.title then
+		return false
 	end
-	menu.nodes[name] = {
-		nodes = {},
-		target = luci.dispatcher.alias(unpack(path)),
-		title = title,
-		order = order,
-		leaf = true
+	if tostring(node.title):match("^%s*$") then return false end
+	if name == "menu" then return false end
+	if parent == "admin" then return main_menu[name] == true end
+	if parent == "admin/system" then return not system_menu_hidden[name] end
+	if parent == "admin/services/AdGuardHome" and name == "oem" then return false end
+	return true
+end
+
+local function menu_serialize(node, name, path)
+	local out = {
+		title = require("luci.i18n").translate(tostring(node.title or name)),
+		satisfied = true,
+		order = tonumber(node.order) or 100
+	}
+	if name ~= "store" then
+		local children = {}
+		for child_name, child in pairs(node.nodes or {}) do
+			if menu_visible(path, child_name, child) then
+				children[child_name] = menu_serialize(child, child_name, path .. "/" .. child_name)
+			end
+		end
+		if next(children) then out.children = children end
+	end
+	return out
+end
+
+local function argon_menu_tree(admin)
+	return {
+		title = "root",
+		satisfied = true,
+		children = { admin = menu_serialize(admin, "admin", "admin") }
 	}
 end
 
-local function inject_plugin_menu(tree, admin)
-	local native, factory, known = {}, {}, {}
-	local menu = { nodes = {}, target = luci.dispatcher.firstchild(), title = "插件", order = 55 }
-	for _, group in ipairs({ "services", "vpn" }) do
-		local parent = route_node(tree, { "admin", group })
-		for name, child in pairs(parent and parent.nodes or {}) do
-			if type(child) == "table" and child.target and child.title and not child.hidden then
-				local path = { "admin", group, name }
-				local title = tostring(child.title)
-				native[#native + 1] = { title = title, path = path }
-				known[name:lower()] = true
-				add_admin_alias(tree, menu, group .. "_" .. name, title, tonumber(child.order) or 100, path)
-			end
-		end
-	end
-	for _, item in ipairs({
-		{ "ttyd", "Web SSH", { "admin", "system", "ttyd" } },
-		{ "docker", "Docker", { "admin", "docker" } }
-	}) do
-		if not known[item[1]] and route_exists(tree, item[3]) then
-			native[#native + 1] = { title = item[2], path = item[3] }
-			known[item[1]] = true
-			add_admin_alias(tree, menu, item[1], item[2], 200, item[3])
-		end
-	end
-	for _, item in ipairs({
-		{ "openvpn", "OpenVPN", { "nradioadv", "system", "openvpnfull" } },
-		{ "zerotier", "ZeroTier", { "nradioadv", "system", "zerotier" } },
-		{ "openlist", "OpenList", { "nradioadv", "system", "openlist" } },
-		{ "mosdns", "MosDNS", { "nradioadv", "system", "mosdns" } },
-		{ "ddns-go", "DDNS-GO", { "nradioadv", "system", "ddnsgo" } },
-		{ "docker", "Docker", { "nradioadv", "system", "docker" } },
-		{ "ttyd", "Web SSH", { "nradioadv", "system", "webssh" } },
-		{ "qiyou", "奇游联机宝", { "nradioadv", "system", "qiyou" } },
-		{ "leigod", "雷神加速器", { "nradioadv", "system", "leigod" } },
-		{ "aibot", "AI 助手", { "nradioadv", "system", "aibot" } },
-		{ "fanctrl", "风扇控制", { "nradioadv", "system", "fanctrl" } },
-		{ "cpeopt", "5G 连接监听", { "nradioadv", "cellular", "cpeopt" } }
-	}) do
-		if not known[item[1]] and route_exists(tree, item[3]) then
-			factory[#factory + 1] = { title = item[2], path = "/cgi-bin/luci/" .. table.concat(item[3], "/") }
-		end
-	end
-	table.sort(native, function(a, b) return a.title < b.title end)
-	luci.dispatcher.context.nradio_8080_links = { native = native, factory = factory }
-	if #native + #factory > 0 then
-		menu.nodes.overview = {
-			nodes = {}, title = "全部插件入口", order = 0, leaf = true,
-			target = function()
-				require("luci.http").redirect(luci.dispatcher.build_url("admin", "status", "details") .. "#nradio-plugin-links")
-			end
-		}
-		admin.nodes.nradio_plugins = menu
-	end
-end
-
-local function set_bootstrap_theme(node)
-	node.mediaurlbase = "/luci-static/bootstrap"
-	for _, child in pairs(node.nodes or {}) do
-		if type(child) == "table" then set_bootstrap_theme(child) end
-	end
-end
-
 function luci.dispatcher.createtree()
+	local fs = require "nixio.fs"
+	local plugins = dofile(instance_root .. "/plugin-state.lua")
+	local signature = plugins.index_snapshot()
+	local stamp = instance_root .. "/plugins.index"
+	local changed = fs.readfile(stamp) ~= signature
+	if changed then
+		-- New packages can contain controller mtimes older than the cached index.
+		fs.unlink("/tmp/luci-indexcache-bootstrap")
+		plugins.connect_assets(instance_root)
+		luci.dispatcher.createindex()
+	end
 	local tree = original_createtree()
+	if changed and fs.writefile(stamp, signature) then fs.chmod(stamp, "600") end
 	local admin = tree.nodes and tree.nodes.admin
 	if admin then
-		admin.nodes = admin.nodes or {}
-		inject_plugin_menu(tree, admin)
+		for _, plugin in ipairs(plugins.entries()) do
+			local node, category = tree, plugin.route:match("^admin/([^/]+)/")
+			for part in plugin.route:gmatch("[^/]+") do
+				node = node and node.nodes and node.nodes[part]
+				if node and node.leaf then break end
+			end
+			if category and node and node.target then
+				main_menu[category] = true
+				local parent = admin.nodes[category]
+				if parent and not parent.target then
+					parent.target = luci.dispatcher.firstchild()
+					parent.title = parent.title or category:upper()
+					parent.auto = nil
+				end
+			end
+		end
 		tree.nodes.nradio = nil
 		tree.nodes.nradioadv = nil
 		tree.nodes.authcheck = nil
-		admin.nodes = admin.nodes or {}
-		admin.sysauth_template = "admin_status/nradio_8080_sysauth"
-		local status = admin.nodes.status
-		if not status then
-			status = { nodes = {}, target = luci.dispatcher.firstchild(), title = "状态", order = 10 }
-			admin.nodes.status = status
+		admin.sysauth_template = active_theme_name() == "argon"
+			and "themes/argon/sysauth"
+			or "admin_status/nradio_8080_sysauth"
+
+		local status = admin.nodes and admin.nodes.status
+		if status and status.nodes and status.nodes.overview then
+			status.nodes.overview.title = "概况"
+			status.nodes.details = nil
 		end
-		if status then
-			status.nodes = status.nodes or {}
-			status.nodes.details = {
-				nodes = {},
-				target = luci.dispatcher.template("admin_status/nradio_details"),
-				title = "设备总览",
-				order = 0,
+
+		local services = admin.nodes and admin.nodes.services
+		local openvpn = services and services.nodes and services.nodes.openvpn
+		if openvpn and openvpn.nodes and openvpn.nodes.upload then
+			-- Do not mark this route post=true: that parses multipart too early.
+			openvpn.nodes.upload.target = function()
+				return dofile(instance_root .. "/openvpn-upload.lua")
+			end
+			openvpn.nodes.upload.post = nil
+			openvpn.nodes.upload.leaf = true
+		end
+		local system = admin.nodes and admin.nodes.system
+		local argon_config_model = instance_root .. "/usr/lib/lua/luci/model/cbi/argon-config.lua"
+		if active_theme_name() == "argon" and system and system.nodes and
+		   require("nixio.fs").access(argon_config_model) then
+			system.nodes["argon-config"] = {
+				target = luci.dispatcher.form(argon_config_model),
+				title = "Argon Config",
+				order = 90,
 				leaf = true
 			}
 		end
+		local adguard = services and services.nodes and services.nodes.AdGuardHome
+		if adguard and adguard.nodes and adguard.nodes.base then
+			adguard.target = luci.dispatcher.alias("admin", "services", "AdGuardHome", "base")
+			if adguard.nodes.oem then
+				adguard.nodes.oem.title = nil
+				adguard.nodes.oem.target = luci.dispatcher.alias("admin", "services", "AdGuardHome", "base")
+			end
+		end
+
+		admin.nodes.menu = {
+			target = function()
+				http.prepare_content("application/json")
+				http.write(require("luci.jsonc").stringify(argon_menu_tree(admin)))
+			end,
+			leaf = true
+		}
 	end
-	set_bootstrap_theme(tree)
+	set_active_theme(tree, active_theme_name())
 	return tree
 end
 
 function luci.dispatcher.httpdispatch(request, prefix)
 	local config = require "luci.config"
-	config.main.mediaurlbase = "/luci-static/bootstrap"
-	config.themes = { Bootstrap = "/luci-static/bootstrap" }
+	local theme_name = active_theme_name()
+	config.main.mediaurlbase = "/luci-static/" .. theme_name
+	config.themes = {}
+	config.themes[theme_name == "argon" and "Argon" or "Bootstrap"] = "/luci-static/" .. theme_name
 	return original_httpdispatch(request, prefix)
 end
 
 local path_info = os.getenv("PATH_INFO") or ""
-local request_method = os.getenv("REQUEST_METHOD") or ""
-
-if request_method == "GET" and (
-	path_info == "" or
-	path_info == "/" or
-	path_info == "/admin" or
-	path_info == "/admin/" or
-	path_info == "/nradio" or
-	path_info:match("^/nradio/") or
-	path_info == "/nradioadv" or
-	path_info:match("^/nradioadv/")
+if os.getenv("REQUEST_METHOD") == "GET" and (
+	path_info == "" or path_info == "/" or
+	path_info == "/admin" or path_info == "/admin/" or
+	path_info == "/admin/status/details" or
+	path_info:match("^/admin/status/details/") or
+	path_info == "/nradio" or path_info:match("^/nradio/") or
+	path_info == "/nradioadv" or path_info:match("^/nradioadv/")
 ) then
 	io.write("Status: 302 Found\r\n")
-	io.write("Location: /cgi-bin/luci/admin/status/details\r\n")
+	io.write("Location: /cgi-bin/luci/admin/status/overview\r\n")
 	io.write("Content-Type: text/plain\r\n\r\n")
 	return
 end
@@ -68784,7 +70765,7 @@ EOF_OPENWRT_LUCI_8080_WRAPPER
 -%>
 <%+header%>
 
-<form method="post" action="<%=pcdata(luci.http.getenv("REQUEST_URI") or luci.dispatcher.build_url("admin", "status", "details"))%>">
+<form method="post" action="<%=pcdata(luci.http.getenv("REQUEST_URI") or luci.dispatcher.build_url("admin", "status", "overview"))%>">
 	<%- if fuser then %>
 		<div class="alert-message warning">
 			<p><%:Invalid username and/or password! Please try again.%></p>
@@ -69443,7 +71424,7 @@ EOF_OPENWRT_LUCI_8080_SYSAUTH
 EOF_OPENWRT_LUCI_8080_DETAILS
 
     chmod 755 "$OPENWRT_LUCI_8080_CGI" || die "设置 OpenWrt LuCI（8080）CGI 权限失败"
-    chmod 644 "$OPENWRT_LUCI_8080_DOCROOT/index.html" "$OPENWRT_LUCI_8080_DETAILS" "$OPENWRT_LUCI_8080_SYSAUTH" || die "设置 OpenWrt LuCI（8080）页面权限失败"
+    chmod 644 "$OPENWRT_LUCI_8080_DOCROOT/index.html" "$OPENWRT_LUCI_8080_DETAILS" "$OPENWRT_LUCI_8080_SYSAUTH" "$OPENWRT_LUCI_8080_VIEWDIR/openclash/nradio_tabs.htm" || die "设置 OpenWrt LuCI（8080）页面权限失败"
 }
 
 configure_openwrt_luci_8080_uhttpd() {
@@ -69475,6 +71456,12 @@ install_openwrt_luci_8080() {
     require_openwrt_luci_8080_supported_model
     prepare_openwrt_luci_8080_storage
 
+    openwrt_luci_8080_theme_choice="${OPENWRT_LUCI_8080_THEME:-bootstrap}"
+    case "$openwrt_luci_8080_theme_choice" in
+        bootstrap|argon) ;;
+        *) die "不支持的 8080 主题：$openwrt_luci_8080_theme_choice" ;;
+    esac
+
     openwrt_luci_8080_lan="$(openwrt_luci_8080_lan_ip 2>/dev/null || true)"
     [ -n "$openwrt_luci_8080_lan" ] || die "无法识别 LAN IPv4 地址"
     openwrt_luci_8080_listen="$openwrt_luci_8080_lan:$OPENWRT_LUCI_8080_PORT"
@@ -69483,20 +71470,42 @@ install_openwrt_luci_8080() {
     log "机型:   $(openwrt_luci_8080_current_model)"
     log "存储:   $OPENWRT_LUCI_8080_STORAGE_LABEL -> $OPENWRT_LUCI_8080_ROOT"
     log "监听:   $openwrt_luci_8080_listen（仅 LAN）"
-    log "说明:   独立 uhttpd 与独立文档根；80 端口 NRadio 原界面保持不变"
-    log "说明:   直接安装或更新，不创建备份"
-    confirm_or_exit "确认安装或更新 OpenWrt 原版 LuCI（8080）吗？"
+    log "主题:   $openwrt_luci_8080_theme_choice"
+    if [ "${1:-}" != --yes ]; then confirm_or_exit "确认安装或更新 OpenWrt 原版 LuCI（8080）吗？"; fi
 
-    log_stage 2 4 "下载并安装传统 Bootstrap 兼容主题"
-    install_openwrt_luci_8080_theme
+    if [ "$openwrt_luci_8080_theme_choice" = 'argon' ]; then
+        log_stage 2 4 "安装 argon 主题"
+        build_argon_8080_files
+    else
+        log_stage 2 4 "下载并安装传统 Bootstrap 兼容主题"
+        install_openwrt_luci_8080_theme
+    fi
 
     log_stage 3 4 "写入独立 CGI、原生菜单与设备总览"
-    write_openwrt_luci_8080_files
+    if [ "$openwrt_luci_8080_theme_choice" != argon ]; then write_openwrt_luci_8080_files; fi
+
+    # 收敛 web 文档根权限：脚本 umask 077 会让 mkdir/cp/tar 产出 700/600，
+    # uhttpd 吐静态文件时目录 700 直接 403（C2000MAX 重置后实机反馈）。
+    # -P 不跟随软链，避免改动 luci-static/* 指向的系统 /www/luci-static。
+    find -P "$OPENWRT_LUCI_8080_ROOT" -type d -exec chmod 755 {} \;
+    find -P "$OPENWRT_LUCI_8080_ROOT" -type f -exec chmod 644 {} \;
+    chmod 755 "$OPENWRT_LUCI_8080_CGI" || die "恢复 8080 CGI 可执行权限失败"
+
+    # 同步系统 iStore 静态资源：luci-app-store 页面依赖 /luci-static/istore/，
+    # 8080 为独立 docroot，缺失会导致 iStore 页面白屏（2026-09-25 实机取证）。
+    if [ -d /www/luci-static/istore ] && [ ! -L "$OPENWRT_LUCI_8080_DOCROOT/luci-static/istore" ]; then
+        mkdir -p "$OPENWRT_LUCI_8080_DOCROOT/luci-static/istore" || die "创建 8080 iStore 静态目录失败"
+        cp -a /www/luci-static/istore/. "$OPENWRT_LUCI_8080_DOCROOT/luci-static/istore/" || die "同步 iStore 静态资源失败"
+        find -P "$OPENWRT_LUCI_8080_DOCROOT/luci-static/istore" ! -type l -type d -exec chmod 755 {} \;
+        find -P "$OPENWRT_LUCI_8080_DOCROOT/luci-static/istore" ! -type l -type f -exec chmod 644 {} \;
+    fi
 
     log_stage 4 4 "建立 LAN 端口 8080 独立映射"
     configure_openwrt_luci_8080_uhttpd "$openwrt_luci_8080_listen"
+    printf '%s\n' "$openwrt_luci_8080_theme_choice" > "$OPENWRT_LUCI_8080_ROOT/theme.active" || die "写入 8080 主题标记失败"
+    if [ "$openwrt_luci_8080_theme_choice" = argon ]; then install_openwrt_luci_8080_sync; fi
     restore_nradio_main_theme_selection
-    rm -f "$OPENWRT_LUCI_8080_INDEX_CACHE" 2>/dev/null || true
+    rm -f "$OPENWRT_LUCI_8080_INDEX_CACHE" /tmp/luci-indexcache /tmp/luci-indexcache.json /tmp/luci-indexcache-admin /tmp/luci-indexcache-store 2>/dev/null || true
     /etc/init.d/uhttpd reload || die "重载 uhttpd 失败"
     log "入口:   http://$openwrt_luci_8080_listen/"
     record_action_history "4 > 3 > 1" "OpenWrt 原版 LuCI（8080）安装或更新" "PASS" "disabled"
@@ -69506,6 +71515,12 @@ uninstall_openwrt_luci_8080() {
     require_root
     require_openwrt_luci_8080_supported_model
     confirm_or_exit "确认卸载 OpenWrt 原版 LuCI（8080）吗？"
+
+    if [ -f /etc/init.d/nradio-luci8080-sync ]; then
+        /etc/init.d/nradio-luci8080-sync stop
+        /etc/init.d/nradio-luci8080-sync disable
+        rm -f /etc/init.d/nradio-luci8080-sync
+    fi
 
     if uci -q get uhttpd.openwrt8080 >/dev/null 2>&1; then
         uci -q delete uhttpd.openwrt8080 || die "删除 8080 服务配置失败"
@@ -69519,7 +71534,7 @@ uninstall_openwrt_luci_8080() {
         "$ROOTFS_2ND_STORAGE_APPS_DIR/openwrt-luci-8080" || die "删除 8080 独立目录失败"
     rm -f /usr/lib/lua/luci/view/admin_status/nradio_details.htm \
         /usr/lib/lua/luci/view/admin_status/nradio_8080_sysauth.htm \
-        "$OPENWRT_LUCI_8080_INDEX_CACHE" || die "删除 8080 旧页面和缓存失败"
+        "$OPENWRT_LUCI_8080_INDEX_CACHE" /tmp/luci-indexcache /tmp/luci-indexcache.json /tmp/luci-indexcache-admin /tmp/luci-indexcache-store || die "删除 8080 旧页面和缓存失败"
     log "结果:   OpenWrt 原版 LuCI（8080）已卸载"
     record_action_history "4 > 3 > 2" "OpenWrt 原版 LuCI（8080）卸载" "PASS" "disabled"
 }
@@ -69539,6 +71554,14166 @@ manage_openwrt_luci_8080() {
         *) die_menu_input_issue "$UI_READ_RESULT" ;;
     esac
     MENU_ACTION_COMPLETED='1'
+}
+
+install_argon_8080() {
+    local configured_home
+    require_root
+    require_openwrt_luci_8080_supported_model
+    prepare_openwrt_luci_8080_storage
+    configured_home="$(uci -q get uhttpd.openwrt8080.home 2>/dev/null || true)"
+    if [ -n "$configured_home" ] && [ "$configured_home" != "$OPENWRT_LUCI_8080_DOCROOT" ]; then
+        die "8080 当前文档根与目标实例不一致: $configured_home"
+    fi
+    if [ ! -d "$OPENWRT_LUCI_8080_ROOT" ] || [ -z "$configured_home" ]; then
+        log "正在创建 8080 argon 实例"
+        OPENWRT_LUCI_8080_THEME='argon' install_openwrt_luci_8080 "${1:-}"
+        record_action_history "4 > 4" "argon 主题（8080）" "PASS" "disabled"
+        return 0
+    fi
+    ARGON_ROOT="$OPENWRT_LUCI_8080_ROOT"
+
+    log_stage 1 3 "argon 主题 2.2.9.4 部署规划"
+    log "实例:   $ARGON_ROOT"
+    if [ "${1:-}" != --yes ]; then confirm_or_exit "确认将 8080 页面切换为 argon 主题吗？"; fi
+
+    log_stage 2 3 "私有化解包 argon 主题并更新 8080 页面"
+    build_argon_8080_files
+    find -P "$ARGON_ROOT" -type d -exec chmod 755 {} \;
+    find -P "$ARGON_ROOT" -type f -exec chmod 644 {} \;
+    chmod 755 "$OPENWRT_LUCI_8080_CGI" || die "恢复 8080 CGI 可执行权限失败"
+
+    log_stage 3 3 "切换 8080 主题并重载服务"
+    printf '%s\n' 'argon' > "$ARGON_ROOT/theme.active" || die "写入 argon 主题标记失败"
+    install_openwrt_luci_8080_sync
+    rm -f "$OPENWRT_LUCI_8080_INDEX_CACHE" /tmp/luci-indexcache /tmp/luci-indexcache.json /tmp/luci-indexcache-admin /tmp/luci-indexcache-store 2>/dev/null || true
+    /etc/init.d/uhttpd reload || die "重载 uhttpd 失败"
+    log "入口:   http://$(openwrt_luci_8080_lan_ip 2>/dev/null || true):$OPENWRT_LUCI_8080_PORT/（浏览器请 Ctrl+F5 强制刷新）"
+    record_action_history "4 > 4" "argon 主题（8080）" "PASS" "disabled"
+}
+
+publish_openwrt_luci_8080_files() {
+    lua - "$1" "$2" <<'EOF_OPENWRT_LUCI_8080_PUBLISH'
+local fs = require "nixio.fs"
+local source, target = arg[1], arg[2]
+local function visit(root, callback)
+	for name in fs.dir(root) do
+		local path = root .. "/" .. name
+		local stat = assert(fs.lstat(path))
+		if stat.type == "dir" then visit(path, callback)
+		elseif stat.type == "reg" then callback(path) end
+	end
+end
+-- Compile prepared Lua/templates before the first live file is replaced.
+visit(source, function(path)
+	if path:match("%.lua$") or path:match("/cgi%-bin/luci$") then assert(loadfile(path))
+	elseif path:match("%.htm$") then assert(require("luci.template.parser").parse(path)) end
+end)
+local function publish(src, dst)
+	local stat = assert(fs.lstat(src))
+	local old = fs.lstat(dst)
+	if stat.type == "dir" then
+		if old and old.type == "lnk" then assert(fs.unlink(dst)); old = nil end
+		assert(not old or old.type == "dir", "Not a directory: " .. dst)
+		if not old then assert(fs.mkdir(dst)) end
+		assert(fs.chmod(dst, "755"))
+		for name in fs.dir(src) do publish(src .. "/" .. name, dst .. "/" .. name) end
+	elseif stat.type == "reg" then
+		local pending = dst .. ".nradio-new"
+		fs.unlink(pending)
+		assert(fs.copy(src, pending))
+		assert(fs.chmod(pending, src:match("/cgi%-bin/luci$") and "755" or "644"))
+		assert(fs.rename(pending, dst))
+	elseif stat.type == "lnk" and (not old or old.type == "lnk") then
+		local pending = dst .. ".nradio-new"
+		fs.unlink(pending)
+		assert(fs.symlink(assert(fs.readlink(src)), pending))
+		assert(fs.rename(pending, dst))
+	end
+end
+if not fs.access(target) then assert(fs.mkdirr(target)) end
+publish(source, target)
+EOF_OPENWRT_LUCI_8080_PUBLISH
+    [ "$?" -eq 0 ] || die "8080 页面准备或替换失败"
+}
+
+build_argon_8080_files() {
+    local live_root="$OPENWRT_LUCI_8080_ROOT"
+    local OPENWRT_LUCI_8080_PACKAGE_ROOT="$live_root/packages"
+    local OPENWRT_LUCI_8080_ROOT="$WORKDIR/argon-ready"
+    local ARGON_ROOT="$OPENWRT_LUCI_8080_ROOT"
+    local OPENWRT_LUCI_8080_DOCROOT="$OPENWRT_LUCI_8080_ROOT/www"
+    local OPENWRT_LUCI_8080_CGI="$OPENWRT_LUCI_8080_DOCROOT/cgi-bin/luci"
+    local OPENWRT_LUCI_8080_VIEWDIR="$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/view"
+    local OPENWRT_LUCI_8080_DETAILS="$OPENWRT_LUCI_8080_VIEWDIR/admin_status/nradio_details.htm"
+    local OPENWRT_LUCI_8080_SYSAUTH="$OPENWRT_LUCI_8080_VIEWDIR/admin_status/nradio_8080_sysauth.htm"
+    deploy_argon_8080_theme
+    write_openwrt_luci_8080_files
+    publish_openwrt_luci_8080_files "$OPENWRT_LUCI_8080_ROOT" "$live_root"
+}
+
+write_openwrt_luci_8080_shared_assets() {
+    local asset_name asset_source asset_stage asset_target
+    asset_stage="$WORKDIR/luci8080-shared-assets"
+    mkdir -p "$asset_stage" || die "创建 8080 插件资源暂存目录失败"
+    for asset_source in /www/luci-static/* /www/luci-static/resources/*; do
+        [ -e "$asset_source" ] || continue
+        asset_name="${asset_source##*/}"
+        case "$asset_source" in
+            /www/luci-static/resources/*)
+                case "$asset_name" in menu-argon.js|cbi.js|luci.js|ui.js|fs.js|rpc.js|uci.js|validation.js|xhr.js|codemirror|twin-bcrypt.min.js) continue ;; esac
+                asset_target="$asset_stage/resources/$asset_name"
+                ;;
+            *)
+                case "$asset_name" in argon|bootstrap|nradio|resources) continue ;; esac
+                asset_target="$asset_stage/$asset_name"
+                ;;
+        esac
+        # Materialize shared assets, including symlink targets. Publishing repairs
+        # old private directories and stale links, with readable private modes.
+        if [ -d "$asset_source" ]; then
+            mkdir -p "$asset_target" || die "创建 8080 资源目录失败: $asset_name"
+            cp -RL "$asset_source/." "$asset_target/" || die "准备 8080 资源失败: $asset_name"
+        else
+            mkdir -p "$(dirname "$asset_target")" || die "创建 8080 资源父目录失败"
+            cp -L "$asset_source" "$asset_target" || die "准备 8080 资源失败: $asset_name"
+        fi
+    done
+    publish_openwrt_luci_8080_files "$asset_stage" "$OPENWRT_LUCI_8080_DOCROOT/luci-static"
+}
+
+sync_openwrt_luci_8080_plugins() {
+    local sync_home
+    sync_home="$(uci -q get uhttpd.openwrt8080.home 2>/dev/null || true)"
+    [ -n "$sync_home" ] && [ -d "$sync_home" ] || return 0
+    prepare_openwrt_luci_8080_storage
+    [ "$sync_home" = "$OPENWRT_LUCI_8080_DOCROOT" ] || die "8080 实例尚未挂载，稍后重试同步"
+    [ "$(cat "$OPENWRT_LUCI_8080_ROOT/theme.active" 2>/dev/null || true)" = argon ] || return 0
+    prepare_openwrt_luci_8080_packages
+    write_openwrt_luci_8080_adguard
+    write_openwrt_luci_8080_openvpn
+    # These are generated private copies; shared package files remain authoritative.
+    if [ ! -f /usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua ]; then
+        rm -rf "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/model/cbi/AdGuardHome" "$OPENWRT_LUCI_8080_VIEWDIR/AdGuardHome"
+    fi
+    if [ ! -f /usr/lib/lua/luci/model/cbi/openvpn.lua ]; then
+        rm -f "$OPENWRT_LUCI_8080_ROOT"/usr/lib/lua/luci/model/cbi/openvpn*.lua
+        rm -rf "$OPENWRT_LUCI_8080_VIEWDIR/openvpn"
+    fi
+    write_openwrt_luci_8080_shared_assets
+    find -P "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci" -type d -exec chmod 755 {} \;
+    find -P "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci" -type f -exec chmod 644 {} \;
+    find -P "$OPENWRT_LUCI_8080_DOCROOT/luci-static/resources" -type d -exec chmod 755 {} \;
+    find -P "$OPENWRT_LUCI_8080_DOCROOT/luci-static/resources" -type f -exec chmod 644 {} \;
+    rm -f "$OPENWRT_LUCI_8080_INDEX_CACHE" /tmp/luci-indexcache /tmp/luci-indexcache.json /tmp/luci-indexcache-admin /tmp/luci-indexcache-store
+    log "8080 插件页面、资源与菜单已同步"
+}
+
+
+verify_argon_8080_code() {
+    local verify_home
+    verify_home="$(uci -q get uhttpd.openwrt8080.home)"
+    [ -f "$verify_home/cgi-bin/luci" ] || die "8080 实例不存在"
+    lua - "$0" "${verify_home%/www}" <<'EOF_VERIFY_ARGON_8080_CODE'
+local fs = require "nixio.fs"
+local source = assert(fs.readfile(arg[1])):gsub("\r", "")
+local root = arg[2]
+local function embedded(marker)
+	local text = assert(source:match("<<'" .. marker .. "'\n(.-)\n" .. marker), marker)
+	return (text:gsub("^#![^\n]*\n", ""))
+end
+local function isolated(code, modules, values)
+	local env = values or {}
+	env.require = function(name) return assert(modules[name], name) end
+	return setfenv(assert(loadstring(code)), setmetatable(env, { __index = _G })), env
+end
+for _, marker in ipairs({ "EOF_OPENWRT_LUCI_8080_UPLOAD", "EOF_OPENWRT_LUCI_8080_PUBLISH",
+	"EOF_OPENWRT_LUCI_8080_OPENVPN", "EOF_OPENWRT_LUCI_8080_ADGUARD", "EOF_OPENWRT_LUCI_8080_WRAPPER" }) do
+	assert(loadstring(embedded(marker)))
+end
+print("PASS: embedded Lua compiles")
+
+-- Exercise the deployed upload action with memory-only files and UCI writes.
+local upload_code = assert(fs.readfile(root .. "/openvpn-upload.lua"))
+for _, case in ipairs({
+	{ name="valid", instance="sample", content="client\r\nremote example.invalid 1194\n", expected=true },
+	{ name="missing-name", content="client" },
+	{ name="duplicate", instance="sample", content="client", duplicate=true },
+	{ name="empty-file", instance="sample", content=" " },
+	{ name="invalid-token", instance="sample", content="client", token=false },
+	{ name="oversized", instance="sample", content=string.rep("a", 2097153) },
+	{ name="commit-failed", instance="sample", content="client", commit=false },
+	{ name="get-request", method="GET", instance="sample", content="client" }
+}) do
+	local handler, consumed, written, committed, redirected, removed
+	local http = {
+		getenv=function() return case.method or "POST" end,
+		setfilehandler=function(f) handler=f end,
+		urlencode=function(v) return v end,
+		redirect=function(v) redirected=v end
+	}
+	http.formvalue=function()
+		assert(handler, "file handler must precede form parsing")
+		if not consumed then
+			handler({name="ovpn_file"}, case.content:sub(1,3), false)
+			handler({name="ovpn_file"}, case.content:sub(4), true)
+			consumed=true
+		end
+		return case.instance
+	end
+	local cursor = {
+		get=function() return case.duplicate end, section=function() return "sample" end,
+		save=function() return true end, revert=function() end,
+		commit=function() if case.commit==false then return false end; committed=true; return true end
+	}
+	local files = {
+		mkdirr=function() return true end, lstat=function() return nil end,
+		writefile=function(path,data) assert(path=="/etc/openvpn/sample.ovpn"); written=data; return true end,
+		chmod=function(_,mode) assert(mode=="600"); return true end,
+		unlink=function() removed=true; written=nil end
+	}
+	local action = isolated(upload_code, {
+		["luci.http"]=http, ["nixio.fs"]=files, ["luci.model.uci"]={cursor=function() return cursor end},
+		["luci.dispatcher"]={test_post_security=function() return case.token~=false end,
+			build_url=function() return "/cgi-bin/luci/admin/services/openvpn" end}
+	})
+	action()
+	if case.expected then
+		assert(committed and written==case.content:gsub("\r\n", "\n"))
+		assert(redirected=="/cgi-bin/luci/admin/services/openvpn")
+	else
+		assert(not committed and not written, case.name)
+		if case.commit==false then assert(removed) end
+	end
+	print("PASS: OpenVPN upload " .. case.name)
+end
+
+-- Run the real CBI loaders in a GET request, using a missing instance for editors.
+local http = require "luci.http"
+local dispatcher = require "luci.dispatcher"
+local sgi = require "luci.sgi.cgi"
+local original_getenv, original_run, original_tree = os.getenv, sgi.run, dispatcher.createtree
+os.getenv = function(name)
+	if name=="SERVER_PORT" then return "8080" end
+	if name=="SCRIPT_FILENAME" then return root .. "/www/cgi-bin/luci" end
+	return original_getenv(name)
+end
+sgi.run = function() end
+local vpn_node = { nodes = { upload = {} } }
+local tree = { nodes = { admin = { nodes = { services = { nodes = { openvpn = vpn_node } } } } } }
+dispatcher.createtree = function() return tree end
+http.context.request = http.Request({REQUEST_METHOD="GET", CONTENT_LENGTH="0", SCRIPT_NAME="/cgi-bin/luci"}, function() return nil end)
+assert(loadfile(root .. "/www/cgi-bin/luci"))()
+assert(type(dispatcher.createtree().nodes.admin.nodes.services.nodes.openvpn.nodes.upload.target)=="function")
+os.getenv, sgi.run = original_getenv, original_run
+local cbi = require "luci.cbi"
+local sys = require "luci.sys"
+for _, name in ipairs({ "AdGuardHome/base", "AdGuardHome/manual", "AdGuardHome/log",
+	"openvpn", "openvpn-basic", "openvpn-advanced", "openvpn-file" }) do
+	local maps = cbi.load(name, "__nradio_missing_instance__")
+	assert(maps[1], name)
+	if name=="openvpn" then
+		local button = assert(maps[1].children[1].fields._updown)
+		local calls, call, redirect = {}, sys.call, http.redirect
+		sys.call=function(command) calls[#calls+1]=command; return 0 end
+		http.redirect=function() end
+		button.option="start"; button:write("sample", "1")
+		button.option="stop"; button:write("sample", "1")
+		maps[1]:on_after_apply()
+		sys.call, http.redirect=call, redirect
+		assert(calls[1]=="/etc/init.d/openvpn start sample")
+		assert(calls[2]=="/etc/init.d/openvpn stop sample")
+		assert(calls[3]=="/etc/init.d/openvpn reload")
+		print("PASS: OpenVPN start/stop/apply callbacks (simulated)")
+	end
+	print("PASS: CBI " .. name)
+end
+dispatcher.createtree=original_tree
+
+-- Execute the installed OpenClash settings callbacks with fake UCI/service calls.
+local settings=assert(fs.readfile("/usr/lib/lua/luci/model/cbi/openclash/settings.lua"))
+for _, title in ipairs({"Commit Settings", "Apply Settings"}) do
+	local body=assert(settings:match('o.inputtitle = translate%("' .. title .. '"%)(.-)\nend'), title)
+	body=assert(body:match("o.write = function%(%)\n(.*)"))
+	local committed, restarted, redirected=false,false,false
+	local action=isolated("return function()\n" .. body .. "\nend", {}, {
+		CORE_VERSION="Meta", RELEASE_BRANCH="master", SMART_ENABLE="0",
+		m={uci={set=function() end,commit=function(_,config) assert(config=="openclash"); committed=true end}},
+		SYS={call=function(command) assert(command:find("/etc/init.d/openclash restart",1,true)); restarted=true end},
+		HTTP={redirect=function() redirected=true end},
+		DISP={build_url=function() return "/cgi-bin/luci/admin/services/openclash" end}
+	})
+	action()()
+	assert(committed)
+	assert(restarted==(title=="Apply Settings") and redirected==restarted)
+	print("PASS: OpenClash " .. title .. " (simulated)")
+end
+
+-- AdGuard backend actions use fake files and commands, including failures.
+local result, state, fail_write, reload_fail, deleted = nil, {}, false, false, false
+local files = {
+	access=function(path)
+		if path=="/tmp/AdGuardHometmpconfig.yaml" then return reload_fail end
+		return path=="/usr/share/AdGuardHome/update_core.sh"
+	end,
+	readfile=function(path) return state[path] end,
+	writefile=function(path,value) if fail_write then return false end; state[path]=value; return true end,
+	unlink=function(path) state[path]=nil end, remove=function() end,
+	lstat=function() return {type="reg",uid=0} end
+}
+local routes={}
+local action, env=isolated(assert(fs.readfile("/usr/lib/lua/luci/controller/AdGuardHome.lua")), {
+	["nixio.fs"]=files,
+	["luci.http"]={prepare_content=function() end,write_json=function(value) result=value end,formvalue=function() return "0" end},
+	["luci.sys"]={call=function() return 0 end,exec=function() return "sample log" end},
+	["luci.model.uci"]={cursor=function() return {get=function() return "/var/log/AdGuardHome.log" end} end}
+}, {
+	module=function() end, _=function(s) return s end,
+	entry=function(path) local node={}; routes[path[#path]]=node; return node end,
+	alias=function() end, template=function() end, cbi=function() end, form=function() end, call=function() end,
+	io={open=function(path,mode) assert(path=="/var/log/AdGuardHome.log" and mode=="wb"); deleted=true; return {close=function() end} end}
+})
+action(); env.index()
+for _, route in ipairs({"doupdate", "dodellog", "reloadconfig"}) do assert(routes[route].post==true) end
+env.do_update(); assert(result.ok and result.state=="running")
+fail_write=true; env.do_update(); assert(result.ok==false); fail_write=false
+env.do_dellog(); assert(result.ok and deleted)
+env.reload_config(); assert(result.ok)
+reload_fail=true; env.reload_config(); assert(result.ok==false)
+print("PASS: AdGuard update/log/reload POST contracts and failure responses (simulated)")
+print("PASS: Argon 8080 code verification complete")
+EOF_VERIFY_ARGON_8080_CODE
+}
+
+install_openwrt_luci_8080_sync() {
+    local sync_installer
+    sync_installer="$(readlink -f "$0")"
+    [ -f "$sync_installer" ] || die "找不到用于 8080 后续同步的总脚本"
+    printf '%s\n' "$sync_installer" > "$OPENWRT_LUCI_8080_ROOT/installer.path"
+    cat > "$OPENWRT_LUCI_8080_ROOT/plugin-sync.sh" <<'EOF_OPENWRT_LUCI_8080_SYNC'
+#!/bin/sh
+root="$(dirname "$0")"
+snapshot() {
+    lua "$root/plugin-state.lua" --snapshot
+}
+if [ "${1:-}" = --snapshot ]; then snapshot; exit $?; fi
+last="$(cat "$root/plugins.signature" 2>/dev/null)"
+pending=''
+while sleep 15; do
+    [ "$(cat "$root/theme.active" 2>/dev/null)" = argon ] || continue
+    [ ! -d /var/run/nradio-plugin-assistant.lock ] || continue
+    pidof opkg >/dev/null 2>&1 && continue
+    current="$(snapshot)" || { logger -t nradio-luci8080 '读取插件文件状态失败'; continue; }
+    [ -n "$current" ] || continue
+    [ "$current" != "$last" ] || { pending=''; continue; }
+    [ "$current" = "$pending" ] || { pending="$current"; continue; }
+    installer="$(cat "$root/installer.path" 2>/dev/null)"
+    if [ -f "$installer" ] && sh "$installer" --sync-luci8080 > /var/run/nradio-luci8080-sync.log 2>&1; then
+        last="$current"
+        printf '%s\n' "$last" > "$root/plugins.signature"
+        pending=''
+    else
+        logger -t nradio-luci8080 '插件同步未完成，详情见 /var/run/nradio-luci8080-sync.log'
+        sleep 60
+    fi
+done
+EOF_OPENWRT_LUCI_8080_SYNC
+    sh "$OPENWRT_LUCI_8080_ROOT/plugin-sync.sh" --snapshot > "$OPENWRT_LUCI_8080_ROOT/plugins.signature" || die "读取 8080 插件初始状态失败"
+    cat > /etc/init.d/nradio-luci8080-sync <<'EOF_OPENWRT_LUCI_8080_SYNC_INIT'
+#!/bin/sh /etc/rc.common
+START=96
+USE_PROCD=1
+start_service() {
+    local home root
+    home="$(uci -q get uhttpd.openwrt8080.home)"
+    root="${home%/www}"
+    [ -f "$root/plugin-sync.sh" ] || return 0
+    procd_open_instance
+    procd_set_param command /bin/sh "$root/plugin-sync.sh"
+    procd_set_param respawn 3600 5 5
+    procd_close_instance
+}
+EOF_OPENWRT_LUCI_8080_SYNC_INIT
+    chmod 755 /etc/init.d/nradio-luci8080-sync
+    /etc/init.d/nradio-luci8080-sync enable
+    /etc/init.d/nradio-luci8080-sync restart
+}
+
+ensure_argon_8080_istore() {
+    local istore_installer istore_url
+    if [ -s /usr/lib/lua/luci/controller/store.lua ] &&
+       [ -s /www/luci-static/istore/index.js ] &&
+       [ -s /etc/init.d/tasks ] && command -v is-opkg >/dev/null 2>&1; then
+        log "iStore: 已安装，接入 8080 原生菜单"
+        return 0
+    fi
+    istore_installer="$WORKDIR/istore-reinstall.run"
+    istore_url='https://raw.githubusercontent.com/linkease/openwrt-app-actions/main/applications/luci-app-systools/root/usr/share/systools/istore-reinstall.run'
+    mkdir -p "$WORKDIR" || die "创建 iStore 安装临时目录失败"
+    log "iStore: 准备基础软件源与依赖索引"
+    ensure_opkg_update || die "更新 iStore 基础软件源失败"
+    log "iStore: 安装官方应用商店及其依赖"
+    download_from_urls "$istore_installer" "https://gh-proxy.com/$istore_url" "$istore_url" || die "下载 iStore 官方安装器失败"
+    sh "$istore_installer" || die "安装 iStore 失败"
+}
+
+deploy_argon_8080_theme() {
+    local argon_pkg argon_pkg_dir argon_data argon_static argon_views argon_target_root argon_resources shared_resource resource_name
+    argon_target_root="${ARGON_ROOT:-$OPENWRT_LUCI_8080_ROOT}"
+    [ -n "$argon_target_root" ] || die "无法确定 argon 目标实例目录"
+    ensure_argon_8080_istore
+    # Finish every required download and extraction before replacing live pages.
+    prepare_openwrt_luci_8080_packages argon
+    if [ -L "$argon_target_root/www/luci-static" ]; then
+        rm -f "$argon_target_root/www/luci-static" || die "移除旧 LuCI 静态资源链接失败"
+    fi
+    mkdir -p "$WORKDIR/argon-8080" || die "创建 argon 下载目录失败"
+    argon_pkg="$WORKDIR/argon-8080/luci-theme-argon.ipk"
+    argon_pkg_dir="$WORKDIR/argon-8080/pkg"
+    argon_data="$WORKDIR/argon-8080/data"
+    [ -s "$argon_data/usr/lib/lua/luci/view/themes/argon/header.htm" ] || die "argon 主题缺少 header.htm"
+
+    argon_static="$argon_target_root/www/luci-static/argon"
+    argon_views="$argon_target_root/usr/lib/lua/luci/view/themes/argon"
+    [ ! -L "$argon_static" ] && [ ! -L "$argon_views" ] || die "argon 独立目录不能是符号链接"
+    mkdir -p "$argon_static" "$argon_views" || die "创建 argon 独立目录失败"
+    cp -R "$argon_data/www/luci-static/argon/." "$argon_static/" || die "写入 argon 静态资源失败"
+    cp -R "$argon_data/usr/lib/lua/luci/view/themes/argon/." "$argon_views/" || die "写入 argon 模板失败"
+    mkdir -p "$argon_target_root/usr/libexec/argon" || die "创建 argon 壁纸脚本目录失败"
+    cp "$argon_data/usr/libexec/argon/bing_wallpaper" "$argon_target_root/usr/libexec/argon/bing_wallpaper" || die "写入 argon 壁纸脚本失败"
+    if [ ! -e /etc/config/argon ]; then
+        cat > /etc/config/argon <<'EOF_ARGON_8080_CONFIG'
+config global
+    option primary '#5e72e4'
+    option dark_primary '#483d8b'
+    option blur '10'
+    option blur_dark '10'
+    option transparency '0.5'
+    option transparency_dark '0.5'
+    option mode 'normal'
+    option bing_background '0'
+EOF_ARGON_8080_CONFIG
+        chmod 644 /etc/config/argon || die "设置 argon 配置文件权限失败"
+    fi
+    argon_resources="$argon_target_root/www/luci-static/resources"
+    if [ -L "$argon_resources" ]; then
+        rm -f "$argon_resources" || die "移除共享 resources 链接失败"
+    fi
+    mkdir -p "$argon_resources" || die "创建 argon resources 目录失败"
+    for shared_resource in /www/luci-static/resources/*; do
+        [ -e "$shared_resource" ] || continue
+        resource_name="${shared_resource##*/}"
+        case "$resource_name" in
+            openclash|icons|menu-argon.js|cbi.js|luci.js|ui.js|fs.js|rpc.js|uci.js|validation.js|xhr.js) continue ;;
+        esac
+        if [ ! -e "$argon_resources/$resource_name" ] && [ ! -L "$argon_resources/$resource_name" ]; then
+            ln -s "$shared_resource" "$argon_resources/$resource_name" || die "链接 LuCI 公共资源失败: $resource_name"
+        fi
+    done
+    write_openwrt_luci_8080_shared_assets
+    for resource_name in menu-argon.js cbi.js luci.js ui.js fs.js rpc.js uci.js validation.js xhr.js; do
+        if [ -L "$argon_resources/$resource_name" ]; then
+            rm -f "$argon_resources/$resource_name" || die "移除共享 JS 链接失败: $resource_name"
+        fi
+    done
+    mkdir -p "$argon_target_root/usr/lib/lua/luci/view/themes/argon" || die "创建 argon 模板目录失败"
+    cp "$argon_data/www/luci-static/resources/menu-argon.js" "$argon_resources/menu-argon.js" || die "写入 argon 原版菜单脚本失败"
+    sed -i 's/ui.menu.load().then/ui.menu.flushCache();ui.menu.load().then/' "$argon_resources/menu-argon.js" || die "更新 argon 菜单缓存入口失败"
+    grep -q 'ui.menu.flushCache();ui.menu.load()' "$argon_resources/menu-argon.js" || die "argon 菜单缓存入口缺失"
+    cat > "$argon_target_root/www/luci-static/resources/cbi.js" <<'EOF_ARGON_8080_CBI_JS'
+/*
+	LuCI - Lua Configuration Interface
+
+	Copyright 2008 Steven Barth <steven@midlink.org>
+	Copyright 2008-2012 Jo-Philipp Wich <jow@openwrt.org>
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+*/
+
+function s8(bytes,off){var n=bytes[off];return(n>0x7F)?(n-256)>>>0:n;}
+function u16(bytes,off){return((bytes[off+1]<<8)+bytes[off])>>>0;}
+function sfh(s){if(s===null||s.length===0)
+return null;var bytes=[];for(var i=0;i<s.length;i++){var ch=s.charCodeAt(i);if(ch<=0x7F)
+bytes.push(ch);else if(ch<=0x7FF)
+bytes.push(((ch>>>6)&0x1F)|0xC0,(ch&0x3F)|0x80);else if(ch<=0xFFFF)
+bytes.push(((ch>>>12)&0x0F)|0xE0,((ch>>>6)&0x3F)|0x80,(ch&0x3F)|0x80);else if(ch<=0x10FFFF)
+bytes.push(((ch>>>18)&0x07)|0xF0,((ch>>>12)&0x3F)|0x80,((ch>>6)&0x3F)|0x80,(ch&0x3F)|0x80);}
+if(!bytes.length)
+return null;var hash=(bytes.length>>>0),len=(bytes.length>>>2),off=0,tmp;while(len--){hash+=u16(bytes,off);tmp=((u16(bytes,off+2)<<11)^hash)>>>0;hash=((hash<<16)^tmp)>>>0;hash+=hash>>>11;off+=4;}
+switch((bytes.length&3)>>>0){case 3:hash+=u16(bytes,off);hash=(hash^(hash<<16))>>>0;hash=(hash^(s8(bytes,off+2)<<18))>>>0;hash+=hash>>>11;break;case 2:hash+=u16(bytes,off);hash=(hash^(hash<<11))>>>0;hash+=hash>>>17;break;case 1:hash+=s8(bytes,off);hash=(hash^(hash<<10))>>>0;hash+=hash>>>1;break;}
+hash=(hash^(hash<<3))>>>0;hash+=hash>>>5;hash=(hash^(hash<<4))>>>0;hash+=hash>>>17;hash=(hash^(hash<<25))>>>0;hash+=hash>>>6;return(0x100000000+hash).toString(16).substr(1);}
+var plural_function=null;function trimws(s){return String(s).trim().replace(/[ \t\n]+/g,' ');}
+function _(s,c){var k=(c!=null?trimws(c)+'\u0001':'')+trimws(s);return(window.TR&&TR[sfh(k)])||s;}
+function N_(n,s,p,c){if(plural_function==null&&window.TR)
+plural_function=new Function('n',(TR['00000000']||'plural=(n != 1);')+'return +plural');var i=plural_function?plural_function(n):(n!=1),k=(c!=null?trimws(c)+'\u0001':'')+trimws(s)+'\u0002'+i.toString();return(window.TR&&TR[sfh(k)])||(i?p:s);}
+function E(){return L.dom.create.apply(L.dom,arguments)}
+
+var cbi_d = [];
+var cbi_t = [];
+var cbi_strings = { path: {}, label: {} };
+
+function Int(x) {
+	return (/^-?\d+$/.test(x) ? +x : NaN);
+}
+
+function Dec(x) {
+	return (/^-?\d+(?:\.\d+)?$/.test(x) ? +x : NaN);
+}
+function getRealLen( str ) {  
+    return str.replace(/[^\x00-\xff]/g, '___').length;
+}  
+var cbi_validators = {
+
+	'integer': function()
+	{
+		return !!Int(this);
+	},
+
+	'uinteger': function()
+	{
+		return (this.match(/^(0|[1-9](\d)*)$/));
+	},
+
+	'float': function()
+	{
+		return !!Dec(this);
+	},
+
+	'ufloat': function()
+	{
+		return (Dec(this) >= 0);
+	},
+
+	'ipaddr': function()
+	{
+		return cbi_validators.ip4addr.apply(this) ||
+			cbi_validators.ip6addr.apply(this);
+	},
+
+	'ip4addr': function()
+	{
+		if (this.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\S+))?$/))
+		{
+			return (RegExp.$1 >= 0) && (RegExp.$1 <= 255) &&
+			       (RegExp.$2 >= 0) && (RegExp.$2 <= 255) &&
+			       (RegExp.$3 >= 0) && (RegExp.$3 <= 255) &&
+			       (RegExp.$4 >= 0) && (RegExp.$4 <= 255) &&
+			       ((RegExp.$6.indexOf('.') < 0)
+			          ? ((RegExp.$6 >= 0) && (RegExp.$6 <= 32))
+			          : (cbi_validators.ip4addr.apply(RegExp.$6)))
+			;
+		}
+
+		return false;
+	},
+
+	'ip6addr': function()
+	{
+		if( this.match(/^([a-fA-F0-9:.]+)(\/(\d+))?$/) )
+		{
+			if( !RegExp.$2 || ((RegExp.$3 >= 0) && (RegExp.$3 <= 128)) )
+			{
+				var addr = RegExp.$1;
+
+				if( addr == '::' )
+				{
+					return true;
+				}
+
+				if( addr.indexOf('.') > 0 )
+				{
+					var off = addr.lastIndexOf(':');
+
+					if( !(off && cbi_validators.ip4addr.apply(addr.substr(off+1))) )
+						return false;
+
+					addr = addr.substr(0, off) + ':0:0';
+				}
+
+				if( addr.indexOf('::') >= 0 )
+				{
+					var colons = 0;
+					var fill = '0';
+
+					for( var i = 1; i < (addr.length-1); i++ )
+						if( addr.charAt(i) == ':' )
+							colons++;
+
+					if( colons > 7 )
+						return false;
+
+					for( var i = 0; i < (7 - colons); i++ )
+						fill += ':0';
+
+					if (addr.match(/^(.*?)::(.*?)$/))
+						addr = (RegExp.$1 ? RegExp.$1 + ':' : '') + fill +
+						       (RegExp.$2 ? ':' + RegExp.$2 : '');
+				}
+
+				return (addr.match(/^(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}$/) != null);
+			}
+		}
+
+		return false;
+	},
+
+	'ipmask': function()
+	{
+		return cbi_validators.ipmask4.apply(this) ||
+			cbi_validators.ipmask6.apply(this);
+	},
+
+	'ipmask4': function()
+	{
+		var ip = this, mask = 32;
+
+		if (ip.match(/^(\S+)\/(\S+)$/))
+		{
+			ip = RegExp.$1;
+			mask = RegExp.$2;
+		}
+
+		if (!isNaN(mask) && (mask < 0 || mask > 32))
+			return false;
+
+		if (isNaN(mask) && !cbi_validators.ip4addr.apply(mask))
+			return false;
+
+		return cbi_validators.ip4addr.apply(ip);
+	},
+
+	'ipmask6': function()
+	{
+		var ip = this, mask = 128;
+
+		if (ip.match(/^(\S+)\/(\S+)$/))
+		{
+			ip = RegExp.$1;
+			mask = RegExp.$2;
+		}
+
+		if (!isNaN(mask) && (mask < 0 || mask > 128))
+			return false;
+
+		if (isNaN(mask) && !cbi_validators.ip6addr.apply(mask))
+			return false;
+
+		return cbi_validators.ip6addr.apply(ip);
+	},
+
+	'port': function()
+	{
+		var p = Int(this);
+		return (p >= 0 && p <= 65535);
+	},
+
+	'portrange': function()
+	{
+		if (this.match(/^(\d+)-(\d+)$/))
+		{
+			var p1 = +RegExp.$1;
+			var p2 = +RegExp.$2;
+			return (p1 <= p2 && p2 <= 65535);
+		}
+
+		return cbi_validators.port.apply(this);
+	},
+	'multimacaddr': function()
+	{
+		var mac_array = this.replace(/^\r*/, '').split("\n");
+		if(mac_array.length)
+		{
+			for(i=0;i<mac_array.length;i++)
+			{
+				if(!mac_array[i].length)
+				{
+					continue;
+				}
+				if(!mac_array[i].match(/^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$/))
+				{
+					return false;
+				}
+			}
+
+		}
+		return true;
+	},
+	'macaddr': function()
+	{
+		return (this.match(/^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$/) != null);
+	},
+
+	'host': function(ipv4only)
+	{
+		return cbi_validators.hostname.apply(this) ||
+			((ipv4only != 1) && cbi_validators.ipaddr.apply(this)) ||
+			((ipv4only == 1) && cb_validators.ip4addr.apply(this));
+	},
+
+	'hostname': function()
+	{
+		if (this.length <= 253)
+			return (this.match(/^[a-zA-Z0-9]+$/) != null ||
+			        (this.match(/^[a-zA-Z0-9_][a-zA-Z0-9_\-.]*[a-zA-Z0-9]$/) &&
+			         this.match(/[^0-9.]/)));
+
+		return false;
+	},
+
+	'network': function()
+	{
+		return cbi_validators.uciname.apply(this) ||
+			cbi_validators.host.apply(this);
+	},
+
+	'hostport': function(ipv4only)
+	{
+		var hp = this.split(/:/);
+
+		if (hp.length == 2)
+			return (cbi_validators.host.apply(hp[0], ipv4only) &&
+			        cbi_validators.port.apply(hp[1]));
+
+		return false;
+	},
+
+	'ip4addrport': function()
+	{
+		var hp = this.split(/:/);
+
+		if (hp.length == 2)
+			return (cbi_validators.ipaddr.apply(hp[0]) &&
+			        cbi_validators.port.apply(hp[1]));
+		return false;
+	},
+
+	'ipaddrport': function(bracket)
+	{
+		if (this.match(/^([^\[\]:]+):([^:]+)$/)) {
+			var addr = RegExp.$1
+			var port = RegExp.$2
+			return (cbi_validators.ip4addr.apply(addr) &&
+				cbi_validators.port.apply(port));
+                } else if ((bracket == 1) && (this.match(/^\[(.+)\]:([^:]+)$/))) {
+			var addr = RegExp.$1
+			var port = RegExp.$2
+			return (cbi_validators.ip6addr.apply(addr) &&
+				cbi_validators.port.apply(port));
+                } else if ((bracket != 1) && (this.match(/^([^\[\]]+):([^:]+)$/))) {
+			var addr = RegExp.$1
+			var port = RegExp.$2
+			return (cbi_validators.ip6addr.apply(addr) &&
+				cbi_validators.port.apply(port));
+		} else {
+			return false;
+		}
+	},
+
+	'wpakey': function()
+	{
+		var v = this;
+
+		if( v.length == 64 )
+			return (v.match(/^[a-fA-F0-9]{64}$/) != null);
+		else
+			return (v.match(/^[\u9FA5\x21-\x7e]{8,63}$/) != null);
+	},
+
+	'wepkey': function()
+	{
+		var v = this;
+
+		if ( v.substr(0,2) == 's:' )
+			v = v.substr(2);
+
+		if( (v.length == 10) || (v.length == 26) )
+			return (v.match(/^[a-fA-F0-9]{10,26}$/) != null);
+		else
+			return (v.length == 5) || (v.length == 13);
+	},
+
+	'uciname': function()
+	{
+		return (this.match(/^[a-zA-Z0-9_]+$/) != null);
+	},
+
+	'range': function(min, max)
+	{
+		var val = Dec(this);
+		return (val >= +min && val <= +max);
+	},
+
+	'min': function(min)
+	{
+		return (Dec(this) >= +min);
+	},
+
+	'max': function(max)
+	{
+		return (Dec(this) <= +max);
+	},
+
+	'rangelength': function(min, max)
+	{
+		var val = '' + this;
+		return ((getRealLen(val) >= +min) && (getRealLen(val) <= +max));
+	},
+
+	'minlength': function(min)
+	{
+		return (getRealLen(''+this) >= +min);
+	},
+
+	'maxlength': function(max)
+	{
+		return (getRealLen(''+this) <= +max);
+	},
+	'pwdcheck': function()
+	{
+		return (this.match(/^[\u9FA5\x21-\x7e]{5,64}$/) != null);
+	},
+
+	'or': function()
+	{
+		for (var i = 0; i < arguments.length; i += 2)
+		{
+			if (typeof arguments[i] != 'function')
+			{
+				if (arguments[i] == this)
+					return true;
+				i--;
+			}
+			else if (arguments[i].apply(this, arguments[i+1]))
+			{
+				return true;
+			}
+		}
+		return false;
+	},
+
+	'and': function()
+	{
+		for (var i = 0; i < arguments.length; i += 2)
+		{
+			if (typeof arguments[i] != 'function')
+			{
+				if (arguments[i] != this)
+					return false;
+				i--;
+			}
+			else if (!arguments[i].apply(this, arguments[i+1]))
+			{
+				return false;
+			}
+		}
+		return true;
+	},
+
+	'neg': function()
+	{
+		return cbi_validators.or.apply(
+			this.replace(/^[ \t]*![ \t]*/, ''), arguments);
+	},
+
+	'list': function(subvalidator, subargs)
+	{
+		if (typeof subvalidator != 'function')
+			return false;
+
+		var tokens = this.match(/[^ \t]+/g);
+		for (var i = 0; i < tokens.length; i++)
+			if (!subvalidator.apply(tokens[i], subargs))
+				return false;
+
+		return true;
+	},
+	'phonedigit': function()
+	{
+		return (this.match(/^[0-9\*#!\.]+$/) != null);
+	},
+	'timehhmmss': function()
+	{
+		return (this.match(/^[0-6][0-9]:[0-6][0-9]:[0-6][0-9]$/) != null);
+	},
+	'dateyyyymmdd': function()
+	{
+		if (this == null) {
+			return false;
+		}
+		if (this.match(/^(\d\d\d\d)-(\d\d)-(\d\d)/)) {
+			var year = RegExp.$1;
+			var month = RegExp.$2;
+			var day = RegExp.$2
+
+			var days_in_month = [ 31, 28, 31, 30, 31, 30, 31, 31, 30 , 31, 30, 31 ];
+			function is_leap_year(year) {
+				return ((year % 4) == 0) && ((year % 100) != 0) || ((year % 400) == 0);
+			}
+			function get_days_in_month(month, year) {
+				if ((month == 2) && is_leap_year(year)) {
+					return 29;
+				} else {
+					return days_in_month[month];
+				}
+			}
+			/* Firewall rules in the past don't make sense */
+			if (year < 2015) {
+				return false;
+			}
+			if ((month <= 0) || (month > 12)) {
+				return false;
+			}
+			if ((day <= 0) || (day > get_days_in_month(month, year))) {
+				return false;
+			}
+			return true;
+
+		} else {
+			return false;
+		}
+	}
+};
+
+
+function cbi_d_add(field, dep, index) {
+	var obj = (typeof(field) === 'string') ? document.getElementById(field) : field;
+	if (obj) {
+		var entry
+		for (var i=0; i<cbi_d.length; i++) {
+			if (cbi_d[i].id == obj.id) {
+				entry = cbi_d[i];
+				break;
+			}
+		}
+		if (!entry) {
+			entry = {
+				"node": obj,
+				"id": obj.id,
+				"parent": obj.parentNode.id,
+				"deps": [],
+				"index": index
+			};
+			cbi_d.unshift(entry);
+		}
+		entry.deps.push(dep)
+	}
+}
+
+function cbi_d_checkvalue(target, ref) {
+	var t = document.getElementById(target);
+	var value;
+
+	if (!t) {
+		var tl = document.getElementsByName(target);
+
+		if( tl.length > 0 && (tl[0].type == 'radio' || tl[0].type == 'checkbox'))
+			for( var i = 0; i < tl.length; i++ )
+				if( tl[i].checked ) {
+					value = tl[i].value;
+					break;
+				}
+
+		value = value ? value : "";
+	} else if (!t.value) {
+		value = "";
+	} else {
+		value = t.value;
+
+		if (t.type == "checkbox") {
+			value = t.checked ? value : "";
+		}
+	}
+
+	return (value == ref)
+}
+
+function cbi_d_check(deps) {
+	var reverse;
+	var def = false;
+	for (var i=0; i<deps.length; i++) {
+		var istat = true;
+		reverse = false;
+		for (var j in deps[i]) {
+			if (j == "!reverse") {
+				reverse = true;
+			} else if (j == "!default") {
+				def = true;
+				istat = false;
+			} else {
+				istat = (istat && cbi_d_checkvalue(j, deps[i][j]))
+			}
+		}
+		if (istat) {
+			return !reverse;
+		}
+	}
+	return def;
+}
+
+function cbi_d_update() {
+	var state = false;
+	for (var i=0; i<cbi_d.length; i++) {
+		var entry = cbi_d[i];
+		var node  = document.getElementById(entry.id);
+		var parent = document.getElementById(entry.parent);
+
+		if (node && node.parentNode && !cbi_d_check(entry.deps)) {
+			node.parentNode.removeChild(node);
+			state = true;
+		} else if (parent && (!node || !node.parentNode) && cbi_d_check(entry.deps)) {
+			var next = undefined;
+
+			for (next = parent.firstChild; next; next = next.nextSibling) {
+				if (next.getAttribute && parseInt(next.getAttribute('data-index'), 10) > entry.index) {
+					break;
+				}
+			}
+
+			if (!next) {
+				parent.appendChild(entry.node);
+			} else {
+				parent.insertBefore(entry.node, next);
+			}
+
+			state = true;
+		}
+
+		// hide optionals widget if no choices remaining
+		if (parent && parent.parentNode && parent.getAttribute('data-optionals'))
+			parent.parentNode.style.display = (parent.options.length <= 1) ? 'none' : '';
+	}
+
+	if (entry && entry.parent) {
+		if (!cbi_t_update())
+			cbi_tag_last(parent);
+	}
+
+	if (state) {
+		cbi_d_update();
+	}
+}
+
+function cbi_init() {
+	var nodes;
+
+	nodes = document.querySelectorAll('[data-strings]');
+
+	for (var i = 0, node; (node = nodes[i]) !== undefined; i++) {
+		var str = JSON.parse(node.getAttribute('data-strings'));
+		for (var key in str) {
+			for (var key2 in str[key]) {
+				var dst = cbi_strings[key] || (cbi_strings[key] = { });
+				    dst[key2] = str[key][key2];
+			}
+		}
+	}
+
+	nodes = document.querySelectorAll('[data-depends]');
+
+	for (var i = 0, node; (node = nodes[i]) !== undefined; i++) {
+		var index = parseInt(node.getAttribute('data-index'), 10);
+		var depends = JSON.parse(node.getAttribute('data-depends'));
+		if (!isNaN(index) && depends.length > 0) {
+			for (var alt = 0; alt < depends.length; alt++) {
+				cbi_d_add(node, depends[alt], index);
+			}
+		}
+	}
+
+	nodes = document.querySelectorAll('[data-update]');
+
+	for (var i = 0, node; (node = nodes[i]) !== undefined; i++) {
+		var events = node.getAttribute('data-update').split(' ');
+		for (var j = 0, event; (event = events[j]) !== undefined; j++) {
+			cbi_bind(node, event, cbi_d_update);
+		}
+	}
+
+	nodes = document.querySelectorAll('[data-choices]');
+
+	for (var i = 0, node; (node = nodes[i]) !== undefined; i++) {
+		var choices = JSON.parse(node.getAttribute('data-choices'));
+		var options = {};
+
+		for (var j = 0; j < choices[0].length; j++)
+			options[choices[0][j]] = choices[1][j];
+
+		var def = (node.getAttribute('data-optional') === 'true')
+			? node.placeholder || '' : null;
+
+		cbi_combobox_init(node, options, def,
+		                  node.getAttribute('data-manual'));
+	}
+
+	nodes = document.querySelectorAll('[data-dynlist]');
+
+	for (var i = 0, node; (node = nodes[i]) !== undefined; i++) {
+		var choices = JSON.parse(node.getAttribute('data-dynlist'));
+		var options = null;
+
+		if (choices[0] && choices[0].length) {
+			options = {};
+
+			for (var j = 0; j < choices[0].length; j++)
+				options[choices[0][j]] = choices[1][j];
+		}
+
+		cbi_dynlist_init(node, choices[2], choices[3], options);
+	}
+
+	nodes = document.querySelectorAll('[data-type]');
+
+	for (var i = 0, node; (node = nodes[i]) !== undefined; i++) {
+		cbi_validate_field(node, node.getAttribute('data-optional') === 'true',
+		                   node.getAttribute('data-type'));
+	}
+
+	cbi_d_update();
+}
+
+function cbi_bind(obj, type, callback, mode) {
+	if (!obj.addEventListener) {
+		obj.attachEvent('on' + type,
+			function(){
+				var e = window.event;
+
+				if (!e.target && e.srcElement)
+					e.target = e.srcElement;
+
+				return !!callback(e);
+			}
+		);
+	} else {
+		obj.addEventListener(type, callback, !!mode);
+	}
+	return obj;
+}
+
+function cbi_combobox(id, values, def, man, focus) {
+	var selid = "cbi.combobox." + id;
+	if (document.getElementById(selid)) {
+		return
+	}
+
+	var obj = document.getElementById(id)
+	var sel = document.createElement("select");
+		sel.id = selid;
+		sel.index = obj.index;
+		sel.className = obj.className.replace(/cbi-input-text/, 'cbi-input-select');
+
+	if (obj.nextSibling) {
+		obj.parentNode.insertBefore(sel, obj.nextSibling);
+	} else {
+		obj.parentNode.appendChild(sel);
+	}
+
+	var dt = obj.getAttribute('cbi_datatype');
+	var op = obj.getAttribute('cbi_optional');
+
+	if (dt)
+		cbi_validate_field(sel, op == 'true', dt);
+
+	if (!values[obj.value]) {
+		if (obj.value == "") {
+			var optdef = document.createElement("option");
+			optdef.value = "";
+			optdef.appendChild(document.createTextNode(typeof(def) === 'string' ? def : cbi_strings.label.choose));
+			sel.appendChild(optdef);
+		} else {
+			var opt = document.createElement("option");
+			opt.value = obj.value;
+			opt.selected = "selected";
+			opt.appendChild(document.createTextNode(obj.value));
+			sel.appendChild(opt);
+		}
+	}
+
+	for (var i in values) {
+		var opt = document.createElement("option");
+		opt.value = i;
+
+		if (obj.value == i) {
+			opt.selected = "selected";
+		}
+
+		opt.appendChild(document.createTextNode(values[i]));
+		sel.appendChild(opt);
+	}
+
+	var optman = document.createElement("option");
+	optman.value = "";
+	optman.appendChild(document.createTextNode(typeof(man) === 'string' ? man : cbi_strings.label.custom));
+	sel.appendChild(optman);
+
+	obj.style.display = "none";
+
+	cbi_bind(sel, "change", function() {
+		if (sel.selectedIndex == sel.options.length - 1) {
+			obj.style.display = "inline";
+			sel.blur();
+			sel.parentNode.removeChild(sel);
+			if(!is_mobile_device()){
+				obj.focus();
+			}			
+		} else {
+			obj.value = sel.options[sel.selectedIndex].value;
+			var dtpt = obj.getAttribute('data-passthrough');
+			if (dtpt && (typeof(dtpt) == 'string')){
+				var f_dtpt = eval(dtpt);
+				if (typeof(f_dtpt) == "function"){
+					f_dtpt(obj);
+				}
+			}
+		}
+
+		try {
+			cbi_d_update();
+		} catch (e) {
+			//Do nothing
+		}
+	})
+
+	// Retrigger validation in select
+	if (focus) {
+		sel.focus();
+		sel.blur();
+	}
+}
+
+function cbi_combobox_init(id, values, def, man) {
+	var obj = (typeof(id) === 'string') ? document.getElementById(id) : id;
+	cbi_bind(obj, "blur", function() {
+		cbi_combobox(obj.id, values, def, man, true);
+	});
+	cbi_combobox(obj.id, values, def, man, false);
+}
+
+function cbi_filebrowser(id, defpath) {
+	var field   = document.getElementById(id);
+	var browser = window.open(
+		cbi_strings.path.browser + ( field.value || defpath || '' ) + '?field=' + id,
+		"luci_filebrowser", "width=300,height=400,left=100,top=200,scrollbars=yes"
+	);
+
+	browser.focus();
+}
+
+function cbi_browser_init(id, defpath)
+{
+	function cbi_browser_btnclick(e) {
+		cbi_filebrowser(id, defpath);
+		return false;
+	}
+
+	var field = document.getElementById(id);
+
+	var btn = document.createElement('img');
+	btn.className = 'cbi-image-button';
+	btn.src = cbi_strings.path.resource + '/cbi/folder.gif';
+	field.parentNode.insertBefore(btn, field.nextSibling);
+
+	cbi_bind(btn, 'click', cbi_browser_btnclick);
+}
+
+function cbi_dynlist_init(parent, datatype, optional, choices)
+{
+	var prefix = parent.getAttribute('data-prefix');
+	var holder = parent.getAttribute('data-placeholder');
+
+	var values;
+
+	function cbi_dynlist_redraw(focus, add, del)
+	{
+		values = [ ];
+
+		while (parent.firstChild)
+		{
+			var n = parent.firstChild;
+			var i = +n.index;
+
+			if (i != del)
+			{
+				if (n.nodeName.toLowerCase() == 'input')
+					values.push(n.value || '');
+				else if (n.nodeName.toLowerCase() == 'select')
+					values[values.length-1] = n.options[n.selectedIndex].value;
+			}
+
+			parent.removeChild(n);
+		}
+
+		if (add >= 0)
+		{
+			focus = add+1;
+			values.splice(focus, 0, '');
+		}
+		else if (values.length == 0)
+		{
+			focus = 0;
+			values.push('');
+		}
+
+		for (var i = 0; i < values.length; i++)
+		{
+			var t = document.createElement('input');
+				t.id = prefix + '.' + (i+1);
+				t.name = prefix;
+				t.value = values[i];
+				t.type = 'text';
+				t.index = i;
+				t.className = 'cbi-input-text';
+
+			if (i == 0 && holder)
+			{
+				t.placeholder = holder;
+			}
+
+			var b = document.createElement('img');
+				b.src = cbi_strings.path.resource + ((i+1) < values.length ? '/cbi/remove.gif' : '/cbi/add.gif');
+				b.className = 'cbi-image-button';
+
+			parent.appendChild(t);
+			parent.appendChild(b);
+			if (datatype == 'file')
+			{
+				cbi_browser_init(t.id, parent.getAttribute('data-browser-path'));
+			}
+
+			parent.appendChild(document.createElement('br'));
+
+			if (datatype)
+			{
+				cbi_validate_field(t.id, ((i+1) == values.length) || optional, datatype);
+			}
+
+			if (choices)
+			{
+				cbi_combobox_init(t.id, choices, '', cbi_strings.label.custom);
+				b.index = i;
+
+				cbi_bind(b, 'keydown',  cbi_dynlist_keydown);
+				cbi_bind(b, 'keypress', cbi_dynlist_keypress);
+
+				if (i == focus || -i == focus)
+					b.focus();
+			}
+			else
+			{
+				cbi_bind(t, 'keydown',  cbi_dynlist_keydown);
+				cbi_bind(t, 'keypress', cbi_dynlist_keypress);
+
+				if (i == focus)
+				{
+					t.focus();
+				}
+				else if (-i == focus)
+				{
+					t.focus();
+
+					/* force cursor to end */
+					var v = t.value;
+					t.value = ' '
+					t.value = v;
+				}
+			}
+
+			cbi_bind(b, 'click', cbi_dynlist_btnclick);
+		}
+	}
+
+	function cbi_dynlist_keypress(ev)
+	{
+		ev = ev ? ev : window.event;
+
+		var se = ev.target ? ev.target : ev.srcElement;
+
+		if (se.nodeType == 3)
+			se = se.parentNode;
+
+		switch (ev.keyCode)
+		{
+			/* backspace, delete */
+			case 8:
+			case 46:
+				if (se.value.length == 0)
+				{
+					if (ev.preventDefault)
+						ev.preventDefault();
+
+					return false;
+				}
+
+				return true;
+
+			/* enter, arrow up, arrow down */
+			case 13:
+			case 38:
+			case 40:
+				if (ev.preventDefault)
+					ev.preventDefault();
+
+				return false;
+		}
+
+		return true;
+	}
+
+	function cbi_dynlist_keydown(ev)
+	{
+		ev = ev ? ev : window.event;
+
+		var se = ev.target ? ev.target : ev.srcElement;
+
+		if (se.nodeType == 3)
+			se = se.parentNode;
+
+		var prev = se.previousSibling;
+		while (prev && prev.name != prefix)
+			prev = prev.previousSibling;
+
+		var next = se.nextSibling;
+		while (next && next.name != prefix)
+			next = next.nextSibling;
+
+		/* advance one further in combobox case */
+		if (next && next.nextSibling.name == prefix)
+			next = next.nextSibling;
+
+		switch (ev.keyCode)
+		{
+			/* backspace, delete */
+			case 8:
+			case 46:
+				var del = (se.nodeName.toLowerCase() == 'select')
+					? true : (se.value.length == 0);
+
+				if (del)
+				{
+					if (ev.preventDefault)
+						ev.preventDefault();
+
+					var focus = se.index;
+					if (ev.keyCode == 8)
+						focus = -focus+1;
+
+					cbi_dynlist_redraw(focus, -1, se.index);
+
+					return false;
+				}
+
+				break;
+
+			/* enter */
+			case 13:
+				cbi_dynlist_redraw(-1, se.index, -1);
+				break;
+
+			/* arrow up */
+			case 38:
+				if (prev)
+					prev.focus();
+
+				break;
+
+			/* arrow down */
+			case 40:
+				if (next)
+					next.focus();
+
+				break;
+		}
+
+		return true;
+	}
+
+	function cbi_dynlist_btnclick(ev)
+	{
+		ev = ev ? ev : window.event;
+
+		var se = ev.target ? ev.target : ev.srcElement;
+		var input = se.previousSibling;
+		while (input && input.name != prefix) {
+			input = input.previousSibling;
+		}
+
+		if (se.src.indexOf('remove') > -1)
+		{
+			input.value = '';
+
+			cbi_dynlist_keydown({
+				target:  input,
+				keyCode: 8
+			});
+		}
+		else
+		{
+			cbi_dynlist_keydown({
+				target:  input,
+				keyCode: 13
+			});
+		}
+
+		return false;
+	}
+
+	cbi_dynlist_redraw(NaN, -1, -1);
+}
+
+
+function cbi_t_add(section, tab) {
+	var t = document.getElementById('tab.' + section + '.' + tab);
+	var c = document.getElementById('container.' + section + '.' + tab);
+
+	if( t && c ) {
+		cbi_t[section] = (cbi_t[section] || [ ]);
+		cbi_t[section][tab] = { 'tab': t, 'container': c, 'cid': c.id };
+	}
+}
+
+function cbi_t_switch(section, tab) {
+	if( cbi_t[section] && cbi_t[section][tab] ) {
+		var o = cbi_t[section][tab];
+		var h = document.getElementById('tab.' + section);
+		for( var tid in cbi_t[section] ) {
+			var o2 = cbi_t[section][tid];
+			if( o.tab.id != o2.tab.id ) {
+				o2.tab.className = o2.tab.className.replace(/(^| )cbi-tab( |$)/, " cbi-tab-disabled ");
+				o2.container.style.display = 'none';
+			}
+			else {
+				if(h) h.value = tab;
+				o2.tab.className = o2.tab.className.replace(/(^| )cbi-tab-disabled( |$)/, " cbi-tab ");
+				o2.container.style.display = 'block';
+			}
+		}
+	}
+	return false
+}
+
+function cbi_t_update() {
+	var hl_tabs = [ ];
+	var updated = false;
+
+	for( var sid in cbi_t )
+		for( var tid in cbi_t[sid] )
+		{
+			var t = cbi_t[sid][tid].tab;
+			var c = cbi_t[sid][tid].container;
+
+			if (!c.firstElementChild) {
+				t.style.display = 'none';
+			}
+			else if (t.style.display == 'none') {
+				t.style.display = '';
+				t.className += ' cbi-tab-highlighted';
+				hl_tabs.push(t);
+			}
+
+			cbi_tag_last(c);
+			updated = true;
+		}
+
+	if (hl_tabs.length > 0)
+		window.setTimeout(function() {
+			for( var i = 0; i < hl_tabs.length; i++ )
+				hl_tabs[i].className = hl_tabs[i].className.replace(/ cbi-tab-highlighted/g, '');
+		}, 750);
+
+	return updated;
+}
+
+
+function cbi_validate_form(form, errmsg)
+{
+	/* if triggered by a section removal or addition, don't validate */
+	if( form.cbi_state == 'add-section' || form.cbi_state == 'del-section' )
+		return true;
+
+	if( form.cbi_validators )
+	{
+		for( var i = 0; i < form.cbi_validators.length; i++ )
+		{
+			var validator = form.cbi_validators[i];
+			if( !validator() && errmsg )
+			{
+				alert(errmsg);
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+function cbi_validate_reset(form)
+{
+	window.setTimeout(
+		function() { cbi_validate_form(form, null) }, 100
+	);
+
+	return true;
+}
+
+function cbi_validate_compile(code)
+{
+	var pos = 0;
+	var esc = false;
+	var depth = 0;
+	var stack = [ ];
+
+	code += ',';
+
+	for (var i = 0; i < code.length; i++)
+	{
+		if (esc)
+		{
+			esc = false;
+			continue;
+		}
+
+		switch (code.charCodeAt(i))
+		{
+		case 92:
+			esc = true;
+			break;
+
+		case 40:
+		case 44:
+			if (depth <= 0)
+			{
+				if (pos < i)
+				{
+					var label = code.substring(pos, i);
+						label = label.replace(/\\(.)/g, '$1');
+						label = label.replace(/^[ \t]+/g, '');
+						label = label.replace(/[ \t]+$/g, '');
+
+					if (label && !isNaN(label))
+					{
+						stack.push(parseFloat(label));
+					}
+					else if (label.match(/^(['"]).*\1$/))
+					{
+						stack.push(label.replace(/^(['"])(.*)\1$/, '$2'));
+					}
+					else if (typeof cbi_validators[label] == 'function')
+					{
+						stack.push(cbi_validators[label]);
+						stack.push(null);
+					}
+					else
+					{
+						throw "Syntax error, unhandled token '"+label+"'";
+					}
+				}
+				pos = i+1;
+			}
+			depth += (code.charCodeAt(i) == 40);
+			break;
+
+		case 41:
+			if (--depth <= 0)
+			{
+				if (typeof stack[stack.length-2] != 'function')
+					throw "Syntax error, argument list follows non-function";
+
+				stack[stack.length-1] =
+					arguments.callee(code.substring(pos, i));
+
+				pos = i+1;
+			}
+			break;
+		}
+	}
+
+	return stack;
+}
+
+function cbi_validate_field(cbid, optional, type)
+{
+	var field = (typeof cbid == "string") ? document.getElementById(cbid) : cbid;
+	var vstack; try { vstack = cbi_validate_compile(type); } catch(e) { };
+
+	if (field && vstack && typeof vstack[0] == "function")
+	{
+		var validator = function()
+		{
+			// is not detached
+			if( field.form )
+			{
+				field.className = field.className.replace(/ cbi-input-invalid/g, '');
+
+				// validate value
+				var value = (field.options && field.options.selectedIndex > -1)
+					? field.options[field.options.selectedIndex].value : field.value;
+
+				if (!(((value.length == 0) && optional) || vstack[0].apply(value, vstack[1])))
+				{
+					// invalid
+					field.className += ' cbi-input-invalid';
+					if (field.disabled == true)
+					{
+						return true;
+					}
+					return false;
+				}
+			}
+
+			return true;
+		};
+
+		if( ! field.form.cbi_validators )
+			field.form.cbi_validators = [ ];
+
+		field.form.cbi_validators.push(validator);
+
+		cbi_bind(field, "blur",  validator);
+		cbi_bind(field, "keyup", validator);
+
+		if (field.nodeName == 'SELECT')
+		{
+			cbi_bind(field, "change", validator);
+			cbi_bind(field, "click",  validator);
+		}
+
+		field.setAttribute("cbi_validate", validator);
+		field.setAttribute("cbi_datatype", type);
+		field.setAttribute("cbi_optional", (!!optional).toString());
+
+		validator();
+
+		var fcbox = document.getElementById('cbi.combobox.' + field.id);
+		if (fcbox)
+			cbi_validate_field(fcbox, optional, type);
+	}
+}
+
+function cbi_row_swap(elem, up, store)
+{
+	var tr = elem.parentNode;
+	while (tr && tr.nodeName.toLowerCase() != 'tr')
+		tr = tr.parentNode;
+
+	if (!tr)
+		return false;
+
+	var table = tr.parentNode;
+	while (table && table.nodeName.toLowerCase() != 'table')
+		table = table.parentNode;
+
+	if (!table)
+		return false;
+
+	var s = up ? 3 : 2;
+	var e = up ? table.rows.length : table.rows.length - 1;
+
+	for (var idx = s; idx < e; idx++)
+	{
+		if (table.rows[idx] == tr)
+		{
+			if (up)
+				tr.parentNode.insertBefore(table.rows[idx], table.rows[idx-1]);
+			else
+				tr.parentNode.insertBefore(table.rows[idx+1], table.rows[idx]);
+
+			break;
+		}
+	}
+
+	var ids = [ ];
+	for (idx = 2; idx < table.rows.length; idx++)
+	{
+		table.rows[idx].className = table.rows[idx].className.replace(
+			/cbi-rowstyle-[12]/, 'cbi-rowstyle-' + (1 + (idx % 2))
+		);
+
+		if (table.rows[idx].id && table.rows[idx].id.match(/-([^\-]+)$/) )
+			ids.push(RegExp.$1);
+	}
+
+	var input = document.getElementById(store);
+	if (input)
+		input.value = ids.join(' ');
+
+	return false;
+}
+
+function cbi_tag_last(container)
+{
+	var last;
+
+	for (var i = 0; i < container.childNodes.length; i++)
+	{
+		var c = container.childNodes[i];
+		if (c.nodeType == 1 && c.nodeName.toLowerCase() == 'div')
+		{
+			c.className = c.className.replace(/ cbi-value-last$/, '');
+			last = c;
+		}
+	}
+
+	if (last)
+	{
+		last.className += ' cbi-value-last';
+	}
+}
+
+String.prototype.serialize = function()
+{
+	var o = this;
+	switch(typeof(o))
+	{
+		case 'object':
+			// null
+			if( o == null )
+			{
+				return 'null';
+			}
+
+			// array
+			else if( o.length )
+			{
+				var i, s = '';
+
+				for( var i = 0; i < o.length; i++ )
+					s += (s ? ', ' : '') + String.serialize(o[i]);
+
+				return '[ ' + s + ' ]';
+			}
+
+			// object
+			else
+			{
+				var k, s = '';
+
+				for( k in o )
+					s += (s ? ', ' : '') + k + ': ' + String.serialize(o[k]);
+
+				return '{ ' + s + ' }';
+			}
+
+			break;
+
+		case 'string':
+			// complex string
+			if( o.match(/[^a-zA-Z0-9_,.: -]/) )
+				return 'decodeURIComponent("' + encodeURIComponent(o) + '")';
+
+			// simple string
+			else
+				return '"' + o + '"';
+
+			break;
+
+		default:
+			return o.toString();
+	}
+}
+
+String.prototype.format = function()
+{
+	if (!RegExp)
+		return;
+
+	var html_esc = [/&/g, '&#38;', /"/g, '&#34;', /'/g, '&#39;', /</g, '&#60;', />/g, '&#62;'];
+	var quot_esc = [/"/g, '&#34;', /'/g, '&#39;'];
+
+	function esc(s, r) {
+		if (typeof(s) !== 'string' && !(s instanceof String))
+			return '';
+
+		for( var i = 0; i < r.length; i += 2 )
+			s = s.replace(r[i], r[i+1]);
+		return s;
+	}
+
+	var str = this;
+	var out = '';
+	var re = /^(([^%]*)%('.|0|\x20)?(-)?(\d+)?(\.\d+)?(%|b|c|d|u|f|o|s|x|X|q|h|j|t|m))/;
+	var a = b = [], numSubstitutions = 0, numMatches = 0;
+
+	while (a = re.exec(str))
+	{
+		var m = a[1];
+		var leftpart = a[2], pPad = a[3], pJustify = a[4], pMinLength = a[5];
+		var pPrecision = a[6], pType = a[7];
+
+		numMatches++;
+
+		if (pType == '%')
+		{
+			subst = '%';
+		}
+		else
+		{
+			if (numSubstitutions < arguments.length)
+			{
+				var param = arguments[numSubstitutions++];
+
+				var pad = '';
+				if (pPad && pPad.substr(0,1) == "'")
+					pad = leftpart.substr(1,1);
+				else if (pPad)
+					pad = pPad;
+				else
+					pad = ' ';
+
+				var justifyRight = true;
+				if (pJustify && pJustify === "-")
+					justifyRight = false;
+
+				var minLength = -1;
+				if (pMinLength)
+					minLength = +pMinLength;
+
+				var precision = -1;
+				if (pPrecision && pType == 'f')
+					precision = +pPrecision.substring(1);
+
+				var subst = param;
+
+				switch(pType)
+				{
+					case 'b':
+						subst = (+param || 0).toString(2);
+						break;
+
+					case 'c':
+						subst = String.fromCharCode(+param || 0);
+						break;
+
+					case 'd':
+						subst = ~~(+param || 0);
+						break;
+
+					case 'u':
+						subst = ~~Math.abs(+param || 0);
+						break;
+
+					case 'f':
+						subst = (precision > -1)
+							? ((+param || 0.0)).toFixed(precision)
+							: (+param || 0.0);
+						break;
+
+					case 'o':
+						subst = (+param || 0).toString(8);
+						break;
+
+					case 's':
+						subst = param;
+						break;
+
+					case 'x':
+						subst = ('' + (+param || 0).toString(16)).toLowerCase();
+						break;
+
+					case 'X':
+						subst = ('' + (+param || 0).toString(16)).toUpperCase();
+						break;
+
+					case 'h':
+						subst = esc(param, html_esc);
+						break;
+
+					case 'q':
+						subst = esc(param, quot_esc);
+						break;
+
+					case 'j':
+						subst = String.serialize(param);
+						break;
+
+					case 't':
+						var td = 0;
+						var th = 0;
+						var tm = 0;
+						var ts = (param || 0);
+
+						if (ts > 60) {
+							tm = Math.floor(ts / 60);
+							ts = (ts % 60);
+						}
+
+						if (tm > 60) {
+							th = Math.floor(tm / 60);
+							tm = (tm % 60);
+						}
+
+						if (th > 24) {
+							td = Math.floor(th / 24);
+							th = (th % 24);
+						}
+
+						subst = (td > 0)
+							? String.format('%dd %dh %dm %ds', td, th, tm, ts)
+							: String.format('%dh %dm %ds', th, tm, ts);
+
+						break;
+
+					case 'm':
+						var mf = pMinLength ? +pMinLength : 1000;
+						var pr = pPrecision ? ~~(10 * +('0' + pPrecision)) : 2;
+
+						var i = 0;
+						var val = (+param || 0);
+						var units = [ ' ', ' K', ' M', ' G', ' T', ' P', ' E' ];
+
+						for (i = 0; (i < units.length) && (val > mf); i++)
+							val /= mf;
+
+						subst = (i ? val.toFixed(pr) : val) + units[i];
+						pMinLength = null;
+						break;
+				}
+			}
+		}
+
+		if (pMinLength) {
+			subst = subst.toString();
+			for (var i = subst.length; i < pMinLength; i++)
+				if (pJustify == '-')
+					subst = subst + ' ';
+				else
+					subst = pad + subst;
+		}
+
+		out += leftpart + subst;
+		str = str.substr(m.length);
+	}
+
+	return out + str;
+}
+
+String.prototype.nobr = function()
+{
+	return this.replace(/[\s\n]+/g, '&#160;');
+}
+
+String.serialize = function()
+{
+	var a = [ ];
+	for (var i = 1; i < arguments.length; i++)
+		a.push(arguments[i]);
+	return ''.serialize.apply(arguments[0], a);
+}
+
+String.format = function()
+{
+	var a = [ ];
+	for (var i = 1; i < arguments.length; i++)
+		a.push(arguments[i]);
+	return ''.format.apply(arguments[0], a);
+}
+
+String.nobr = function()
+{
+	var a = [ ];
+	for (var i = 1; i < arguments.length; i++)
+		a.push(arguments[i]);
+	return ''.nobr.apply(arguments[0], a);
+}
+
+function cbi_dynlist_init(parent, datatype, optional, choices)
+{
+	parent = $(parent).addClass('cbi-input-dynlist');
+	var prefix = parent.attr('data-prefix');
+	var holder = parent.attr('data-placeholder');
+
+	var values;
+
+	function cbi_dynlist_redraw(focus, add, del) {
+		values = [ ];
+
+		if (del >= 0)
+			parent.children('.input-group').slice(del, del+1).remove();
+
+		parent.children('.input-group').each(function () {
+			var item = $(this).children('.cbi-input-text');
+
+			if (item.is('input'))
+				values.push(item.val() || '');
+			else if (item.is('select'))
+				values[values.length-1] = item.find('option:selected').text();
+
+			$(this).remove();
+		});
+
+		if (add >= 0) {
+			focus = add+1;
+			values.splice(focus, 0, '');
+		}
+		else if (values.length == 0) {
+			focus = 0;
+			values.push('');
+		}
+
+		for (var i = 0; i < values.length; i++) {
+			var d = $('<div/>').attr('class', 'input-group dynlist-input-group').appendTo(parent);
+
+			var t = $('<input/>')
+				.attr('id', prefix + '.' + (i+1))
+				.attr('name', prefix)
+				.attr('value', values[i])
+				.attr('type', 'text')
+				.attr('index', i)
+				.attr('class', 'cbi-input-text')
+				.attr('placeholder', (i == 0 && holder) ? holder : '')
+				.appendTo(d);
+
+			var s = $('<span/>').attr('class', 'input-group-addon ' + ((i+1) < values.length ? 'cbi-remove' : 'cbi-add')).appendTo(d);
+			var b = $('<i/>').attr('class', 'far ' + ((i+1) < values.length ? 'fa-minus' : 'fa-plus')).appendTo(s);
+
+			if (datatype == 'file')
+				cbi_browser_init(t.attr('id'), parent.attr('data-browser-path'));
+
+			if (datatype)
+				cbi_validate_field(t.attr('id'), ((i+1) == values.length) || optional, datatype);
+
+			if (choices) {
+				cbi_combobox_init(t.attr('id'), choices, '', cbi_strings.label.custom);
+				s.attr('index', i);
+			}
+
+			if (i == focus || -1 == focus)
+				t.select();
+
+			s.click(cbi_dynlist_btnclick);
+		}
+	}
+
+	function cbi_dynlist_btnclick(ev)
+	{
+		var target=$(ev.target);
+
+		if (! target.hasClass('input-group'))
+			target = target.parents('.input-group');
+
+		if (target.children('.cbi-remove').length)
+			cbi_dynlist_redraw(target.index(), -1, target.index());
+		else
+			cbi_dynlist_redraw(-1, target.index(), -1);
+
+		return false;
+	}
+
+	cbi_dynlist_redraw(NaN, -1, -1);
+}
+
+cbi_validators['netmask'] = function()
+{
+	return (this.match(/^(((128|192|224|240|248|252|254)\.0\.0\.0)|(255\.(0|128|192|224|240|248|252|254)\.0\.0)|(255\.255\.(0|128|192|224|240|248|252|254)\.0)|(255\.255\.255\.(0|128|192|224|240|248|252|254)))$/) != null);
+}
+
+cbi_validators['timehhmm'] = function()
+{
+	if (this.match(/^(\d{1,2}):(\d{1,2})$/))
+	{
+		return (RegExp.$1 >= 0) && (RegExp.$1 < 24) &&
+		       (RegExp.$2 >= 0) && (RegExp.$2 < 60);
+	}
+
+	return false;
+}
+EOF_ARGON_8080_CBI_JS
+    cat > "$argon_target_root/www/luci-static/resources/luci.js" <<'EOF_ARGON_8080_LUCI_JS'
+﻿/**
+ * @class LuCI
+ * @classdesc
+ *
+ * This is the LuCI base class. It is automatically instantiated and
+ * accessible using the global `L` variable.
+ *
+ * @param {Object} env
+ * The environment settings to use for the LuCI runtime.
+ */
+
+(function(window, document, undefined) {
+	'use strict';
+
+	var env = {};
+
+	/* Object.assign polyfill for IE */
+	if (typeof Object.assign !== 'function') {
+		Object.defineProperty(Object, 'assign', {
+			value: function assign(target, varArgs) {
+				if (target == null)
+					throw new TypeError('Cannot convert undefined or null to object');
+
+				var to = Object(target);
+
+				for (var index = 1; index < arguments.length; index++)
+					if (arguments[index] != null)
+						for (var nextKey in arguments[index])
+							if (Object.prototype.hasOwnProperty.call(arguments[index], nextKey))
+								to[nextKey] = arguments[index][nextKey];
+
+				return to;
+			},
+			writable: true,
+			configurable: true
+		});
+	}
+
+	/* Promise.finally polyfill */
+	if (typeof Promise.prototype.finally !== 'function') {
+		Promise.prototype.finally = function(fn) {
+			var onFinally = function(cb) {
+				return Promise.resolve(fn.call(this)).then(cb);
+			};
+
+			return this.then(
+				function(result) { return onFinally.call(this, function() { return result }) },
+				function(reason) { return onFinally.call(this, function() { return Promise.reject(reason) }) }
+			);
+		};
+	}
+
+	/*
+	 * Class declaration and inheritance helper
+	 */
+
+	var toCamelCase = function(s) {
+		return s.replace(/(?:^|[\. -])(.)/g, function(m0, m1) { return m1.toUpperCase() });
+	};
+
+	/**
+	 * @class baseclass
+	 * @hideconstructor
+	 * @memberof LuCI
+	 * @classdesc
+	 *
+	 * `LuCI.baseclass` is the abstract base class all LuCI classes inherit from.
+	 *
+	 * It provides simple means to create subclasses of given classes and
+	 * implements prototypal inheritance.
+	 */
+	var superContext = {}, classIndex = 0, Class = Object.assign(function() {}, {
+		/**
+		 * Extends this base class with the properties described in
+		 * `properties` and returns a new subclassed Class instance
+		 *
+		 * @memberof LuCI.baseclass
+		 *
+		 * @param {Object<string, *>} properties
+		 * An object describing the properties to add to the new
+		 * subclass.
+		 *
+		 * @returns {LuCI.baseclass}
+		 * Returns a new LuCI.baseclass sublassed from this class, extended
+		 * by the given properties and with its prototype set to this base
+		 * class to enable inheritance. The resulting value represents a
+		 * class constructor and can be instantiated with `new`.
+		 */
+		extend: function(properties) {
+			var props = {
+				__id__: { value: classIndex },
+				__base__: { value: this.prototype },
+				__name__: { value: properties.__name__ || 'anonymous' + classIndex++ }
+			};
+
+			var ClassConstructor = function() {
+				if (!(this instanceof ClassConstructor))
+					throw new TypeError('Constructor must not be called without "new"');
+
+				if (Object.getPrototypeOf(this).hasOwnProperty('__init__')) {
+					if (typeof(this.__init__) != 'function')
+						throw new TypeError('Class __init__ member is not a function');
+
+					this.__init__.apply(this, arguments)
+				}
+				else {
+					this.super('__init__', arguments);
+				}
+			};
+
+			for (var key in properties)
+				if (!props[key] && properties.hasOwnProperty(key))
+					props[key] = { value: properties[key], writable: true };
+
+			ClassConstructor.prototype = Object.create(this.prototype, props);
+			ClassConstructor.prototype.constructor = ClassConstructor;
+			Object.assign(ClassConstructor, this);
+			ClassConstructor.displayName = toCamelCase(props.__name__.value + 'Class');
+
+			return ClassConstructor;
+		},
+
+		/**
+		 * Extends this base class with the properties described in
+		 * `properties`, instantiates the resulting subclass using
+		 * the additional optional arguments passed to this function
+		 * and returns the resulting subclassed Class instance.
+		 *
+		 * This function serves as a convenience shortcut for
+		 * {@link LuCI.baseclass.extend Class.extend()} and subsequent
+		 * `new`.
+		 *
+		 * @memberof LuCI.baseclass
+		 *
+		 * @param {Object<string, *>} properties
+		 * An object describing the properties to add to the new
+		 * subclass.
+		 *
+		 * @param {...*} [new_args]
+		 * Specifies arguments to be passed to the subclass constructor
+		 * as-is in order to instantiate the new subclass.
+		 *
+		 * @returns {LuCI.baseclass}
+		 * Returns a new LuCI.baseclass instance extended by the given
+		 * properties with its prototype set to this base class to
+		 * enable inheritance.
+		 */
+		singleton: function(properties /*, ... */) {
+			return Class.extend(properties)
+				.instantiate(Class.prototype.varargs(arguments, 1));
+		},
+
+		/**
+		 * Calls the class constructor using `new` with the given argument
+		 * array being passed as variadic parameters to the constructor.
+		 *
+		 * @memberof LuCI.baseclass
+		 *
+		 * @param {Array<*>} params
+		 * An array of arbitrary values which will be passed as arguments
+		 * to the constructor function.
+		 *
+		 * @param {...*} [new_args]
+		 * Specifies arguments to be passed to the subclass constructor
+		 * as-is in order to instantiate the new subclass.
+		 *
+		 * @returns {LuCI.baseclass}
+		 * Returns a new LuCI.baseclass instance extended by the given
+		 * properties with its prototype set to this base class to
+		 * enable inheritance.
+		 */
+		instantiate: function(args) {
+			return new (Function.prototype.bind.apply(this,
+				Class.prototype.varargs(args, 0, null)))();
+		},
+
+		/* unused */
+		call: function(self, method) {
+			if (typeof(this.prototype[method]) != 'function')
+				throw new ReferenceError(method + ' is not defined in class');
+
+			return this.prototype[method].apply(self, self.varargs(arguments, 1));
+		},
+
+		/**
+		 * Checks whether the given class value is a subclass of this class.
+		 *
+		 * @memberof LuCI.baseclass
+		 *
+		 * @param {LuCI.baseclass} classValue
+		 * The class object to test.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` when the given `classValue` is a subclass of this
+		 * class or `false` if the given value is not a valid class or not
+		 * a subclass of this class'.
+		 */
+		isSubclass: function(classValue) {
+			return (classValue != null &&
+			        typeof(classValue) == 'function' &&
+			        classValue.prototype instanceof this);
+		},
+
+		prototype: {
+			/**
+			 * Extract all values from the given argument array beginning from
+			 * `offset` and prepend any further given optional parameters to
+			 * the beginning of the resulting array copy.
+			 *
+			 * @memberof LuCI.baseclass
+			 * @instance
+			 *
+			 * @param {Array<*>} args
+			 * The array to extract the values from.
+			 *
+			 * @param {number} offset
+			 * The offset from which to extract the values. An offset of `0`
+			 * would copy all values till the end.
+			 *
+			 * @param {...*} [extra_args]
+			 * Extra arguments to add to prepend to the resultung array.
+			 *
+			 * @returns {Array<*>}
+			 * Returns a new array consisting of the optional extra arguments
+			 * and the values extracted from the `args` array beginning with
+			 * `offset`.
+			 */
+			varargs: function(args, offset /*, ... */) {
+				return Array.prototype.slice.call(arguments, 2)
+					.concat(Array.prototype.slice.call(args, offset));
+			},
+
+			/**
+			 * Walks up the parent class chain and looks for a class member
+			 * called `key` in any of the parent classes this class inherits
+			 * from. Returns the member value of the superclass or calls the
+			 * member as function and returns its return value when the
+			 * optional `callArgs` array is given.
+			 *
+			 * This function has two signatures and is sensitive to the
+			 * amount of arguments passed to it:
+			 *  - `super('key')` -
+			 *    Returns the value of `key` when found within one of the
+			 *    parent classes.
+			 *  - `super('key', ['arg1', 'arg2'])` -
+			 *    Calls the `key()` method with parameters `arg1` and `arg2`
+			 *    when found within one of the parent classes.
+			 *
+			 * @memberof LuCI.baseclass
+			 * @instance
+			 *
+			 * @param {string} key
+			 * The name of the superclass member to retrieve.
+			 *
+			 * @param {Array<*>} [callArgs]
+			 * An optional array of function call parameters to use. When
+			 * this parameter is specified, the found member value is called
+			 * as function using the values of this array as arguments.
+			 *
+			 * @throws {ReferenceError}
+			 * Throws a `ReferenceError` when `callArgs` are specified and
+			 * the found member named by `key` is not a function value.
+			 *
+			 * @returns {*|null}
+			 * Returns the value of the found member or the return value of
+			 * the call to the found method. Returns `null` when no member
+			 * was found in the parent class chain or when the call to the
+			 * superclass method returned `null`.
+			 */
+			super: function(key, callArgs) {
+				if (key == null)
+					return null;
+
+				var slotIdx = this.__id__ + '.' + key,
+				    symStack = superContext[slotIdx],
+				    protoCtx = null;
+
+				for (protoCtx = Object.getPrototypeOf(symStack ? symStack[0] : Object.getPrototypeOf(this));
+				     protoCtx != null && !protoCtx.hasOwnProperty(key);
+				     protoCtx = Object.getPrototypeOf(protoCtx)) {}
+
+				if (protoCtx == null)
+					return null;
+
+				var res = protoCtx[key];
+
+				if (arguments.length > 1) {
+					if (typeof(res) != 'function')
+						throw new ReferenceError(key + ' is not a function in base class');
+
+					if (typeof(callArgs) != 'object')
+						callArgs = this.varargs(arguments, 1);
+
+					if (symStack)
+						symStack.unshift(protoCtx);
+					else
+						superContext[slotIdx] = [ protoCtx ];
+
+					res = res.apply(this, callArgs);
+
+					if (symStack && symStack.length > 1)
+						symStack.shift(protoCtx);
+					else
+						delete superContext[slotIdx];
+				}
+
+				return res;
+			},
+
+			/**
+			 * Returns a string representation of this class.
+			 *
+			 * @returns {string}
+			 * Returns a string representation of this class containing the
+			 * constructor functions `displayName` and describing the class
+			 * members and their respective types.
+			 */
+			toString: function() {
+				var s = '[' + this.constructor.displayName + ']', f = true;
+				for (var k in this) {
+					if (this.hasOwnProperty(k)) {
+						s += (f ? ' {\n' : '') + '  ' + k + ': ' + typeof(this[k]) + '\n';
+						f = false;
+					}
+				}
+				return s + (f ? '' : '}');
+			}
+		}
+	});
+
+
+	/**
+	 * @class headers
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `Headers` class is an internal utility class exposed in HTTP
+	 * response objects using the `response.headers` property.
+	 */
+	var Headers = Class.extend(/** @lends LuCI.headers.prototype */ {
+		__name__: 'LuCI.headers',
+		__init__: function(xhr) {
+			var hdrs = this.headers = {};
+			xhr.getAllResponseHeaders().split(/\r\n/).forEach(function(line) {
+				var m = /^([^:]+):(.*)$/.exec(line);
+				if (m != null)
+					hdrs[m[1].trim().toLowerCase()] = m[2].trim();
+			});
+		},
+
+		/**
+		 * Checks whether the given header name is present.
+		 * Note: Header-Names are case-insensitive.
+		 *
+		 * @instance
+		 * @memberof LuCI.headers
+		 * @param {string} name
+		 * The header name to check
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the header name is present, `false` otherwise
+		 */
+		has: function(name) {
+			return this.headers.hasOwnProperty(String(name).toLowerCase());
+		},
+
+		/**
+		 * Returns the value of the given header name.
+		 * Note: Header-Names are case-insensitive.
+		 *
+		 * @instance
+		 * @memberof LuCI.headers
+		 * @param {string} name
+		 * The header name to read
+		 *
+		 * @returns {string|null}
+		 * The value of the given header name or `null` if the header isn't present.
+		 */
+		get: function(name) {
+			var key = String(name).toLowerCase();
+			return this.headers.hasOwnProperty(key) ? this.headers[key] : null;
+		}
+	});
+
+	/**
+	 * @class response
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `Response` class is an internal utility class representing HTTP responses.
+	 */
+	var Response = Class.extend({
+		__name__: 'LuCI.response',
+		__init__: function(xhr, url, duration, headers, content) {
+			/**
+			 * Describes whether the response is successful (status codes `200..299`) or not
+			 * @instance
+			 * @memberof LuCI.response
+			 * @name ok
+			 * @type {boolean}
+			 */
+			this.ok = (xhr.status >= 200 && xhr.status <= 299);
+
+			/**
+			 * The numeric HTTP status code of the response
+			 * @instance
+			 * @memberof LuCI.response
+			 * @name status
+			 * @type {number}
+			 */
+			this.status = xhr.status;
+
+			/**
+			 * The HTTP status description message of the response
+			 * @instance
+			 * @memberof LuCI.response
+			 * @name statusText
+			 * @type {string}
+			 */
+			this.statusText = xhr.statusText;
+
+			/**
+			 * The HTTP headers of the response
+			 * @instance
+			 * @memberof LuCI.response
+			 * @name headers
+			 * @type {LuCI.headers}
+			 */
+			this.headers = (headers != null) ? headers : new Headers(xhr);
+
+			/**
+			 * The total duration of the HTTP request in milliseconds
+			 * @instance
+			 * @memberof LuCI.response
+			 * @name duration
+			 * @type {number}
+			 */
+			this.duration = duration;
+
+			/**
+			 * The final URL of the request, i.e. after following redirects.
+			 * @instance
+			 * @memberof LuCI.response
+			 * @name url
+			 * @type {string}
+			 */
+			this.url = url;
+
+			/* privates */
+			this.xhr = xhr;
+
+			if (content instanceof Blob) {
+				this.responseBlob = content;
+				this.responseJSON = null;
+				this.responseText = null;
+			}
+			else if (content != null && typeof(content) == 'object') {
+				this.responseBlob = null;
+				this.responseJSON = content;
+				this.responseText = null;
+			}
+			else if (content != null) {
+				this.responseBlob = null;
+				this.responseJSON = null;
+				this.responseText = String(content);
+			}
+			else {
+				this.responseJSON = null;
+
+				if (xhr.responseType == 'blob') {
+					this.responseBlob = xhr.response;
+					this.responseText = null;
+				}
+				else {
+					this.responseBlob = null;
+					this.responseText = xhr.responseText;
+				}
+			}
+		},
+
+		/**
+		 * Clones the given response object, optionally overriding the content
+		 * of the cloned instance.
+		 *
+		 * @instance
+		 * @memberof LuCI.response
+		 * @param {*} [content]
+		 * Override the content of the cloned response. Object values will be
+		 * treated as JSON response data, all other types will be converted
+		 * using `String()` and treated as response text.
+		 *
+		 * @returns {LuCI.response}
+		 * The cloned `Response` instance.
+		 */
+		clone: function(content) {
+			var copy = new Response(this.xhr, this.url, this.duration, this.headers, content);
+
+			copy.ok = this.ok;
+			copy.status = this.status;
+			copy.statusText = this.statusText;
+
+			return copy;
+		},
+
+		/**
+		 * Access the response content as JSON data.
+		 *
+		 * @instance
+		 * @memberof LuCI.response
+		 * @throws {SyntaxError}
+		 * Throws `SyntaxError` if the content isn't valid JSON.
+		 *
+		 * @returns {*}
+		 * The parsed JSON data.
+		 */
+		json: function() {
+			if (this.responseJSON == null)
+				this.responseJSON = JSON.parse(this.responseText);
+
+			return this.responseJSON;
+		},
+
+		/**
+		 * Access the response content as string.
+		 *
+		 * @instance
+		 * @memberof LuCI.response
+		 * @returns {string}
+		 * The response content.
+		 */
+		text: function() {
+			if (this.responseText == null && this.responseJSON != null)
+				this.responseText = JSON.stringify(this.responseJSON);
+
+			return this.responseText;
+		},
+
+		/**
+		 * Access the response content as blob.
+		 *
+		 * @instance
+		 * @memberof LuCI.response
+		 * @returns {Blob}
+		 * The response content as blob.
+		 */
+		blob: function() {
+			return this.responseBlob;
+		}
+	});
+
+
+	var requestQueue = [];
+
+	function isQueueableRequest(opt) {
+		if (!classes.rpc)
+			return false;
+
+		if (opt.method != 'POST' || typeof(opt.content) != 'object')
+			return false;
+
+		if (opt.nobatch === true)
+			return false;
+
+		var rpcBaseURL = Request.expandURL(classes.rpc.getBaseURL());
+
+		return (rpcBaseURL != null && opt.url.indexOf(rpcBaseURL) == 0);
+	}
+
+	function flushRequestQueue() {
+		if (!requestQueue.length)
+			return;
+
+		var reqopt = Object.assign({}, requestQueue[0][0], { content: [], nobatch: true }),
+		    batch = [];
+
+		for (var i = 0; i < requestQueue.length; i++) {
+			batch[i] = requestQueue[i];
+			reqopt.content[i] = batch[i][0].content;
+		}
+
+		requestQueue.length = 0;
+
+		Request.request(rpcBaseURL, reqopt).then(function(reply) {
+			var json = null, req = null;
+
+			try { json = reply.json() }
+			catch(e) { }
+
+			while ((req = batch.shift()) != null)
+				if (Array.isArray(json) && json.length)
+					req[2].call(reqopt, reply.clone(json.shift()));
+				else
+					req[1].call(reqopt, new Error('No related RPC reply'));
+		}).catch(function(error) {
+			var req = null;
+
+			while ((req = batch.shift()) != null)
+				req[1].call(reqopt, error);
+		});
+	}
+
+	/**
+	 * @class request
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `Request` class allows initiating HTTP requests and provides utilities
+	 * for dealing with responses.
+	 */
+	var Request = Class.singleton(/** @lends LuCI.request.prototype */ {
+		__name__: 'LuCI.request',
+
+		interceptors: [],
+
+		/**
+		 * Turn the given relative URL into an absolute URL if necessary.
+		 *
+		 * @instance
+		 * @memberof LuCI.request
+		 * @param {string} url
+		 * The URL to convert.
+		 *
+		 * @returns {string}
+		 * The absolute URL derived from the given one, or the original URL
+		 * if it already was absolute.
+		 */
+		expandURL: function(url) {
+			if (!/^(?:[^/]+:)?\/\//.test(url))
+				url = location.protocol + '//' + location.host + url;
+
+			return url;
+		},
+
+		/**
+		 * @typedef {Object} RequestOptions
+		 * @memberof LuCI.request
+		 *
+		 * @property {string} [method=GET]
+		 * The HTTP method to use, e.g. `GET` or `POST`.
+		 *
+		 * @property {Object<string, Object|string>} [query]
+		 * Query string data to append to the URL. Non-string values of the
+		 * given object will be converted to JSON.
+		 *
+		 * @property {boolean} [cache=false]
+		 * Specifies whether the HTTP response may be retrieved from cache.
+		 *
+		 * @property {string} [username]
+		 * Provides a username for HTTP basic authentication.
+		 *
+		 * @property {string} [password]
+		 * Provides a password for HTTP basic authentication.
+		 *
+		 * @property {number} [timeout]
+		 * Specifies the request timeout in milliseconds.
+		 *
+		 * @property {boolean} [credentials=false]
+		 * Whether to include credentials such as cookies in the request.
+		 *
+		 * @property {string} [responseType=text]
+		 * Overrides the request response type. Valid values or `text` to
+		 * interpret the response as UTF-8 string or `blob` to handle the
+		 * response as binary `Blob` data.
+		 *
+		 * @property {*} [content]
+		 * Specifies the HTTP message body to send along with the request.
+		 * If the value is a function, it is invoked and the return value
+		 * used as content, if it is a FormData instance, it is used as-is,
+		 * if it is an object, it will be converted to JSON, in all other
+		 * cases it is converted to a string.
+		 *
+		 * @property {Object<string, string>} [header]
+		 * Specifies HTTP headers to set for the request.
+		 *
+		 * @property {function} [progress]
+		 * An optional request callback function which receives ProgressEvent
+		 * instances as sole argument during the HTTP request transfer.
+		 */
+
+		/**
+		 * Initiate an HTTP request to the given target.
+		 *
+		 * @instance
+		 * @memberof LuCI.request
+		 * @param {string} target
+		 * The URL to request.
+		 *
+		 * @param {LuCI.request.RequestOptions} [options]
+		 * Additional options to configure the request.
+		 *
+		 * @returns {Promise<LuCI.response>}
+		 * The resulting HTTP response.
+		 */
+		request: function(target, options) {
+			return Promise.resolve(target).then((function(url) {
+				var state = { xhr: new XMLHttpRequest(), url: this.expandURL(url), start: Date.now() },
+				    opt = Object.assign({}, options, state),
+				    content = null,
+				    contenttype = null,
+				    callback = this.handleReadyStateChange;
+
+				return new Promise(function(resolveFn, rejectFn) {
+					opt.xhr.onreadystatechange = callback.bind(opt, resolveFn, rejectFn);
+					opt.method = String(opt.method || 'GET').toUpperCase();
+
+					if ('query' in opt) {
+						var q = (opt.query != null) ? Object.keys(opt.query).map(function(k) {
+							if (opt.query[k] != null) {
+								var v = (typeof(opt.query[k]) == 'object')
+									? JSON.stringify(opt.query[k])
+									: String(opt.query[k]);
+
+								return '%s=%s'.format(encodeURIComponent(k), encodeURIComponent(v));
+							}
+							else {
+								return encodeURIComponent(k);
+							}
+						}).join('&') : '';
+
+						if (q !== '') {
+							switch (opt.method) {
+							case 'GET':
+							case 'HEAD':
+							case 'OPTIONS':
+								opt.url += ((/\?/).test(opt.url) ? '&' : '?') + q;
+								break;
+
+							default:
+								if (content == null) {
+									content = q;
+									contenttype = 'application/x-www-form-urlencoded';
+								}
+							}
+						}
+					}
+
+					if (!opt.cache)
+						opt.url += ((/\?/).test(opt.url) ? '&' : '?') + (new Date()).getTime();
+
+					if (isQueueableRequest(opt)) {
+						requestQueue.push([opt, rejectFn, resolveFn]);
+						requestAnimationFrame(flushRequestQueue);
+						return;
+					}
+
+					if ('username' in opt && 'password' in opt)
+						opt.xhr.open(opt.method, opt.url, true, opt.username, opt.password);
+					else
+						opt.xhr.open(opt.method, opt.url, true);
+
+					opt.xhr.responseType = opt.responseType || 'text';
+
+					if ('overrideMimeType' in opt.xhr)
+						opt.xhr.overrideMimeType('application/octet-stream');
+
+					if ('timeout' in opt)
+						opt.xhr.timeout = +opt.timeout;
+
+					if ('credentials' in opt)
+						opt.xhr.withCredentials = !!opt.credentials;
+
+					if (opt.content != null) {
+						switch (typeof(opt.content)) {
+						case 'function':
+							content = opt.content(opt.xhr);
+							break;
+
+						case 'object':
+							if (!(opt.content instanceof FormData)) {
+								content = JSON.stringify(opt.content);
+								contenttype = 'application/json';
+							}
+							else {
+								content = opt.content;
+							}
+							break;
+
+						default:
+							content = String(opt.content);
+						}
+					}
+
+					if ('headers' in opt)
+						for (var header in opt.headers)
+							if (opt.headers.hasOwnProperty(header)) {
+								if (header.toLowerCase() != 'content-type')
+									opt.xhr.setRequestHeader(header, opt.headers[header]);
+								else
+									contenttype = opt.headers[header];
+							}
+
+					if ('progress' in opt && 'upload' in opt.xhr)
+						opt.xhr.upload.addEventListener('progress', opt.progress);
+
+					if (contenttype != null)
+						opt.xhr.setRequestHeader('Content-Type', contenttype);
+
+					try {
+						opt.xhr.send(content);
+					}
+					catch (e) {
+						rejectFn.call(opt, e);
+					}
+				});
+			}).bind(this));
+		},
+
+		handleReadyStateChange: function(resolveFn, rejectFn, ev) {
+			var xhr = this.xhr,
+			    duration = Date.now() - this.start;
+
+			if (xhr.readyState !== 4)
+				return;
+
+			if (xhr.status === 0 && xhr.statusText === '') {
+				if (duration >= this.timeout)
+					rejectFn.call(this, new Error('XHR request timed out'));
+				else
+					rejectFn.call(this, new Error('XHR request aborted by browser'));
+			}
+			else {
+				var response = new Response(
+					xhr, xhr.responseURL || this.url, duration);
+
+				Promise.all(Request.interceptors.map(function(fn) { return fn(response) }))
+					.then(resolveFn.bind(this, response))
+					.catch(rejectFn.bind(this));
+			}
+		},
+
+		/**
+		 * Initiate an HTTP GET request to the given target.
+		 *
+		 * @instance
+		 * @memberof LuCI.request
+		 * @param {string} target
+		 * The URL to request.
+		 *
+		 * @param {LuCI.request.RequestOptions} [options]
+		 * Additional options to configure the request.
+		 *
+		 * @returns {Promise<LuCI.response>}
+		 * The resulting HTTP response.
+		 */
+		get: function(url, options) {
+			return this.request(url, Object.assign({ method: 'GET' }, options));
+		},
+
+		/**
+		 * Initiate an HTTP POST request to the given target.
+		 *
+		 * @instance
+		 * @memberof LuCI.request
+		 * @param {string} target
+		 * The URL to request.
+		 *
+		 * @param {*} [data]
+		 * The request data to send, see {@link LuCI.request.RequestOptions} for details.
+		 *
+		 * @param {LuCI.request.RequestOptions} [options]
+		 * Additional options to configure the request.
+		 *
+		 * @returns {Promise<LuCI.response>}
+		 * The resulting HTTP response.
+		 */
+		post: function(url, data, options) {
+			return this.request(url, Object.assign({ method: 'POST', content: data }, options));
+		},
+
+		/**
+		 * Interceptor functions are invoked whenever an HTTP reply is received, in the order
+		 * these functions have been registered.
+		 * @callback LuCI.request.interceptorFn
+		 * @param {LuCI.response} res
+		 * The HTTP response object
+		 */
+
+		/**
+		 * Register an HTTP response interceptor function. Interceptor
+		 * functions are useful to perform default actions on incoming HTTP
+		 * responses, such as checking for expired authentication or for
+		 * implementing request retries before returning a failure.
+		 *
+		 * @instance
+		 * @memberof LuCI.request
+		 * @param {LuCI.request.interceptorFn} interceptorFn
+		 * The interceptor function to register.
+		 *
+		 * @returns {LuCI.request.interceptorFn}
+		 * The registered function.
+		 */
+		addInterceptor: function(interceptorFn) {
+			if (typeof(interceptorFn) == 'function')
+				this.interceptors.push(interceptorFn);
+			return interceptorFn;
+		},
+
+		/**
+		 * Remove an HTTP response interceptor function. The passed function
+		 * value must be the very same value that was used to register the
+		 * function.
+		 *
+		 * @instance
+		 * @memberof LuCI.request
+		 * @param {LuCI.request.interceptorFn} interceptorFn
+		 * The interceptor function to remove.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if any function has been removed, else `false`.
+		 */
+		removeInterceptor: function(interceptorFn) {
+			var oldlen = this.interceptors.length, i = oldlen;
+			while (i--)
+				if (this.interceptors[i] === interceptorFn)
+					this.interceptors.splice(i, 1);
+			return (this.interceptors.length < oldlen);
+		},
+
+		/**
+		 * @class
+		 * @memberof LuCI.request
+		 * @hideconstructor
+		 * @classdesc
+		 *
+		 * The `Request.poll` class provides some convience wrappers around
+		 * {@link LuCI.poll} mainly to simplify registering repeating HTTP
+		 * request calls as polling functions.
+		 */
+		poll: {
+			/**
+			 * The callback function is invoked whenever an HTTP reply to a
+			 * polled request is received or when the polled request timed
+			 * out.
+			 *
+			 * @callback LuCI.request.poll~callbackFn
+			 * @param {LuCI.response} res
+			 * The HTTP response object.
+			 *
+			 * @param {*} data
+			 * The response JSON if the response could be parsed as such,
+			 * else `null`.
+			 *
+			 * @param {number} duration
+			 * The total duration of the request in milliseconds.
+			 */
+
+			/**
+			 * Register a repeating HTTP request with an optional callback
+			 * to invoke whenever a response for the request is received.
+			 *
+			 * @instance
+			 * @memberof LuCI.request.poll
+			 * @param {number} interval
+			 * The poll interval in seconds.
+			 *
+			 * @param {string} url
+			 * The URL to request on each poll.
+			 *
+			 * @param {LuCI.request.RequestOptions} [options]
+			 * Additional options to configure the request.
+			 *
+			 * @param {LuCI.request.poll~callbackFn} [callback]
+			 * {@link LuCI.request.poll~callbackFn Callback} function to
+			 * invoke for each HTTP reply.
+			 *
+			 * @throws {TypeError}
+			 * Throws `TypeError` when an invalid interval was passed.
+			 *
+			 * @returns {function}
+			 * Returns the internally created poll function.
+			 */
+			add: function(interval, url, options, callback) {
+				if (isNaN(interval) || interval <= 0)
+					throw new TypeError('Invalid poll interval');
+
+				var ival = interval >>> 0,
+				    opts = Object.assign({}, options, { timeout: ival * 1000 - 5 });
+
+				var fn = function() {
+					return Request.request(url, options).then(function(res) {
+						if (!Poll.active())
+							return;
+
+						var res_json = null;
+						try {
+							res_json = res.json();
+						}
+						catch (err) {}
+
+						callback(res, res_json, res.duration);
+					});
+				};
+
+				return (Poll.add(fn, ival) ? fn : null);
+			},
+
+			/**
+			 * Remove a polling request that has been previously added using `add()`.
+			 * This function is essentially a wrapper around
+			 * {@link LuCI.poll.remove LuCI.poll.remove()}.
+			 *
+			 * @instance
+			 * @memberof LuCI.request.poll
+			 * @param {function} entry
+			 * The poll function returned by {@link LuCI.request.poll#add add()}.
+			 *
+			 * @returns {boolean}
+			 * Returns `true` if any function has been removed, else `false`.
+			 */
+			remove: function(entry) { return Poll.remove(entry) },
+
+			/**
+			  * Alias for {@link LuCI.poll.start LuCI.poll.start()}.
+			  *
+			  * @instance
+			  * @memberof LuCI.request.poll
+			  */
+			start: function() { return Poll.start() },
+
+			/**
+			  * Alias for {@link LuCI.poll.stop LuCI.poll.stop()}.
+			  *
+			  * @instance
+			  * @memberof LuCI.request.poll
+			  */
+			stop: function() { return Poll.stop() },
+
+			/**
+			  * Alias for {@link LuCI.poll.active LuCI.poll.active()}.
+			  *
+			  * @instance
+			  * @memberof LuCI.request.poll
+			  */
+			active: function() { return Poll.active() }
+		}
+	});
+
+	/**
+	 * @class poll
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `Poll` class allows registering and unregistering poll actions,
+	 * as well as starting, stopping and querying the state of the polling
+	 * loop.
+	 */
+	var Poll = Class.singleton(/** @lends LuCI.poll.prototype */ {
+		__name__: 'LuCI.poll',
+
+		queue: [],
+
+		/**
+		 * Add a new operation to the polling loop. If the polling loop is not
+		 * already started at this point, it will be implicitely started.
+		 *
+		 * @instance
+		 * @memberof LuCI.poll
+		 * @param {function} fn
+		 * The function to invoke on each poll interval.
+		 *
+		 * @param {number} interval
+		 * The poll interval in seconds.
+		 *
+		 * @throws {TypeError}
+		 * Throws `TypeError` when an invalid interval was passed.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the function has been added or `false` if it
+		 * already is registered.
+		 */
+		add: function(fn, interval) {
+			if (interval == null || interval <= 0)
+				interval = env.pollinterval || null;
+
+			if (isNaN(interval) || typeof(fn) != 'function')
+				throw new TypeError('Invalid argument to LuCI.poll.add()');
+
+			for (var i = 0; i < this.queue.length; i++)
+				if (this.queue[i].fn === fn)
+					return false;
+
+			var e = {
+				r: true,
+				i: interval >>> 0,
+				fn: fn
+			};
+
+			this.queue.push(e);
+
+			if (this.tick != null && !this.active())
+				this.start();
+
+			return true;
+		},
+
+		/**
+		 * Remove an operation from the polling loop. If no further operatons
+		 * are registered, the polling loop is implicitely stopped.
+		 *
+		 * @instance
+		 * @memberof LuCI.poll
+		 * @param {function} fn
+		 * The function to remove.
+		 *
+		 * @throws {TypeError}
+		 * Throws `TypeError` when the given argument isn't a function.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the function has been removed or `false` if it
+		 * wasn't found.
+		 */
+		remove: function(fn) {
+			if (typeof(fn) != 'function')
+				throw new TypeError('Invalid argument to LuCI.poll.remove()');
+
+			var len = this.queue.length;
+
+			for (var i = len; i > 0; i--)
+				if (this.queue[i-1].fn === fn)
+					this.queue.splice(i-1, 1);
+
+			if (!this.queue.length && this.stop())
+				this.tick = 0;
+
+			return (this.queue.length != len);
+		},
+
+		/**
+		 * (Re)start the polling loop. Dispatches a custom `poll-start` event
+		 * to the `document` object upon successful start.
+		 *
+		 * @instance
+		 * @memberof LuCI.poll
+		 * @returns {boolean}
+		 * Returns `true` if polling has been started (or if no functions
+		 * where registered) or `false` when the polling loop already runs.
+		 */
+		start: function() {
+			if (this.active())
+				return false;
+
+			this.tick = 0;
+
+			if (this.queue.length) {
+				this.timer = window.setInterval(this.step, 1000);
+				this.step();
+				document.dispatchEvent(new CustomEvent('poll-start'));
+			}
+
+			return true;
+		},
+
+		/**
+		 * Stop the polling loop. Dispatches a custom `poll-stop` event
+		 * to the `document` object upon successful stop.
+		 *
+		 * @instance
+		 * @memberof LuCI.poll
+		 * @returns {boolean}
+		 * Returns `true` if polling has been stopped or `false` if it din't
+		 * run to begin with.
+		 */
+		stop: function() {
+			if (!this.active())
+				return false;
+
+			document.dispatchEvent(new CustomEvent('poll-stop'));
+			window.clearInterval(this.timer);
+			delete this.timer;
+			delete this.tick;
+			return true;
+		},
+
+		/* private */
+		step: function() {
+			for (var i = 0, e = null; (e = Poll.queue[i]) != null; i++) {
+				if ((Poll.tick % e.i) != 0)
+					continue;
+
+				if (!e.r)
+					continue;
+
+				e.r = false;
+
+				Promise.resolve(e.fn()).finally((function() { this.r = true }).bind(e));
+			}
+
+			Poll.tick = (Poll.tick + 1) % Math.pow(2, 32);
+		},
+
+		/**
+		 * Test whether the polling loop is running.
+		 *
+		 * @instance
+		 * @memberof LuCI.poll
+		 * @returns {boolean} - Returns `true` if polling is active, else `false`.
+		 */
+		active: function() {
+			return (this.timer != null);
+		}
+	});
+
+	/**
+	 * @class dom
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `dom` class provides convenience method for creating and
+	 * manipulating DOM elements.
+	 *
+	 * To import the class in views, use `'require dom'`, to import it in
+	 * external JavaScript, use `L.require("dom").then(...)`.
+	 */
+	var DOM = Class.singleton(/** @lends LuCI.dom.prototype */ {
+		__name__: 'LuCI.dom',
+
+		/**
+		 * Tests whether the given argument is a valid DOM `Node`.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} e
+		 * The value to test.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the value is a DOM `Node`, else `false`.
+		 */
+		elem: function(e) {
+			return (e != null && typeof(e) == 'object' && 'nodeType' in e);
+		},
+
+		/**
+		 * Parses a given string as HTML and returns the first child node.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {string} s
+		 * A string containing an HTML fragment to parse. Note that only
+		 * the first result of the resulting structure is returned, so an
+		 * input value of `<div>foo</div> <div>bar</div>` will only return
+		 * the first `div` element node.
+		 *
+		 * @returns {Node}
+		 * Returns the first DOM `Node` extracted from the HTML fragment or
+		 * `null` on parsing failures or if no element could be found.
+		 */
+		parse: function(s) {
+			var elem = null;
+
+			try {
+				domParser = domParser || new DOMParser();
+				elem = domParser.parseFromString(s, 'text/html').body.firstChild;
+			}
+			catch(e) {}
+
+			return elem;
+		},
+
+		/**
+		 * Tests whether a given `Node` matches the given query selector.
+		 *
+		 * This function is a convenience wrapper around the standard
+		 * `Node.matches("selector")` function with the added benefit that
+		 * the `node` argument may be a non-`Node` value, in which case
+		 * this function simply returns `false`.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} node
+		 * The `Node` argument to test the selector against.
+		 *
+		 * @param {string} [selector]
+		 * The query selector expression to test against the given node.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the given node matches the specified selector
+		 * or `false` when the node argument is no valid DOM `Node` or the
+		 * selector didn't match.
+		 */
+		matches: function(node, selector) {
+			var m = this.elem(node) ? node.matches || node.msMatchesSelector : null;
+			return m ? m.call(node, selector) : false;
+		},
+
+		/**
+		 * Returns the closest parent node that matches the given query
+		 * selector expression.
+		 *
+		 * This function is a convenience wrapper around the standard
+		 * `Node.closest("selector")` function with the added benefit that
+		 * the `node` argument may be a non-`Node` value, in which case
+		 * this function simply returns `null`.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} node
+		 * The `Node` argument to find the closest parent for.
+		 *
+		 * @param {string} [selector]
+		 * The query selector expression to test against each parent.
+		 *
+		 * @returns {Node|null}
+		 * Returns the closest parent node matching the selector or
+		 * `null` when the node argument is no valid DOM `Node` or the
+		 * selector didn't match any parent.
+		 */
+		parent: function(node, selector) {
+			if (this.elem(node) && node.closest)
+				return node.closest(selector);
+
+			while (this.elem(node))
+				if (this.matches(node, selector))
+					return node;
+				else
+					node = node.parentNode;
+
+			return null;
+		},
+
+		/**
+		 * Appends the given children data to the given node.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} node
+		 * The `Node` argument to append the children to.
+		 *
+		 * @param {*} [children]
+		 * The childrens to append to the given node.
+		 *
+		 * When `children` is an array, then each item of the array
+		 * will be either appended as child element or text node,
+		 * depending on whether the item is a DOM `Node` instance or
+		 * some other non-`null` value. Non-`Node`, non-`null` values
+		 * will be converted to strings first before being passed as
+		 * argument to `createTextNode()`.
+		 *
+		 * When `children` is a function, it will be invoked with
+		 * the passed `node` argument as sole parameter and the `append`
+		 * function will be invoked again, with the given `node` argument
+		 * as first and the return value of the `children` function as
+		 * second parameter.
+		 *
+		 * When `children` is is a DOM `Node` instance, it will be
+		 * appended to the given `node`.
+		 *
+		 * When `children` is any other non-`null` value, it will be
+		 * converted to a string and appened to the `innerHTML` property
+		 * of the given `node`.
+		 *
+		 * @returns {Node|null}
+		 * Returns the last children `Node` appended to the node or `null`
+		 * if either the `node` argument was no valid DOM `node` or if the
+		 * `children` was `null` or didn't result in further DOM nodes.
+		 */
+		append: function(node, children) {
+			if (!this.elem(node))
+				return null;
+
+			if (Array.isArray(children)) {
+				for (var i = 0; i < children.length; i++)
+					if (this.elem(children[i]))
+						node.appendChild(children[i]);
+					else if (children !== null && children !== undefined)
+						node.appendChild(document.createTextNode('' + children[i]));
+
+				return node.lastChild;
+			}
+			else if (typeof(children) === 'function') {
+				return this.append(node, children(node));
+			}
+			else if (this.elem(children)) {
+				return node.appendChild(children);
+			}
+			else if (children !== null && children !== undefined) {
+				node.innerHTML = '' + children;
+				return node.lastChild;
+			}
+
+			return null;
+		},
+
+		/**
+		 * Replaces the content of the given node with the given children.
+		 *
+		 * This function first removes any children of the given DOM
+		 * `Node` and then adds the given given children following the
+		 * rules outlined below.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} node
+		 * The `Node` argument to replace the children of.
+		 *
+		 * @param {*} [children]
+		 * The childrens to replace into the given node.
+		 *
+		 * When `children` is an array, then each item of the array
+		 * will be either appended as child element or text node,
+		 * depending on whether the item is a DOM `Node` instance or
+		 * some other non-`null` value. Non-`Node`, non-`null` values
+		 * will be converted to strings first before being passed as
+		 * argument to `createTextNode()`.
+		 *
+		 * When `children` is a function, it will be invoked with
+		 * the passed `node` argument as sole parameter and the `append`
+		 * function will be invoked again, with the given `node` argument
+		 * as first and the return value of the `children` function as
+		 * second parameter.
+		 *
+		 * When `children` is is a DOM `Node` instance, it will be
+		 * appended to the given `node`.
+		 *
+		 * When `children` is any other non-`null` value, it will be
+		 * converted to a string and appened to the `innerHTML` property
+		 * of the given `node`.
+		 *
+		 * @returns {Node|null}
+		 * Returns the last children `Node` appended to the node or `null`
+		 * if either the `node` argument was no valid DOM `node` or if the
+		 * `children` was `null` or didn't result in further DOM nodes.
+		 */
+		content: function(node, children) {
+			if (!this.elem(node))
+				return null;
+
+			var dataNodes = node.querySelectorAll('[data-idref]');
+
+			for (var i = 0; i < dataNodes.length; i++)
+				delete this.registry[dataNodes[i].getAttribute('data-idref')];
+
+			while (node.firstChild)
+				node.removeChild(node.firstChild);
+
+			return this.append(node, children);
+		},
+
+		/**
+		 * Sets attributes or registers event listeners on element nodes.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} node
+		 * The `Node` argument to set the attributes or add the event
+		 * listeners for. When the given `node` value is not a valid
+		 * DOM `Node`, the function returns and does nothing.
+		 *
+		 * @param {string|Object<string, *>} key
+		 * Specifies either the attribute or event handler name to use,
+		 * or an object containing multiple key, value pairs which are
+		 * each added to the node as either attribute or event handler,
+		 * depending on the respective value.
+		 *
+		 * @param {*} [val]
+		 * Specifies the attribute value or event handler function to add.
+		 * If the `key` parameter is an `Object`, this parameter will be
+		 * ignored.
+		 *
+		 * When `val` is of type function, it will be registered as event
+		 * handler on the given `node` with the `key` parameter being the
+		 * event name.
+		 *
+		 * When `val` is of type object, it will be serialized as JSON and
+		 * added as attribute to the given `node`, using the given `key`
+		 * as attribute name.
+		 *
+		 * When `val` is of any other type, it will be added as attribute
+		 * to the given `node` as-is, with the underlying `setAttribute()`
+		 * call implicitely turning it into a string.
+		 */
+		attr: function(node, key, val) {
+			if (!this.elem(node))
+				return null;
+
+			var attr = null;
+
+			if (typeof(key) === 'object' && key !== null)
+				attr = key;
+			else if (typeof(key) === 'string')
+				attr = {}, attr[key] = val;
+
+			for (key in attr) {
+				if (!attr.hasOwnProperty(key) || attr[key] == null)
+					continue;
+
+				switch (typeof(attr[key])) {
+				case 'function':
+					node.addEventListener(key, attr[key]);
+					break;
+
+				case 'object':
+					node.setAttribute(key, JSON.stringify(attr[key]));
+					break;
+
+				default:
+					node.setAttribute(key, attr[key]);
+				}
+			}
+		},
+
+		/**
+		 * Creates a new DOM `Node` from the given `html`, `attr` and
+		 * `data` parameters.
+		 *
+		 * This function has multiple signatures, it can be either invoked
+		 * in the form `create(html[, attr[, data]])` or in the form
+		 * `create(html[, data])`. The used variant is determined from the
+		 * type of the second argument.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {*} html
+		 * Describes the node to create.
+		 *
+		 * When the value of `html` is of type array, a `DocumentFragment`
+		 * node is created and each item of the array is first converted
+		 * to a DOM `Node` by passing it through `create()` and then added
+		 * as child to the fragment.
+		 *
+		 * When the value of `html` is a DOM `Node` instance, no new
+		 * element will be created but the node will be used as-is.
+		 *
+		 * When the value of `html` is a string starting with `<`, it will
+		 * be passed to `dom.parse()` and the resulting value is used.
+		 *
+		 * When the value of `html` is any other string, it will be passed
+		 * to `document.createElement()` for creating a new DOM `Node` of
+		 * the given name.
+		 *
+		 * @param {Object<string, *>} [attr]
+		 * Specifies an Object of key, value pairs to set as attributes
+		 * or event handlers on the created node. Refer to
+		 * {@link LuCI.dom#attr dom.attr()} for details.
+		 *
+		 * @param {*} [data]
+		 * Specifies children to append to the newly created element.
+		 * Refer to {@link LuCI.dom#append dom.append()} for details.
+		 *
+		 * @throws {InvalidCharacterError}
+		 * Throws an `InvalidCharacterError` when the given `html`
+		 * argument contained malformed markup (such as not escaped
+		 * `&` characters in XHTML mode) or when the given node name
+		 * in `html` contains characters which are not legal in DOM
+		 * element names, such as spaces.
+		 *
+		 * @returns {Node}
+		 * Returns the newly created `Node`.
+		 */
+		create: function() {
+			var html = arguments[0],
+			    attr = arguments[1],
+			    data = arguments[2],
+			    elem;
+
+			if (!(attr instanceof Object) || Array.isArray(attr))
+				data = attr, attr = null;
+
+			if (Array.isArray(html)) {
+				elem = document.createDocumentFragment();
+				for (var i = 0; i < html.length; i++)
+					elem.appendChild(this.create(html[i]));
+			}
+			else if (this.elem(html)) {
+				elem = html;
+			}
+			else if (html.charCodeAt(0) === 60) {
+				elem = this.parse(html);
+			}
+			else {
+				elem = document.createElement(html);
+			}
+
+			if (!elem)
+				return null;
+
+			this.attr(elem, attr);
+			this.append(elem, data);
+
+			return elem;
+		},
+
+		registry: {},
+
+		/**
+		 * Attaches or detaches arbitrary data to and from a DOM `Node`.
+		 *
+		 * This function is useful to attach non-string values or runtime
+		 * data that is not serializable to DOM nodes. To decouple data
+		 * from the DOM, values are not added directly to nodes, but
+		 * inserted into a registry instead which is then referenced by a
+		 * string key stored as `data-idref` attribute in the node.
+		 *
+		 * This function has multiple signatures and is sensitive to the
+		 * number of arguments passed to it.
+		 *
+		 *  - `dom.data(node)` -
+		 *     Fetches all data associated with the given node.
+		 *  - `dom.data(node, key)` -
+		 *     Fetches a specific key associated with the given node.
+		 *  - `dom.data(node, key, val)` -
+		 *     Sets a specific key to the given value associated with the
+		 *     given node.
+		 *  - `dom.data(node, null)` -
+		 *     Clears any data associated with the node.
+		 *  - `dom.data(node, key, null)` -
+		 *     Clears the given key associated with the node.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {Node} node
+		 * The DOM `Node` instance to set or retrieve the data for.
+		 *
+		 * @param {string|null} [key]
+		 * This is either a string specifying the key to retrieve, or
+		 * `null` to unset the entire node data.
+		 *
+		 * @param {*|null} [val]
+		 * This is either a non-`null` value to set for a given key or
+		 * `null` to remove the given `key` from the specified node.
+		 *
+		 * @returns {*}
+		 * Returns the get or set value, or `null` when no value could
+		 * be found.
+		 */
+		data: function(node, key, val) {
+			if (!node || !node.getAttribute)
+				return null;
+
+			var id = node.getAttribute('data-idref');
+
+			/* clear all data */
+			if (arguments.length > 1 && key == null) {
+				if (id != null) {
+					node.removeAttribute('data-idref');
+					val = this.registry[id]
+					delete this.registry[id];
+					return val;
+				}
+
+				return null;
+			}
+
+			/* clear a key */
+			else if (arguments.length > 2 && key != null && val == null) {
+				if (id != null) {
+					val = this.registry[id][key];
+					delete this.registry[id][key];
+					return val;
+				}
+
+				return null;
+			}
+
+			/* set a key */
+			else if (arguments.length > 2 && key != null && val != null) {
+				if (id == null) {
+					do { id = Math.floor(Math.random() * 0xffffffff).toString(16) }
+					while (this.registry.hasOwnProperty(id));
+
+					node.setAttribute('data-idref', id);
+					this.registry[id] = {};
+				}
+
+				return (this.registry[id][key] = val);
+			}
+
+			/* get all data */
+			else if (arguments.length == 1) {
+				if (id != null)
+					return this.registry[id];
+
+				return null;
+			}
+
+			/* get a key */
+			else if (arguments.length == 2) {
+				if (id != null)
+					return this.registry[id][key];
+			}
+
+			return null;
+		},
+
+		/**
+		 * Binds the given class instance ot the specified DOM `Node`.
+		 *
+		 * This function uses the `dom.data()` facility to attach the
+		 * passed instance of a Class to a node. This is needed for
+		 * complex widget elements or similar where the corresponding
+		 * class instance responsible for the element must be retrieved
+		 * from DOM nodes obtained by `querySelector()` or similar means.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {Node} node
+		 * The DOM `Node` instance to bind the class to.
+		 *
+		 * @param {Class} inst
+		 * The Class instance to bind to the node.
+		 *
+		 * @throws {TypeError}
+		 * Throws a `TypeError` when the given instance argument isn't
+		 * a valid Class instance.
+		 *
+		 * @returns {Class}
+		 * Returns the bound class instance.
+		 */
+		bindClassInstance: function(node, inst) {
+			if (!(inst instanceof Class))
+				LuCI.prototype.error('TypeError', 'Argument must be a class instance');
+
+			return this.data(node, '_class', inst);
+		},
+
+		/**
+		 * Finds a bound class instance on the given node itself or the
+		 * first bound instance on its closest parent node.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {Node} node
+		 * The DOM `Node` instance to start from.
+		 *
+		 * @returns {Class|null}
+		 * Returns the founds class instance if any or `null` if no bound
+		 * class could be found on the node itself or any of its parents.
+		 */
+		findClassInstance: function(node) {
+			var inst = null;
+
+			do {
+				inst = this.data(node, '_class');
+				node = node.parentNode;
+			}
+			while (!(inst instanceof Class) && node != null);
+
+			return inst;
+		},
+
+		/**
+		 * Finds a bound class instance on the given node itself or the
+		 * first bound instance on its closest parent node and invokes
+		 * the specified method name on the found class instance.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {Node} node
+		 * The DOM `Node` instance to start from.
+		 *
+		 * @param {string} method
+		 * The name of the method to invoke on the found class instance.
+		 *
+		 * @param {...*} params
+		 * Additional arguments to pass to the invoked method as-is.
+		 *
+		 * @returns {*|null}
+		 * Returns the return value of the invoked method if a class
+		 * instance and method has been found. Returns `null` if either
+		 * no bound class instance could be found, or if the found
+		 * instance didn't have the requested `method`.
+		 */
+		callClassMethod: function(node, method /*, ... */) {
+			var inst = this.findClassInstance(node);
+
+			if (inst == null || typeof(inst[method]) != 'function')
+				return null;
+
+			return inst[method].apply(inst, inst.varargs(arguments, 2));
+		},
+
+		/**
+		 * The ignore callback function is invoked by `isEmpty()` for each
+		 * child node to decide whether to ignore a child node or not.
+		 *
+		 * When this function returns `false`, the node passed to it is
+		 * ignored, else not.
+		 *
+		 * @callback LuCI.dom~ignoreCallbackFn
+		 * @param {Node} node
+		 * The child node to test.
+		 *
+		 * @returns {boolean}
+		 * Boolean indicating whether to ignore the node or not.
+		 */
+
+		/**
+		 * Tests whether a given DOM `Node` instance is empty or appears
+		 * empty.
+		 *
+		 * Any element child nodes which have the CSS class `hidden` set
+		 * or for which the optionally passed `ignoreFn` callback function
+		 * returns `false` are ignored.
+		 *
+		 * @instance
+		 * @memberof LuCI.dom
+		 * @param {Node} node
+		 * The DOM `Node` instance to test.
+		 *
+		 * @param {LuCI.dom~ignoreCallbackFn} [ignoreFn]
+		 * Specifies an optional function which is invoked for each child
+		 * node to decide whether the child node should be ignored or not.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the node does not have any children or if
+		 * any children node either has a `hidden` CSS class or a `false`
+		 * result when testing it using the given `ignoreFn`.
+		 */
+		isEmpty: function(node, ignoreFn) {
+			for (var child = node.firstElementChild; child != null; child = child.nextElementSibling)
+				if (!child.classList.contains('hidden') && (!ignoreFn || !ignoreFn(child)))
+					return false;
+
+			return true;
+		}
+	});
+
+	/**
+	 * @class session
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `session` class provides various session related functionality.
+	 */
+	var Session = Class.singleton(/** @lends LuCI.session.prototype */ {
+		__name__: 'LuCI.session',
+
+		/**
+		 * Retrieve the current session ID.
+		 *
+		 * @returns {string}
+		 * Returns the current session ID.
+		 */
+		getID: function() {
+			return env.sessionid || '00000000000000000000000000000000';
+		},
+
+		/**
+		 * Retrieve the current session token.
+		 *
+		 * @returns {string|null}
+		 * Returns the current session token or `null` if not logged in.
+		 */
+		getToken: function() {
+			return env.token || null;
+		},
+
+		/**
+		 * Retrieve data from the local session storage.
+		 *
+		 * @param {string} [key]
+		 * The key to retrieve from the session data store. If omitted, all
+		 * session data will be returned.
+		 *
+		 * @returns {*}
+		 * Returns the stored session data or `null` if the given key wasn't
+		 * found.
+		 */
+		getLocalData: function(key) {
+			try {
+				var sid = this.getID(),
+				    item = 'luci-session-store',
+				    data = JSON.parse(window.sessionStorage.getItem(item));
+
+				if (!LuCI.prototype.isObject(data) || !data.hasOwnProperty(sid)) {
+					data = {};
+					data[sid] = {};
+				}
+
+				if (key != null)
+					return data[sid].hasOwnProperty(key) ? data[sid][key] : null;
+
+				return data[sid];
+			}
+			catch (e) {
+				return (key != null) ? null : {};
+			}
+		},
+
+		/**
+		 * Set data in the local session storage.
+		 *
+		 * @param {string} key
+		 * The key to set in the session data store.
+		 *
+		 * @param {*} value
+		 * The value to store. It will be internally converted to JSON before
+		 * being put in the session store.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the data could be stored or `false` on error.
+		 */
+		setLocalData: function(key, value) {
+			if (key == null)
+				return false;
+
+			try {
+				var sid = this.getID(),
+				    item = 'luci-session-store',
+				    data = JSON.parse(window.sessionStorage.getItem(item));
+
+				if (!LuCI.prototype.isObject(data) || !data.hasOwnProperty(sid)) {
+					data = {};
+					data[sid] = {};
+				}
+
+				if (value != null)
+					data[sid][key] = value;
+				else
+					delete data[sid][key];
+
+				window.sessionStorage.setItem(item, JSON.stringify(data));
+
+				return true;
+			}
+			catch (e) {
+				return false;
+			}
+		}
+	});
+
+	/**
+	 * @class view
+	 * @memberof LuCI
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `view` class forms the basis of views and provides a standard
+	 * set of methods to inherit from.
+	 */
+	var View = Class.extend(/** @lends LuCI.view.prototype */ {
+		__name__: 'LuCI.view',
+
+		__init__: function() {
+			var vp = document.getElementById('view');
+
+			DOM.content(vp, E('div', { 'class': 'spinning' }, _('Loading view…')));
+
+			return Promise.resolve(this.load())
+				.then(LuCI.prototype.bind(this.render, this))
+				.then(LuCI.prototype.bind(function(nodes) {
+					var vp = document.getElementById('view');
+
+					DOM.content(vp, nodes);
+					DOM.append(vp, this.addFooter());
+				}, this)).catch(LuCI.prototype.error);
+		},
+
+		/**
+		 * The load function is invoked before the view is rendered.
+		 *
+		 * The invocation of this function is wrapped by
+		 * `Promise.resolve()` so it may return Promises if needed.
+		 *
+		 * The return value of the function (or the resolved values
+		 * of the promise returned by it) will be passed as first
+		 * argument to `render()`.
+		 *
+		 * This function is supposed to be overwritten by subclasses,
+		 * the default implementation does nothing.
+		 *
+		 * @instance
+		 * @abstract
+		 * @memberof LuCI.view
+		 *
+		 * @returns {*|Promise<*>}
+		 * May return any value or a Promise resolving to any value.
+		 */
+		load: function() {},
+
+		/**
+		 * The render function is invoked after the
+		 * {@link LuCI.view#load load()} function and responsible
+		 * for setting up the view contents. It must return a DOM
+		 * `Node` or `DocumentFragment` holding the contents to
+		 * insert into the view area.
+		 *
+		 * The invocation of this function is wrapped by
+		 * `Promise.resolve()` so it may return Promises if needed.
+		 *
+		 * The return value of the function (or the resolved values
+		 * of the promise returned by it) will be inserted into the
+		 * main content area using
+		 * {@link LuCI.dom#append dom.append()}.
+		 *
+		 * This function is supposed to be overwritten by subclasses,
+		 * the default implementation does nothing.
+		 *
+		 * @instance
+		 * @abstract
+		 * @memberof LuCI.view
+		 * @param {*|null} load_results
+		 * This function will receive the return value of the
+		 * {@link LuCI.view#load view.load()} function as first
+		 * argument.
+		 *
+		 * @returns {Node|Promise<Node>}
+		 * Should return a DOM `Node` value or a `Promise` resolving
+		 * to a `Node` value.
+		 */
+		render: function() {},
+
+		/**
+		 * The handleSave function is invoked when the user clicks
+		 * the `Save` button in the page action footer.
+		 *
+		 * The default implementation should be sufficient for most
+		 * views using {@link form#Map form.Map()} based forms - it
+		 * will iterate all forms present in the view and invoke
+		 * the {@link form#Map#save Map.save()} method on each form.
+		 *
+		 * Views not using `Map` instances or requiring other special
+		 * logic should overwrite `handleSave()` with a custom
+		 * implementation.
+		 *
+		 * To disable the `Save` page footer button, views extending
+		 * this base class should overwrite the `handleSave` function
+		 * with `null`.
+		 *
+		 * The invocation of this function is wrapped by
+		 * `Promise.resolve()` so it may return Promises if needed.
+		 *
+		 * @instance
+		 * @memberof LuCI.view
+		 * @param {Event} ev
+		 * The DOM event that triggered the function.
+		 *
+		 * @returns {*|Promise<*>}
+		 * Any return values of this function are discarded, but
+		 * passed through `Promise.resolve()` to ensure that any
+		 * returned promise runs to completion before the button
+		 * is reenabled.
+		 */
+		handleSave: function(ev) {
+			var tasks = [];
+
+			document.getElementById('maincontent')
+				.querySelectorAll('.cbi-map').forEach(function(map) {
+					tasks.push(DOM.callClassMethod(map, 'save'));
+				});
+
+			return Promise.all(tasks);
+		},
+
+		/**
+		 * The handleSaveApply function is invoked when the user clicks
+		 * the `Save & Apply` button in the page action footer.
+		 *
+		 * The default implementation should be sufficient for most
+		 * views using {@link form#Map form.Map()} based forms - it
+		 * will first invoke
+		 * {@link LuCI.view.handleSave view.handleSave()} and then
+		 * call {@link ui#changes#apply ui.changes.apply()} to start the
+		 * modal config apply and page reload flow.
+		 *
+		 * Views not using `Map` instances or requiring other special
+		 * logic should overwrite `handleSaveApply()` with a custom
+		 * implementation.
+		 *
+		 * To disable the `Save & Apply` page footer button, views
+		 * extending this base class should overwrite the
+		 * `handleSaveApply` function with `null`.
+		 *
+		 * The invocation of this function is wrapped by
+		 * `Promise.resolve()` so it may return Promises if needed.
+		 *
+		 * @instance
+		 * @memberof LuCI.view
+		 * @param {Event} ev
+		 * The DOM event that triggered the function.
+		 *
+		 * @returns {*|Promise<*>}
+		 * Any return values of this function are discarded, but
+		 * passed through `Promise.resolve()` to ensure that any
+		 * returned promise runs to completion before the button
+		 * is reenabled.
+		 */
+		handleSaveApply: function(ev, mode) {
+			return this.handleSave(ev).then(function() {
+				classes.ui.changes.apply(mode == '0');
+			});
+		},
+
+		/**
+		 * The handleReset function is invoked when the user clicks
+		 * the `Reset` button in the page action footer.
+		 *
+		 * The default implementation should be sufficient for most
+		 * views using {@link form#Map form.Map()} based forms - it
+		 * will iterate all forms present in the view and invoke
+		 * the {@link form#Map#save Map.reset()} method on each form.
+		 *
+		 * Views not using `Map` instances or requiring other special
+		 * logic should overwrite `handleReset()` with a custom
+		 * implementation.
+		 *
+		 * To disable the `Reset` page footer button, views extending
+		 * this base class should overwrite the `handleReset` function
+		 * with `null`.
+		 *
+		 * The invocation of this function is wrapped by
+		 * `Promise.resolve()` so it may return Promises if needed.
+		 *
+		 * @instance
+		 * @memberof LuCI.view
+		 * @param {Event} ev
+		 * The DOM event that triggered the function.
+		 *
+		 * @returns {*|Promise<*>}
+		 * Any return values of this function are discarded, but
+		 * passed through `Promise.resolve()` to ensure that any
+		 * returned promise runs to completion before the button
+		 * is reenabled.
+		 */
+		handleReset: function(ev) {
+			var tasks = [];
+
+			document.getElementById('maincontent')
+				.querySelectorAll('.cbi-map').forEach(function(map) {
+					tasks.push(DOM.callClassMethod(map, 'reset'));
+				});
+
+			return Promise.all(tasks);
+		},
+
+		/**
+		 * Renders a standard page action footer if any of the
+		 * `handleSave()`, `handleSaveApply()` or `handleReset()`
+		 * functions are defined.
+		 *
+		 * The default implementation should be sufficient for most
+		 * views - it will render a standard page footer with action
+		 * buttons labeled `Save`, `Save & Apply` and `Reset`
+		 * triggering the `handleSave()`, `handleSaveApply()` and
+		 * `handleReset()` functions respectively.
+		 *
+		 * When any of these `handle*()` functions is overwritten
+		 * with `null` by a view extending this class, the
+		 * corresponding button will not be rendered.
+		 *
+		 * @instance
+		 * @memberof LuCI.view
+		 * @returns {DocumentFragment}
+		 * Returns a `DocumentFragment` containing the footer bar
+		 * with buttons for each corresponding `handle*()` action
+		 * or an empty `DocumentFragment` if all three `handle*()`
+		 * methods are overwritten with `null`.
+		 */
+		addFooter: function() {
+			var footer = E([]),
+			    vp = document.getElementById('view'),
+			    hasmap = false,
+			    readonly = true;
+
+			vp.querySelectorAll('.cbi-map').forEach(function(map) {
+				var m = DOM.findClassInstance(map);
+				if (m) {
+					hasmap = true;
+
+					if (!m.readonly)
+						readonly = false;
+				}
+			});
+
+			if (!hasmap)
+				readonly = !LuCI.prototype.hasViewPermission();
+
+			var saveApplyBtn = this.handleSaveApply ? new classes.ui.ComboButton('0', {
+				0: [ _('Save & Apply') ],
+				1: [ _('Apply unchecked') ]
+			}, {
+				classes: {
+					0: 'btn cbi-button cbi-button-apply important',
+					1: 'btn cbi-button cbi-button-negative important'
+				},
+				click: classes.ui.createHandlerFn(this, 'handleSaveApply'),
+				disabled: readonly || null
+			}).render() : E([]);
+
+			if (this.handleSaveApply || this.handleSave || this.handleReset) {
+				footer.appendChild(E('div', { 'class': 'cbi-page-actions' }, [
+					saveApplyBtn, ' ',
+					this.handleSave ? E('button', {
+						'class': 'cbi-button cbi-button-save',
+						'click': classes.ui.createHandlerFn(this, 'handleSave'),
+						'disabled': readonly || null
+					}, [ _('Save') ]) : '', ' ',
+					this.handleReset ? E('button', {
+						'class': 'cbi-button cbi-button-reset',
+						'click': classes.ui.createHandlerFn(this, 'handleReset'),
+						'disabled': readonly || null
+					}, [ _('Reset') ]) : ''
+				]));
+			}
+
+			return footer;
+		}
+	});
+
+
+	var dummyElem = null,
+	    domParser = null,
+	    originalCBIInit = null,
+	    rpcBaseURL = null,
+	    sysFeatures = null,
+	    preloadClasses = null;
+
+	/* "preload" builtin classes to make the available via require */
+	var classes = {
+		baseclass: Class,
+		dom: DOM,
+		poll: Poll,
+		request: Request,
+		session: Session,
+		view: View
+	};
+
+	var naturalCompare = new Intl.Collator(undefined, { numeric: true }).compare;
+
+	var LuCI = Class.extend(/** @lends LuCI.prototype */ {
+		__name__: 'LuCI',
+		__init__: function(setenv) {
+
+			document.querySelectorAll('script[src*="/luci.js"]').forEach(function(s) {
+				if (setenv.base_url == null || setenv.base_url == '') {
+					var m = (s.getAttribute('src') || '').match(/^(.*)\/luci\.js(?:\?v=([^?]+))?$/);
+					if (m) {
+						setenv.base_url = m[1];
+						setenv.resource_version = m[2];
+					}
+				}
+			});
+
+			if (setenv.base_url == null)
+				this.error('InternalError', 'Cannot find url of luci.js');
+
+			setenv.cgi_base = setenv.scriptname.replace(/\/[^\/]+$/, '');
+
+			Object.assign(env, setenv);
+
+			var domReady = new Promise(function(resolveFn, rejectFn) {
+				document.addEventListener('DOMContentLoaded', resolveFn);
+			});
+
+			Promise.all([
+				domReady,
+				this.require('ui'),
+				this.require('rpc'),
+				this.require('form'),
+				this.probeRPCBaseURL()
+			]).then(this.setupDOM.bind(this)).catch(this.error);
+
+			originalCBIInit = window.cbi_init;
+			window.cbi_init = function() {};
+		},
+
+		/**
+		 * Captures the current stack trace and throws an error of the
+		 * specified type as a new exception. Also logs the exception as
+		 * error to the debug console if it is available.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {Error|string} [type=Error]
+		 * Either a string specifying the type of the error to throw or an
+		 * existing `Error` instance to copy.
+		 *
+		 * @param {string} [fmt=Unspecified error]
+		 * A format string which is used to form the error message, together
+		 * with all subsequent optional arguments.
+		 *
+		 * @param {...*} [args]
+		 * Zero or more variable arguments to the supplied format string.
+		 *
+		 * @throws {Error}
+		 * Throws the created error object with the captured stack trace
+		 * appended to the message and the type set to the given type
+		 * argument or copied from the given error instance.
+		 */
+		raise: function(type, fmt /*, ...*/) {
+			var e = null,
+			    msg = fmt ? String.prototype.format.apply(fmt, this.varargs(arguments, 2)) : null,
+			    stack = null;
+
+			if (type instanceof Error) {
+				e = type;
+
+				if (msg)
+					e.message = msg + ': ' + e.message;
+			}
+			else {
+				try { throw new Error('stacktrace') }
+				catch (e2) { stack = (e2.stack || '').split(/\n/) }
+
+				e = new (window[type || 'Error'] || Error)(msg || 'Unspecified error');
+				e.name = type || 'Error';
+			}
+
+			stack = (stack || []).map(function(frame) {
+				frame = frame.replace(/(.*?)@(.+):(\d+):(\d+)/g, 'at $1 ($2:$3:$4)').trim();
+				return frame ? '  ' + frame : '';
+			});
+
+			if (!/^  at /.test(stack[0]))
+				stack.shift();
+
+			if (/\braise /.test(stack[0]))
+				stack.shift();
+
+			if (/\berror /.test(stack[0]))
+				stack.shift();
+
+			if (stack.length)
+				e.message += '\n' + stack.join('\n');
+
+			if (window.console && console.debug)
+				console.debug(e);
+
+			throw e;
+		},
+
+		/**
+		 * A wrapper around {@link LuCI#raise raise()} which also renders
+		 * the error either as modal overlay when `ui.js` is already loaed
+		 * or directly into the view body.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {Error|string} [type=Error]
+		 * Either a string specifying the type of the error to throw or an
+		 * existing `Error` instance to copy.
+		 *
+		 * @param {string} [fmt=Unspecified error]
+		 * A format string which is used to form the error message, together
+		 * with all subsequent optional arguments.
+		 *
+		 * @param {...*} [args]
+		 * Zero or more variable arguments to the supplied format string.
+		 *
+		 * @throws {Error}
+		 * Throws the created error object with the captured stack trace
+		 * appended to the message and the type set to the given type
+		 * argument or copied from the given error instance.
+		 */
+		error: function(type, fmt /*, ...*/) {
+			try {
+				LuCI.prototype.raise.apply(LuCI.prototype,
+					Array.prototype.slice.call(arguments));
+			}
+			catch (e) {
+				if (!e.reported) {
+					if (classes.ui)
+						classes.ui.addNotification(e.name || _('Runtime error'),
+							E('pre', {}, e.message), 'danger');
+					else
+						DOM.content(document.querySelector('#maincontent'),
+							E('pre', { 'class': 'alert-message error' }, e.message));
+
+					e.reported = true;
+				}
+
+				throw e;
+			}
+		},
+
+		/**
+		 * Return a bound function using the given `self` as `this` context
+		 * and any further arguments as parameters to the bound function.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {function} fn
+		 * The function to bind.
+		 *
+		 * @param {*} self
+		 * The value to bind as `this` context to the specified function.
+		 *
+		 * @param {...*} [args]
+		 * Zero or more variable arguments which are bound to the function
+		 * as parameters.
+		 *
+		 * @returns {function}
+		 * Returns the bound function.
+		 */
+		bind: function(fn, self /*, ... */) {
+			return Function.prototype.bind.apply(fn, this.varargs(arguments, 2, self));
+		},
+
+		/**
+		 * Load an additional LuCI JavaScript class and its dependencies,
+		 * instantiate it and return the resulting class instance. Each
+		 * class is only loaded once. Subsequent attempts to load the same
+		 * class will return the already instantiated class.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string} name
+		 * The name of the class to load in dotted notation. Dots will
+		 * be replaced by spaces and joined with the runtime-determined
+		 * base URL of LuCI.js to form an absolute URL to load the class
+		 * file from.
+		 *
+		 * @throws {DependencyError}
+		 * Throws a `DependencyError` when the class to load includes
+		 * circular dependencies.
+		 *
+		 * @throws {NetworkError}
+		 * Throws `NetworkError` when the underlying {@link LuCI.request}
+		 * call failed.
+		 *
+		 * @throws {SyntaxError}
+		 * Throws `SyntaxError` when the loaded class file code cannot
+		 * be interpreted by `eval`.
+		 *
+		 * @throws {TypeError}
+		 * Throws `TypeError` when the class file could be loaded and
+		 * interpreted, but when invoking its code did not yield a valid
+		 * class instance.
+		 *
+		 * @returns {Promise<LuCI.baseclass>}
+		 * Returns the instantiated class.
+		 */
+		require: function(name, from) {
+			var L = this, url = null, from = from || [];
+
+			/* Class already loaded */
+			if (classes[name] != null) {
+				/* Circular dependency */
+				if (from.indexOf(name) != -1)
+					LuCI.prototype.raise('DependencyError',
+						'Circular dependency: class "%s" depends on "%s"',
+						name, from.join('" which depends on "'));
+
+				return Promise.resolve(classes[name]);
+			}
+
+			url = '%s/%s.js%s'.format(env.base_url, name.replace(/\./g, '/'), (env.resource_version ? '?v=' + env.resource_version : ''));
+			from = [ name ].concat(from);
+
+			var compileClass = function(res) {
+				if (!res.ok)
+					LuCI.prototype.raise('NetworkError',
+						'HTTP error %d while loading class file "%s"', res.status, url);
+
+				var source = res.text(),
+				    requirematch = /^require[ \t]+(\S+)(?:[ \t]+as[ \t]+([a-zA-Z_]\S*))?$/,
+				    strictmatch = /^use[ \t]+strict$/,
+				    depends = [],
+				    args = '';
+
+				/* find require statements in source */
+				for (var i = 0, off = -1, prev = -1, quote = -1, comment = -1, esc = false; i < source.length; i++) {
+					var chr = source.charCodeAt(i);
+
+					if (esc) {
+						esc = false;
+					}
+					else if (comment != -1) {
+						if ((comment == 47 && chr == 10) || (comment == 42 && prev == 42 && chr == 47))
+							comment = -1;
+					}
+					else if ((chr == 42 || chr == 47) && prev == 47) {
+						comment = chr;
+					}
+					else if (chr == 92) {
+						esc = true;
+					}
+					else if (chr == quote) {
+						var s = source.substring(off, i),
+						    m = requirematch.exec(s);
+
+						if (m) {
+							var dep = m[1], as = m[2] || dep.replace(/[^a-zA-Z0-9_]/g, '_');
+							depends.push(LuCI.prototype.require(dep, from));
+							args += ', ' + as;
+						}
+						else if (!strictmatch.exec(s)) {
+							break;
+						}
+
+						off = -1;
+						quote = -1;
+					}
+					else if (quote == -1 && (chr == 34 || chr == 39)) {
+						off = i + 1;
+						quote = chr;
+					}
+
+					prev = chr;
+				}
+
+				/* load dependencies and instantiate class */
+				return Promise.all(depends).then(function(instances) {
+					var _factory, _class;
+
+					try {
+						_factory = eval(
+							'(function(window, document, L%s) { %s })\n\n//# sourceURL=%s\n'
+								.format(args, source, res.url));
+					}
+					catch (error) {
+						LuCI.prototype.raise('SyntaxError', '%s\n  in %s:%s',
+							error.message, res.url, error.lineNumber || '?');
+					}
+
+					_factory.displayName = toCamelCase(name + 'ClassFactory');
+					_class = _factory.apply(_factory, [window, document, L].concat(instances));
+
+					if (!Class.isSubclass(_class))
+					    LuCI.prototype.error('TypeError', '"%s" factory yields invalid constructor', name);
+
+					if (_class.displayName == 'AnonymousClass')
+						_class.displayName = toCamelCase(name + 'Class');
+
+					var ptr = Object.getPrototypeOf(L),
+					    parts = name.split(/\./),
+					    instance = new _class();
+
+					for (var i = 0; ptr && i < parts.length - 1; i++)
+						ptr = ptr[parts[i]];
+
+					if (ptr)
+						ptr[parts[i]] = instance;
+
+					classes[name] = instance;
+
+					return instance;
+				});
+			};
+
+			/* Request class file */
+			classes[name] = Request.get(url, { cache: true }).then(compileClass);
+
+			return classes[name];
+		},
+
+		/* DOM setup */
+		probeRPCBaseURL: function() {
+			if (rpcBaseURL == null)
+				rpcBaseURL = Session.getLocalData('rpcBaseURL');
+
+			if (rpcBaseURL == null) {
+				var msg = {
+					jsonrpc: '2.0',
+					id:      'init',
+					method:  'list',
+					params:  undefined
+				};
+				var rpcFallbackURL = this.url('admin/ubus');
+
+				rpcBaseURL = Request.post(env.ubuspath, msg, { nobatch: true }).then(function(res) {
+					return (rpcBaseURL = res.status == 200 ? env.ubuspath : rpcFallbackURL);
+				}, function() {
+					return (rpcBaseURL = rpcFallbackURL);
+				}).then(function(url) {
+					Session.setLocalData('rpcBaseURL', url);
+					return url;
+				});
+			}
+
+			return Promise.resolve(rpcBaseURL);
+		},
+
+		probeSystemFeatures: function() {
+			if (sysFeatures == null)
+				sysFeatures = Session.getLocalData('features');
+
+			if (!this.isObject(sysFeatures)) {
+				sysFeatures = classes.rpc.declare({
+					object: 'luci',
+					method: 'getFeatures',
+					expect: { '': {} }
+				})().then(function(features) {
+					Session.setLocalData('features', features);
+					sysFeatures = features;
+
+					return features;
+				});
+			}
+
+			return Promise.resolve(sysFeatures);
+		},
+
+		probePreloadClasses: function() {
+			if (preloadClasses == null)
+				preloadClasses = Session.getLocalData('preload');
+
+			if (!Array.isArray(preloadClasses)) {
+				preloadClasses = this.resolveDefault(classes.rpc.declare({
+					object: 'file',
+					method: 'list',
+					params: [ 'path' ],
+					expect: { 'entries': [] }
+				})(this.fspath(this.resource('preload'))), []).then(function(entries) {
+					var classes = [];
+
+					for (var i = 0; i < entries.length; i++) {
+						if (entries[i].type != 'file')
+							continue;
+
+						var m = entries[i].name.match(/(.+)\.js$/);
+
+						if (m)
+							classes.push('preload.%s'.format(m[1]));
+					}
+
+					Session.setLocalData('preload', classes);
+					preloadClasses = classes;
+
+					return classes;
+				});
+			}
+
+			return Promise.resolve(preloadClasses);
+		},
+
+		/**
+		 * Test whether a particular system feature is available, such as
+		 * hostapd SAE support or an installed firewall. The features are
+		 * queried once at the beginning of the LuCI session and cached in
+		 * `SessionStorage` throughout the lifetime of the associated tab or
+		 * browser window.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string} feature
+		 * The feature to test. For detailed list of known feature flags,
+		 * see `/modules/luci-base/root/usr/share/rpcd/ucode/luci`.
+		 *
+		 * @param {string} [subfeature]
+		 * Some feature classes like `hostapd` provide sub-feature flags,
+		 * such as `sae` or `11w` support. The `subfeature` argument can
+		 * be used to query these.
+		 *
+		 * @return {boolean|null}
+		 * Return `true` if the queried feature (and sub-feature) is available
+		 * or `false` if the requested feature isn't present or known.
+		 * Return `null` when a sub-feature was queried for a feature which
+		 * has no sub-features.
+		 */
+		hasSystemFeature: function() {
+			var ft = sysFeatures[arguments[0]];
+
+			if (arguments.length == 2)
+				return this.isObject(ft) ? ft[arguments[1]] : null;
+
+			return (ft != null && ft != false);
+		},
+
+		/* private */
+		notifySessionExpiry: function() {
+			Poll.stop();
+
+			classes.ui.showModal(_('Session expired'), [
+				E('div', { class: 'alert-message warning' },
+					_('A new login is required since the authentication session expired.')),
+				E('div', { class: 'right' },
+					E('div', {
+						class: 'btn primary',
+						click: function() {
+							var loc = window.location;
+							window.location = loc.protocol + '//' + loc.host + loc.pathname + loc.search;
+						}
+					}, _('Log in…')))
+			]);
+
+			LuCI.prototype.raise('SessionError', 'Login session is expired');
+		},
+
+		/* private */
+		setupDOM: function(res) {
+			var domEv = res[0],
+			    uiClass = res[1],
+			    rpcClass = res[2],
+			    formClass = res[3],
+			    rpcBaseURL = res[4];
+
+			rpcClass.setBaseURL(rpcBaseURL);
+
+			rpcClass.addInterceptor(function(msg, req) {
+				if (!LuCI.prototype.isObject(msg) ||
+				    !LuCI.prototype.isObject(msg.error) ||
+				    msg.error.code != -32002)
+					return;
+
+				if (!LuCI.prototype.isObject(req) ||
+				    (req.object == 'session' && req.method == 'access'))
+					return;
+
+				return rpcClass.declare({
+					'object': 'session',
+					'method': 'access',
+					'params': [ 'scope', 'object', 'function' ],
+					'expect': { access: true }
+				})('uci', 'luci', 'read').catch(LuCI.prototype.notifySessionExpiry);
+			});
+
+			Request.addInterceptor(function(res) {
+				var isDenied = false;
+
+				if (res.status == 403 && res.headers.get('X-LuCI-Login-Required') == 'yes')
+					isDenied = true;
+
+				if (!isDenied)
+					return;
+
+				LuCI.prototype.notifySessionExpiry();
+			});
+
+			document.addEventListener('poll-start', function(ev) {
+				uiClass.showIndicator('poll-status', _('Refreshing'), function(ev) {
+					Request.poll.active() ? Request.poll.stop() : Request.poll.start();
+				});
+			});
+
+			document.addEventListener('poll-stop', function(ev) {
+				uiClass.showIndicator('poll-status', _('Paused'), null, 'inactive');
+			});
+
+			return Promise.all([
+				this.probeSystemFeatures(),
+				this.probePreloadClasses()
+			]).finally(LuCI.prototype.bind(function() {
+				var tasks = [];
+
+				if (Array.isArray(preloadClasses))
+					for (var i = 0; i < preloadClasses.length; i++)
+						tasks.push(this.require(preloadClasses[i]));
+
+				return Promise.all(tasks);
+			}, this)).finally(this.initDOM);
+		},
+
+		/* private */
+		initDOM: function() {
+			originalCBIInit();
+			Poll.start();
+			document.dispatchEvent(new CustomEvent('luci-loaded'));
+		},
+
+		/**
+		 * The `env` object holds environment settings used by LuCI, such
+		 * as request timeouts, base URLs etc.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 */
+		env: env,
+
+		/**
+		 * Construct an absolute filesystem path relative to the server
+		 * document root.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {...string} [parts]
+		 * An array of parts to join into a path.
+		 *
+		 * @return {string}
+		 * Return the joined path.
+		 */
+		fspath: function(/* ... */) {
+			var path = env.documentroot;
+
+			for (var i = 0; i < arguments.length; i++)
+				path += '/' + arguments[i];
+
+			var p = path.replace(/\/+$/, '').replace(/\/+/g, '/').split(/\//),
+			    res = [];
+
+			for (var i = 0; i < p.length; i++)
+				if (p[i] == '..')
+					res.pop();
+				else if (p[i] != '.')
+					res.push(p[i]);
+
+			return res.join('/');
+		},
+
+		/**
+		 * Construct a relative URL path from the given prefix and parts.
+		 * The resulting URL is guaranteed to only contain the characters
+		 * `a-z`, `A-Z`, `0-9`, `_`, `.`, `%`, `,`, `;`, and `-` as well
+		 * as `/` for the path separator.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string} [prefix]
+		 * The prefix to join the given parts with. If the `prefix` is
+		 * omitted, it defaults to an empty string.
+		 *
+		 * @param {string[]} [parts]
+		 * An array of parts to join into an URL path. Parts may contain
+		 * slashes and any of the other characters mentioned above.
+		 *
+		 * @return {string}
+		 * Return the joined URL path.
+		 */
+		path: function(prefix, parts) {
+			var url = [ prefix || '' ];
+
+			for (var i = 0; i < parts.length; i++)
+				if (/^(?:[a-zA-Z0-9_.%,;-]+\/)*[a-zA-Z0-9_.%,;-]+$/.test(parts[i]))
+					url.push('/', parts[i]);
+
+			if (url.length === 1)
+				url.push('/');
+
+			return url.join('');
+		},
+
+		/**
+		 * Construct an URL  pathrelative to the script path of the server
+		 * side LuCI application (usually `/cgi-bin/luci`).
+		 *
+		 * The resulting URL is guaranteed to only contain the characters
+		 * `a-z`, `A-Z`, `0-9`, `_`, `.`, `%`, `,`, `;`, and `-` as well
+		 * as `/` for the path separator.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string[]} [parts]
+		 * An array of parts to join into an URL path. Parts may contain
+		 * slashes and any of the other characters mentioned above.
+		 *
+		 * @return {string}
+		 * Returns the resulting URL path.
+		 */
+		url: function() {
+			return this.path(env.scriptname, arguments);
+		},
+
+		/**
+		 * Construct an URL path relative to the global static resource path
+		 * of the LuCI ui (usually `/luci-static/resources`).
+		 *
+		 * The resulting URL is guaranteed to only contain the characters
+		 * `a-z`, `A-Z`, `0-9`, `_`, `.`, `%`, `,`, `;`, and `-` as well
+		 * as `/` for the path separator.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string[]} [parts]
+		 * An array of parts to join into an URL path. Parts may contain
+		 * slashes and any of the other characters mentioned above.
+		 *
+		 * @return {string}
+		 * Returns the resulting URL path.
+		 */
+		resource: function() {
+			return this.path(env.resource, arguments);
+		},
+
+		/**
+		 * Construct an URL path relative to the media resource path of the
+		 * LuCI ui (usually `/luci-static/$theme_name`).
+		 *
+		 * The resulting URL is guaranteed to only contain the characters
+		 * `a-z`, `A-Z`, `0-9`, `_`, `.`, `%`, `,`, `;`, and `-` as well
+		 * as `/` for the path separator.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string[]} [parts]
+		 * An array of parts to join into an URL path. Parts may contain
+		 * slashes and any of the other characters mentioned above.
+		 *
+		 * @return {string}
+		 * Returns the resulting URL path.
+		 */
+		media: function() {
+			return this.path(env.media, arguments);
+		},
+
+		/**
+		 * Return the complete URL path to the current view.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @return {string}
+		 * Returns the URL path to the current view.
+		 */
+		location: function() {
+			return this.path(env.scriptname, env.requestpath);
+		},
+
+
+		/**
+		 * Tests whether the passed argument is a JavaScript object.
+		 * This function is meant to be an object counterpart to the
+		 * standard `Array.isArray()` function.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {*} [val]
+		 * The value to test
+		 *
+		 * @return {boolean}
+		 * Returns `true` if the given value is of type object and
+		 * not `null`, else returns `false`.
+		 */
+		isObject: function(val) {
+			return (val != null && typeof(val) == 'object');
+		},
+
+		/**
+		 * Return an array of sorted object keys, optionally sorted by
+		 * a different key or a different sorting mode.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {object} obj
+		 * The object to extract the keys from. If the given value is
+		 * not an object, the function will return an empty array.
+		 *
+		 * @param {string} [key]
+		 * Specifies the key to order by. This is mainly useful for
+		 * nested objects of objects or objects of arrays when sorting
+		 * shall not be performed by the primary object keys but by
+		 * some other key pointing to a value within the nested values.
+		 *
+		 * @param {string} [sortmode]
+		 * May be either `addr` or `num` to override the natural
+		 * lexicographic sorting with a sorting suitable for IP/MAC style
+		 * addresses or numeric values respectively.
+		 *
+		 * @return {string[]}
+		 * Returns an array containing the sorted keys of the given object.
+		 */
+		sortedKeys: function(obj, key, sortmode) {
+			if (obj == null || typeof(obj) != 'object')
+				return [];
+
+			return Object.keys(obj).map(function(e) {
+				var v = (key != null) ? obj[e][key] : e;
+
+				switch (sortmode) {
+				case 'addr':
+					v = (v != null) ? v.replace(/(?:^|[.:])([0-9a-fA-F]{1,4})/g,
+						function(m0, m1) { return ('000' + m1.toLowerCase()).substr(-4) }) : null;
+					break;
+
+				case 'num':
+					v = (v != null) ? +v : null;
+					break;
+				}
+
+				return [ e, v ];
+			}).filter(function(e) {
+				return (e[1] != null);
+			}).sort(function(a, b) {
+				return naturalCompare(a[1], b[1]);
+			}).map(function(e) {
+				return e[0];
+			});
+		},
+
+		/**
+		 * Compares two values numerically and returns -1, 0 or 1 depending
+		 * on whether the first value is smaller, equal to or larger than the
+		 * second one respectively.
+		 *
+		 * This function is meant to be used as comparator function for
+		 * Array.sort().
+		 *
+		 * @type {function}
+		 *
+		 * @param {*} a
+		 * The first value
+		 *
+		 * @param {*} b
+		 * The second value.
+		 *
+		 * @return {number}
+		 * Returns -1 if the first value is smaller than the second one.
+		 * Returns 0 if both values are equal.
+		 * Returns 1 if the first value is larger than the second one.
+		 */
+		naturalCompare: naturalCompare,
+
+		/**
+		 * Converts the given value to an array using toArray() if needed,
+		 * performs a numerical sort using naturalCompare() and returns the
+		 * result. If the input already is an array, no copy is being made
+		 * and the sorting is performed in-place.
+		 *
+		 * @see toArray
+		 * @see naturalCompare
+		 *
+		 * @param {*} val
+		 * The input value to sort (and convert to an array if needed).
+		 *
+		 * @return {Array<*>}
+		 * Returns the resulting, numerically sorted array.
+		 */
+		sortedArray: function(val) {
+			return this.toArray(val).sort(naturalCompare);
+		},
+
+		/**
+		 * Converts the given value to an array. If the given value is of
+		 * type array, it is returned as-is, values of type object are
+		 * returned as one-element array containing the object, empty
+		 * strings and `null` values are returned as empty array, all other
+		 * values are converted using `String()`, trimmed, split on white
+		 * space and returned as array.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {*} val
+		 * The value to convert into an array.
+		 *
+		 * @return {Array<*>}
+		 * Returns the resulting array.
+		 */
+		toArray: function(val) {
+			if (val == null)
+				return [];
+			else if (Array.isArray(val))
+				return val;
+			else if (typeof(val) == 'object')
+				return [ val ];
+
+			var s = String(val).trim();
+
+			if (s == '')
+				return [];
+
+			return s.split(/\s+/);
+		},
+
+		/**
+		 * Returns a promise resolving with either the given value or or with
+		 * the given default in case the input value is a rejecting promise.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {*} value
+		 * The value to resolve the promise with.
+		 *
+		 * @param {*} defvalue
+		 * The default value to resolve the promise with in case the given
+		 * input value is a rejecting promise.
+		 *
+		 * @returns {Promise<*>}
+		 * Returns a new promise resolving either to the given input value or
+		 * to the given default value on error.
+		 */
+		resolveDefault: function(value, defvalue) {
+			return Promise.resolve(value).catch(function() { return defvalue });
+		},
+
+		/**
+		 * The request callback function is invoked whenever an HTTP
+		 * reply to a request made using the `L.get()`, `L.post()` or
+		 * `L.poll()` function is timed out or received successfully.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @callback LuCI.requestCallbackFn
+		 * @param {XMLHTTPRequest} xhr
+		 * The XMLHTTPRequest instance used to make the request.
+		 *
+		 * @param {*} data
+		 * The response JSON if the response could be parsed as such,
+		 * else `null`.
+		 *
+		 * @param {number} duration
+		 * The total duration of the request in milliseconds.
+		 */
+
+		/**
+		 * Issues a GET request to the given url and invokes the specified
+		 * callback function. The function is a wrapper around
+		 * {@link LuCI.request#request Request.request()}.
+		 *
+		 * @deprecated
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string} url
+		 * The URL to request.
+		 *
+		 * @param {Object<string, string>} [args]
+		 * Additional query string arguments to append to the URL.
+		 *
+		 * @param {LuCI.requestCallbackFn} cb
+		 * The callback function to invoke when the request finishes.
+		 *
+		 * @return {Promise<null>}
+		 * Returns a promise resolving to `null` when concluded.
+		 */
+		get: function(url, args, cb) {
+			return this.poll(null, url, args, cb, false);
+		},
+
+		/**
+		 * Issues a POST request to the given url and invokes the specified
+		 * callback function. The function is a wrapper around
+		 * {@link LuCI.request#request Request.request()}. The request is
+		 * sent using `application/x-www-form-urlencoded` encoding and will
+		 * contain a field `token` with the current value of `LuCI.env.token`
+		 * by default.
+		 *
+		 * @deprecated
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {string} url
+		 * The URL to request.
+		 *
+		 * @param {Object<string, string>} [args]
+		 * Additional post arguments to append to the request body.
+		 *
+		 * @param {LuCI.requestCallbackFn} cb
+		 * The callback function to invoke when the request finishes.
+		 *
+		 * @return {Promise<null>}
+		 * Returns a promise resolving to `null` when concluded.
+		 */
+		post: function(url, args, cb) {
+			return this.poll(null, url, args, cb, true);
+		},
+
+		/**
+		 * Register a polling HTTP request that invokes the specified
+		 * callback function. The function is a wrapper around
+		 * {@link LuCI.request.poll#add Request.poll.add()}.
+		 *
+		 * @deprecated
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {number} interval
+		 * The poll interval to use. If set to a value less than or equal
+		 * to `0`, it will default to the global poll interval configured
+		 * in `LuCI.env.pollinterval`.
+		 *
+		 * @param {string} url
+		 * The URL to request.
+		 *
+		 * @param {Object<string, string>} [args]
+		 * Specifies additional arguments for the request. For GET requests,
+		 * the arguments are appended to the URL as query string, for POST
+		 * requests, they'll be added to the request body.
+		 *
+		 * @param {LuCI.requestCallbackFn} cb
+		 * The callback function to invoke whenever a request finishes.
+		 *
+		 * @param {boolean} [post=false]
+		 * When set to `false` or not specified, poll requests will be made
+		 * using the GET method. When set to `true`, POST requests will be
+		 * issued. In case of POST requests, the request body will contain
+		 * an argument `token` with the current value of `LuCI.env.token` by
+		 * default, regardless of the parameters specified with `args`.
+		 *
+		 * @return {function}
+		 * Returns the internally created function that has been passed to
+		 * {@link LuCI.request.poll#add Request.poll.add()}. This value can
+		 * be passed to {@link LuCI.poll.remove Poll.remove()} to remove the
+		 * polling request.
+		 */
+		poll: function(interval, url, args, cb, post) {
+			if (interval !== null && interval <= 0)
+				interval = env.pollinterval;
+
+			var data = post ? { token: env.token } : null,
+			    method = post ? 'POST' : 'GET';
+
+			if (!/^(?:\/|\S+:\/\/)/.test(url))
+				url = this.url(url);
+
+			if (args != null)
+				data = Object.assign(data || {}, args);
+
+			if (interval !== null)
+				return Request.poll.add(interval, url, { method: method, query: data }, cb);
+			else
+				return Request.request(url, { method: method, query: data })
+					.then(function(res) {
+						var json = null;
+						if (/^application\/json\b/.test(res.headers.get('Content-Type')))
+							try { json = res.json() } catch(e) {}
+						cb(res.xhr, json, res.duration);
+					});
+		},
+
+		/**
+		 * Check whether a view has sufficient permissions.
+		 *
+		 * @return {boolean|null}
+		 * Returns `null` if the current session has no permission at all to
+		 * load resources required by the view. Returns `false` if readonly
+		 * permissions are granted or `true` if at least one required ACL
+		 * group is granted with write permissions.
+		 */
+		hasViewPermission: function() {
+			if (!this.isObject(env.nodespec) || !env.nodespec.satisfied)
+			    return null;
+
+			return !env.nodespec.readonly;
+		},
+
+		/**
+		 * Deprecated wrapper around {@link LuCI.poll.remove Poll.remove()}.
+		 *
+		 * @deprecated
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @param {function} entry
+		 * The polling function to remove.
+		 *
+		 * @return {boolean}
+		 * Returns `true` when the function has been removed or `false` if
+		 * it could not be found.
+		 */
+		stop: function(entry) { return Poll.remove(entry) },
+
+		/**
+		 * Deprecated wrapper around {@link LuCI.poll.stop Poll.stop()}.
+		 *
+		 * @deprecated
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @return {boolean}
+		 * Returns `true` when the polling loop has been stopped or `false`
+		 * when it didn't run to begin with.
+		 */
+		halt: function() { return Poll.stop() },
+
+		/**
+		 * Deprecated wrapper around {@link LuCI.poll.start Poll.start()}.
+		 *
+		 * @deprecated
+		 * @instance
+		 * @memberof LuCI
+		 *
+		 * @return {boolean}
+		 * Returns `true` when the polling loop has been started or `false`
+		 * when it was already running.
+		 */
+		run: function() { return Poll.start() },
+
+		/**
+		 * Legacy `L.dom` class alias. New view code should use `'require dom';`
+		 * to request the `LuCI.dom` class.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 * @deprecated
+		 */
+		dom: DOM,
+
+		/**
+		 * Legacy `L.view` class alias. New view code should use `'require view';`
+		 * to request the `LuCI.view` class.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 * @deprecated
+		 */
+		view: View,
+
+		/**
+		 * Legacy `L.Poll` class alias. New view code should use `'require poll';`
+		 * to request the `LuCI.poll` class.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 * @deprecated
+		 */
+		Poll: Poll,
+
+		/**
+		 * Legacy `L.Request` class alias. New view code should use `'require request';`
+		 * to request the `LuCI.request` class.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 * @deprecated
+		 */
+		Request: Request,
+
+		/**
+		 * Legacy `L.Class` class alias. New view code should use `'require baseclass';`
+		 * to request the `LuCI.baseclass` class.
+		 *
+		 * @instance
+		 * @memberof LuCI
+		 * @deprecated
+		 */
+		Class: Class
+	});
+
+	/**
+	 * @class xhr
+	 * @memberof LuCI
+	 * @deprecated
+	 * @classdesc
+	 *
+	 * The `LuCI.xhr` class is a legacy compatibility shim for the
+	 * functionality formerly provided by `xhr.js`. It is registered as global
+	 * `window.XHR` symbol for compatibility with legacy code.
+	 *
+	 * New code should use {@link LuCI.request} instead to implement HTTP
+	 * request handling.
+	 */
+	var XHR = Class.extend(/** @lends LuCI.xhr.prototype */ {
+		__name__: 'LuCI.xhr',
+		__init__: function() {
+			if (window.console && console.debug)
+				console.debug('Direct use XHR() is deprecated, please use L.Request instead');
+		},
+
+		_response: function(cb, res, json, duration) {
+			if (this.active)
+				cb(res, json, duration);
+			delete this.active;
+		},
+
+		/**
+		 * This function is a legacy wrapper around
+		 * {@link LuCI#get LuCI.get()}.
+		 *
+		 * @instance
+		 * @deprecated
+		 * @memberof LuCI.xhr
+		 *
+		 * @param {string} url
+		 * The URL to request
+		 *
+		 * @param {Object} [data]
+		 * Additional query string data
+		 *
+		 * @param {LuCI.requestCallbackFn} [callback]
+		 * Callback function to invoke on completion
+		 *
+		 * @param {number} [timeout]
+		 * Request timeout to use
+		 *
+		 * @return {Promise<null>}
+		 */
+		get: function(url, data, callback, timeout) {
+			this.active = true;
+			LuCI.prototype.get(url, data, this._response.bind(this, callback), timeout);
+		},
+
+		/**
+		 * This function is a legacy wrapper around
+		 * {@link LuCI#post LuCI.post()}.
+		 *
+		 * @instance
+		 * @deprecated
+		 * @memberof LuCI.xhr
+		 *
+		 * @param {string} url
+		 * The URL to request
+		 *
+		 * @param {Object} [data]
+		 * Additional data to append to the request body.
+		 *
+		 * @param {LuCI.requestCallbackFn} [callback]
+		 * Callback function to invoke on completion
+		 *
+		 * @param {number} [timeout]
+		 * Request timeout to use
+		 *
+		 * @return {Promise<null>}
+		 */
+		post: function(url, data, callback, timeout) {
+			this.active = true;
+			LuCI.prototype.post(url, data, this._response.bind(this, callback), timeout);
+		},
+
+		/**
+		 * Cancels a running request.
+		 *
+		 * This function does not actually cancel the underlying
+		 * `XMLHTTPRequest` request but it sets a flag which prevents the
+		 * invocation of the callback function when the request eventually
+		 * finishes or timed out.
+		 *
+		 * @instance
+		 * @deprecated
+		 * @memberof LuCI.xhr
+		 */
+		cancel: function() { delete this.active },
+
+		/**
+		 * Checks the running state of the request.
+		 *
+		 * @instance
+		 * @deprecated
+		 * @memberof LuCI.xhr
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the request is still running or `false` if it
+		 * already completed.
+		 */
+		busy: function() { return (this.active === true) },
+
+		/**
+		 * Ignored for backwards compatibility.
+		 *
+		 * This function does nothing.
+		 *
+		 * @instance
+		 * @deprecated
+		 * @memberof LuCI.xhr
+		 */
+		abort: function() {},
+
+		/**
+		 * Existing for backwards compatibility.
+		 *
+		 * This function simply throws an `InternalError` when invoked.
+		 *
+		 * @instance
+		 * @deprecated
+		 * @memberof LuCI.xhr
+		 *
+		 * @throws {InternalError}
+		 * Throws an `InternalError` with the message `Not implemented`
+		 * when invoked.
+		 */
+		send_form: function() { LuCI.prototype.error('InternalError', 'Not implemented') },
+	});
+
+	XHR.get = function() { return LuCI.prototype.get.apply(LuCI.prototype, arguments) };
+	XHR.post = function() { return LuCI.prototype.post.apply(LuCI.prototype, arguments) };
+	XHR.poll = function() { return LuCI.prototype.poll.apply(LuCI.prototype, arguments) };
+	XHR.stop = Request.poll.remove.bind(Request.poll);
+	XHR.halt = Request.poll.stop.bind(Request.poll);
+	XHR.run = Request.poll.start.bind(Request.poll);
+	XHR.running = Request.poll.active.bind(Request.poll);
+
+	window.XHR = XHR;
+	window.LuCI = LuCI;
+})(window, document);
+EOF_ARGON_8080_LUCI_JS
+    cat > "$argon_target_root/www/luci-static/resources/ui.js" <<'EOF_ARGON_8080_UI_JS'
+﻿'use strict';
+'require validation';
+'require baseclass';
+'require request';
+'require session';
+'require poll';
+'require dom';
+'require rpc';
+'require uci';
+'require fs';
+
+var modalDiv = null,
+    tooltipDiv = null,
+    indicatorDiv = null,
+    tooltipTimeout = null;
+
+/**
+ * @class AbstractElement
+ * @memberof LuCI.ui
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `AbstractElement` class serves as abstract base for the different widgets
+ * implemented by `LuCI.ui`. It provides the common logic for getting and
+ * setting values, for checking the validity state and for wiring up required
+ * events.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.AbstractElement`. To import
+ * it in external JavaScript, use `L.require("ui").then(...)` and access the
+ * `AbstractElement` property of the class instance value.
+ */
+var UIElement = baseclass.extend(/** @lends LuCI.ui.AbstractElement.prototype */ {
+	/**
+	 * @typedef {Object} InitOptions
+	 * @memberof LuCI.ui.AbstractElement
+	 *
+	 * @property {string} [id]
+	 * Specifies the widget ID to use. It will be used as HTML `id` attribute
+	 * on the toplevel widget DOM node.
+	 *
+	 * @property {string} [name]
+	 * Specifies the widget name which is set as HTML `name` attribute on the
+	 * corresponding `<input>` element.
+	 *
+	 * @property {boolean} [optional=true]
+	 * Specifies whether the input field allows empty values.
+	 *
+	 * @property {string} [datatype=string]
+	 * An expression describing the input data validation constraints.
+	 * It defaults to `string` which will allow any value.
+	 * See {@link LuCI.validation} for details on the expression format.
+	 *
+	 * @property {function} [validator]
+	 * Specifies a custom validator function which is invoked after the
+	 * standard validation constraints are checked. The function should return
+	 * `true` to accept the given input value. Any other return value type is
+	 * converted to a string and treated as validation error message.
+	 *
+	 * @property {boolean} [disabled=false]
+	 * Specifies whether the widget should be rendered in disabled state
+	 * (`true`) or not (`false`). Disabled widgets cannot be interacted with
+	 * and are displayed in a slightly faded style.
+	 */
+
+	/**
+	 * Read the current value of the input widget.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @returns {string|string[]|null}
+	 * The current value of the input element. For simple inputs like text
+	 * fields or selects, the return value type will be a - possibly empty -
+	 * string. Complex widgets such as `DynamicList` instances may result in
+	 * an array of strings or `null` for unset values.
+	 */
+	getValue: function() {
+		if (dom.matches(this.node, 'select') || dom.matches(this.node, 'input'))
+			return this.node.value;
+
+		return null;
+	},
+
+	/**
+	 * Set the current value of the input widget.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @param {string|string[]|null} value
+	 * The value to set the input element to. For simple inputs like text
+	 * fields or selects, the value should be a - possibly empty - string.
+	 * Complex widgets such as `DynamicList` instances may accept string array
+	 * or `null` values.
+	 */
+	setValue: function(value) {
+		if (dom.matches(this.node, 'select') || dom.matches(this.node, 'input'))
+			this.node.value = value;
+	},
+
+	/**
+	 * Set the current placeholder value of the input widget.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @param {string|string[]|null} value
+	 * The placeholder to set for the input element. Only applicable to text
+	 * inputs, not to radio buttons, selects or similar.
+	 */
+	setPlaceholder: function(value) {
+		var node = this.node ? this.node.querySelector('input,textarea') : null;
+		if (node) {
+			switch (node.getAttribute('type') || 'text') {
+			case 'password':
+			case 'search':
+			case 'tel':
+			case 'text':
+			case 'url':
+				if (value != null && value != '')
+					node.setAttribute('placeholder', value);
+				else
+					node.removeAttribute('placeholder');
+			}
+		}
+	},
+
+	/**
+	 * Check whether the input value was altered by the user.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @returns {boolean}
+	 * Returns `true` if the input value has been altered by the user or
+	 * `false` if it is unchaged. Note that if the user modifies the initial
+	 * value and changes it back to the original state, it is still reported
+	 * as changed.
+	 */
+	isChanged: function() {
+		return (this.node ? this.node.getAttribute('data-changed') : null) == 'true';
+	},
+
+	/**
+	 * Check whether the current input value is valid.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @returns {boolean}
+	 * Returns `true` if the current input value is valid or `false` if it does
+	 * not meet the validation constraints.
+	 */
+	isValid: function() {
+		return (this.validState !== false);
+	},
+
+	/**
+	 * Returns the current validation error
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @returns {string}
+	 * The validation error at this time
+	 */
+	getValidationError: function() {
+		return this.validationError || '';
+	},
+
+	/**
+	 * Force validation of the current input value.
+	 *
+	 * Usually input validation is automatically triggered by various DOM events
+	 * bound to the input widget. In some cases it is required though to manually
+	 * trigger validation runs, e.g. when programmatically altering values.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 */
+	triggerValidation: function() {
+		if (typeof(this.vfunc) != 'function')
+			return false;
+
+		var wasValid = this.isValid();
+
+		this.vfunc();
+
+		return (wasValid != this.isValid());
+	},
+
+	/**
+	 * Dispatch a custom (synthetic) event in response to received events.
+	 *
+	 * Sets up event handlers on the given target DOM node for the given event
+	 * names that dispatch a custom event of the given type to the widget root
+	 * DOM node.
+	 *
+	 * The primary purpose of this function is to set up a series of custom
+	 * uniform standard events such as `widget-update`, `validation-success`,
+	 * `validation-failure` etc. which are triggered by various different
+	 * widget specific native DOM events.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @param {Node} targetNode
+	 * Specifies the DOM node on which the native event listeners should be
+	 * registered.
+	 *
+	 * @param {string} synevent
+	 * The name of the custom event to dispatch to the widget root DOM node.
+	 *
+	 * @param {string[]} events
+	 * The native DOM events for which event handlers should be registered.
+	 */
+	registerEvents: function(targetNode, synevent, events) {
+		var dispatchFn = L.bind(function(ev) {
+			this.node.dispatchEvent(new CustomEvent(synevent, { bubbles: true }));
+		}, this);
+
+		for (var i = 0; i < events.length; i++)
+			targetNode.addEventListener(events[i], dispatchFn);
+	},
+
+	/**
+	 * Set up listeners for native DOM events that may update the widget value.
+	 *
+	 * Sets up event handlers on the given target DOM node for the given event
+	 * names which may cause the input value to update, such as `keyup` or
+	 * `onclick` events. In contrast to change events, such update events will
+	 * trigger input value validation.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @param {Node} targetNode
+	 * Specifies the DOM node on which the event listeners should be registered.
+	 *
+	 * @param {...string} events
+	 * The DOM events for which event handlers should be registered.
+	 */
+	setUpdateEvents: function(targetNode /*, ... */) {
+		var datatype = this.options.datatype,
+		    optional = this.options.hasOwnProperty('optional') ? this.options.optional : true,
+		    validate = this.options.validate,
+		    events = this.varargs(arguments, 1);
+
+		this.registerEvents(targetNode, 'widget-update', events);
+
+		if (!datatype && !validate)
+			return;
+
+		this.vfunc = UI.prototype.addValidator.apply(UI.prototype, [
+			targetNode, datatype || 'string',
+			optional, validate
+		].concat(events));
+
+		this.node.addEventListener('validation-success', L.bind(function(ev) {
+			this.validState = true;
+			this.validationError = '';
+		}, this));
+
+		this.node.addEventListener('validation-failure', L.bind(function(ev) {
+			this.validState = false;
+			this.validationError = ev.detail.message;
+		}, this));
+	},
+
+	/**
+	 * Set up listeners for native DOM events that may change the widget value.
+	 *
+	 * Sets up event handlers on the given target DOM node for the given event
+	 * names which may cause the input value to change completely, such as
+	 * `change` events in a select menu. In contrast to update events, such
+	 * change events will not trigger input value validation but they may cause
+	 * field dependencies to get re-evaluated and will mark the input widget
+	 * as dirty.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 * @param {Node} targetNode
+	 * Specifies the DOM node on which the event listeners should be registered.
+	 *
+	 * @param {...string} events
+	 * The DOM events for which event handlers should be registered.
+	 */
+	setChangeEvents: function(targetNode /*, ... */) {
+		var tag_changed = L.bind(function(ev) { this.setAttribute('data-changed', true) }, this.node);
+
+		for (var i = 1; i < arguments.length; i++)
+			targetNode.addEventListener(arguments[i], tag_changed);
+
+		this.registerEvents(targetNode, 'widget-change', this.varargs(arguments, 1));
+	},
+
+	/**
+	 * Render the widget, set up event listeners and return resulting markup.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.AbstractElement
+	 *
+	 * @returns {Node}
+	 * Returns a DOM Node or DocumentFragment containing the rendered
+	 * widget markup.
+	 */
+	render: function() {}
+});
+
+/**
+ * Instantiate a text input widget.
+ *
+ * @constructor Textfield
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Textfield` class implements a standard single line text input field.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Textfield`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Textfield` property of the class instance value.
+ *
+ * @param {string} [value=null]
+ * The initial input value.
+ *
+ * @param {LuCI.ui.Textfield.InitOptions} [options]
+ * Object describing the widget specific options to initialize the input.
+ */
+var UITextfield = UIElement.extend(/** @lends LuCI.ui.Textfield.prototype */ {
+	/**
+	 * In addition to the [AbstractElement.InitOptions]{@link LuCI.ui.AbstractElement.InitOptions}
+	 * the following properties are recognized:
+	 *
+	 * @typedef {LuCI.ui.AbstractElement.InitOptions} InitOptions
+	 * @memberof LuCI.ui.Textfield
+	 *
+	 * @property {boolean} [password=false]
+	 * Specifies whether the input should be rendered as concealed password field.
+	 *
+	 * @property {boolean} [readonly=false]
+	 * Specifies whether the input widget should be rendered readonly.
+	 *
+	 * @property {number} [maxlength]
+	 * Specifies the HTML `maxlength` attribute to set on the corresponding
+	 * `<input>` element. Note that this a legacy property that exists for
+	 * compatibility reasons. It is usually better to `maxlength(N)` validation
+	 * expression.
+	 *
+	 * @property {string} [placeholder]
+	 * Specifies the HTML `placeholder` attribute which is displayed when the
+	 * corresponding `<input>` element is empty.
+	 */
+	__init__: function(value, options) {
+		this.value = value;
+		this.options = Object.assign({
+			optional: true,
+			password: false
+		}, options);
+	},
+
+	/** @override */
+	render: function() {
+		var frameEl = E('div', { 'id': this.options.id });
+		var inputEl = E('input', {
+			'id': this.options.id ? 'widget.' + this.options.id : null,
+			'name': this.options.name,
+			'type': 'text',
+			'class': this.options.password ? 'cbi-input-password' : 'cbi-input-text',
+			'readonly': this.options.readonly ? '' : null,
+			'disabled': this.options.disabled ? '' : null,
+			'maxlength': this.options.maxlength,
+			'placeholder': this.options.placeholder,
+			'autocomplete': this.options.password ? 'new-password' : null,
+			'value': this.value,
+		});
+
+		if (this.options.password) {
+			frameEl.appendChild(E('div', { 'class': 'control-group' }, [
+				inputEl,
+				E('button', {
+					'class': 'cbi-button cbi-button-neutral',
+					'title': _('Reveal/hide password'),
+					'aria-label': _('Reveal/hide password'),
+					'click': function(ev) {
+						var e = this.previousElementSibling;
+						e.type = (e.type === 'password') ? 'text' : 'password';
+						ev.preventDefault();
+					}
+				}, '∗')
+			]));
+
+			window.requestAnimationFrame(function() { inputEl.type = 'password' });
+		}
+		else {
+			frameEl.appendChild(inputEl);
+		}
+
+		return this.bind(frameEl);
+	},
+
+	/** @private */
+	bind: function(frameEl) {
+		var inputEl = frameEl.querySelector('input');
+
+		this.node = frameEl;
+
+		this.setUpdateEvents(inputEl, 'keyup', 'blur');
+		this.setChangeEvents(inputEl, 'change');
+
+		dom.bindClassInstance(frameEl, this);
+
+		return frameEl;
+	},
+
+	/** @override */
+	getValue: function() {
+		var inputEl = this.node.querySelector('input');
+		return inputEl.value;
+	},
+
+	/** @override */
+	setValue: function(value) {
+		var inputEl = this.node.querySelector('input');
+		inputEl.value = value;
+	}
+});
+
+/**
+ * Instantiate a textarea widget.
+ *
+ * @constructor Textarea
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Textarea` class implements a multiline text area input field.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Textarea`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Textarea` property of the class instance value.
+ *
+ * @param {string} [value=null]
+ * The initial input value.
+ *
+ * @param {LuCI.ui.Textarea.InitOptions} [options]
+ * Object describing the widget specific options to initialize the input.
+ */
+var UITextarea = UIElement.extend(/** @lends LuCI.ui.Textarea.prototype */ {
+	/**
+	 * In addition to the [AbstractElement.InitOptions]{@link LuCI.ui.AbstractElement.InitOptions}
+	 * the following properties are recognized:
+	 *
+	 * @typedef {LuCI.ui.AbstractElement.InitOptions} InitOptions
+	 * @memberof LuCI.ui.Textarea
+	 *
+	 * @property {boolean} [readonly=false]
+	 * Specifies whether the input widget should be rendered readonly.
+	 *
+	 * @property {string} [placeholder]
+	 * Specifies the HTML `placeholder` attribute which is displayed when the
+	 * corresponding `<textarea>` element is empty.
+	 *
+	 * @property {boolean} [monospace=false]
+	 * Specifies whether a monospace font should be forced for the textarea
+	 * contents.
+	 *
+	 * @property {number} [cols]
+	 * Specifies the HTML `cols` attribute to set on the corresponding
+	 * `<textarea>` element.
+	 *
+	 * @property {number} [rows]
+	 * Specifies the HTML `rows` attribute to set on the corresponding
+	 * `<textarea>` element.
+	 *
+	 * @property {boolean} [wrap=false]
+	 * Specifies whether the HTML `wrap` attribute should be set.
+	 */
+	__init__: function(value, options) {
+		this.value = value;
+		this.options = Object.assign({
+			optional: true,
+			wrap: false,
+			cols: null,
+			rows: null
+		}, options);
+	},
+
+	/** @override */
+	render: function() {
+		var style = !this.options.cols ? 'width:100%' : null,
+		    frameEl = E('div', { 'id': this.options.id, 'style': style }),
+		    value = (this.value != null) ? String(this.value) : '';
+
+		frameEl.appendChild(E('textarea', {
+			'id': this.options.id ? 'widget.' + this.options.id : null,
+			'name': this.options.name,
+			'class': 'cbi-input-textarea',
+			'readonly': this.options.readonly ? '' : null,
+			'disabled': this.options.disabled ? '' : null,
+			'placeholder': this.options.placeholder,
+			'style': style,
+			'cols': this.options.cols,
+			'rows': this.options.rows,
+			'wrap': this.options.wrap ? '' : null
+		}, [ value ]));
+
+		if (this.options.monospace)
+			frameEl.firstElementChild.style.fontFamily = 'monospace';
+
+		return this.bind(frameEl);
+	},
+
+	/** @private */
+	bind: function(frameEl) {
+		var inputEl = frameEl.firstElementChild;
+
+		this.node = frameEl;
+
+		this.setUpdateEvents(inputEl, 'keyup', 'blur');
+		this.setChangeEvents(inputEl, 'change');
+
+		dom.bindClassInstance(frameEl, this);
+
+		return frameEl;
+	},
+
+	/** @override */
+	getValue: function() {
+		return this.node.firstElementChild.value;
+	},
+
+	/** @override */
+	setValue: function(value) {
+		this.node.firstElementChild.value = value;
+	}
+});
+
+/**
+ * Instantiate a checkbox widget.
+ *
+ * @constructor Checkbox
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Checkbox` class implements a simple checkbox input field.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Checkbox`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Checkbox` property of the class instance value.
+ *
+ * @param {string} [value=null]
+ * The initial input value.
+ *
+ * @param {LuCI.ui.Checkbox.InitOptions} [options]
+ * Object describing the widget specific options to initialize the input.
+ */
+var UICheckbox = UIElement.extend(/** @lends LuCI.ui.Checkbox.prototype */ {
+	/**
+	 * In addition to the [AbstractElement.InitOptions]{@link LuCI.ui.AbstractElement.InitOptions}
+	 * the following properties are recognized:
+	 *
+	 * @typedef {LuCI.ui.AbstractElement.InitOptions} InitOptions
+	 * @memberof LuCI.ui.Checkbox
+	 *
+	 * @property {string} [value_enabled=1]
+	 * Specifies the value corresponding to a checked checkbox.
+	 *
+	 * @property {string} [value_disabled=0]
+	 * Specifies the value corresponding to an unchecked checkbox.
+	 *
+	 * @property {string} [hiddenname]
+	 * Specifies the HTML `name` attribute of the hidden input backing the
+	 * checkbox. This is a legacy property existing for compatibility reasons,
+	 * it is required for HTML based form submissions.
+	 */
+	__init__: function(value, options) {
+		this.value = value;
+		this.options = Object.assign({
+			value_enabled: '1',
+			value_disabled: '0'
+		}, options);
+	},
+
+	/** @override */
+	render: function() {
+		var id = 'cb%08x'.format(Math.random() * 0xffffffff);
+		var frameEl = E('div', {
+			'id': this.options.id,
+			'class': 'cbi-checkbox'
+		});
+
+		if (this.options.hiddenname)
+			frameEl.appendChild(E('input', {
+				'type': 'hidden',
+				'name': this.options.hiddenname,
+				'value': 1
+			}));
+
+		frameEl.appendChild(E('input', {
+			'id': id,
+			'name': this.options.name,
+			'type': 'checkbox',
+			'value': this.options.value_enabled,
+			'checked': (this.value == this.options.value_enabled) ? '' : null,
+			'disabled': this.options.disabled ? '' : null,
+			'data-widget-id': this.options.id ? 'widget.' + this.options.id : null
+		}));
+
+		frameEl.appendChild(E('label', { 'for': id }));
+
+		if (this.options.tooltip != null) {
+			var icon = "⚠️";
+
+			if (this.options.tooltipicon != null)
+				icon = this.options.tooltipicon;
+
+			frameEl.appendChild(
+				E('label', { 'class': 'cbi-tooltip-container' },[
+					icon,
+					E('div', { 'class': 'cbi-tooltip' },
+						this.options.tooltip
+					)
+				])
+			);
+		}
+
+		return this.bind(frameEl);
+	},
+
+	/** @private */
+	bind: function(frameEl) {
+		this.node = frameEl;
+
+		var input = frameEl.querySelector('input[type="checkbox"]');
+		this.setUpdateEvents(input, 'click', 'blur');
+		this.setChangeEvents(input, 'change');
+
+		dom.bindClassInstance(frameEl, this);
+
+		return frameEl;
+	},
+
+	/**
+	 * Test whether the checkbox is currently checked.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.Checkbox
+	 * @returns {boolean}
+	 * Returns `true` when the checkbox is currently checked, otherwise `false`.
+	 */
+	isChecked: function() {
+		return this.node.querySelector('input[type="checkbox"]').checked;
+	},
+
+	/** @override */
+	getValue: function() {
+		return this.isChecked()
+			? this.options.value_enabled
+			: this.options.value_disabled;
+	},
+
+	/** @override */
+	setValue: function(value) {
+		this.node.querySelector('input[type="checkbox"]').checked = (value == this.options.value_enabled);
+	}
+});
+
+/**
+ * Instantiate a select dropdown or checkbox/radiobutton group.
+ *
+ * @constructor Select
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Select` class implements either a traditional HTML `<select>` element
+ * or a group of checkboxes or radio buttons, depending on whether multiple
+ * values are enabled or not.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Select`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Select` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value(s).
+ *
+ * @param {Object<string, string>} choices
+ * Object containing the selectable choices of the widget. The object keys
+ * serve as values for the different choices while the values are used as
+ * choice labels.
+ *
+ * @param {LuCI.ui.Select.InitOptions} [options]
+ * Object describing the widget specific options to initialize the inputs.
+ */
+var UISelect = UIElement.extend(/** @lends LuCI.ui.Select.prototype */ {
+	/**
+	 * In addition to the [AbstractElement.InitOptions]{@link LuCI.ui.AbstractElement.InitOptions}
+	 * the following properties are recognized:
+	 *
+	 * @typedef {LuCI.ui.AbstractElement.InitOptions} InitOptions
+	 * @memberof LuCI.ui.Select
+	 *
+	 * @property {boolean} [multiple=false]
+	 * Specifies whether multiple choice values may be selected.
+	 *
+	 * @property {string} [widget=select]
+	 * Specifies the kind of widget to render. May be either `select` or
+	 * `individual`. When set to `select` an HTML `<select>` element will be
+	 * used, otherwise a group of checkbox or radio button elements is created,
+	 * depending on the value of the `multiple` option.
+	 *
+	 * @property {string} [orientation=horizontal]
+	 * Specifies whether checkbox / radio button groups should be rendered
+	 * in a `horizontal` or `vertical` manner. Does not apply to the `select`
+	 * widget type.
+	 *
+	 * @property {boolean|string[]} [sort=false]
+	 * Specifies if and how to sort choice values. If set to `true`, the choice
+	 * values will be sorted alphabetically. If set to an array of strings, the
+	 * choice sort order is derived from the array.
+	 *
+	 * @property {number} [size]
+	 * Specifies the HTML `size` attribute to set on the `<select>` element.
+	 * Only applicable to the `select` widget type.
+	 *
+	 * @property {string} [placeholder=-- Please choose --]
+	 * Specifies a placeholder text which is displayed when no choice is
+	 * selected yet. Only applicable to the `select` widget type.
+	 */
+	__init__: function(value, choices, options) {
+		if (!L.isObject(choices))
+			choices = {};
+
+		if (!Array.isArray(value))
+			value = (value != null && value != '') ? [ value ] : [];
+
+		if (!options.multiple && value.length > 1)
+			value.length = 1;
+
+		this.values = value;
+		this.choices = choices;
+		this.options = Object.assign({
+			multiple: false,
+			widget: 'select',
+			orientation: 'horizontal'
+		}, options);
+
+		if (this.choices.hasOwnProperty(''))
+			this.options.optional = true;
+	},
+
+	/** @override */
+	render: function() {
+		var frameEl = E('div', { 'id': this.options.id }),
+		    keys = Object.keys(this.choices);
+
+		if (this.options.sort === true)
+			keys.sort(L.naturalCompare);
+		else if (Array.isArray(this.options.sort))
+			keys = this.options.sort;
+
+		if (this.options.widget != 'radio' && this.options.widget != 'checkbox') {
+			frameEl.appendChild(E('select', {
+				'id': this.options.id ? 'widget.' + this.options.id : null,
+				'name': this.options.name,
+				'size': this.options.size,
+				'class': 'cbi-input-select',
+				'multiple': this.options.multiple ? '' : null,
+				'disabled': this.options.disabled ? '' : null
+			}));
+
+			if (this.options.optional)
+				frameEl.lastChild.appendChild(E('option', {
+					'value': '',
+					'selected': (this.values.length == 0 || this.values[0] == '') ? '' : null
+				}, [ this.choices[''] || this.options.placeholder || _('-- Please choose --') ]));
+
+			for (var i = 0; i < keys.length; i++) {
+				if (keys[i] == null || keys[i] == '')
+					continue;
+
+				frameEl.lastChild.appendChild(E('option', {
+					'value': keys[i],
+					'selected': (this.values.indexOf(keys[i]) > -1) ? '' : null
+				}, [ this.choices[keys[i]] || keys[i] ]));
+			}
+		}
+		else {
+			var brEl = (this.options.orientation === 'horizontal') ? document.createTextNode(' \xa0 ') : E('br');
+
+			for (var i = 0; i < keys.length; i++) {
+				frameEl.appendChild(E('span', {
+					'class': 'cbi-%s'.format(this.options.multiple ? 'checkbox' : 'radio')
+				}, [
+					E('input', {
+						'id': this.options.id ? 'widget.%s.%d'.format(this.options.id, i) : null,
+						'name': this.options.id || this.options.name,
+						'type': this.options.multiple ? 'checkbox' : 'radio',
+						'class': this.options.multiple ? 'cbi-input-checkbox' : 'cbi-input-radio',
+						'value': keys[i],
+						'checked': (this.values.indexOf(keys[i]) > -1) ? '' : null,
+						'disabled': this.options.disabled ? '' : null
+					}),
+					E('label', { 'for': this.options.id ? 'widget.%s.%d'.format(this.options.id, i) : null }),
+					E('span', {
+						'click': function(ev) {
+							ev.currentTarget.previousElementSibling.previousElementSibling.click();
+						}
+					}, [ this.choices[keys[i]] || keys[i] ])
+				]));
+
+				frameEl.appendChild(brEl.cloneNode());
+			}
+		}
+
+		return this.bind(frameEl);
+	},
+
+	/** @private */
+	bind: function(frameEl) {
+		this.node = frameEl;
+
+		if (this.options.widget != 'radio' && this.options.widget != 'checkbox') {
+			this.setUpdateEvents(frameEl.firstChild, 'change', 'click', 'blur');
+			this.setChangeEvents(frameEl.firstChild, 'change');
+		}
+		else {
+			var radioEls = frameEl.querySelectorAll('input[type="radio"]');
+			for (var i = 0; i < radioEls.length; i++) {
+				this.setUpdateEvents(radioEls[i], 'change', 'click', 'blur');
+				this.setChangeEvents(radioEls[i], 'change', 'click', 'blur');
+			}
+		}
+
+		dom.bindClassInstance(frameEl, this);
+
+		return frameEl;
+	},
+
+	/** @override */
+	getValue: function() {
+		if (this.options.widget != 'radio' && this.options.widget != 'checkbox')
+			return this.node.firstChild.value;
+
+		var radioEls = this.node.querySelectorAll('input[type="radio"]');
+		for (var i = 0; i < radioEls.length; i++)
+			if (radioEls[i].checked)
+				return radioEls[i].value;
+
+		return null;
+	},
+
+	/** @override */
+	setValue: function(value) {
+		if (this.options.widget != 'radio' && this.options.widget != 'checkbox') {
+			if (value == null)
+				value = '';
+
+			for (var i = 0; i < this.node.firstChild.options.length; i++)
+				this.node.firstChild.options[i].selected = (this.node.firstChild.options[i].value == value);
+
+			return;
+		}
+
+		var radioEls = frameEl.querySelectorAll('input[type="radio"]');
+		for (var i = 0; i < radioEls.length; i++)
+			radioEls[i].checked = (radioEls[i].value == value);
+	}
+});
+
+/**
+ * Instantiate a rich dropdown choice widget.
+ *
+ * @constructor Dropdown
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Dropdown` class implements a rich, stylable dropdown menu which
+ * supports non-text choice labels.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Dropdown`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Dropdown` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value(s).
+ *
+ * @param {Object<string, *>} choices
+ * Object containing the selectable choices of the widget. The object keys
+ * serve as values for the different choices while the values are used as
+ * choice labels.
+ *
+ * @param {LuCI.ui.Dropdown.InitOptions} [options]
+ * Object describing the widget specific options to initialize the dropdown.
+ */
+var UIDropdown = UIElement.extend(/** @lends LuCI.ui.Dropdown.prototype */ {
+	/**
+	 * In addition to the [AbstractElement.InitOptions]{@link LuCI.ui.AbstractElement.InitOptions}
+	 * the following properties are recognized:
+	 *
+	 * @typedef {LuCI.ui.AbstractElement.InitOptions} InitOptions
+	 * @memberof LuCI.ui.Dropdown
+	 *
+	 * @property {boolean} [optional=true]
+	 * Specifies whether the dropdown selection is optional. In contrast to
+	 * other widgets, the `optional` constraint of dropdowns works differently;
+	 * instead of marking the widget invalid on empty values when set to `false`,
+	 * the user is not allowed to deselect all choices.
+	 *
+	 * For single value dropdowns that means that no empty "please select"
+	 * choice is offered and for multi value dropdowns, the last selected choice
+	 * may not be deselected without selecting another choice first.
+	 *
+	 * @property {boolean} [multiple]
+	 * Specifies whether multiple choice values may be selected. It defaults
+	 * to `true` when an array is passed as input value to the constructor.
+	 *
+	 * @property {boolean|string[]} [sort=false]
+	 * Specifies if and how to sort choice values. If set to `true`, the choice
+	 * values will be sorted alphabetically. If set to an array of strings, the
+	 * choice sort order is derived from the array.
+	 *
+	 * @property {string} [select_placeholder=-- Please choose --]
+	 * Specifies a placeholder text which is displayed when no choice is
+	 * selected yet.
+	 *
+	 * @property {string} [custom_placeholder=-- custom --]
+	 * Specifies a placeholder text which is displayed in the text input
+	 * field allowing to enter custom choice values. Only applicable if the
+	 * `create` option is set to `true`.
+	 *
+	 * @property {boolean} [create=false]
+	 * Specifies whether custom choices may be entered into the dropdown
+	 * widget.
+	 *
+	 * @property {string} [create_query=.create-item-input]
+	 * Specifies a CSS selector expression used to find the input element
+	 * which is used to enter custom choice values. This should not normally
+	 * be used except by widgets derived from the Dropdown class.
+	 *
+	 * @property {string} [create_template=script[type="item-template"]]
+	 * Specifies a CSS selector expression used to find an HTML element
+	 * serving as template for newly added custom choice values.
+	 *
+	 * Any `{{value}}` placeholder string within the template elements text
+	 * content will be replaced by the user supplied choice value, the
+	 * resulting string is parsed as HTML and appended to the end of the
+	 * choice list. The template markup may specify one HTML element with a
+	 * `data-label-placeholder` attribute which is replaced by a matching
+	 * label value from the `choices` object or with the user supplied value
+	 * itself in case `choices` contains no matching choice label.
+	 *
+	 * If the template element is not found or if no `create_template` selector
+	 * expression is specified, the default markup for newly created elements is
+	 * `<li data-value="{{value}}"><span data-label-placeholder="true" /></li>`.
+	 *
+	 * @property {string} [create_markup]
+	 * This property allows specifying the markup for custom choices directly
+	 * instead of referring to a template element through CSS selectors.
+	 *
+	 * Apart from that it works exactly like `create_template`.
+	 *
+	 * @property {number} [display_items=3]
+	 * Specifies the maximum amount of choice labels that should be shown in
+	 * collapsed dropdown state before further selected choices are cut off.
+	 *
+	 * Only applicable when `multiple` is `true`.
+	 *
+	 * @property {number} [dropdown_items=-1]
+	 * Specifies the maximum amount of choices that should be shown when the
+	 * dropdown is open. If the amount of available choices exceeds this number,
+	 * the dropdown area must be scrolled to reach further items.
+	 *
+	 * If set to `-1`, the dropdown menu will attempt to show all choice values
+	 * and only resort to scrolling if the amount of choices exceeds the available
+	 * screen space above and below the dropdown widget.
+	 *
+	 * @property {string} [placeholder]
+	 * This property serves as a shortcut to set both `select_placeholder` and
+	 * `custom_placeholder`. Either of these properties will fallback to
+	 * `placeholder` if not specified.
+	 *
+	 * @property {boolean} [readonly=false]
+	 * Specifies whether the custom choice input field should be rendered
+	 * readonly. Only applicable when `create` is `true`.
+	 *
+	 * @property {number} [maxlength]
+	 * Specifies the HTML `maxlength` attribute to set on the custom choice
+	 * `<input>` element. Note that this a legacy property that exists for
+	 * compatibility reasons. It is usually better to `maxlength(N)` validation
+	 * expression. Only applicable when `create` is `true`.
+	 */
+	__init__: function(value, choices, options) {
+		if (typeof(choices) != 'object')
+			choices = {};
+
+		if (!Array.isArray(value))
+			this.values = (value != null && value != '') ? [ value ] : [];
+		else
+			this.values = value;
+
+		this.choices = choices;
+		this.options = Object.assign({
+			sort:               true,
+			multiple:           Array.isArray(value),
+			optional:           true,
+			select_placeholder: _('-- Please choose --'),
+			custom_placeholder: _('-- custom --'),
+			display_items:      3,
+			dropdown_items:     -1,
+			create:             false,
+			create_query:       '.create-item-input',
+			create_template:    'script[type="item-template"]'
+		}, options);
+	},
+
+	/** @override */
+	render: function() {
+		var sb = E('div', {
+			'id': this.options.id,
+			'class': 'cbi-dropdown',
+			'multiple': this.options.multiple ? '' : null,
+			'optional': this.options.optional ? '' : null,
+			'disabled': this.options.disabled ? '' : null,
+			'tabindex': -1
+		}, E('ul'));
+
+		var keys = Object.keys(this.choices);
+
+		if (this.options.sort === true)
+			keys.sort(L.naturalCompare);
+		else if (Array.isArray(this.options.sort))
+			keys = this.options.sort;
+
+		if (this.options.create)
+			for (var i = 0; i < this.values.length; i++)
+				if (!this.choices.hasOwnProperty(this.values[i]))
+					keys.push(this.values[i]);
+
+		for (var i = 0; i < keys.length; i++) {
+			var label = this.choices[keys[i]];
+
+			if (dom.elem(label))
+				label = label.cloneNode(true);
+
+			sb.lastElementChild.appendChild(E('li', {
+				'data-value': keys[i],
+				'selected': (this.values.indexOf(keys[i]) > -1) ? '' : null
+			}, [ label || keys[i] ]));
+		}
+
+		if (this.options.create) {
+			var createEl = E('input', {
+				'type': 'text',
+				'class': 'create-item-input',
+				'readonly': this.options.readonly ? '' : null,
+				'maxlength': this.options.maxlength,
+				'placeholder': this.options.custom_placeholder || this.options.placeholder
+			});
+
+			if (this.options.datatype || this.options.validate)
+				UI.prototype.addValidator(createEl, this.options.datatype || 'string',
+				                          true, this.options.validate, 'blur', 'keyup');
+
+			sb.lastElementChild.appendChild(E('li', { 'data-value': '-' }, createEl));
+		}
+
+		if (this.options.create_markup)
+			sb.appendChild(E('script', { type: 'item-template' },
+				this.options.create_markup));
+
+		return this.bind(sb);
+	},
+
+	/** @private */
+	bind: function(sb) {
+		var o = this.options;
+
+		o.multiple = sb.hasAttribute('multiple');
+		o.optional = sb.hasAttribute('optional');
+		o.placeholder = sb.getAttribute('placeholder') || o.placeholder;
+		o.display_items = parseInt(sb.getAttribute('display-items') || o.display_items);
+		o.dropdown_items = parseInt(sb.getAttribute('dropdown-items') || o.dropdown_items);
+		o.create_query = sb.getAttribute('item-create') || o.create_query;
+		o.create_template = sb.getAttribute('item-template') || o.create_template;
+
+		var ul = sb.querySelector('ul'),
+		    more = sb.appendChild(E('span', { class: 'more', tabindex: -1 }, '···')),
+		    open = sb.appendChild(E('span', { class: 'open', tabindex: -1 }, '▾')),
+		    canary = sb.appendChild(E('div')),
+		    create = sb.querySelector(this.options.create_query),
+		    ndisplay = this.options.display_items,
+		    n = 0;
+
+		if (this.options.multiple) {
+			var items = ul.querySelectorAll('li');
+
+			for (var i = 0; i < items.length; i++) {
+				this.transformItem(sb, items[i]);
+
+				if (items[i].hasAttribute('selected') && ndisplay-- > 0)
+					items[i].setAttribute('display', n++);
+			}
+		}
+		else {
+			if (this.options.optional && !ul.querySelector('li[data-value=""]')) {
+				var placeholder = E('li', { placeholder: '' },
+					this.options.select_placeholder || this.options.placeholder);
+
+				ul.firstChild
+					? ul.insertBefore(placeholder, ul.firstChild)
+					: ul.appendChild(placeholder);
+			}
+
+			var items = ul.querySelectorAll('li'),
+			    sel = sb.querySelectorAll('[selected]');
+
+			sel.forEach(function(s) {
+				s.removeAttribute('selected');
+			});
+
+			var s = sel[0] || items[0];
+			if (s) {
+				s.setAttribute('selected', '');
+				s.setAttribute('display', n++);
+			}
+
+			ndisplay--;
+		}
+
+		this.saveValues(sb, ul);
+
+		ul.setAttribute('tabindex', -1);
+		sb.setAttribute('tabindex', 0);
+
+		if (ndisplay < 0)
+			sb.setAttribute('more', '')
+		else
+			sb.removeAttribute('more');
+
+		if (ndisplay == this.options.display_items)
+			sb.setAttribute('empty', '')
+		else
+			sb.removeAttribute('empty');
+
+		dom.content(more, (ndisplay == this.options.display_items)
+			? (this.options.select_placeholder || this.options.placeholder) : '···');
+
+
+		sb.addEventListener('click', this.handleClick.bind(this));
+		sb.addEventListener('keydown', this.handleKeydown.bind(this));
+		sb.addEventListener('cbi-dropdown-close', this.handleDropdownClose.bind(this));
+		sb.addEventListener('cbi-dropdown-select', this.handleDropdownSelect.bind(this));
+
+		if ('ontouchstart' in window) {
+			sb.addEventListener('touchstart', function(ev) { ev.stopPropagation(); });
+			window.addEventListener('touchstart', this.closeAllDropdowns);
+		}
+		else {
+			sb.addEventListener('focus', this.handleFocus.bind(this));
+
+			canary.addEventListener('focus', this.handleCanaryFocus.bind(this));
+
+			window.addEventListener('click', this.closeAllDropdowns);
+		}
+
+		if (create) {
+			create.addEventListener('keydown', this.handleCreateKeydown.bind(this));
+			create.addEventListener('focus', this.handleCreateFocus.bind(this));
+			create.addEventListener('blur', this.handleCreateBlur.bind(this));
+
+			var li = findParent(create, 'li');
+
+			li.setAttribute('unselectable', '');
+			li.addEventListener('click', this.handleCreateClick.bind(this));
+		}
+
+		this.node = sb;
+
+		this.setUpdateEvents(sb, 'cbi-dropdown-open', 'cbi-dropdown-close');
+		this.setChangeEvents(sb, 'cbi-dropdown-change', 'cbi-dropdown-close');
+
+		dom.bindClassInstance(sb, this);
+
+		return sb;
+	},
+
+	/** @private */
+	getScrollParent: function(element) {
+		var parent = element,
+		    style = getComputedStyle(element),
+		    excludeStaticParent = (style.position === 'absolute');
+
+		if (style.position === 'fixed')
+			return document.body;
+
+		while ((parent = parent.parentElement) != null) {
+			style = getComputedStyle(parent);
+
+			if (excludeStaticParent && style.position === 'static')
+				continue;
+
+			if (/(auto|scroll)/.test(style.overflow + style.overflowY + style.overflowX))
+				return parent;
+		}
+
+		return document.body;
+	},
+
+	/** @private */
+	openDropdown: function(sb) {
+		var st = window.getComputedStyle(sb, null),
+		    ul = sb.querySelector('ul'),
+		    li = ul.querySelectorAll('li'),
+		    fl = findParent(sb, '.cbi-value-field'),
+		    sel = ul.querySelector('[selected]'),
+		    rect = sb.getBoundingClientRect(),
+		    items = Math.min(this.options.dropdown_items, li.length),
+		    scrollParent = this.getScrollParent(sb);
+
+		document.querySelectorAll('.cbi-dropdown[open]').forEach(function(s) {
+			s.dispatchEvent(new CustomEvent('cbi-dropdown-close', {}));
+		});
+
+		sb.setAttribute('open', '');
+
+		var pv = ul.cloneNode(true);
+		    pv.classList.add('preview');
+
+		if (fl)
+			fl.classList.add('cbi-dropdown-open');
+
+		if ('ontouchstart' in window) {
+			var vpWidth = Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
+			    vpHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
+			    start = null;
+
+			ul.style.top = sb.offsetHeight + 'px';
+			ul.style.left = -rect.left + 'px';
+			ul.style.right = (rect.right - vpWidth) + 'px';
+			ul.style.maxHeight = (vpHeight * 0.5) + 'px';
+			ul.style.WebkitOverflowScrolling = 'touch';
+
+			var scrollFrom = scrollParent.scrollTop,
+			    scrollTo = scrollFrom + rect.top - vpHeight * 0.5;
+
+			var scrollStep = function(timestamp) {
+				if (!start) {
+					start = timestamp;
+					ul.scrollTop = sel ? Math.max(sel.offsetTop - sel.offsetHeight, 0) : 0;
+				}
+
+				var duration = Math.max(timestamp - start, 1);
+				if (duration < 100) {
+					scrollParent.scrollTop = scrollFrom + (scrollTo - scrollFrom) * (duration / 100);
+					window.requestAnimationFrame(scrollStep);
+				}
+				else {
+					scrollParent.scrollTop = scrollTo;
+				}
+			};
+
+			window.requestAnimationFrame(scrollStep);
+		}
+		else {
+			ul.style.maxHeight = '1px';
+			ul.style.top = ul.style.bottom = '';
+
+			window.requestAnimationFrame(function() {
+				var containerRect = scrollParent.getBoundingClientRect(),
+				    itemHeight = li[Math.max(0, li.length - 2)].getBoundingClientRect().height,
+				    fullHeight = 0,
+				    spaceAbove = rect.top - containerRect.top,
+				    spaceBelow = containerRect.bottom - rect.bottom;
+
+				for (var i = 0; i < (items == -1 ? li.length : items); i++)
+					fullHeight += li[i].getBoundingClientRect().height;
+
+				if (fullHeight <= spaceBelow) {
+					ul.style.top = rect.height + 'px';
+					ul.style.maxHeight = spaceBelow + 'px';
+				}
+				else if (fullHeight <= spaceAbove) {
+					ul.style.bottom = rect.height + 'px';
+					ul.style.maxHeight = spaceAbove + 'px';
+				}
+				else if (spaceBelow >= spaceAbove) {
+					ul.style.top = rect.height + 'px';
+					ul.style.maxHeight = (spaceBelow - (spaceBelow % itemHeight)) + 'px';
+				}
+				else {
+					ul.style.bottom = rect.height + 'px';
+					ul.style.maxHeight = (spaceAbove - (spaceAbove % itemHeight)) + 'px';
+				}
+
+				ul.scrollTop = sel ? Math.max(sel.offsetTop - sel.offsetHeight, 0) : 0;
+			});
+		}
+
+		var cboxes = ul.querySelectorAll('[selected] input[type="checkbox"]');
+		for (var i = 0; i < cboxes.length; i++) {
+			cboxes[i].checked = true;
+			cboxes[i].disabled = (cboxes.length == 1 && !this.options.optional);
+		};
+
+		ul.classList.add('dropdown');
+
+		sb.insertBefore(pv, ul.nextElementSibling);
+
+		li.forEach(function(l) {
+			if (!l.hasAttribute('unselectable'))
+				l.setAttribute('tabindex', 0);
+		});
+
+		sb.lastElementChild.setAttribute('tabindex', 0);
+
+		var focusFn = L.bind(function(el) {
+			this.setFocus(sb, el, true);
+			ul.removeEventListener('transitionend', focusFn);
+		}, this, sel || li[0]);
+
+		ul.addEventListener('transitionend', focusFn);
+	},
+
+	/** @private */
+	closeDropdown: function(sb, no_focus) {
+		if (!sb.hasAttribute('open'))
+			return;
+
+		var pv = sb.querySelector('ul.preview'),
+		    ul = sb.querySelector('ul.dropdown'),
+		    li = ul.querySelectorAll('li'),
+		    fl = findParent(sb, '.cbi-value-field');
+
+		li.forEach(function(l) { l.removeAttribute('tabindex'); });
+		sb.lastElementChild.removeAttribute('tabindex');
+
+		sb.removeChild(pv);
+		sb.removeAttribute('open');
+		sb.style.width = sb.style.height = '';
+
+		ul.classList.remove('dropdown');
+		ul.style.top = ul.style.bottom = ul.style.maxHeight = '';
+
+		if (fl)
+			fl.classList.remove('cbi-dropdown-open');
+
+		if (!no_focus)
+			this.setFocus(sb, sb);
+
+		this.saveValues(sb, ul);
+	},
+
+	/** @private */
+	toggleItem: function(sb, li, force_state) {
+		var ul = li.parentNode;
+
+		if (li.hasAttribute('unselectable'))
+			return;
+
+		if (this.options.multiple) {
+			var cbox = li.querySelector('input[type="checkbox"]'),
+			    items = li.parentNode.querySelectorAll('li'),
+			    label = sb.querySelector('ul.preview'),
+			    sel = li.parentNode.querySelectorAll('[selected]').length,
+			    more = sb.querySelector('.more'),
+			    ndisplay = this.options.display_items,
+			    n = 0;
+
+			if (li.hasAttribute('selected')) {
+				if (force_state !== true) {
+					if (sel > 1 || this.options.optional) {
+						li.removeAttribute('selected');
+						cbox.checked = cbox.disabled = false;
+						sel--;
+					}
+					else {
+						cbox.disabled = true;
+					}
+				}
+			}
+			else {
+				if (force_state !== false) {
+					li.setAttribute('selected', '');
+					cbox.checked = true;
+					cbox.disabled = false;
+					sel++;
+				}
+			}
+
+			while (label && label.firstElementChild)
+				label.removeChild(label.firstElementChild);
+
+			for (var i = 0; i < items.length; i++) {
+				items[i].removeAttribute('display');
+				if (items[i].hasAttribute('selected')) {
+					if (ndisplay-- > 0) {
+						items[i].setAttribute('display', n++);
+						if (label)
+							label.appendChild(items[i].cloneNode(true));
+					}
+					var c = items[i].querySelector('input[type="checkbox"]');
+					if (c)
+						c.disabled = (sel == 1 && !this.options.optional);
+				}
+			}
+
+			if (ndisplay < 0)
+				sb.setAttribute('more', '');
+			else
+				sb.removeAttribute('more');
+
+			if (ndisplay === this.options.display_items)
+				sb.setAttribute('empty', '');
+			else
+				sb.removeAttribute('empty');
+
+			dom.content(more, (ndisplay === this.options.display_items)
+				? (this.options.select_placeholder || this.options.placeholder) : '···');
+		}
+		else {
+			var sel = li.parentNode.querySelector('[selected]');
+			if (sel) {
+				sel.removeAttribute('display');
+				sel.removeAttribute('selected');
+			}
+
+			li.setAttribute('display', 0);
+			li.setAttribute('selected', '');
+
+			this.closeDropdown(sb);
+		}
+
+		this.saveValues(sb, ul);
+	},
+
+	/** @private */
+	transformItem: function(sb, li) {
+		var cbox = E('form', {}, E('input', { type: 'checkbox', tabindex: -1, onclick: 'event.preventDefault()' })),
+		    label = E('label');
+
+		while (li.firstChild)
+			label.appendChild(li.firstChild);
+
+		li.appendChild(cbox);
+		li.appendChild(label);
+	},
+
+	/** @private */
+	saveValues: function(sb, ul) {
+		var sel = ul.querySelectorAll('li[selected]'),
+		    div = sb.lastElementChild,
+		    name = this.options.name,
+		    strval = '',
+		    values = [];
+
+		while (div.lastElementChild)
+			div.removeChild(div.lastElementChild);
+
+		sel.forEach(function (s) {
+			if (s.hasAttribute('placeholder'))
+				return;
+
+			var v = {
+				text: s.innerText,
+				value: s.hasAttribute('data-value') ? s.getAttribute('data-value') : s.innerText,
+				element: s
+			};
+
+			div.appendChild(E('input', {
+				type: 'hidden',
+				name: name,
+				value: v.value
+			}));
+
+			values.push(v);
+
+			strval += strval.length ? ' ' + v.value : v.value;
+		});
+
+		var detail = {
+			instance: this,
+			element: sb
+		};
+
+		if (this.options.multiple)
+			detail.values = values;
+		else
+			detail.value = values.length ? values[0] : null;
+
+		sb.value = strval;
+
+		sb.dispatchEvent(new CustomEvent('cbi-dropdown-change', {
+			bubbles: true,
+			detail: detail
+		}));
+	},
+
+	/** @private */
+	setValues: function(sb, values) {
+		var ul = sb.querySelector('ul');
+
+		if (this.options.create) {
+			for (var value in values) {
+				this.createItems(sb, value);
+
+				if (!this.options.multiple)
+					break;
+			}
+		}
+
+		if (this.options.multiple) {
+			var lis = ul.querySelectorAll('li[data-value]');
+			for (var i = 0; i < lis.length; i++) {
+				var value = lis[i].getAttribute('data-value');
+				if (values === null || !(value in values))
+					this.toggleItem(sb, lis[i], false);
+				else
+					this.toggleItem(sb, lis[i], true);
+			}
+		}
+		else {
+			var ph = ul.querySelector('li[placeholder]');
+			if (ph)
+				this.toggleItem(sb, ph);
+
+			var lis = ul.querySelectorAll('li[data-value]');
+			for (var i = 0; i < lis.length; i++) {
+				var value = lis[i].getAttribute('data-value');
+				if (values !== null && (value in values))
+					this.toggleItem(sb, lis[i]);
+			}
+		}
+	},
+
+	/** @private */
+	setFocus: function(sb, elem, scroll) {
+		if (sb.hasAttribute('locked-in'))
+			return;
+
+		sb.querySelectorAll('.focus').forEach(function(e) {
+			e.classList.remove('focus');
+		});
+
+		elem.classList.add('focus');
+
+		if (scroll)
+			elem.parentNode.scrollTop = elem.offsetTop - elem.parentNode.offsetTop;
+
+		elem.focus();
+	},
+
+	/** @private */
+	createChoiceElement: function(sb, value, label) {
+		var tpl = sb.querySelector(this.options.create_template),
+		    markup = null;
+
+		if (tpl)
+			markup = (tpl.textContent || tpl.innerHTML || tpl.firstChild.data).replace(/^<!--|--!?>$/, '').trim();
+		else
+			markup = '<li data-value="{{value}}"><span data-label-placeholder="true" /></li>';
+
+		var new_item = E(markup.replace(/{{value}}/g, '%h'.format(value))),
+		    placeholder = new_item.querySelector('[data-label-placeholder]');
+
+		if (placeholder) {
+			var content = E('span', {}, label || this.choices[value] || [ value ]);
+
+			while (content.firstChild)
+				placeholder.parentNode.insertBefore(content.firstChild, placeholder);
+
+			placeholder.parentNode.removeChild(placeholder);
+		}
+
+		if (this.options.multiple)
+			this.transformItem(sb, new_item);
+
+		if (!new_item.hasAttribute('unselectable'))
+			new_item.setAttribute('tabindex', 0);
+
+		return new_item;
+	},
+
+	/** @private */
+	createItems: function(sb, value) {
+		var sbox = this,
+		    val = (value || '').trim(),
+		    ul = sb.querySelector('ul');
+
+		if (!sbox.options.multiple)
+			val = val.length ? [ val ] : [];
+		else
+			val = val.length ? val.split(/\s+/) : [];
+
+		val.forEach(function(item) {
+			var new_item = null;
+
+			ul.childNodes.forEach(function(li) {
+				if (li.getAttribute && li.getAttribute('data-value') === item)
+					new_item = li;
+			});
+
+			if (!new_item) {
+				new_item = sbox.createChoiceElement(sb, item);
+
+				if (!sbox.options.multiple) {
+					var old = ul.querySelector('li[created]');
+					if (old)
+						ul.removeChild(old);
+
+					new_item.setAttribute('created', '');
+				}
+
+				new_item = ul.insertBefore(new_item, ul.lastElementChild);
+			}
+
+			sbox.toggleItem(sb, new_item, true);
+			sbox.setFocus(sb, new_item, true);
+		});
+	},
+
+	/**
+	 * Remove all existing choices from the dropdown menu.
+	 *
+	 * This function removes all preexisting dropdown choices from the widget,
+	 * keeping only choices currently being selected unless `reset_values` is
+	 * given, in which case all choices and deselected and removed.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.Dropdown
+	 * @param {boolean} [reset_value=false]
+	 * If set to `true`, deselect and remove selected choices as well instead
+	 * of keeping them.
+	 */
+	clearChoices: function(reset_value) {
+		var ul = this.node.querySelector('ul'),
+		    lis = ul ? ul.querySelectorAll('li[data-value]') : [],
+		    len = lis.length - (this.options.create ? 1 : 0),
+		    val = reset_value ? null : this.getValue();
+
+		for (var i = 0; i < len; i++) {
+			var lival = lis[i].getAttribute('data-value');
+			if (val == null ||
+				(!this.options.multiple && val != lival) ||
+				(this.options.multiple && val.indexOf(lival) == -1))
+				ul.removeChild(lis[i]);
+		}
+
+		if (reset_value)
+			this.setValues(this.node, {});
+	},
+
+	/**
+	 * Add new choices to the dropdown menu.
+	 *
+	 * This function adds further choices to an existing dropdown menu,
+	 * ignoring choice values which are already present.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.Dropdown
+	 * @param {string[]} values
+	 * The choice values to add to the dropdown widget.
+	 *
+	 * @param {Object<string, *>} labels
+	 * The choice label values to use when adding dropdown choices. If no
+	 * label is found for a particular choice value, the value itself is used
+	 * as label text. Choice labels may be any valid value accepted by
+	 * {@link LuCI.dom#content}.
+	 */
+	addChoices: function(values, labels) {
+		var sb = this.node,
+		    ul = sb.querySelector('ul'),
+		    lis = ul ? ul.querySelectorAll('li[data-value]') : [];
+
+		if (!Array.isArray(values))
+			values = L.toArray(values);
+
+		if (!L.isObject(labels))
+			labels = {};
+
+		for (var i = 0; i < values.length; i++) {
+			var found = false;
+
+			for (var j = 0; j < lis.length; j++) {
+				if (lis[j].getAttribute('data-value') === values[i]) {
+					found = true;
+					break;
+				}
+			}
+
+			if (found)
+				continue;
+
+			ul.insertBefore(
+				this.createChoiceElement(sb, values[i], labels[values[i]]),
+				ul.lastElementChild);
+		}
+	},
+
+	/**
+	 * Close all open dropdown widgets in the current document.
+	 */
+	closeAllDropdowns: function() {
+		document.querySelectorAll('.cbi-dropdown[open]').forEach(function(s) {
+			s.dispatchEvent(new CustomEvent('cbi-dropdown-close', {}));
+		});
+	},
+
+	/** @private */
+	handleClick: function(ev) {
+		var sb = ev.currentTarget;
+
+		if (!sb.hasAttribute('open')) {
+			if (!matchesElem(ev.target, 'input'))
+				this.openDropdown(sb);
+		}
+		else {
+			var li = findParent(ev.target, 'li');
+			if (li && li.parentNode.classList.contains('dropdown'))
+				this.toggleItem(sb, li);
+			else if (li && li.parentNode.classList.contains('preview'))
+				this.closeDropdown(sb);
+			else if (matchesElem(ev.target, 'span.open, span.more'))
+				this.closeDropdown(sb);
+		}
+
+		ev.preventDefault();
+		ev.stopPropagation();
+	},
+
+	/** @private */
+	handleKeydown: function(ev) {
+		var sb = ev.currentTarget,
+		    ul = sb.querySelector('ul.dropdown');
+
+		if (matchesElem(ev.target, 'input'))
+			return;
+
+		if (!sb.hasAttribute('open')) {
+			switch (ev.keyCode) {
+			case 37:
+			case 38:
+			case 39:
+			case 40:
+				this.openDropdown(sb);
+				ev.preventDefault();
+			}
+		}
+		else {
+			var active = findParent(document.activeElement, 'li');
+
+			switch (ev.keyCode) {
+			case 27:
+				this.closeDropdown(sb);
+				ev.stopPropagation();
+				break;
+
+			case 13:
+				if (active) {
+					if (!active.hasAttribute('selected'))
+						this.toggleItem(sb, active);
+					this.closeDropdown(sb);
+					ev.preventDefault();
+				}
+				break;
+
+			case 32:
+				if (active) {
+					this.toggleItem(sb, active);
+					ev.preventDefault();
+				}
+				break;
+
+			case 38:
+				if (active && active.previousElementSibling) {
+					this.setFocus(sb, active.previousElementSibling);
+					ev.preventDefault();
+				}
+				else if (document.activeElement === ul) {
+					this.setFocus(sb, ul.lastElementChild);
+					ev.preventDefault();
+				}
+				break;
+
+			case 40:
+				if (active && active.nextElementSibling) {
+					var li = active.nextElementSibling;
+					this.setFocus(sb, li);
+					if (this.options.create && li == li.parentNode.lastElementChild) {
+						var input = li.querySelector('input:not([type="hidden"]):not([type="checkbox"]');
+						if (input) input.focus();
+					}
+					ev.preventDefault();
+				}
+				else if (document.activeElement === ul) {
+					this.setFocus(sb, ul.firstElementChild);
+					ev.preventDefault();
+				}
+				break;
+			}
+		}
+	},
+
+	/** @private */
+	handleDropdownClose: function(ev) {
+		var sb = ev.currentTarget;
+
+		this.closeDropdown(sb, true);
+	},
+
+	/** @private */
+	handleDropdownSelect: function(ev) {
+		var sb = ev.currentTarget,
+		    li = findParent(ev.target, 'li');
+
+		if (!li)
+			return;
+
+		this.toggleItem(sb, li);
+		this.closeDropdown(sb, true);
+	},
+
+	/** @private */
+	handleFocus: function(ev) {
+		var sb = ev.currentTarget;
+
+		document.querySelectorAll('.cbi-dropdown[open]').forEach(function(s) {
+			if (s !== sb || sb.hasAttribute('open'))
+				s.dispatchEvent(new CustomEvent('cbi-dropdown-close', {}));
+		});
+	},
+
+	/** @private */
+	handleCanaryFocus: function(ev) {
+		this.closeDropdown(ev.currentTarget.parentNode);
+	},
+
+	/** @private */
+	handleCreateKeydown: function(ev) {
+		var input = ev.currentTarget,
+		    li = findParent(input, 'li'),
+		    sb = findParent(li, '.cbi-dropdown');
+
+		switch (ev.keyCode) {
+		case 13:
+			ev.preventDefault();
+
+			if (input.classList.contains('cbi-input-invalid'))
+				return;
+
+			this.handleCreateBlur(ev);
+			this.createItems(sb, input.value);
+			input.value = '';
+			break;
+
+		case 27:
+			this.handleCreateBlur(ev);
+			this.closeDropdown(sb);
+			ev.stopPropagation();
+			input.value = '';
+			break;
+
+		case 38:
+			if (li.previousElementSibling) {
+				this.handleCreateBlur(ev);
+				this.setFocus(sb, li.previousElementSibling, true);
+			}
+			break;
+		}
+	},
+
+	/** @private */
+	handleCreateFocus: function(ev) {
+		var input = ev.currentTarget,
+		    li = findParent(input, 'li'),
+		    cbox = li.querySelector('input[type="checkbox"]'),
+		    sb = findParent(input, '.cbi-dropdown');
+
+		if (cbox)
+			cbox.checked = true;
+
+		sb.setAttribute('locked-in', '');
+		this.setFocus(sb, li, true);
+	},
+
+	/** @private */
+	handleCreateBlur: function(ev) {
+		var input = ev.currentTarget,
+		    cbox = findParent(input, 'li').querySelector('input[type="checkbox"]'),
+		    sb = findParent(input, '.cbi-dropdown');
+
+		if (cbox)
+			cbox.checked = false;
+
+		sb.removeAttribute('locked-in');
+	},
+
+	/** @private */
+	handleCreateClick: function(ev) {
+		ev.currentTarget.querySelector(this.options.create_query).focus();
+	},
+
+	/** @override */
+	setValue: function(values) {
+		if (this.options.multiple) {
+			if (!Array.isArray(values))
+				values = (values != null && values != '') ? [ values ] : [];
+
+			var v = {};
+
+			for (var i = 0; i < values.length; i++)
+				v[values[i]] = true;
+
+			this.setValues(this.node, v);
+		}
+		else {
+			var v = {};
+
+			if (values != null) {
+				if (Array.isArray(values))
+					v[values[0]] = true;
+				else
+					v[values] = true;
+			}
+
+			this.setValues(this.node, v);
+		}
+	},
+
+	/** @override */
+	getValue: function() {
+		var div = this.node.lastElementChild,
+		    h = div.querySelectorAll('input[type="hidden"]'),
+			v = [];
+
+		for (var i = 0; i < h.length; i++)
+			v.push(h[i].value);
+
+		return this.options.multiple ? v : v[0];
+	}
+});
+
+/**
+ * Instantiate a rich dropdown choice widget allowing custom values.
+ *
+ * @constructor Combobox
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.Dropdown
+ *
+ * @classdesc
+ *
+ * The `Combobox` class implements a rich, stylable dropdown menu which allows
+ * to enter custom values. Historically, comboboxes used to be a dedicated
+ * widget type in LuCI but nowadays they are direct aliases of dropdown widgets
+ * with a set of enforced default properties for easier instantiation.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Combobox`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Combobox` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value(s).
+ *
+ * @param {Object<string, *>} choices
+ * Object containing the selectable choices of the widget. The object keys
+ * serve as values for the different choices while the values are used as
+ * choice labels.
+ *
+ * @param {LuCI.ui.Combobox.InitOptions} [options]
+ * Object describing the widget specific options to initialize the dropdown.
+ */
+var UICombobox = UIDropdown.extend(/** @lends LuCI.ui.Combobox.prototype */ {
+	/**
+	 * Comboboxes support the same properties as
+	 * [Dropdown.InitOptions]{@link LuCI.ui.Dropdown.InitOptions} but enforce
+	 * specific values for the following properties:
+	 *
+	 * @typedef {LuCI.ui.Dropdown.InitOptions} InitOptions
+	 * @memberof LuCI.ui.Combobox
+	 *
+	 * @property {boolean} multiple=false
+	 * Since Comboboxes never allow selecting multiple values, this property
+	 * is forcibly set to `false`.
+	 *
+	 * @property {boolean} create=true
+	 * Since Comboboxes always allow custom choice values, this property is
+	 * forcibly set to `true`.
+	 *
+	 * @property {boolean} optional=true
+	 * Since Comboboxes are always optional, this property is forcibly set to
+	 * `true`.
+	 */
+	__init__: function(value, choices, options) {
+		this.super('__init__', [ value, choices, Object.assign({
+			select_placeholder: _('-- Please choose --'),
+			custom_placeholder: _('-- custom --'),
+			dropdown_items: -1,
+			sort: true
+		}, options, {
+			multiple: false,
+			create: true,
+			optional: true
+		}) ]);
+	}
+});
+
+/**
+ * Instantiate a combo button widget offering multiple action choices.
+ *
+ * @constructor ComboButton
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.Dropdown
+ *
+ * @classdesc
+ *
+ * The `ComboButton` class implements a button element which can be expanded
+ * into a dropdown to chose from a set of different action choices.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.ComboButton`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `ComboButton` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value(s).
+ *
+ * @param {Object<string, *>} choices
+ * Object containing the selectable choices of the widget. The object keys
+ * serve as values for the different choices while the values are used as
+ * choice labels.
+ *
+ * @param {LuCI.ui.ComboButton.InitOptions} [options]
+ * Object describing the widget specific options to initialize the button.
+ */
+var UIComboButton = UIDropdown.extend(/** @lends LuCI.ui.ComboButton.prototype */ {
+	/**
+	 * ComboButtons support the same properties as
+	 * [Dropdown.InitOptions]{@link LuCI.ui.Dropdown.InitOptions} but enforce
+	 * specific values for some properties and add aditional button specific
+	 * properties.
+	 *
+	 * @typedef {LuCI.ui.Dropdown.InitOptions} InitOptions
+	 * @memberof LuCI.ui.ComboButton
+	 *
+	 * @property {boolean} multiple=false
+	 * Since ComboButtons never allow selecting multiple actions, this property
+	 * is forcibly set to `false`.
+	 *
+	 * @property {boolean} create=false
+	 * Since ComboButtons never allow creating custom choices, this property
+	 * is forcibly set to `false`.
+	 *
+	 * @property {boolean} optional=false
+	 * Since ComboButtons must always select one action, this property is
+	 * forcibly set to `false`.
+	 *
+	 * @property {Object<string, string>} [classes]
+	 * Specifies a mapping of choice values to CSS class names. If an action
+	 * choice is selected by the user and if a corresponding entry exists in
+	 * the `classes` object, the class names corresponding to the selected
+	 * value are set on the button element.
+	 *
+	 * This is useful to apply different button styles, such as colors, to the
+	 * combined button depending on the selected action.
+	 *
+	 * @property {function} [click]
+	 * Specifies a handler function to invoke when the user clicks the button.
+	 * This function will be called with the button DOM node as `this` context
+	 * and receive the DOM click event as first as well as the selected action
+	 * choice value as second argument.
+	 */
+	__init__: function(value, choices, options) {
+		this.super('__init__', [ value, choices, Object.assign({
+			sort: true
+		}, options, {
+			multiple: false,
+			create: false,
+			optional: false
+		}) ]);
+	},
+
+	/** @override */
+	render: function(/* ... */) {
+		var node = UIDropdown.prototype.render.apply(this, arguments),
+		    val = this.getValue();
+
+		if (L.isObject(this.options.classes) && this.options.classes.hasOwnProperty(val))
+			node.setAttribute('class', 'cbi-dropdown ' + this.options.classes[val]);
+
+		return node;
+	},
+
+	/** @private */
+	handleClick: function(ev) {
+		var sb = ev.currentTarget,
+		    t = ev.target;
+
+		if (sb.hasAttribute('open') || dom.matches(t, '.cbi-dropdown > span.open'))
+			return UIDropdown.prototype.handleClick.apply(this, arguments);
+
+		if (this.options.click)
+			return this.options.click.call(sb, ev, this.getValue());
+	},
+
+	/** @private */
+	toggleItem: function(sb /*, ... */) {
+		var rv = UIDropdown.prototype.toggleItem.apply(this, arguments),
+		    val = this.getValue();
+
+		if (L.isObject(this.options.classes) && this.options.classes.hasOwnProperty(val))
+			sb.setAttribute('class', 'cbi-dropdown ' + this.options.classes[val]);
+		else
+			sb.setAttribute('class', 'cbi-dropdown');
+
+		return rv;
+	}
+});
+
+/**
+ * Instantiate a dynamic list widget.
+ *
+ * @constructor DynamicList
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `DynamicList` class implements a widget which allows the user to specify
+ * an arbitrary amount of input values, either from free formed text input or
+ * from a set of predefined choices.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.DynamicList`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `DynamicList` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value(s).
+ *
+ * @param {Object<string, *>} [choices]
+ * Object containing the selectable choices of the widget. The object keys
+ * serve as values for the different choices while the values are used as
+ * choice labels. If omitted, no default choices are presented to the user,
+ * instead a plain text input field is rendered allowing the user to add
+ * arbitrary values to the dynamic list.
+ *
+ * @param {LuCI.ui.DynamicList.InitOptions} [options]
+ * Object describing the widget specific options to initialize the dynamic list.
+ */
+var UIDynamicList = UIElement.extend(/** @lends LuCI.ui.DynamicList.prototype */ {
+	/**
+	 * In case choices are passed to the dynamic list contructor, the widget
+	 * supports the same properties as [Dropdown.InitOptions]{@link LuCI.ui.Dropdown.InitOptions}
+	 * but enforces specific values for some dropdown properties.
+	 *
+	 * @typedef {LuCI.ui.Dropdown.InitOptions} InitOptions
+	 * @memberof LuCI.ui.DynamicList
+	 *
+	 * @property {boolean} multiple=false
+	 * Since dynamic lists never allow selecting multiple choices when adding
+	 * another list item, this property is forcibly set to `false`.
+	 *
+	 * @property {boolean} optional=true
+	 * Since dynamic lists use an embedded dropdown to present a list of
+	 * predefined choice values, the dropdown must be made optional to allow
+	 * it to remain unselected.
+	 */
+	__init__: function(values, choices, options) {
+		if (!Array.isArray(values))
+			values = (values != null && values != '') ? [ values ] : [];
+
+		if (typeof(choices) != 'object')
+			choices = null;
+
+		this.values = values;
+		this.choices = choices;
+		this.options = Object.assign({}, options, {
+			multiple: false,
+			optional: true
+		});
+	},
+
+	/** @override */
+	render: function() {
+		var dl = E('div', {
+			'id': this.options.id,
+			'class': 'cbi-dynlist',
+			'disabled': this.options.disabled ? '' : null
+		}, E('div', { 'class': 'add-item control-group' }));
+
+		if (this.choices) {
+			if (this.options.placeholder != null)
+				this.options.select_placeholder = this.options.placeholder;
+
+			var cbox = new UICombobox(null, this.choices, this.options);
+
+			dl.lastElementChild.appendChild(cbox.render());
+		}
+		else {
+			var inputEl = E('input', {
+				'id': this.options.id ? 'widget.' + this.options.id : null,
+				'type': 'text',
+				'class': 'cbi-input-text',
+				'placeholder': this.options.placeholder,
+				'disabled': this.options.disabled ? '' : null
+			});
+
+			dl.lastElementChild.appendChild(inputEl);
+			dl.lastElementChild.appendChild(E('div', { 'class': 'btn cbi-button cbi-button-add' }, '+'));
+
+			if (this.options.datatype || this.options.validate)
+				UI.prototype.addValidator(inputEl, this.options.datatype || 'string',
+				                          true, this.options.validate, 'blur', 'keyup');
+		}
+
+		for (var i = 0; i < this.values.length; i++) {
+			var label = this.choices ? this.choices[this.values[i]] : null;
+
+			if (dom.elem(label))
+				label = label.cloneNode(true);
+
+			this.addItem(dl, this.values[i], label);
+		}
+
+		return this.bind(dl);
+	},
+
+	/** @private */
+	bind: function(dl) {
+		dl.addEventListener('click', L.bind(this.handleClick, this));
+		dl.addEventListener('keydown', L.bind(this.handleKeydown, this));
+		dl.addEventListener('cbi-dropdown-change', L.bind(this.handleDropdownChange, this));
+
+		this.node = dl;
+
+		this.setUpdateEvents(dl, 'cbi-dynlist-change');
+		this.setChangeEvents(dl, 'cbi-dynlist-change');
+
+		dom.bindClassInstance(dl, this);
+
+		return dl;
+	},
+
+	/** @private */
+	addItem: function(dl, value, text, flash) {
+		var exists = false,
+		    new_item = E('div', { 'class': flash ? 'item flash' : 'item', 'tabindex': 0 }, [
+				E('span', {}, [ text || value ]),
+				E('input', {
+					'type': 'hidden',
+					'name': this.options.name,
+					'value': value })]);
+
+		dl.querySelectorAll('.item').forEach(function(item) {
+			if (exists)
+				return;
+
+			var hidden = item.querySelector('input[type="hidden"]');
+
+			if (hidden && hidden.parentNode !== item)
+				hidden = null;
+
+			if (hidden && hidden.value === value)
+				exists = true;
+		});
+
+		if (!exists) {
+			var ai = dl.querySelector('.add-item');
+			ai.parentNode.insertBefore(new_item, ai);
+		}
+
+		dl.dispatchEvent(new CustomEvent('cbi-dynlist-change', {
+			bubbles: true,
+			detail: {
+				instance: this,
+				element: dl,
+				value: value,
+				add: true
+			}
+		}));
+	},
+
+	/** @private */
+	removeItem: function(dl, item) {
+		var value = item.querySelector('input[type="hidden"]').value;
+		var sb = dl.querySelector('.cbi-dropdown');
+		if (sb)
+			sb.querySelectorAll('ul > li').forEach(function(li) {
+				if (li.getAttribute('data-value') === value) {
+					if (li.hasAttribute('dynlistcustom'))
+						li.parentNode.removeChild(li);
+					else
+						li.removeAttribute('unselectable');
+				}
+			});
+
+		item.parentNode.removeChild(item);
+
+		dl.dispatchEvent(new CustomEvent('cbi-dynlist-change', {
+			bubbles: true,
+			detail: {
+				instance: this,
+				element: dl,
+				value: value,
+				remove: true
+			}
+		}));
+	},
+
+	/** @private */
+	handleClick: function(ev) {
+		var dl = ev.currentTarget,
+		    item = findParent(ev.target, '.item');
+
+		if (this.options.disabled)
+			return;
+
+		if (item) {
+			this.removeItem(dl, item);
+		}
+		else if (matchesElem(ev.target, '.cbi-button-add')) {
+			var input = ev.target.previousElementSibling;
+			if (input.value.length && !input.classList.contains('cbi-input-invalid')) {
+				this.addItem(dl, input.value, null, true);
+				input.value = '';
+			}
+		}
+	},
+
+	/** @private */
+	handleDropdownChange: function(ev) {
+		var dl = ev.currentTarget,
+		    sbIn = ev.detail.instance,
+		    sbEl = ev.detail.element,
+		    sbVal = ev.detail.value;
+
+		if (sbVal === null)
+			return;
+
+		sbIn.setValues(sbEl, null);
+		sbVal.element.setAttribute('unselectable', '');
+
+		if (sbVal.element.hasAttribute('created')) {
+			sbVal.element.removeAttribute('created');
+			sbVal.element.setAttribute('dynlistcustom', '');
+		}
+
+		var label = sbVal.text;
+
+		if (sbVal.element) {
+			label = E([]);
+
+			for (var i = 0; i < sbVal.element.childNodes.length; i++)
+				label.appendChild(sbVal.element.childNodes[i].cloneNode(true));
+		}
+
+		this.addItem(dl, sbVal.value, label, true);
+	},
+
+	/** @private */
+	handleKeydown: function(ev) {
+		var dl = ev.currentTarget,
+		    item = findParent(ev.target, '.item');
+
+		if (item) {
+			switch (ev.keyCode) {
+			case 8: /* backspace */
+				if (item.previousElementSibling)
+					item.previousElementSibling.focus();
+
+				this.removeItem(dl, item);
+				break;
+
+			case 46: /* delete */
+				if (item.nextElementSibling) {
+					if (item.nextElementSibling.classList.contains('item'))
+						item.nextElementSibling.focus();
+					else
+						item.nextElementSibling.firstElementChild.focus();
+				}
+
+				this.removeItem(dl, item);
+				break;
+			}
+		}
+		else if (matchesElem(ev.target, '.cbi-input-text')) {
+			switch (ev.keyCode) {
+			case 13: /* enter */
+				if (ev.target.value.length && !ev.target.classList.contains('cbi-input-invalid')) {
+					this.addItem(dl, ev.target.value, null, true);
+					ev.target.value = '';
+					ev.target.blur();
+					ev.target.focus();
+				}
+
+				ev.preventDefault();
+				break;
+			}
+		}
+	},
+
+	/** @override */
+	getValue: function() {
+		var items = this.node.querySelectorAll('.item > input[type="hidden"]'),
+		    input = this.node.querySelector('.add-item > input[type="text"]'),
+		    v = [];
+
+		for (var i = 0; i < items.length; i++)
+			v.push(items[i].value);
+
+		if (input && input.value != null && input.value.match(/\S/) &&
+		    input.classList.contains('cbi-input-invalid') == false &&
+		    v.filter(function(s) { return s == input.value }).length == 0)
+			v.push(input.value);
+
+		return v;
+	},
+
+	/** @override */
+	setValue: function(values) {
+		if (!Array.isArray(values))
+			values = (values != null && values != '') ? [ values ] : [];
+
+		var items = this.node.querySelectorAll('.item');
+
+		for (var i = 0; i < items.length; i++)
+			if (items[i].parentNode === this.node)
+				this.removeItem(this.node, items[i]);
+
+		for (var i = 0; i < values.length; i++)
+			this.addItem(this.node, values[i],
+				this.choices ? this.choices[values[i]] : null);
+	},
+
+	/**
+	 * Add new suggested choices to the dynamic list.
+	 *
+	 * This function adds further choices to an existing dynamic list,
+	 * ignoring choice values which are already present.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.DynamicList
+	 * @param {string[]} values
+	 * The choice values to add to the dynamic lists suggestion dropdown.
+	 *
+	 * @param {Object<string, *>} labels
+	 * The choice label values to use when adding suggested choices. If no
+	 * label is found for a particular choice value, the value itself is used
+	 * as label text. Choice labels may be any valid value accepted by
+	 * {@link LuCI.dom#content}.
+	 */
+	addChoices: function(values, labels) {
+		var dl = this.node.lastElementChild.firstElementChild;
+		dom.callClassMethod(dl, 'addChoices', values, labels);
+	},
+
+	/**
+	 * Remove all existing choices from the dynamic list.
+	 *
+	 * This function removes all preexisting suggested choices from the widget.
+	 *
+	 * @instance
+	 * @memberof LuCI.ui.DynamicList
+	 */
+	clearChoices: function() {
+		var dl = this.node.lastElementChild.firstElementChild;
+		dom.callClassMethod(dl, 'clearChoices');
+	}
+});
+
+/**
+ * Instantiate a hidden input field widget.
+ *
+ * @constructor Hiddenfield
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Hiddenfield` class implements an HTML `<input type="hidden">` field
+ * which allows to store form data without exposing it to the user.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.Hiddenfield`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `Hiddenfield` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value.
+ *
+ * @param {LuCI.ui.AbstractElement.InitOptions} [options]
+ * Object describing the widget specific options to initialize the hidden input.
+ */
+var UIHiddenfield = UIElement.extend(/** @lends LuCI.ui.Hiddenfield.prototype */ {
+	__init__: function(value, options) {
+		this.value = value;
+		this.options = Object.assign({
+
+		}, options);
+	},
+
+	/** @override */
+	render: function() {
+		var hiddenEl = E('input', {
+			'id': this.options.id,
+			'type': 'hidden',
+			'value': this.value
+		});
+
+		return this.bind(hiddenEl);
+	},
+
+	/** @private */
+	bind: function(hiddenEl) {
+		this.node = hiddenEl;
+
+		dom.bindClassInstance(hiddenEl, this);
+
+		return hiddenEl;
+	},
+
+	/** @override */
+	getValue: function() {
+		return this.node.value;
+	},
+
+	/** @override */
+	setValue: function(value) {
+		this.node.value = value;
+	}
+});
+
+/**
+ * Instantiate a file upload widget.
+ *
+ * @constructor FileUpload
+ * @memberof LuCI.ui
+ * @augments LuCI.ui.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `FileUpload` class implements a widget which allows the user to upload,
+ * browse, select and delete files beneath a predefined remote directory.
+ *
+ * UI widget instances are usually not supposed to be created by view code
+ * directly, instead they're implicitely created by `LuCI.form` when
+ * instantiating CBI forms.
+ *
+ * This class is automatically instantiated as part of `LuCI.ui`. To use it
+ * in views, use `'require ui'` and refer to `ui.FileUpload`. To import it in
+ * external JavaScript, use `L.require("ui").then(...)` and access the
+ * `FileUpload` property of the class instance value.
+ *
+ * @param {string|string[]} [value=null]
+ * The initial input value.
+ *
+ * @param {LuCI.ui.DynamicList.InitOptions} [options]
+ * Object describing the widget specific options to initialize the file
+ * upload control.
+ */
+var UIFileUpload = UIElement.extend(/** @lends LuCI.ui.FileUpload.prototype */ {
+	/**
+	 * In addition to the [AbstractElement.InitOptions]{@link LuCI.ui.AbstractElement.InitOptions}
+	 * the following properties are recognized:
+	 *
+	 * @typedef {LuCI.ui.AbstractElement.InitOptions} InitOptions
+	 * @memberof LuCI.ui.FileUpload
+	 *
+	 * @property {boolean} [show_hidden=false]
+	 * Specifies whether hidden files should be displayed when browsing remote
+	 * files. Note that this is not a security feature, hidden files are always
+	 * present in the remote file listings received, this option merely controls
+	 * whether they're displayed or not.
+	 *
+	 * @property {boolean} [enable_upload=true]
+	 * Specifies whether the widget allows the user to upload files. If set to
+	 * `false`, only existing files may be selected. Note that this is not a
+	 * security feature. Whether file upload requests are accepted remotely
+	 * depends on the ACL setup for the current session. This option merely
+	 * controls whether the upload controls are rendered or not.
+	 *
+	 * @property {boolean} [enable_remove=true]
+	 * Specifies whether the widget allows the user to delete remove files.
+	 * If set to `false`, existing files may not be removed. Note that this is
+	 * not a security feature. Whether file delete requests are accepted
+	 * remotely depends on the ACL setup for the current session. This option
+	 * merely controls whether the file remove controls are rendered or not.
+	 *
+	 * @property {string} [root_directory=/etc/luci-uploads]
+	 * Specifies the remote directory the upload and file browsing actions take
+	 * place in. Browsing to directories outside of the root directory is
+	 * prevented by the widget. Note that this is not a security feature.
+	 * Whether remote directories are browseable or not solely depends on the
+	 * ACL setup for the current session.
+	 */
+	__init__: function(value, options) {
+		this.value = value;
+		this.options = Object.assign({
+			show_hidden: false,
+			enable_upload: true,
+			enable_remove: true,
+			root_directory: '/etc/luci-uploads'
+		}, options);
+	},
+
+	/** @private */
+	bind: function(browserEl) {
+		this.node = browserEl;
+
+		this.setUpdateEvents(browserEl, 'cbi-fileupload-select', 'cbi-fileupload-cancel');
+		this.setChangeEvents(browserEl, 'cbi-fileupload-select', 'cbi-fileupload-cancel');
+
+		dom.bindClassInstance(browserEl, this);
+
+		return browserEl;
+	},
+
+	/** @override */
+	render: function() {
+		return L.resolveDefault(this.value != null ? fs.stat(this.value) : null).then(L.bind(function(stat) {
+			var label;
+
+			if (L.isObject(stat) && stat.type != 'directory')
+				this.stat = stat;
+
+			if (this.stat != null)
+				label = [ this.iconForType(this.stat.type), ' %s (%1000mB)'.format(this.truncatePath(this.stat.path), this.stat.size) ];
+			else if (this.value != null)
+				label = [ this.iconForType('file'), ' %s (%s)'.format(this.truncatePath(this.value), _('File not accessible')) ];
+			else
+				label = [ _('Select file…') ];
+
+			return this.bind(E('div', { 'id': this.options.id }, [
+				E('button', {
+					'class': 'btn',
+					'click': UI.prototype.createHandlerFn(this, 'handleFileBrowser'),
+					'disabled': this.options.disabled ? '' : null
+				}, label),
+				E('div', {
+					'class': 'cbi-filebrowser'
+				}),
+				E('input', {
+					'type': 'hidden',
+					'name': this.options.name,
+					'value': this.value
+				})
+			]));
+		}, this));
+	},
+
+	/** @private */
+	truncatePath: function(path) {
+		if (path.length > 50)
+			path = path.substring(0, 25) + '…' + path.substring(path.length - 25);
+
+		return path;
+	},
+
+	/** @private */
+	iconForType: function(type) {
+		switch (type) {
+		case 'symlink':
+			return E('img', {
+				'src': L.resource('cbi/link.svg'),
+				'width': 16,
+				'title': _('Symbolic link'),
+				'class': 'middle'
+			});
+
+		case 'directory':
+			return E('img', {
+				'src': L.resource('cbi/folder.svg'),
+				'width': 16,
+				'title': _('Directory'),
+				'class': 'middle'
+			});
+
+		default:
+			return E('img', {
+				'src': L.resource('cbi/file.svg'),
+				'width': 16,
+				'title': _('File'),
+				'class': 'middle'
+			});
+		}
+	},
+
+	/** @private */
+	canonicalizePath: function(path) {
+		return path.replace(/\/{2,}/, '/')
+			.replace(/\/\.(\/|$)/g, '/')
+			.replace(/[^\/]+\/\.\.(\/|$)/g, '/')
+			.replace(/\/$/, '');
+	},
+
+	/** @private */
+	splitPath: function(path) {
+		var croot = this.canonicalizePath(this.options.root_directory || '/'),
+		    cpath = this.canonicalizePath(path || '/');
+
+		if (cpath.length <= croot.length)
+			return [ croot ];
+
+		if (cpath.charAt(croot.length) != '/')
+			return [ croot ];
+
+		var parts = cpath.substring(croot.length + 1).split(/\//);
+
+		parts.unshift(croot);
+
+		return parts;
+	},
+
+	/** @private */
+	handleUpload: function(path, list, ev) {
+		var form = ev.target.parentNode,
+		    fileinput = form.querySelector('input[type="file"]'),
+		    nameinput = form.querySelector('input[type="text"]'),
+		    filename = (nameinput.value != null ? nameinput.value : '').trim();
+
+		ev.preventDefault();
+
+		if (filename == '' || filename.match(/\//) || fileinput.files[0] == null)
+			return;
+
+		var existing = list.filter(function(e) { return e.name == filename })[0];
+
+		if (existing != null && existing.type == 'directory')
+			return alert(_('A directory with the same name already exists.'));
+		else if (existing != null && !confirm(_('Overwrite existing file "%s" ?').format(filename)))
+			return;
+
+		var data = new FormData();
+
+		data.append('sessionid', L.env.sessionid);
+		data.append('filename', path + '/' + filename);
+		data.append('filedata', fileinput.files[0]);
+
+		return request.post(L.env.cgi_base + '/cgi-upload', data, {
+			progress: L.bind(function(btn, ev) {
+				btn.firstChild.data = '%.2f%%'.format((ev.loaded / ev.total) * 100);
+			}, this, ev.target)
+		}).then(L.bind(function(path, ev, res) {
+			var reply = res.json();
+
+			if (L.isObject(reply) && reply.failure)
+				alert(_('Upload request failed: %s').format(reply.message));
+
+			return this.handleSelect(path, null, ev);
+		}, this, path, ev));
+	},
+
+	/** @private */
+	handleDelete: function(path, fileStat, ev) {
+		var parent = path.replace(/\/[^\/]+$/, '') || '/',
+		    name = path.replace(/^.+\//, ''),
+		    msg;
+
+		ev.preventDefault();
+
+		if (fileStat.type == 'directory')
+			msg = _('Do you really want to recursively delete the directory "%s" ?').format(name);
+		else
+			msg = _('Do you really want to delete "%s" ?').format(name);
+
+		if (confirm(msg)) {
+			var button = this.node.firstElementChild,
+			    hidden = this.node.lastElementChild;
+
+			if (path == hidden.value) {
+				dom.content(button, _('Select file…'));
+				hidden.value = '';
+			}
+
+			return fs.remove(path).then(L.bind(function(parent, ev) {
+				return this.handleSelect(parent, null, ev);
+			}, this, parent, ev)).catch(function(err) {
+				alert(_('Delete request failed: %s').format(err.message));
+			});
+		}
+	},
+
+	/** @private */
+	renderUpload: function(path, list) {
+		if (!this.options.enable_upload)
+			return E([]);
+
+		return E([
+			E('a', {
+				'href': '#',
+				'class': 'btn cbi-button-positive',
+				'click': function(ev) {
+					var uploadForm = ev.target.nextElementSibling,
+					    fileInput = uploadForm.querySelector('input[type="file"]');
+
+					ev.target.style.display = 'none';
+					uploadForm.style.display = '';
+					fileInput.click();
+				}
+			}, _('Upload file…')),
+			E('div', { 'class': 'upload', 'style': 'display:none' }, [
+				E('input', {
+					'type': 'file',
+					'style': 'display:none',
+					'change': function(ev) {
+						var nameinput = ev.target.parentNode.querySelector('input[type="text"]'),
+						    uploadbtn = ev.target.parentNode.querySelector('button.cbi-button-save');
+
+						nameinput.value = ev.target.value.replace(/^.+[\/\\]/, '');
+						uploadbtn.disabled = false;
+					}
+				}),
+				E('button', {
+					'class': 'btn',
+					'click': function(ev) {
+						ev.preventDefault();
+						ev.target.previousElementSibling.click();
+					}
+				}, [ _('Browse…') ]),
+				E('div', {}, E('input', { 'type': 'text', 'placeholder': _('Filename') })),
+				E('button', {
+					'class': 'btn cbi-button-save',
+					'click': UI.prototype.createHandlerFn(this, 'handleUpload', path, list),
+					'disabled': true
+				}, [ _('Upload file') ])
+			])
+		]);
+	},
+
+	/** @private */
+	renderListing: function(container, path, list) {
+		var breadcrumb = E('p'),
+		    rows = E('ul');
+
+		list.sort(function(a, b) {
+			return L.naturalCompare(a.type == 'directory', b.type == 'directory') ||
+			       L.naturalCompare(a.name, b.name);
+		});
+
+		for (var i = 0; i < list.length; i++) {
+			if (!this.options.show_hidden && list[i].name.charAt(0) == '.')
+				continue;
+
+			var entrypath = this.canonicalizePath(path + '/' + list[i].name),
+			    selected = (entrypath == this.node.lastElementChild.value),
+			    mtime = new Date(list[i].mtime * 1000);
+
+			rows.appendChild(E('li', [
+				E('div', { 'class': 'name' }, [
+					this.iconForType(list[i].type),
+					' ',
+					E('a', {
+						'href': '#',
+						'style': selected ? 'font-weight:bold' : null,
+						'click': UI.prototype.createHandlerFn(this, 'handleSelect',
+							entrypath, list[i].type != 'directory' ? list[i] : null)
+					}, '%h'.format(list[i].name))
+				]),
+				E('div', { 'class': 'mtime hide-xs' }, [
+					' %04d-%02d-%02d %02d:%02d:%02d '.format(
+						mtime.getFullYear(),
+						mtime.getMonth() + 1,
+						mtime.getDate(),
+						mtime.getHours(),
+						mtime.getMinutes(),
+						mtime.getSeconds())
+				]),
+				E('div', [
+					selected ? E('button', {
+						'class': 'btn',
+						'click': UI.prototype.createHandlerFn(this, 'handleReset')
+					}, [ _('Deselect') ]) : '',
+					this.options.enable_remove ? E('button', {
+						'class': 'btn cbi-button-negative',
+						'click': UI.prototype.createHandlerFn(this, 'handleDelete', entrypath, list[i])
+					}, [ _('Delete') ]) : ''
+				])
+			]));
+		}
+
+		if (!rows.firstElementChild)
+			rows.appendChild(E('em', _('No entries in this directory')));
+
+		var dirs = this.splitPath(path),
+		    cur = '';
+
+		for (var i = 0; i < dirs.length; i++) {
+			cur = cur ? cur + '/' + dirs[i] : dirs[i];
+			dom.append(breadcrumb, [
+				i ? ' » ' : '',
+				E('a', {
+					'href': '#',
+					'click': UI.prototype.createHandlerFn(this, 'handleSelect', cur || '/', null)
+				}, dirs[i] != '' ? '%h'.format(dirs[i]) : E('em', '(root)')),
+			]);
+		}
+
+		dom.content(container, [
+			breadcrumb,
+			rows,
+			E('div', { 'class': 'right' }, [
+				this.renderUpload(path, list),
+				E('a', {
+					'href': '#',
+					'class': 'btn',
+					'click': UI.prototype.createHandlerFn(this, 'handleCancel')
+				}, _('Cancel'))
+			]),
+		]);
+	},
+
+	/** @private */
+	handleCancel: function(ev) {
+		var button = this.node.firstElementChild,
+		    browser = button.nextElementSibling;
+
+		browser.classList.remove('open');
+		button.style.display = '';
+
+		this.node.dispatchEvent(new CustomEvent('cbi-fileupload-cancel', {}));
+
+		ev.preventDefault();
+	},
+
+	/** @private */
+	handleReset: function(ev) {
+		var button = this.node.firstElementChild,
+		    hidden = this.node.lastElementChild;
+
+		hidden.value = '';
+		dom.content(button, _('Select file…'));
+
+		this.handleCancel(ev);
+	},
+
+	/** @private */
+	handleSelect: function(path, fileStat, ev) {
+		var browser = dom.parent(ev.target, '.cbi-filebrowser'),
+		    ul = browser.querySelector('ul');
+
+		if (fileStat == null) {
+			dom.content(ul, E('em', { 'class': 'spinning' }, _('Loading directory contents…')));
+			L.resolveDefault(fs.list(path), []).then(L.bind(this.renderListing, this, browser, path));
+		}
+		else {
+			var button = this.node.firstElementChild,
+			    hidden = this.node.lastElementChild;
+
+			path = this.canonicalizePath(path);
+
+			dom.content(button, [
+				this.iconForType(fileStat.type),
+				' %s (%1000mB)'.format(this.truncatePath(path), fileStat.size)
+			]);
+
+			browser.classList.remove('open');
+			button.style.display = '';
+			hidden.value = path;
+
+			this.stat = Object.assign({ path: path }, fileStat);
+			this.node.dispatchEvent(new CustomEvent('cbi-fileupload-select', { detail: this.stat }));
+		}
+	},
+
+	/** @private */
+	handleFileBrowser: function(ev) {
+		var button = ev.target,
+		    browser = button.nextElementSibling,
+		    path = this.stat ? this.stat.path.replace(/\/[^\/]+$/, '') : (this.options.initial_directory || this.options.root_directory);
+
+		if (path.indexOf(this.options.root_directory) != 0)
+			path = this.options.root_directory;
+
+		ev.preventDefault();
+
+		return L.resolveDefault(fs.list(path), []).then(L.bind(function(button, browser, path, list) {
+			document.querySelectorAll('.cbi-filebrowser.open').forEach(function(browserEl) {
+				dom.findClassInstance(browserEl).handleCancel(ev);
+			});
+
+			button.style.display = 'none';
+			browser.classList.add('open');
+
+			return this.renderListing(browser, path, list);
+		}, this, button, browser, path));
+	},
+
+	/** @override */
+	getValue: function() {
+		return this.node.lastElementChild.value;
+	},
+
+	/** @override */
+	setValue: function(value) {
+		this.node.lastElementChild.value = value;
+	}
+});
+
+
+function scrubMenu(node) {
+	var hasSatisfiedChild = false;
+
+	if (L.isObject(node.children)) {
+		for (var k in node.children) {
+			var child = scrubMenu(node.children[k]);
+
+			if (child.title && !child.firstchild_ineligible)
+				hasSatisfiedChild = hasSatisfiedChild || child.satisfied;
+		}
+	}
+
+	if (L.isObject(node.action) &&
+	    node.action.type == 'firstchild' &&
+	    hasSatisfiedChild == false)
+		node.satisfied = false;
+
+	return node;
+};
+
+/**
+ * Handle menu.
+ *
+ * @constructor menu
+ * @memberof LuCI.ui
+ *
+ * @classdesc
+ *
+ * Handles menus.
+ */
+var UIMenu = baseclass.singleton(/** @lends LuCI.ui.menu.prototype */ {
+	/**
+	 * @typedef {Object} MenuNode
+	 * @memberof LuCI.ui.menu
+
+	 * @property {string} name - The internal name of the node, as used in the URL
+	 * @property {number} order - The sort index of the menu node
+	 * @property {string} [title] - The title of the menu node, `null` if the node should be hidden
+	 * @property {satisified} boolean - Boolean indicating whether the menu enries dependencies are satisfied
+	 * @property {readonly} [boolean] - Boolean indicating whether the menu entries underlying ACLs are readonly
+	 * @property {LuCI.ui.menu.MenuNode[]} [children] - Array of child menu nodes.
+	 */
+
+	/**
+	 * Load and cache current menu tree.
+	 *
+	 * @returns {Promise<LuCI.ui.menu.MenuNode>}
+	 * Returns a promise resolving to the root element of the menu tree.
+	 */
+	load: function() {
+		if (this.menu == null)
+			this.menu = session.getLocalData('menu');
+
+		if (!L.isObject(this.menu)) {
+			this.menu = request.get(L.url('admin/menu')).then(L.bind(function(menu) {
+				this.menu = scrubMenu(menu.json());
+				session.setLocalData('menu', this.menu);
+
+				return this.menu;
+			}, this));
+		}
+
+		return Promise.resolve(this.menu);
+	},
+
+	/**
+	 * Flush the internal menu cache to force loading a new structure on the
+	 * next page load.
+	 */
+	flushCache: function() {
+		session.setLocalData('menu', null);
+	},
+
+	/**
+	 * @param {LuCI.ui.menu.MenuNode} [node]
+	 * The menu node to retrieve the children for. Defaults to the menu's
+	 * internal root node if omitted.
+	 *
+	 * @returns {LuCI.ui.menu.MenuNode[]}
+	 * Returns an array of child menu nodes.
+	 */
+	getChildren: function(node) {
+		var children = [];
+
+		if (node == null)
+			node = this.menu;
+
+		for (var k in node.children) {
+			if (!node.children.hasOwnProperty(k))
+				continue;
+
+			if (!node.children[k].satisfied)
+				continue;
+
+			if (!node.children[k].hasOwnProperty('title'))
+				continue;
+
+			var subnode = Object.assign(node.children[k], { name: k });
+
+			if (L.isObject(subnode.action) && subnode.action.path != null &&
+			    (subnode.action.type == 'alias' || subnode.action.type == 'rewrite')) {
+				var root = this.menu,
+				    path = subnode.action.path.split('/');
+
+				for (var i = 0; root != null && i < path.length; i++)
+					root = L.isObject(root.children) ? root.children[path[i]] : null;
+
+				if (root)
+					subnode = Object.assign({}, subnode, {
+						children: root.children,
+						action: root.action
+					});
+			}
+
+			children.push(subnode);
+		}
+
+		return children.sort(function(a, b) {
+			var wA = a.order || 1000,
+			    wB = b.order || 1000;
+
+			if (wA != wB)
+				return wA - wB;
+
+			return L.naturalCompare(a.name, b.name);
+		});
+	}
+});
+
+var UITable = baseclass.extend(/** @lends LuCI.ui.table.prototype */ {
+	__init__: function(captions, options, placeholder) {
+		if (!Array.isArray(captions)) {
+			this.initFromMarkup(captions);
+
+			return;
+		}
+
+		var id = options.id || 'table%08x'.format(Math.random() * 0xffffffff);
+
+		var table = E('table', { 'id': id, 'class': 'table' }, [
+			E('tr', { 'class': 'tr table-titles', 'click': UI.prototype.createHandlerFn(this, 'handleSort') })
+		]);
+
+		this.id = id;
+		this.node = table
+		this.options = options;
+
+		var sorting = this.getActiveSortState();
+
+		for (var i = 0; i < captions.length; i++) {
+			if (captions[i] == null)
+				continue;
+
+			var th = E('th', { 'class': 'th' }, [ captions[i] ]);
+
+			if (typeof(options.captionClasses) == 'object')
+				DOMTokenList.prototype.add.apply(th.classList, L.toArray(options.captionClasses[i]));
+
+			if (options.sortable !== false && (typeof(options.sortable) != 'object' || options.sortable[i] !== false)) {
+				th.setAttribute('data-sortable-row', true);
+
+				if (sorting && sorting[0] == i)
+					th.setAttribute('data-sort-direction', sorting[1] ? 'desc' : 'asc');
+			}
+
+			table.firstElementChild.appendChild(th);
+		}
+
+		if (placeholder) {
+			var trow = table.appendChild(E('tr', { 'class': 'tr placeholder' })),
+			    td = trow.appendChild(E('td', { 'class': 'td' }, placeholder));
+
+			if (typeof(captionClasses) == 'object')
+				DOMTokenList.prototype.add.apply(td.classList, L.toArray(captionClasses[0]));
+		}
+
+		DOMTokenList.prototype.add.apply(table.classList, L.toArray(options.classes));
+	},
+
+	update: function(data, placeholder) {
+		var placeholder = placeholder || this.options.placeholder || _('No data', 'empty table placeholder'),
+		    sorting = this.getActiveSortState();
+
+		if (!Array.isArray(data))
+			return;
+
+		this.data = data;
+		this.placeholder = placeholder;
+
+		var n = 0,
+		    rows = this.node.querySelectorAll('tr, .tr'),
+		    trows = [],
+		    headings = [].slice.call(this.node.firstElementChild.querySelectorAll('th, .th')),
+		    captionClasses = this.options.captionClasses,
+		    trTag = (rows[0] && rows[0].nodeName == 'DIV') ? 'div' : 'tr',
+		    tdTag = (headings[0] && headings[0].nodeName == 'DIV') ? 'div' : 'td';
+
+		if (sorting) {
+			var list = data.map(L.bind(function(row) {
+				return [ this.deriveSortKey(row[sorting[0]], sorting[0]), row ];
+			}, this));
+
+			list.sort(function(a, b) {
+				return sorting[1]
+					? -L.naturalCompare(a[0], b[0])
+					: L.naturalCompare(a[0], b[0]);
+			});
+
+			data.length = 0;
+
+			list.forEach(function(item) {
+				data.push(item[1]);
+			});
+
+			headings.forEach(function(th, i) {
+				if (i == sorting[0])
+					th.setAttribute('data-sort-direction', sorting[1] ? 'desc' : 'asc');
+				else
+					th.removeAttribute('data-sort-direction');
+			});
+		}
+
+		data.forEach(function(row) {
+			trows[n] = E(trTag, { 'class': 'tr' });
+
+			for (var i = 0; i < headings.length; i++) {
+				var text = (headings[i].innerText || '').trim();
+				var raw_val = Array.isArray(row[i]) ? row[i][0] : null;
+				var disp_val = Array.isArray(row[i]) ? row[i][1] : row[i];
+				var td = trows[n].appendChild(E(tdTag, {
+					'class': 'td',
+					'data-title': (text !== '') ? text : null,
+					'data-value': raw_val
+				}, (disp_val != null) ? ((disp_val instanceof DocumentFragment) ? disp_val.cloneNode(true) : disp_val) : ''));
+
+				if (typeof(captionClasses) == 'object')
+					DOMTokenList.prototype.add.apply(td.classList, L.toArray(captionClasses[i]));
+
+				if (!td.classList.contains('cbi-section-actions'))
+					headings[i].setAttribute('data-sortable-row', true);
+			}
+
+			trows[n].classList.add('cbi-rowstyle-%d'.format((n++ % 2) ? 2 : 1));
+		});
+
+		for (var i = 0; i < n; i++) {
+			if (rows[i+1])
+				this.node.replaceChild(trows[i], rows[i+1]);
+			else
+				this.node.appendChild(trows[i]);
+		}
+
+		while (rows[++n])
+			this.node.removeChild(rows[n]);
+
+		if (placeholder && this.node.firstElementChild === this.node.lastElementChild) {
+			var trow = this.node.appendChild(E(trTag, { 'class': 'tr placeholder' })),
+			    td = trow.appendChild(E(tdTag, { 'class': 'td' }, placeholder));
+
+			if (typeof(captionClasses) == 'object')
+				DOMTokenList.prototype.add.apply(td.classList, L.toArray(captionClasses[0]));
+		}
+
+		return this.node;
+	},
+
+	render: function() {
+		return this.node;
+	},
+
+	/** @private */
+	initFromMarkup: function(node) {
+		if (!dom.elem(node))
+			node = document.querySelector(node);
+
+		if (!node)
+			throw 'Invalid table selector';
+
+		var options = {},
+		    headrow = node.querySelector('tr, .tr');
+
+		if (!headrow)
+			return;
+
+		options.id = node.id;
+		options.classes = [].slice.call(node.classList).filter(function(c) { return c != 'table' });
+		options.sortable = [];
+		options.captionClasses = [];
+
+		headrow.querySelectorAll('th, .th').forEach(function(th, i) {
+			options.sortable[i] = !th.classList.contains('cbi-section-actions');
+			options.captionClasses[i] = [].slice.call(th.classList).filter(function(c) { return c != 'th' });
+		});
+
+		headrow.addEventListener('click', UI.prototype.createHandlerFn(this, 'handleSort'));
+
+		this.id = node.id;
+		this.node = node;
+		this.options = options;
+	},
+
+	/** @private */
+	deriveSortKey: function(value, index) {
+		var opts = this.options || {},
+		    hint, m;
+
+		if (opts.sortable == true || opts.sortable == null)
+			hint = 'auto';
+		else if (typeof( opts.sortable) == 'object')
+			hint =  opts.sortable[index];
+
+		if (dom.elem(value)) {
+			if (value.hasAttribute('data-value'))
+				value = value.getAttribute('data-value');
+			else
+				value = (value.innerText || '').trim();
+		}
+
+		switch (hint || 'auto') {
+		case true:
+		case 'auto':
+			m = /^([0-9a-fA-F:.]+)(?:\/([0-9a-fA-F:.]+))?$/.exec(value);
+
+			if (m) {
+				var addr, mask;
+
+				addr = validation.parseIPv6(m[1]);
+				mask = m[2] ? validation.parseIPv6(m[2]) : null;
+
+				if (addr && mask != null)
+					return '%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x'.format(
+						addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6], addr[7],
+						mask[0], mask[1], mask[2], mask[3], mask[4], mask[5], mask[6], mask[7]
+					);
+				else if (addr)
+					return '%04x%04x%04x%04x%04x%04x%04x%04x%02x'.format(
+						addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6], addr[7],
+						m[2] ? +m[2] : 128
+					);
+
+				addr = validation.parseIPv4(m[1]);
+				mask = m[2] ? validation.parseIPv4(m[2]) : null;
+
+				if (addr && mask != null)
+					return '%03d%03d%03d%03d%03d%03d%03d%03d'.format(
+						addr[0], addr[1], addr[2], addr[3],
+						mask[0], mask[1], mask[2], mask[3]
+					);
+				else if (addr)
+					return '%03d%03d%03d%03d%02d'.format(
+						addr[0], addr[1], addr[2], addr[3],
+						m[2] ? +m[2] : 32
+					);
+			}
+
+			m = /^(?:(\d+)d )?(\d+)h (\d+)m (\d+)s$/.exec(value);
+
+			if (m)
+				return '%05d%02d%02d%02d'.format(+m[1], +m[2], +m[3], +m[4]);
+
+			m = /^(\d+)\b(\D*)$/.exec(value);
+
+			if (m)
+				return '%010d%s'.format(+m[1], m[2]);
+
+			return String(value);
+
+		case 'ignorecase':
+			return String(value).toLowerCase();
+
+		case 'numeric':
+			return +value;
+
+		default:
+			return String(value);
+		}
+	},
+
+	/** @private */
+	getActiveSortState: function() {
+		if (this.sortState)
+			return this.sortState;
+
+		if (!this.options.id)
+			return null;
+
+		var page = document.body.getAttribute('data-page'),
+		    key = page + '.' + this.options.id,
+		    state = session.getLocalData('tablesort');
+
+		if (L.isObject(state) && Array.isArray(state[key]))
+			return state[key];
+
+		return null;
+	},
+
+	/** @private */
+	setActiveSortState: function(index, descending) {
+		this.sortState = [ index, descending ];
+
+		if (!this.options.id)
+			return;
+
+		var page = document.body.getAttribute('data-page'),
+		    key = page + '.' + this.options.id,
+		    state = session.getLocalData('tablesort');
+
+		if (!L.isObject(state))
+			state = {};
+
+		state[key] = this.sortState;
+
+		session.setLocalData('tablesort', state);
+	},
+
+	/** @private */
+	handleSort: function(ev) {
+		if (!ev.target.matches('th[data-sortable-row]'))
+			return;
+
+		var index, direction;
+
+		this.node.firstElementChild.querySelectorAll('th, .th').forEach(function(th, i) {
+			if (th === ev.target) {
+				index = i;
+				direction = th.getAttribute('data-sort-direction') == 'asc';
+			}
+		});
+
+		this.setActiveSortState(index, direction);
+		this.update(this.data, this.placeholder);
+	}
+});
+
+/**
+ * @class ui
+ * @memberof LuCI
+ * @hideconstructor
+ * @classdesc
+ *
+ * Provides high level UI helper functionality.
+ * To import the class in views, use `'require ui'`, to import it in
+ * external JavaScript, use `L.require("ui").then(...)`.
+ */
+var UI = baseclass.extend(/** @lends LuCI.ui.prototype */ {
+	__init__: function() {
+		modalDiv = document.body.appendChild(
+			dom.create('div', {
+				id: 'modal_overlay',
+				tabindex: -1,
+				keydown: this.cancelModal
+			}, [
+				dom.create('div', {
+					class: 'modal',
+					role: 'dialog',
+					'aria-modal': true
+				})
+			]));
+
+		tooltipDiv = document.body.appendChild(
+			dom.create('div', { class: 'cbi-tooltip' }));
+
+		/* set up old aliases */
+		L.showModal = this.showModal;
+		L.hideModal = this.hideModal;
+		L.showTooltip = this.showTooltip;
+		L.hideTooltip = this.hideTooltip;
+		L.itemlist = this.itemlist;
+
+		document.addEventListener('mouseover', this.showTooltip.bind(this), true);
+		document.addEventListener('mouseout', this.hideTooltip.bind(this), true);
+		document.addEventListener('focus', this.showTooltip.bind(this), true);
+		document.addEventListener('blur', this.hideTooltip.bind(this), true);
+
+		document.addEventListener('luci-loaded', this.tabs.init.bind(this.tabs));
+		document.addEventListener('luci-loaded', this.changes.init.bind(this.changes));
+		document.addEventListener('uci-loaded', this.changes.init.bind(this.changes));
+	},
+
+	/**
+	 * Display a modal overlay dialog with the specified contents.
+	 *
+	 * The modal overlay dialog covers the current view preventing interaction
+	 * with the underlying view contents. Only one modal dialog instance can
+	 * be opened. Invoking showModal() while a modal dialog is already open will
+	 * replace the open dialog with a new one having the specified contents.
+	 *
+	 * Additional CSS class names may be passed to influence the appearence of
+	 * the dialog. Valid values for the classes depend on the underlying theme.
+	 *
+	 * @see LuCI.dom.content
+	 *
+	 * @param {string} [title]
+	 * The title of the dialog. If `null`, no title element will be rendered.
+	 *
+	 * @param {*} contents
+	 * The contents to add to the modal dialog. This should be a DOM node or
+	 * a document fragment in most cases. The value is passed as-is to the
+	 * `dom.content()` function - refer to its documentation for applicable
+	 * values.
+	 *
+	 * @param {...string} [classes]
+	 * A number of extra CSS class names which are set on the modal dialog
+	 * element.
+	 *
+	 * @returns {Node}
+	 * Returns a DOM Node representing the modal dialog element.
+	 */
+	showModal: function(title, children /* , ... */) {
+		var dlg = modalDiv.firstElementChild;
+
+		dlg.setAttribute('class', 'modal');
+
+		for (var i = 2; i < arguments.length; i++)
+			dlg.classList.add(arguments[i]);
+
+		dom.content(dlg, dom.create('h4', {}, title));
+		dom.append(dlg, children);
+
+		document.body.classList.add('modal-overlay-active');
+		modalDiv.scrollTop = 0;
+		modalDiv.focus();
+
+		return dlg;
+	},
+
+	/**
+	 * Close the open modal overlay dialog.
+	 *
+	 * This function will close an open modal dialog and restore the normal view
+	 * behaviour. It has no effect if no modal dialog is currently open.
+	 *
+	 * Note that this function is stand-alone, it does not rely on `this` and
+	 * will not invoke other class functions so it is suitable to be used as event
+	 * handler as-is without the need to bind it first.
+	 */
+	hideModal: function() {
+		document.body.classList.remove('modal-overlay-active');
+		modalDiv.blur();
+	},
+
+	/** @private */
+	cancelModal: function(ev) {
+		if (ev.key == 'Escape') {
+			var btn = modalDiv.querySelector('.right > button, .right > .btn');
+
+			if (btn)
+				btn.click();
+		}
+	},
+
+	/** @private */
+	showTooltip: function(ev) {
+		var target = findParent(ev.target, '[data-tooltip]');
+
+		if (!target)
+			return;
+
+		if (tooltipTimeout !== null) {
+			window.clearTimeout(tooltipTimeout);
+			tooltipTimeout = null;
+		}
+
+		var rect = target.getBoundingClientRect(),
+		    x = rect.left              + window.pageXOffset,
+		    y = rect.top + rect.height + window.pageYOffset,
+		    above = false;
+
+		tooltipDiv.className = 'cbi-tooltip';
+		tooltipDiv.innerHTML = '▲ ';
+		tooltipDiv.firstChild.data += target.getAttribute('data-tooltip');
+
+		if (target.hasAttribute('data-tooltip-style'))
+			tooltipDiv.classList.add(target.getAttribute('data-tooltip-style'));
+
+		if ((y + tooltipDiv.offsetHeight) > (window.innerHeight + window.pageYOffset))
+			above = true;
+
+		var dropdown = target.querySelector('ul.dropdown[style]:first-child');
+
+		if (dropdown && dropdown.style.top)
+			above = true;
+
+		if (above) {
+			y -= (tooltipDiv.offsetHeight + target.offsetHeight);
+			tooltipDiv.firstChild.data = '▼ ' + tooltipDiv.firstChild.data.substr(2);
+		}
+
+		tooltipDiv.style.top = y + 'px';
+		tooltipDiv.style.left = x + 'px';
+		tooltipDiv.style.opacity = 1;
+
+		tooltipDiv.dispatchEvent(new CustomEvent('tooltip-open', {
+			bubbles: true,
+			detail: { target: target }
+		}));
+	},
+
+	/** @private */
+	hideTooltip: function(ev) {
+		if (ev.target === tooltipDiv || ev.relatedTarget === tooltipDiv ||
+		    tooltipDiv.contains(ev.target) || tooltipDiv.contains(ev.relatedTarget))
+			return;
+
+		if (tooltipTimeout !== null) {
+			window.clearTimeout(tooltipTimeout);
+			tooltipTimeout = null;
+		}
+
+		tooltipDiv.style.opacity = 0;
+		tooltipTimeout = window.setTimeout(function() { tooltipDiv.removeAttribute('style'); }, 250);
+
+		tooltipDiv.dispatchEvent(new CustomEvent('tooltip-close', { bubbles: true }));
+	},
+
+	/**
+	 * Add a notification banner at the top of the current view.
+	 *
+	 * A notification banner is an alert message usually displayed at the
+	 * top of the current view, spanning the entire availibe width.
+	 * Notification banners will stay in place until dismissed by the user.
+	 * Multiple banners may be shown at the same time.
+	 *
+	 * Additional CSS class names may be passed to influence the appearence of
+	 * the banner. Valid values for the classes depend on the underlying theme.
+	 *
+	 * @see LuCI.dom.content
+	 *
+	 * @param {string} [title]
+	 * The title of the notification banner. If `null`, no title element
+	 * will be rendered.
+	 *
+	 * @param {*} contents
+	 * The contents to add to the notification banner. This should be a DOM
+	 * node or a document fragment in most cases. The value is passed as-is
+	 * to the `dom.content()` function - refer to its documentation for
+	 * applicable values.
+	 *
+	 * @param {...string} [classes]
+	 * A number of extra CSS class names which are set on the notification
+	 * banner element.
+	 *
+	 * @returns {Node}
+	 * Returns a DOM Node representing the notification banner element.
+	 */
+	addNotification: function(title, children /*, ... */) {
+		var mc = document.querySelector('#maincontent') || document.body;
+		var msg = E('div', {
+			'class': 'alert-message fade-in',
+			'style': 'display:flex',
+			'transitionend': function(ev) {
+				var node = ev.currentTarget;
+				if (node.parentNode && node.classList.contains('fade-out'))
+					node.parentNode.removeChild(node);
+			}
+		}, [
+			E('div', { 'style': 'flex:10' }),
+			E('div', { 'style': 'flex:1 1 auto; display:flex' }, [
+				E('button', {
+					'class': 'btn',
+					'style': 'margin-left:auto; margin-top:auto',
+					'click': function(ev) {
+						dom.parent(ev.target, '.alert-message').classList.add('fade-out');
+					},
+
+				}, [ _('Dismiss') ])
+			])
+		]);
+
+		if (title != null)
+			dom.append(msg.firstElementChild, E('h4', {}, title));
+
+		dom.append(msg.firstElementChild, children);
+
+		for (var i = 2; i < arguments.length; i++)
+			msg.classList.add(arguments[i]);
+
+		mc.insertBefore(msg, mc.firstElementChild);
+
+		return msg;
+	},
+
+	/**
+	 * Display or update an header area indicator.
+	 *
+	 * An indicator is a small label displayed in the header area of the screen
+	 * providing few amounts of status information such as item counts or state
+	 * toggle indicators.
+	 *
+	 * Multiple indicators may be shown at the same time and indicator labels
+	 * may be made clickable to display extended information or to initiate
+	 * further actions.
+	 *
+	 * Indicators can either use a default `active` or a less accented `inactive`
+	 * style which is useful for indicators representing state toggles.
+	 *
+	 * @param {string} id
+	 * The ID of the indicator. If an indicator with the given ID already exists,
+	 * it is updated with the given label and style.
+	 *
+	 * @param {string} label
+	 * The text to display in the indicator label.
+	 *
+	 * @param {function} [handler]
+	 * A handler function to invoke when the indicator label is clicked/touched
+	 * by the user. If omitted, the indicator is not clickable/touchable.
+	 *
+	 * Note that this parameter only applies to new indicators, when updating
+	 * existing labels it is ignored.
+	 *
+	 * @param {string} [style=active]
+	 * The indicator style to use. May be either `active` or `inactive`.
+	 *
+	 * @returns {boolean}
+	 * Returns `true` when the indicator has been updated or `false` when no
+	 * changes were made.
+	 */
+	showIndicator: function(id, label, handler, style) {
+		if (indicatorDiv == null) {
+			indicatorDiv = document.body.querySelector('#indicators');
+
+			if (indicatorDiv == null)
+				return false;
+		}
+
+		var handlerFn = (typeof(handler) == 'function') ? handler : null,
+		    indicatorElem = indicatorDiv.querySelector('span[data-indicator="%s"]'.format(id));
+
+		if (indicatorElem == null) {
+			var beforeElem = null;
+
+			for (beforeElem = indicatorDiv.firstElementChild;
+			     beforeElem != null;
+			     beforeElem = beforeElem.nextElementSibling)
+				if (beforeElem.getAttribute('data-indicator') > id)
+					break;
+
+			indicatorElem = indicatorDiv.insertBefore(E('span', {
+				'data-indicator': id,
+				'data-clickable': handlerFn ? true : null,
+				'click': handlerFn
+			}, ['']), beforeElem);
+		}
+
+		if (label == indicatorElem.firstChild.data && style == indicatorElem.getAttribute('data-style'))
+			return false;
+
+		indicatorElem.firstChild.data = label;
+		indicatorElem.setAttribute('data-style', (style == 'inactive') ? 'inactive' : 'active');
+		return true;
+	},
+
+	/**
+	 * Remove an header area indicator.
+	 *
+	 * This function removes the given indicator label from the header indicator
+	 * area. When the given indicator is not found, this function does nothing.
+	 *
+	 * @param {string} id
+	 * The ID of the indicator to remove.
+	 *
+	 * @returns {boolean}
+	 * Returns `true` when the indicator has been removed or `false` when the
+	 * requested indicator was not found.
+	 */
+	hideIndicator: function(id) {
+		var indicatorElem = indicatorDiv ? indicatorDiv.querySelector('span[data-indicator="%s"]'.format(id)) : null;
+
+		if (indicatorElem == null)
+			return false;
+
+		indicatorDiv.removeChild(indicatorElem);
+		return true;
+	},
+
+	/**
+	 * Formats a series of label/value pairs into list-like markup.
+	 *
+	 * This function transforms a flat array of alternating label and value
+	 * elements into a list-like markup, using the values in `separators` as
+	 * separators and appends the resulting nodes to the given parent DOM node.
+	 *
+	 * Each label is suffixed with `: ` and wrapped into a `<strong>` tag, the
+	 * `<strong>` element and the value corresponding to the label are
+	 * subsequently wrapped into a `<span class="nowrap">` element.
+	 *
+	 * The resulting `<span>` element tuples are joined by the given separators
+	 * to form the final markup which is appened to the given parent DOM node.
+	 *
+	 * @param {Node} node
+	 * The parent DOM node to append the markup to. Any previous child elements
+	 * will be removed.
+	 *
+	 * @param {Array<*>} items
+	 * An alternating array of labels and values. The label values will be
+	 * converted to plain strings, the values are used as-is and may be of
+	 * any type accepted by `LuCI.dom.content()`.
+	 *
+	 * @param {*|Array<*>} [separators=[E('br')]]
+	 * A single value or an array of separator values to separate each
+	 * label/value pair with. The function will cycle through the separators
+	 * when joining the pairs. If omitted, the default separator is a sole HTML
+	 * `<br>` element. Separator values are used as-is and may be of any type
+	 * accepted by `LuCI.dom.content()`.
+	 *
+	 * @returns {Node}
+	 * Returns the parent DOM node the formatted markup has been added to.
+	 */
+	itemlist: function(node, items, separators) {
+		var children = [];
+
+		if (!Array.isArray(separators))
+			separators = [ separators || E('br') ];
+
+		for (var i = 0; i < items.length; i += 2) {
+			if (items[i+1] !== null && items[i+1] !== undefined) {
+				var sep = separators[(i/2) % separators.length],
+				    cld = [];
+
+				children.push(E('span', { class: 'nowrap' }, [
+					items[i] ? E('strong', items[i] + ': ') : '',
+					items[i+1]
+				]));
+
+				if ((i+2) < items.length)
+					children.push(dom.elem(sep) ? sep.cloneNode(true) : sep);
+			}
+		}
+
+		dom.content(node, children);
+
+		return node;
+	},
+
+	/**
+	 * @class
+	 * @memberof LuCI.ui
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `tabs` class handles tab menu groups used throughout the view area.
+	 * It takes care of setting up tab groups, tracking their state and handling
+	 * related events.
+	 *
+	 * This class is automatically instantiated as part of `LuCI.ui`. To use it
+	 * in views, use `'require ui'` and refer to `ui.tabs`. To import it in
+	 * external JavaScript, use `L.require("ui").then(...)` and access the
+	 * `tabs` property of the class instance value.
+	 */
+	tabs: baseclass.singleton(/* @lends LuCI.ui.tabs.prototype */ {
+		/** @private */
+		init: function() {
+			var groups = [], prevGroup = null, currGroup = null;
+
+			document.querySelectorAll('[data-tab]').forEach(function(tab) {
+				var parent = tab.parentNode;
+
+				if (dom.matches(tab, 'li') && dom.matches(parent, 'ul.cbi-tabmenu'))
+					return;
+
+				if (!parent.hasAttribute('data-tab-group'))
+					parent.setAttribute('data-tab-group', groups.length);
+
+				currGroup = +parent.getAttribute('data-tab-group');
+
+				if (currGroup !== prevGroup) {
+					prevGroup = currGroup;
+
+					if (!groups[currGroup])
+						groups[currGroup] = [];
+				}
+
+				groups[currGroup].push(tab);
+			});
+
+			for (var i = 0; i < groups.length; i++)
+				this.initTabGroup(groups[i]);
+
+			document.addEventListener('dependency-update', this.updateTabs.bind(this));
+
+			this.updateTabs();
+		},
+
+		/**
+		 * Initializes a new tab group from the given tab pane collection.
+		 *
+		 * This function cycles through the given tab pane DOM nodes, extracts
+		 * their tab IDs, titles and active states, renders a corresponding
+		 * tab menu and prepends it to the tab panes common parent DOM node.
+		 *
+		 * The tab menu labels will be set to the value of the `data-tab-title`
+		 * attribute of each corresponding pane. The last pane with the
+		 * `data-tab-active` attribute set to `true` will be selected by default.
+		 *
+		 * If no pane is marked as active, the first one will be preselected.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.tabs
+		 * @param {Array<Node>|NodeList} panes
+		 * A collection of tab panes to build a tab group menu for. May be a
+		 * plain array of DOM nodes or a NodeList collection, such as the result
+		 * of a `querySelectorAll()` call or the `.childNodes` property of a
+		 * DOM node.
+		 */
+		initTabGroup: function(panes) {
+			if (typeof(panes) != 'object' || !('length' in panes) || panes.length === 0)
+				return;
+
+			var menu = E('ul', { 'class': 'cbi-tabmenu' }),
+			    group = panes[0].parentNode,
+			    groupId = +group.getAttribute('data-tab-group'),
+			    selected = null;
+
+			if (group.getAttribute('data-initialized') === 'true')
+				return;
+
+			for (var i = 0, pane; pane = panes[i]; i++) {
+				var name = pane.getAttribute('data-tab'),
+				    title = pane.getAttribute('data-tab-title'),
+				    active = pane.getAttribute('data-tab-active') === 'true';
+
+				menu.appendChild(E('li', {
+					'style': this.isEmptyPane(pane) ? 'display:none' : null,
+					'class': active ? 'cbi-tab' : 'cbi-tab-disabled',
+					'data-tab': name
+				}, E('a', {
+					'href': '#',
+					'click': this.switchTab.bind(this)
+				}, title)));
+
+				if (active)
+					selected = i;
+			}
+
+			group.parentNode.insertBefore(menu, group);
+			group.setAttribute('data-initialized', true);
+
+			if (selected === null) {
+				selected = this.getActiveTabId(panes[0]);
+
+				if (selected < 0 || selected >= panes.length || this.isEmptyPane(panes[selected])) {
+					for (var i = 0; i < panes.length; i++) {
+						if (!this.isEmptyPane(panes[i])) {
+							selected = i;
+							break;
+						}
+					}
+				}
+
+				menu.childNodes[selected].classList.add('cbi-tab');
+				menu.childNodes[selected].classList.remove('cbi-tab-disabled');
+				panes[selected].setAttribute('data-tab-active', 'true');
+
+				this.setActiveTabId(panes[selected], selected);
+			}
+
+			requestAnimationFrame(L.bind(function(pane) {
+				pane.dispatchEvent(new CustomEvent('cbi-tab-active', {
+					detail: { tab: pane.getAttribute('data-tab') }
+				}));
+			}, this, panes[selected]));
+
+			this.updateTabs(group);
+		},
+
+		/**
+		 * Checks whether the given tab pane node is empty.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.tabs
+		 * @param {Node} pane
+		 * The tab pane to check.
+		 *
+		 * @returns {boolean}
+		 * Returns `true` if the pane is empty, else `false`.
+		 */
+		isEmptyPane: function(pane) {
+			return dom.isEmpty(pane, function(n) { return n.classList.contains('cbi-tab-descr') });
+		},
+
+		/** @private */
+		getPathForPane: function(pane) {
+			var path = [], node = null;
+
+			for (node = pane ? pane.parentNode : null;
+			     node != null && node.hasAttribute != null;
+			     node = node.parentNode)
+			{
+				if (node.hasAttribute('data-tab'))
+					path.unshift(node.getAttribute('data-tab'));
+				else if (node.hasAttribute('data-section-id'))
+					path.unshift(node.getAttribute('data-section-id'));
+			}
+
+			return path.join('/');
+		},
+
+		/** @private */
+		getActiveTabState: function() {
+			var page = document.body.getAttribute('data-page'),
+			    state = session.getLocalData('tab');
+
+			if (L.isObject(state) && state.page === page && L.isObject(state.paths))
+				return state;
+
+			session.setLocalData('tab', null);
+
+			return { page: page, paths: {} };
+		},
+
+		/** @private */
+		getActiveTabId: function(pane) {
+			var path = this.getPathForPane(pane);
+			return +this.getActiveTabState().paths[path] || 0;
+		},
+
+		/** @private */
+		setActiveTabId: function(pane, tabIndex) {
+			var path = this.getPathForPane(pane),
+			    state = this.getActiveTabState();
+
+			state.paths[path] = tabIndex;
+
+			return session.setLocalData('tab', state);
+		},
+
+		/** @private */
+		updateTabs: function(ev, root) {
+			(root || document).querySelectorAll('[data-tab-title]').forEach(L.bind(function(pane) {
+				var menu = pane.parentNode.previousElementSibling,
+				    tab = menu ? menu.querySelector('[data-tab="%s"]'.format(pane.getAttribute('data-tab'))) : null,
+				    n_errors = pane.querySelectorAll('.cbi-input-invalid').length;
+
+				if (!menu || !tab)
+					return;
+
+				if (this.isEmptyPane(pane)) {
+					tab.style.display = 'none';
+					tab.classList.remove('flash');
+				}
+				else if (tab.style.display === 'none') {
+					tab.style.display = '';
+					requestAnimationFrame(function() { tab.classList.add('flash') });
+				}
+
+				if (n_errors) {
+					tab.setAttribute('data-errors', n_errors);
+					tab.setAttribute('data-tooltip', _('%d invalid field(s)').format(n_errors));
+					tab.setAttribute('data-tooltip-style', 'error');
+				}
+				else {
+					tab.removeAttribute('data-errors');
+					tab.removeAttribute('data-tooltip');
+				}
+			}, this));
+		},
+
+		/** @private */
+		switchTab: function(ev) {
+			var tab = ev.target.parentNode,
+			    name = tab.getAttribute('data-tab'),
+			    menu = tab.parentNode,
+			    group = menu.nextElementSibling,
+			    groupId = +group.getAttribute('data-tab-group'),
+			    index = 0;
+
+			ev.preventDefault();
+
+			if (!tab.classList.contains('cbi-tab-disabled'))
+				return;
+
+			menu.querySelectorAll('[data-tab]').forEach(function(tab) {
+				tab.classList.remove('cbi-tab');
+				tab.classList.remove('cbi-tab-disabled');
+				tab.classList.add(
+					tab.getAttribute('data-tab') === name ? 'cbi-tab' : 'cbi-tab-disabled');
+			});
+
+			group.childNodes.forEach(function(pane) {
+				if (dom.matches(pane, '[data-tab]')) {
+					if (pane.getAttribute('data-tab') === name) {
+						pane.setAttribute('data-tab-active', 'true');
+						pane.dispatchEvent(new CustomEvent('cbi-tab-active', { detail: { tab: name } }));
+						UI.prototype.tabs.setActiveTabId(pane, index);
+					}
+					else {
+						pane.setAttribute('data-tab-active', 'false');
+					}
+
+					index++;
+				}
+			});
+		}
+	}),
+
+	/**
+	 * @typedef {Object} FileUploadReply
+	 * @memberof LuCI.ui
+
+	 * @property {string} name - Name of the uploaded file without directory components
+	 * @property {number} size - Size of the uploaded file in bytes
+	 * @property {string} checksum - The MD5 checksum of the received file data
+	 * @property {string} sha256sum - The SHA256 checksum of the received file data
+	 */
+
+	/**
+	 * Display a modal file upload prompt.
+	 *
+	 * This function opens a modal dialog prompting the user to select and
+	 * upload a file to a predefined remote destination path.
+	 *
+	 * @param {string} path
+	 * The remote file path to upload the local file to.
+	 *
+	 * @param {Node} [progessStatusNode]
+	 * An optional DOM text node whose content text is set to the progress
+	 * percentage value during file upload.
+	 *
+	 * @returns {Promise<LuCI.ui.FileUploadReply>}
+	 * Returns a promise resolving to a file upload status object on success
+	 * or rejecting with an error in case the upload failed or has been
+	 * cancelled by the user.
+	 */
+	uploadFile: function(path, progressStatusNode) {
+		return new Promise(function(resolveFn, rejectFn) {
+			UI.prototype.showModal(_('Uploading file…'), [
+				E('p', _('Please select the file to upload.')),
+				E('div', { 'style': 'display:flex' }, [
+					E('div', { 'class': 'left', 'style': 'flex:1' }, [
+						E('input', {
+							type: 'file',
+							style: 'display:none',
+							change: function(ev) {
+								var modal = dom.parent(ev.target, '.modal'),
+								    body = modal.querySelector('p'),
+								    upload = modal.querySelector('.cbi-button-action.important'),
+								    file = ev.currentTarget.files[0];
+
+								if (file == null)
+									return;
+
+								dom.content(body, [
+									E('ul', {}, [
+										E('li', {}, [ '%s: %s'.format(_('Name'), file.name.replace(/^.*[\\\/]/, '')) ]),
+										E('li', {}, [ '%s: %1024mB'.format(_('Size'), file.size) ])
+									])
+								]);
+
+								upload.disabled = false;
+								upload.focus();
+							}
+						}),
+						E('button', {
+							'class': 'btn',
+							'click': function(ev) {
+								ev.target.previousElementSibling.click();
+							}
+						}, [ _('Browse…') ])
+					]),
+					E('div', { 'class': 'right', 'style': 'flex:1' }, [
+						E('button', {
+							'class': 'btn',
+							'click': function() {
+								UI.prototype.hideModal();
+								rejectFn(new Error(_('Upload has been cancelled')));
+							}
+						}, [ _('Cancel') ]),
+						' ',
+						E('button', {
+							'class': 'btn cbi-button-action important',
+							'disabled': true,
+							'click': function(ev) {
+								var input = dom.parent(ev.target, '.modal').querySelector('input[type="file"]');
+
+								if (!input.files[0])
+									return;
+
+								var progress = E('div', { 'class': 'cbi-progressbar', 'title': '0%' }, E('div', { 'style': 'width:0' }));
+
+								UI.prototype.showModal(_('Uploading file…'), [ progress ]);
+
+								var data = new FormData();
+
+								data.append('sessionid', rpc.getSessionID());
+								data.append('filename', path);
+								data.append('filedata', input.files[0]);
+
+								var filename = input.files[0].name;
+
+								request.post(L.env.cgi_base + '/cgi-upload', data, {
+									timeout: 0,
+									progress: function(pev) {
+										var percent = (pev.loaded / pev.total) * 100;
+
+										if (progressStatusNode)
+											progressStatusNode.data = '%.2f%%'.format(percent);
+
+										progress.setAttribute('title', '%.2f%%'.format(percent));
+										progress.firstElementChild.style.width = '%.2f%%'.format(percent);
+									}
+								}).then(function(res) {
+									var reply = res.json();
+
+									UI.prototype.hideModal();
+
+									if (L.isObject(reply) && reply.failure) {
+										UI.prototype.addNotification(null, E('p', _('Upload request failed: %s').format(reply.message)));
+										rejectFn(new Error(reply.failure));
+									}
+									else {
+										reply.name = filename;
+										resolveFn(reply);
+									}
+								}, function(err) {
+									UI.prototype.hideModal();
+									rejectFn(err);
+								});
+							}
+						}, [ _('Upload') ])
+					])
+				])
+			]);
+		});
+	},
+
+	/**
+	 * Perform a device connectivity test.
+	 *
+	 * Attempt to fetch a well known ressource from the remote device via HTTP
+	 * in order to test connectivity. This function is mainly useful to wait
+	 * for the router to come back online after a reboot or reconfiguration.
+	 *
+	 * @param {string} [proto=http]
+	 * The protocol to use for fetching the resource. May be either `http`
+	 * (the default) or `https`.
+	 *
+	 * @param {string} [host=window.location.host]
+	 * Override the host address to probe. By default the current host as seen
+	 * in the address bar is probed.
+	 *
+	 * @returns {Promise<Event>}
+	 * Returns a promise resolving to a `load` event in case the device is
+	 * reachable or rejecting with an `error` event in case it is not reachable
+	 * or rejecting with `null` when the connectivity check timed out.
+	 */
+	pingDevice: function(proto, ipaddr) {
+		var target = '%s://%s%s?%s'.format(proto || 'http', ipaddr || window.location.host, L.resource('icons/loading.gif'), Math.random());
+
+		return new Promise(function(resolveFn, rejectFn) {
+			var img = new Image();
+
+			img.onload = resolveFn;
+			img.onerror = rejectFn;
+
+			window.setTimeout(rejectFn, 1000);
+
+			img.src = target;
+		});
+	},
+
+	/**
+	 * Wait for device to come back online and reconnect to it.
+	 *
+	 * Poll each given hostname or IP address and navigate to it as soon as
+	 * one of the addresses becomes reachable.
+	 *
+	 * @param {...string} [hosts=[window.location.host]]
+	 * The list of IP addresses and host names to check for reachability.
+	 * If omitted, the current value of `window.location.host` is used by
+	 * default.
+	 */
+	awaitReconnect: function(/* ... */) {
+		var ipaddrs = arguments.length ? arguments : [ window.location.host ];
+
+		window.setTimeout(L.bind(function() {
+			poll.add(L.bind(function() {
+				var tasks = [], reachable = false;
+
+				for (var i = 0; i < 2; i++)
+					for (var j = 0; j < ipaddrs.length; j++)
+						tasks.push(this.pingDevice(i ? 'https' : 'http', ipaddrs[j])
+							.then(function(ev) { reachable = ev.target.src.replace(/^(https?:\/\/[^\/]+).*$/, '$1/') }, function() {}));
+
+				return Promise.all(tasks).then(function() {
+					if (reachable) {
+						poll.stop();
+						window.location = reachable;
+					}
+				});
+			}, this));
+		}, this), 5000);
+	},
+
+	/**
+	 * @class
+	 * @memberof LuCI.ui
+	 * @hideconstructor
+	 * @classdesc
+	 *
+	 * The `changes` class encapsulates logic for visualizing, applying,
+	 * confirming and reverting staged UCI changesets.
+	 *
+	 * This class is automatically instantiated as part of `LuCI.ui`. To use it
+	 * in views, use `'require ui'` and refer to `ui.changes`. To import it in
+	 * external JavaScript, use `L.require("ui").then(...)` and access the
+	 * `changes` property of the class instance value.
+	 */
+	changes: baseclass.singleton(/* @lends LuCI.ui.changes.prototype */ {
+		init: function() {
+			if (!L.env.sessionid)
+				return;
+
+			return uci.changes().then(L.bind(this.renderChangeIndicator, this));
+		},
+
+		/**
+		 * Set the change count indicator.
+		 *
+		 * This function updates or hides the UCI change count indicator,
+		 * depending on the passed change count. When the count is greater
+		 * than 0, the change indicator is displayed or updated, otherwise it
+		 * is removed.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.changes
+		 * @param {number} numChanges
+		 * The number of changes to indicate.
+		 */
+		setIndicator: function(n) {
+			if (n > 0) {
+				UI.prototype.showIndicator('uci-changes',
+					'%s: %d'.format(_('Unsaved Changes'), n),
+					L.bind(this.displayChanges, this));
+			}
+			else {
+				UI.prototype.hideIndicator('uci-changes');
+			}
+		},
+
+		/**
+		 * Update the change count indicator.
+		 *
+		 * This function updates the UCI change count indicator from the given
+		 * UCI changeset structure.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.changes
+		 * @param {Object<string, Array<LuCI.uci.ChangeRecord>>} changes
+		 * The UCI changeset to count.
+		 */
+		renderChangeIndicator: function(changes) {
+			var n_changes = 0;
+
+			for (var config in changes)
+				if (changes.hasOwnProperty(config))
+					n_changes += changes[config].length;
+
+			this.changes = changes;
+			this.setIndicator(n_changes);
+		},
+
+		/** @private */
+		changeTemplates: {
+			'add-3':      '<ins>uci add %0 <strong>%3</strong> # =%2</ins>',
+			'set-3':      '<ins>uci set %0.<strong>%2</strong>=%3</ins>',
+			'set-4':      '<var><ins>uci set %0.%2.%3=<strong>%4</strong></ins></var>',
+			'remove-2':   '<del>uci del %0.<strong>%2</strong></del>',
+			'remove-3':   '<var><del>uci del %0.%2.<strong>%3</strong></del></var>',
+			'order-3':    '<var>uci reorder %0.%2=<strong>%3</strong></var>',
+			'list-add-4': '<var><ins>uci add_list %0.%2.%3=<strong>%4</strong></ins></var>',
+			'list-del-4': '<var><del>uci del_list %0.%2.%3=<strong>%4</strong></del></var>',
+			'rename-3':   '<var>uci rename %0.%2=<strong>%3</strong></var>',
+			'rename-4':   '<var>uci rename %0.%2.%3=<strong>%4</strong></var>'
+		},
+
+		/**
+		 * Display the current changelog.
+		 *
+		 * Open a modal dialog visualizing the currently staged UCI changes
+		 * and offer options to revert or apply the shown changes.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.changes
+		 */
+		displayChanges: function() {
+			var list = E('div', { 'class': 'uci-change-list' }),
+			    dlg = UI.prototype.showModal(_('Configuration') + ' / ' + _('Changes'), [
+				E('div', { 'class': 'cbi-section' }, [
+					E('strong', _('Legend:')),
+					E('div', { 'class': 'uci-change-legend' }, [
+						E('div', { 'class': 'uci-change-legend-label' }, [
+							E('ins', '&#160;'), ' ', _('Section added') ]),
+						E('div', { 'class': 'uci-change-legend-label' }, [
+							E('del', '&#160;'), ' ', _('Section removed') ]),
+						E('div', { 'class': 'uci-change-legend-label' }, [
+							E('var', {}, E('ins', '&#160;')), ' ', _('Option changed') ]),
+						E('div', { 'class': 'uci-change-legend-label' }, [
+							E('var', {}, E('del', '&#160;')), ' ', _('Option removed') ])]),
+					E('br'), list,
+					E('div', { 'class': 'right' }, [
+						E('button', {
+							'class': 'btn',
+							'click': UI.prototype.hideModal
+						}, [ _('Close') ]), ' ',
+						new UIComboButton('0', {
+							0: [ _('Save & Apply') ],
+							1: [ _('Apply unchecked') ]
+						}, {
+							classes: {
+								0: 'btn cbi-button cbi-button-positive important',
+								1: 'btn cbi-button cbi-button-negative important'
+							},
+							click: L.bind(function(ev, mode) { this.apply(mode == '0') }, this)
+						}).render(), ' ',
+						E('button', {
+							'class': 'cbi-button cbi-button-reset',
+							'click': L.bind(this.revert, this)
+						}, [ _('Revert') ])])])
+			]);
+
+			for (var config in this.changes) {
+				if (!this.changes.hasOwnProperty(config))
+					continue;
+
+				list.appendChild(E('h5', '# /etc/config/%s'.format(config)));
+
+				for (var i = 0, added = null; i < this.changes[config].length; i++) {
+					var chg = this.changes[config][i],
+					    tpl = this.changeTemplates['%s-%d'.format(chg[0], chg.length)];
+
+					list.appendChild(E(tpl.replace(/%([01234])/g, function(m0, m1) {
+						switch (+m1) {
+						case 0:
+							return config;
+
+						case 2:
+							if (added != null && chg[1] == added[0])
+								return '@' + added[1] + '[-1]';
+							else
+								return chg[1];
+
+						case 4:
+							return "'%h'".format(chg[3].replace(/'/g, "'\"'\"'"));
+
+						default:
+							return chg[m1-1];
+						}
+					})));
+
+					if (chg[0] == 'add')
+						added = [ chg[1], chg[2] ];
+				}
+			}
+
+			list.appendChild(E('br'));
+			dlg.classList.add('uci-dialog');
+		},
+
+		/** @private */
+		displayStatus: function(type, content) {
+			if (type) {
+				var message = UI.prototype.showModal('', '');
+
+				message.classList.add('alert-message');
+				DOMTokenList.prototype.add.apply(message.classList, type.split(/\s+/));
+
+				if (content)
+					dom.content(message, content);
+
+				if (!this.was_polling) {
+					this.was_polling = request.poll.active();
+					request.poll.stop();
+				}
+			}
+			else {
+				UI.prototype.hideModal();
+
+				if (this.was_polling)
+					request.poll.start();
+			}
+		},
+
+		/** @private */
+		checkConnectivityAffected: function() {
+			return L.resolveDefault(fs.exec_direct('/usr/libexec/luci-peeraddr', null, 'json')).then(L.bind(function(info) {
+				if (L.isObject(info) && Array.isArray(info.inbound_interfaces)) {
+					for (var i = 0; i < info.inbound_interfaces.length; i++) {
+						var iif = info.inbound_interfaces[i];
+
+						for (var j = 0; this.changes && this.changes.network && j < this.changes.network.length; j++) {
+							var chg = this.changes.network[j];
+
+							if (chg[0] == 'set' && chg[1] == iif &&
+								((chg[2] == 'disabled' && chg[3] == '1') || chg[2] == 'proto' || chg[2] == 'ipaddr' || chg[2] == 'netmask'))
+								return iif;
+						}
+					}
+				}
+
+				return null;
+			}, this));
+		},
+
+		/** @private */
+		rollback: function(checked) {
+			if (checked) {
+				this.displayStatus('warning spinning',
+					E('p', _('Failed to confirm apply within %ds, waiting for rollback…')
+						.format(L.env.apply_rollback)));
+
+				var call = function(r) {
+					if (r.status === 204) {
+						UI.prototype.changes.displayStatus('warning', [
+							E('h4', _('Configuration changes have been rolled back!')),
+							E('p', _('The device could not be reached within %d seconds after applying the pending changes, which caused the configuration to be rolled back for safety reasons. If you believe that the configuration changes are correct nonetheless, perform an unchecked configuration apply. Alternatively, you can dismiss this warning and edit changes before attempting to apply again, or revert all pending changes to keep the currently working configuration state.').format(L.env.apply_rollback)),
+							E('div', { 'class': 'right' }, [
+								E('button', {
+									'class': 'btn',
+									'click': L.bind(UI.prototype.changes.displayStatus, UI.prototype.changes, false)
+								}, [ _('Dismiss') ]), ' ',
+								E('button', {
+									'class': 'btn cbi-button-action important',
+									'click': L.bind(UI.prototype.changes.revert, UI.prototype.changes)
+								}, [ _('Revert changes') ]), ' ',
+								E('button', {
+									'class': 'btn cbi-button-negative important',
+									'click': L.bind(UI.prototype.changes.apply, UI.prototype.changes, false)
+								}, [ _('Apply unchecked') ])
+							])
+						]);
+
+						return;
+					}
+
+					var delay = isNaN(r.duration) ? 0 : Math.max(1000 - r.duration, 0);
+					window.setTimeout(function() {
+						request.request(L.url('admin/uci/confirm'), {
+							method: 'post',
+							timeout: L.env.apply_timeout * 1000,
+							query: { sid: L.env.sessionid, token: L.env.token }
+						}).then(call, call.bind(null, { status: 0, duration: 0 }));
+					}, delay);
+				};
+
+				call({ status: 0 });
+			}
+			else {
+				this.displayStatus('warning', [
+					E('h4', _('Device unreachable!')),
+					E('p', _('Could not regain access to the device after applying the configuration changes. You might need to reconnect if you modified network related settings such as the IP address or wireless security credentials.'))
+				]);
+			}
+		},
+
+		/** @private */
+		confirm: function(checked, deadline, override_token) {
+			var tt;
+			var ts = Date.now();
+
+			this.displayStatus('notice');
+
+			if (override_token)
+				this.confirm_auth = { token: override_token };
+
+			var call = function(r) {
+				if (Date.now() >= deadline) {
+					window.clearTimeout(tt);
+					UI.prototype.changes.rollback(checked);
+					return;
+				}
+				else if (r.status === 200 || r.status === 204) {
+					document.dispatchEvent(new CustomEvent('uci-applied'));
+
+					UI.prototype.changes.setIndicator(0);
+					UI.prototype.changes.displayStatus('notice',
+						E('p', _('Configuration changes applied.')));
+
+					window.clearTimeout(tt);
+					window.setTimeout(function() {
+						//UI.prototype.changes.displayStatus(false);
+						window.location = window.location.href.split('#')[0];
+					}, L.env.apply_display * 1000);
+
+					return;
+				}
+
+				var delay = isNaN(r.duration) ? 0 : Math.max(1000 - r.duration, 0);
+				window.setTimeout(function() {
+					request.request(L.url('admin/uci/confirm'), {
+						method: 'post',
+						timeout: L.env.apply_timeout * 1000,
+						query: UI.prototype.changes.confirm_auth
+					}).then(call, call.bind(null, { status: 0, duration: 0 }));
+				}, delay);
+			};
+
+			var tick = function() {
+				var now = Date.now();
+
+				UI.prototype.changes.displayStatus('notice spinning',
+					E('p', _('Applying configuration changes… %ds')
+						.format(Math.max(Math.floor((deadline - Date.now()) / 1000), 0))));
+
+				if (now >= deadline)
+					return;
+
+				tt = window.setTimeout(tick, 1000 - (now - ts));
+				ts = now;
+			};
+
+			tick();
+
+			/* wait a few seconds for the settings to become effective */
+			window.setTimeout(call.bind(null, { status: 0 }), L.env.apply_holdoff * 1000);
+		},
+
+		/**
+		 * Apply the staged configuration changes.
+		 *
+		 * Start applying staged configuration changes and open a modal dialog
+		 * with a progress indication to prevent interaction with the view
+		 * during the apply process. The modal dialog will be automatically
+		 * closed and the current view reloaded once the apply process is
+		 * complete.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.changes
+		 * @param {boolean} [checked=false]
+		 * Whether to perform a checked (`true`) configuration apply or an
+		 * unchecked (`false`) one.
+
+		 * In case of a checked apply, the configuration changes must be
+		 * confirmed within a specific time interval, otherwise the device
+		 * will begin to roll back the changes in order to restore the previous
+		 * settings.
+		 */
+		apply: function(checked) {
+			this.displayStatus('notice spinning',
+				E('p', _('Starting configuration apply…')));
+
+			(new Promise(function(resolveFn, rejectFn) {
+				if (!checked)
+					return resolveFn(false);
+
+				UI.prototype.changes.checkConnectivityAffected().then(function(affected) {
+					if (!affected)
+						return resolveFn(true);
+
+					UI.prototype.changes.displayStatus('warning', [
+						E('h4', _('Connectivity change')),
+						E('p', _('The network access to this device could be interrupted by changing settings of the "%h" interface.').format(affected)),
+						E('p', _('If the IP address used to access LuCI changes, a <strong>manual reconnect to the new IP</strong> is required within %d seconds to confirm the settings, otherwise modifications will be reverted.').format(L.env.apply_rollback)),
+						E('div', { 'class': 'right' }, [
+							E('button', {
+								'class': 'btn',
+								'click': rejectFn,
+							}, [ _('Cancel') ]), ' ',
+							E('button', {
+								'class': 'btn cbi-button-action important',
+								'click': resolveFn.bind(null, true)
+							}, [ _('Apply with revert after connectivity loss') ]), ' ',
+							E('button', {
+								'class': 'btn cbi-button-negative important',
+								'click': resolveFn.bind(null, false)
+							}, [ _('Apply and keep settings') ])
+						])
+					]);
+				});
+			})).then(function(checked) {
+				request.request(L.url('admin/uci', checked ? 'apply_rollback' : 'apply_unchecked'), {
+					method: 'post',
+					query: { sid: L.env.sessionid, token: L.env.token }
+				}).then(function(r) {
+					if (r.status === (checked ? 200 : 204)) {
+						var tok = null; try { tok = r.json(); } catch(e) {}
+						if (checked && tok !== null && typeof(tok) === 'object' && typeof(tok.token) === 'string')
+							UI.prototype.changes.confirm_auth = tok;
+
+						UI.prototype.changes.confirm(checked, Date.now() + L.env.apply_rollback * 1000);
+					}
+					else if (checked && r.status === 204) {
+						UI.prototype.changes.displayStatus('notice',
+							E('p', _('There are no changes to apply')));
+
+						window.setTimeout(function() {
+							UI.prototype.changes.displayStatus(false);
+						}, L.env.apply_display * 1000);
+					}
+					else {
+						UI.prototype.changes.displayStatus('warning',
+							E('p', _('Apply request failed with status <code>%h</code>')
+								.format(r.responseText || r.statusText || r.status)));
+
+						window.setTimeout(function() {
+							UI.prototype.changes.displayStatus(false);
+						}, L.env.apply_display * 1000);
+					}
+				});
+			}, this.displayStatus.bind(this, false));
+		},
+
+		/**
+		 * Revert the staged configuration changes.
+		 *
+		 * Start reverting staged configuration changes and open a modal dialog
+		 * with a progress indication to prevent interaction with the view
+		 * during the revert process. The modal dialog will be automatically
+		 * closed and the current view reloaded once the revert process is
+		 * complete.
+		 *
+		 * @instance
+		 * @memberof LuCI.ui.changes
+		 */
+		revert: function() {
+			this.displayStatus('notice spinning',
+				E('p', _('Reverting configuration…')));
+
+			request.request(L.url('admin/uci/revert'), {
+				method: 'post',
+				query: { sid: L.env.sessionid, token: L.env.token }
+			}).then(function(r) {
+				if (r.status === 200) {
+					document.dispatchEvent(new CustomEvent('uci-reverted'));
+
+					UI.prototype.changes.setIndicator(0);
+					UI.prototype.changes.displayStatus('notice',
+						E('p', _('Changes have been reverted.')));
+
+					window.setTimeout(function() {
+						//UI.prototype.changes.displayStatus(false);
+						window.location = window.location.href.split('#')[0];
+					}, L.env.apply_display * 1000);
+				}
+				else {
+					UI.prototype.changes.displayStatus('warning',
+						E('p', _('Revert request failed with status <code>%h</code>')
+							.format(r.statusText || r.status)));
+
+					window.setTimeout(function() {
+						UI.prototype.changes.displayStatus(false);
+					}, L.env.apply_display * 1000);
+				}
+			});
+		}
+	}),
+
+	/**
+	 * Add validation constraints to an input element.
+	 *
+	 * Compile the given type expression and optional validator function into
+	 * a validation function and bind it to the specified input element events.
+	 *
+	 * @param {Node} field
+	 * The DOM input element node to bind the validation constraints to.
+	 *
+	 * @param {string} type
+	 * The datatype specification to describe validation constraints.
+	 * Refer to the `LuCI.validation` class documentation for details.
+	 *
+	 * @param {boolean} [optional=false]
+	 * Specifies whether empty values are allowed (`true`) or not (`false`).
+	 * If an input element is not marked optional it must not be empty,
+	 * otherwise it will be marked as invalid.
+	 *
+	 * @param {function} [vfunc]
+	 * Specifies a custom validation function which is invoked after the
+	 * other validation constraints are applied. The validation must return
+	 * `true` to accept the passed value. Any other return type is converted
+	 * to a string and treated as validation error message.
+	 *
+	 * @param {...string} [events=blur, keyup]
+	 * The list of events to bind. Each received event will trigger a field
+	 * validation. If omitted, the `keyup` and `blur` events are bound by
+	 * default.
+	 *
+	 * @returns {function}
+	 * Returns the compiled validator function which can be used to manually
+	 * trigger field validation or to bind it to further events.
+	 *
+	 * @see LuCI.validation
+	 */
+	addValidator: function(field, type, optional, vfunc /*, ... */) {
+		if (type == null)
+			return;
+
+		var events = this.varargs(arguments, 3);
+		if (events.length == 0)
+			events.push('blur', 'keyup');
+
+		try {
+			var cbiValidator = validation.create(field, type, optional, vfunc),
+			    validatorFn = cbiValidator.validate.bind(cbiValidator);
+
+			for (var i = 0; i < events.length; i++)
+				field.addEventListener(events[i], validatorFn);
+
+			validatorFn();
+
+			return validatorFn;
+		}
+		catch (e) { }
+	},
+
+	/**
+	 * Create a pre-bound event handler function.
+	 *
+	 * Generate and bind a function suitable for use in event handlers. The
+	 * generated function automatically disables the event source element
+	 * and adds an active indication to it by adding appropriate CSS classes.
+	 *
+	 * It will also await any promises returned by the wrapped function and
+	 * re-enable the source element after the promises ran to completion.
+	 *
+	 * @param {*} ctx
+	 * The `this` context to use for the wrapped function.
+	 *
+	 * @param {function|string} fn
+	 * Specifies the function to wrap. In case of a function value, the
+	 * function is used as-is. If a string is specified instead, it is looked
+	 * up in `ctx` to obtain the function to wrap. In both cases the bound
+	 * function will be invoked with `ctx` as `this` context
+	 *
+	 * @param {...*} extra_args
+	 * Any further parameter as passed as-is to the bound event handler
+	 * function in the same order as passed to `createHandlerFn()`.
+	 *
+	 * @returns {function|null}
+	 * Returns the pre-bound handler function which is suitable to be passed
+	 * to `addEventListener()`. Returns `null` if the given `fn` argument is
+	 * a string which could not be found in `ctx` or if `ctx[fn]` is not a
+	 * valid function value.
+	 */
+	createHandlerFn: function(ctx, fn /*, ... */) {
+		if (typeof(fn) == 'string')
+			fn = ctx[fn];
+
+		if (typeof(fn) != 'function')
+			return null;
+
+		var arg_offset = arguments.length - 2;
+
+		return Function.prototype.bind.apply(function() {
+			var t = arguments[arg_offset].currentTarget;
+
+			t.classList.add('spinning');
+			t.disabled = true;
+
+			if (t.blur)
+				t.blur();
+
+			Promise.resolve(fn.apply(ctx, arguments)).finally(function() {
+				t.classList.remove('spinning');
+				t.disabled = false;
+			});
+		}, this.varargs(arguments, 2, ctx));
+	},
+
+	/**
+	 * Load specified view class path and set it up.
+	 *
+	 * Transforms the given view path into a class name, requires it
+	 * using [LuCI.require()]{@link LuCI#require} and asserts that the
+	 * resulting class instance is a descendant of
+	 * [LuCI.view]{@link LuCI.view}.
+	 *
+	 * By instantiating the view class, its corresponding contents are
+	 * rendered and included into the view area. Any runtime errors are
+	 * catched and rendered using [LuCI.error()]{@link LuCI#error}.
+	 *
+	 * @param {string} path
+	 * The view path to render.
+	 *
+	 * @returns {Promise<LuCI.view>}
+	 * Returns a promise resolving to the loaded view instance.
+	 */
+	instantiateView: function(path) {
+		var className = 'view.%s'.format(path.replace(/\//g, '.'));
+
+		return L.require(className).then(function(view) {
+			if (!(view instanceof View))
+				throw new TypeError('Loaded class %s is not a descendant of View'.format(className));
+
+			return view;
+		}).catch(function(err) {
+			dom.content(document.querySelector('#view'), null);
+			L.error(err);
+		});
+	},
+
+	menu: UIMenu,
+
+	Table: UITable,
+
+	AbstractElement: UIElement,
+
+	/* Widgets */
+	Textfield: UITextfield,
+	Textarea: UITextarea,
+	Checkbox: UICheckbox,
+	Select: UISelect,
+	Dropdown: UIDropdown,
+	DynamicList: UIDynamicList,
+	Combobox: UICombobox,
+	ComboButton: UIComboButton,
+	Hiddenfield: UIHiddenfield,
+	FileUpload: UIFileUpload
+});
+
+return UI;
+EOF_ARGON_8080_UI_JS
+    cat > "$argon_target_root/www/luci-static/resources/fs.js" <<'EOF_ARGON_8080_FS_JS'
+﻿'use strict';
+'require rpc';
+'require request';
+'require baseclass';
+
+/**
+ * @typedef {Object} FileStatEntry
+ * @memberof LuCI.fs
+
+ * @property {string} name - Name of the directory entry
+ * @property {string} type - Type of the entry, one of `block`, `char`, `directory`, `fifo`, `symlink`, `file`, `socket` or `unknown`
+ * @property {number} size - Size in bytes
+ * @property {number} mode - Access permissions
+ * @property {number} atime - Last access time in seconds since epoch
+ * @property {number} mtime - Last modification time in seconds since epoch
+ * @property {number} ctime - Last change time in seconds since epoch
+ * @property {number} inode - Inode number
+ * @property {number} uid - Numeric owner id
+ * @property {number} gid - Numeric group id
+ */
+
+/**
+ * @typedef {Object} FileExecResult
+ * @memberof LuCI.fs
+ *
+ * @property {number} code - The exit code of the invoked command
+ * @property {string} [stdout] - The stdout produced by the command, if any
+ * @property {string} [stderr] - The stderr produced by the command, if any
+ */
+
+var callFileList, callFileStat, callFileRead, callFileWrite, callFileRemove,
+    callFileExec, callFileMD5;
+
+callFileList = rpc.declare({
+	object: 'file',
+	method: 'list',
+	params: [ 'path' ]
+});
+
+callFileStat = rpc.declare({
+	object: 'file',
+	method: 'stat',
+	params: [ 'path' ]
+});
+
+callFileRead = rpc.declare({
+	object: 'file',
+	method: 'read',
+	params: [ 'path' ]
+});
+
+callFileWrite = rpc.declare({
+	object: 'file',
+	method: 'write',
+	params: [ 'path', 'data', 'mode' ]
+});
+
+callFileRemove = rpc.declare({
+	object: 'file',
+	method: 'remove',
+	params: [ 'path' ]
+});
+
+callFileExec = rpc.declare({
+	object: 'file',
+	method: 'exec',
+	params: [ 'command', 'params', 'env' ]
+});
+
+callFileMD5 = rpc.declare({
+	object: 'file',
+	method: 'md5',
+	params: [ 'path' ]
+});
+
+var rpcErrors = [
+	null,
+	'InvalidCommandError',
+	'InvalidArgumentError',
+	'MethodNotFoundError',
+	'NotFoundError',
+	'NoDataError',
+	'PermissionError',
+	'TimeoutError',
+	'UnsupportedError'
+];
+
+function handleRpcReply(expect, rc) {
+	if (typeof(rc) == 'number' && rc != 0) {
+		var e = new Error(rpc.getStatusText(rc)); e.name = rpcErrors[rc] || 'Error';
+		throw e;
+	}
+
+	if (expect) {
+		var type = Object.prototype.toString;
+
+		for (var key in expect) {
+			if (rc != null && key != '')
+				rc = rc[key];
+
+			if (rc == null || type.call(rc) != type.call(expect[key])) {
+				var e = new Error(_('Unexpected reply data format')); e.name = 'TypeError';
+				throw e;
+			}
+
+			break;
+		}
+	}
+
+	return rc;
+}
+
+function handleCgiIoReply(res) {
+	if (!res.ok || res.status != 200) {
+		var e = new Error(res.statusText);
+		switch (res.status) {
+		case 400:
+			e.name = 'InvalidArgumentError';
+			break;
+
+		case 403:
+			e.name = 'PermissionError';
+			break;
+
+		case 404:
+			e.name = 'NotFoundError';
+			break;
+
+		default:
+			e.name = 'Error';
+		}
+		throw e;
+	}
+
+	switch (this.type) {
+	case 'blob':
+		return res.blob();
+
+	case 'json':
+		return res.json();
+
+	default:
+		return res.text();
+	}
+}
+
+/**
+ * @class fs
+ * @memberof LuCI
+ * @hideconstructor
+ * @classdesc
+ *
+ * Provides high level utilities to wrap file system related RPC calls.
+ * To import the class in views, use `'require fs'`, to import it in
+ * external JavaScript, use `L.require("fs").then(...)`.
+ */
+var FileSystem = baseclass.extend(/** @lends LuCI.fs.prototype */ {
+	/**
+	 * Obtains a listing of the specified directory.
+	 *
+	 * @param {string} path
+	 * The directory path to list.
+	 *
+	 * @returns {Promise<LuCI.fs.FileStatEntry[]>}
+	 * Returns a promise resolving to an array of stat detail objects or
+	 * rejecting with an error stating the failure reason.
+	 */
+	list: function(path) {
+		return callFileList(path).then(handleRpcReply.bind(this, { entries: [] }));
+	},
+
+	/**
+	 * Return file stat information on the specified path.
+	 *
+	 * @param {string} path
+	 * The filesystem path to stat.
+	 *
+	 * @returns {Promise<LuCI.fs.FileStatEntry>}
+	 * Returns a promise resolving to a stat detail object or
+	 * rejecting with an error stating the failure reason.
+	 */
+	stat: function(path) {
+		return callFileStat(path).then(handleRpcReply.bind(this, { '': {} }));
+	},
+
+	/**
+	 * Read the contents of the given file and return them.
+	 * Note: this function is unsuitable for obtaining binary data.
+	 *
+	 * @param {string} path
+	 * The file path to read.
+	 *
+	 * @returns {Promise<string>}
+	 * Returns a promise resolving to a string containing the file contents or
+	 * rejecting with an error stating the failure reason.
+	 */
+	read: function(path) {
+		return callFileRead(path).then(handleRpcReply.bind(this, { data: '' }));
+	},
+
+	/**
+	 * Write the given data to the specified file path.
+	 * If the specified file path does not exist, it will be created, given
+	 * sufficient permissions.
+	 *
+	 * Note: `data` will be converted to a string using `String(data)` or to
+	 * `''` when it is `null`.
+	 *
+	 * @param {string} path
+	 * The file path to write to.
+	 *
+	 * @param {*} [data]
+	 * The file data to write. If it is null, it will be set to an empty
+	 * string.
+	 *
+	 * @param {number} [mode]
+	 * The permissions to use on file creation. Default is 420 (0644).
+	 *
+	 * @returns {Promise<number>}
+	 * Returns a promise resolving to `0` or rejecting with an error stating
+	 * the failure reason.
+	 */
+	write: function(path, data, mode) {
+		data = (data != null) ? String(data) : '';
+		mode = (mode != null) ? mode : 420; // 0644
+		return callFileWrite(path, data, mode).then(handleRpcReply.bind(this, { '': 0 }));
+	},
+
+	/**
+	 * Unlink the given file.
+	 *
+	 * @param {string}
+	 * The file path to remove.
+	 *
+	 * @returns {Promise<number>}
+	 * Returns a promise resolving to `0` or rejecting with an error stating
+	 * the failure reason.
+	 */
+	remove: function(path) {
+		return callFileRemove(path).then(handleRpcReply.bind(this, { '': 0 }));
+	},
+
+	/**
+	 * Execute the specified command, optionally passing params and
+	 * environment variables.
+	 *
+	 * Note: The `command` must be either the path to an executable,
+	 * or a basename without arguments in which case it will be searched
+	 * in $PATH. If specified, the values given in `params` will be passed
+	 * as arguments to the command.
+	 *
+	 * The key/value pairs in the optional `env` table are translated to
+	 * `setenv()` calls prior to running the command.
+	 *
+	 * @param {string} command
+	 * The command to invoke.
+	 *
+	 * @param {string[]} [params]
+	 * The arguments to pass to the command.
+	 *
+	 * @param {Object.<string, string>} [env]
+	 * Environment variables to set.
+	 *
+	 * @returns {Promise<LuCI.fs.FileExecResult>}
+	 * Returns a promise resolving to an object describing the execution
+	 * results or rejecting with an error stating the failure reason.
+	 */
+	exec: function(command, params, env) {
+		if (!Array.isArray(params))
+			params = null;
+
+		if (!L.isObject(env))
+			env = null;
+
+		return callFileExec(command, params, env).then(handleRpcReply.bind(this, { '': {} }));
+	},
+
+	/**
+	 * Read the contents of the given file, trim leading and trailing white
+	 * space and return the trimmed result. In case of errors, return an empty
+	 * string instead.
+	 *
+	 * Note: this function is useful to read single-value files in `/sys`
+	 * or `/proc`.
+	 *
+	 * This function is guaranteed to not reject its promises, on failure,
+	 * an empty string will be returned.
+	 *
+	 * @param {string} path
+	 * The file path to read.
+	 *
+	 * @returns {Promise<string>}
+	 * Returns a promise resolving to the file contents or the empty string
+	 * on failure.
+	 */
+	trimmed: function(path) {
+		return L.resolveDefault(this.read(path), '').then(function(s) {
+			return s.trim();
+		});
+	},
+
+	/**
+	 * Read the contents of the given file, split it into lines, trim
+	 * leading and trailing white space of each line and return the
+	 * resulting array.
+	 *
+	 * This function is guaranteed to not reject its promises, on failure,
+	 * an empty array will be returned.
+	 *
+	 * @param {string} path
+	 * The file path to read.
+	 *
+	 * @returns {Promise<string[]>}
+	 * Returns a promise resolving to an array containing the stripped lines
+	 * of the given file or `[]` on failure.
+	 */
+	lines: function(path) {
+		return L.resolveDefault(this.read(path), '').then(function(s) {
+			var lines = [];
+
+			s = s.trim();
+
+			if (s != '') {
+				var l = s.split(/\n/);
+
+				for (var i = 0; i < l.length; i++)
+					lines.push(l[i].trim());
+			}
+
+			return lines;
+		});
+	},
+
+	/**
+	 * Read the contents of the given file and return them, bypassing ubus.
+	 *
+	 * This function will read the requested file through the cgi-io
+	 * helper applet at `/cgi-bin/cgi-download` which bypasses the ubus rpc
+	 * transport. This is useful to fetch large file contents which might
+	 * exceed the ubus message size limits or which contain binary data.
+	 *
+	 * The cgi-io helper will enforce the same access permission rules as
+	 * the ubus based read call.
+	 *
+	 * @param {string} path
+	 * The file path to read.
+	 *
+	 * @param {string} [type=text]
+	 * The expected type of read file contents. Valid values are `text` to
+	 * interpret the contents as string, `json` to parse the contents as JSON
+	 * or `blob` to return the contents as Blob instance.
+	 *
+	 * @returns {Promise<*>}
+	 * Returns a promise resolving with the file contents interpreted according
+	 * to the specified type or rejecting with an error stating the failure
+	 * reason.
+	 */
+	read_direct: function(path, type) {
+		var postdata = 'sessionid=%s&path=%s'
+			.format(encodeURIComponent(L.env.sessionid), encodeURIComponent(path));
+
+		return request.post(L.env.cgi_base + '/cgi-download', postdata, {
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			responseType: (type == 'blob') ? 'blob' : 'text'
+		}).then(handleCgiIoReply.bind({ type: type }));
+	},
+
+	/**
+	 * Execute the specified command, bypassing ubus.
+	 *
+	 * Note: The `command` must be either the path to an executable,
+	 * or a basename without arguments in which case it will be searched
+	 * in $PATH. If specified, the values given in `params` will be passed
+	 * as arguments to the command.
+	 *
+	 * This function will invoke the requested commands through the cgi-io
+	 * helper applet at `/cgi-bin/cgi-exec` which bypasses the ubus rpc
+	 * transport. This is useful to fetch large command outputs which might
+	 * exceed the ubus message size limits or which contain binary data.
+	 *
+	 * The cgi-io helper will enforce the same access permission rules as
+	 * the ubus based exec call.
+	 *
+	 * @param {string} command
+	 * The command to invoke.
+	 *
+	 * @param {string[]} [params]
+	 * The arguments to pass to the command.
+	 *
+	 * @param {string} [type=text]
+	 * The expected output type of the invoked program. Valid values are
+	 * `text` to interpret the output as string, `json` to parse the output
+	 * as JSON or `blob` to return the output as Blob instance.
+	 *
+	 * @param {boolean} [latin1=false]
+	 * Whether to encode the command line as Latin1 instead of UTF-8. This
+	 * is usually not needed but can be useful for programs that cannot
+	 * handle UTF-8 input.
+	 *
+	 * @returns {Promise<*>}
+	 * Returns a promise resolving with the command stdout output interpreted
+	 * according to the specified type or rejecting with an error stating the
+	 * failure reason.
+	 */
+	exec_direct: function(command, params, type, latin1) {
+		var cmdstr = String(command)
+			.replace(/\\/g, '\\\\').replace(/(\s)/g, '\\$1');
+
+		if (Array.isArray(params))
+			for (var i = 0; i < params.length; i++)
+				cmdstr += ' ' + String(params[i])
+					.replace(/\\/g, '\\\\').replace(/(\s)/g, '\\$1');
+
+		if (latin1)
+			cmdstr = escape(cmdstr).replace(/\+/g, '%2b');
+		else
+			cmdstr = encodeURIComponent(cmdstr);
+
+		var postdata = 'sessionid=%s&command=%s'
+			.format(encodeURIComponent(L.env.sessionid), cmdstr);
+
+		return request.post(L.env.cgi_base + '/cgi-exec', postdata, {
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			responseType: (type == 'blob') ? 'blob' : 'text'
+		}).then(handleCgiIoReply.bind({ type: type }));
+	}
+});
+
+return FileSystem;
+EOF_ARGON_8080_FS_JS
+    cat > "$argon_target_root/www/luci-static/resources/rpc.js" <<'EOF_ARGON_8080_RPC_JS'
+﻿'use strict';
+'require baseclass';
+'require request';
+
+var rpcRequestID = 1,
+    rpcSessionID = L.env.sessionid || '00000000000000000000000000000000',
+    rpcBaseURL = L.url('admin/ubus'),
+    rpcInterceptorFns = [];
+
+/**
+ * @class rpc
+ * @memberof LuCI
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `LuCI.rpc` class provides high level ubus JSON-RPC abstractions
+ * and means for listing and invoking remove RPC methods.
+ */
+return baseclass.extend(/** @lends LuCI.rpc.prototype */ {
+	/* privates */
+	call: function(req, cb, nobatch) {
+		var q = '';
+
+		if (Array.isArray(req)) {
+			if (req.length == 0)
+				return Promise.resolve([]);
+
+			for (var i = 0; i < req.length; i++)
+				if (req[i].params)
+					q += '%s%s.%s'.format(
+						q ? ';' : '/',
+						req[i].params[1],
+						req[i].params[2]
+					);
+		}
+
+		return request.post(rpcBaseURL + q, req, {
+			timeout: (L.env.rpctimeout || 20) * 1000,
+			nobatch: nobatch,
+			credentials: true
+		}).then(cb, cb);
+	},
+
+	parseCallReply: function(req, res) {
+		var msg = null;
+
+		if (res instanceof Error)
+			return req.reject(res);
+
+		try {
+			if (!res.ok)
+				L.raise('RPCError', 'RPC call to %s/%s failed with HTTP error %d: %s',
+					req.object, req.method, res.status, res.statusText || '?');
+
+			msg = res.json();
+		}
+		catch (e) {
+			return req.reject(e);
+		}
+
+		/*
+		 * The interceptor args are intentionally swapped.
+		 * Response is passed as first arg to align with Request class interceptors
+		 */
+		Promise.all(rpcInterceptorFns.map(function(fn) { return fn(msg, req) }))
+			.then(this.handleCallReply.bind(this, req, msg))
+			.catch(req.reject);
+	},
+
+	handleCallReply: function(req, msg) {
+		var type = Object.prototype.toString,
+		    ret = null;
+
+		try {
+			/* verify message frame */
+			if (!L.isObject(msg) || msg.jsonrpc != '2.0')
+				L.raise('RPCError', 'RPC call to %s/%s returned invalid message frame',
+					req.object, req.method);
+
+			/* check error condition */
+			if (L.isObject(msg.error) && msg.error.code && msg.error.message)
+				L.raise('RPCError', 'RPC call to %s/%s failed with error %d: %s',
+					req.object, req.method, msg.error.code, msg.error.message || '?');
+		}
+		catch (e) {
+			return req.reject(e);
+		}
+
+		if (!req.object && !req.method) {
+			ret = msg.result;
+		}
+		else if (Array.isArray(msg.result)) {
+			if (req.raise && msg.result[0] !== 0)
+				L.raise('RPCError', 'RPC call to %s/%s failed with ubus code %d: %s',
+					req.object, req.method, msg.result[0], this.getStatusText(msg.result[0]));
+
+			ret = (msg.result.length > 1) ? msg.result[1] : msg.result[0];
+		}
+
+		if (req.expect) {
+			for (var key in req.expect) {
+				if (ret != null && key != '')
+					ret = ret[key];
+
+				if (ret == null || type.call(ret) != type.call(req.expect[key]))
+					ret = req.expect[key];
+
+				break;
+			}
+		}
+
+		/* apply filter */
+		if (typeof(req.filter) == 'function') {
+			req.priv[0] = ret;
+			req.priv[1] = req.params;
+			ret = req.filter.apply(this, req.priv);
+		}
+
+		req.resolve(ret);
+	},
+
+	/**
+	 * Lists available remote ubus objects or the method signatures of
+	 * specific objects.
+	 *
+	 * This function has two signatures and is sensitive to the number of
+	 * arguments passed to it:
+	 *  - `list()` -
+	 *    Returns an array containing the names of all remote `ubus` objects
+	 *  - `list("objname", ...)`
+	 *    Returns method signatures for each given `ubus` object name.
+	 *
+	 * @param {...string} [objectNames]
+	 * If any object names are given, this function will return the method
+	 * signatures of each given object.
+	 *
+	 * @returns {Promise<Array<string>|Object<string, Object<string, Object<string, string>>>>}
+	 * When invoked without arguments, this function will return a promise
+	 * resolving to an array of `ubus` object names. When invoked with one or
+	 * more arguments, a promise resolving to an object describing the method
+	 * signatures of each requested `ubus` object name will be returned.
+	 */
+	list: function() {
+		var msg = {
+			jsonrpc: '2.0',
+			id:      rpcRequestID++,
+			method:  'list',
+			params:  arguments.length ? this.varargs(arguments) : undefined
+		};
+
+		return new Promise(L.bind(function(resolveFn, rejectFn) {
+			/* store request info */
+			var req = {
+				resolve: resolveFn,
+				reject:  rejectFn
+			};
+
+			/* call rpc */
+			this.call(msg, this.parseCallReply.bind(this, req));
+		}, this));
+	},
+
+	/**
+	 * @typedef {Object} DeclareOptions
+	 * @memberof LuCI.rpc
+	 *
+	 * @property {string} object
+	 * The name of the remote `ubus` object to invoke.
+	 *
+	 * @property {string} method
+	 * The name of the remote `ubus` method to invoke.
+	 *
+	 * @property {string[]} [params]
+	 * Lists the named parameters expected by the remote `ubus` RPC method.
+	 * The arguments passed to the resulting generated method call function
+	 * will be mapped to named parameters in the order they appear in this
+	 * array.
+	 *
+	 * Extraneous parameters passed to the generated function will not be
+	 * sent to the remote procedure but are passed to the
+	 * {@link LuCI.rpc~filterFn filter function} if one is specified.
+	 *
+	 * Examples:
+	 *  - `params: [ "foo", "bar" ]` -
+	 *    When the resulting call function is invoked with `fn(true, false)`,
+	 *    the corresponding args object sent to the remote procedure will be
+	 *    `{ foo: true, bar: false }`.
+	 *  - `params: [ "test" ], filter: function(reply, args, extra) { ... }` -
+	 *    When the resultung generated function is invoked with
+	 *    `fn("foo", "bar", "baz")` then `{ "test": "foo" }` will be sent as
+	 *    argument to the remote procedure and the filter function will be
+	 *    invoked with `filterFn(reply, [ "foo" ], "bar", "baz")`
+	 *
+	 * @property {Object<string,*>} [expect]
+	 * Describes the expected return data structure. The given object is
+	 * supposed to contain a single key selecting the value to use from
+	 * the returned `ubus` reply object. The value of the sole key within
+	 * the `expect` object is used to infer the expected type of the received
+	 * `ubus` reply data.
+	 *
+	 * If the received data does not contain `expect`'s key, or if the
+	 * type of the data differs from the type of the value in the expect
+	 * object, the expect object's value is returned as default instead.
+	 *
+	 * The key in the `expect` object may be an empty string (`''`) in which
+	 * case the entire reply object is selected instead of one of its subkeys.
+	 *
+	 * If the `expect` option is omitted, the received reply will be returned
+	 * as-is, regardless of its format or type.
+	 *
+	 * Examples:
+	 *  - `expect: { '': { error: 'Invalid response' } }` -
+	 *    This requires the entire `ubus` reply to be a plain JavaScript
+	 *    object. If the reply isn't an object but e.g. an array or a numeric
+	 *    error code instead, it will get replaced with
+	 *    `{ error: 'Invalid response' }` instead.
+	 *  - `expect: { results: [] }` -
+	 *    This requires the received `ubus` reply to be an object containing
+	 *    a key `results` with an array as value. If the received reply does
+	 *    not contain such a key, or if `reply.results` points to a non-array
+	 *    value, the empty array (`[]`) will be used instead.
+	 *  - `expect: { success: false }` -
+	 *    This requires the received `ubus` reply to be an object containing
+	 *    a key `success` with a boolean value. If the reply does not contain
+	 *    `success` or if `reply.success` is not a boolean value, `false` will
+	 *    be returned as default instead.
+	 *
+	 * @property {LuCI.rpc~filterFn} [filter]
+	 * Specfies an optional filter function which is invoked to transform the
+	 * received reply data before it is returned to the caller.
+	 *
+	 * @property {boolean} [reject=false]
+	 * If set to `true`, non-zero ubus call status codes are treated as fatal
+	 * error and lead to the rejection of the call promise. The default
+	 * behaviour is to resolve with the call return code value instead.
+	 */
+
+	/**
+	 * The filter function is invoked to transform a received `ubus` RPC call
+	 * reply before returning it to the caller.
+	 *
+	 * @callback LuCI.rpc~filterFn
+	 *
+	 * @param {*} data
+	 * The received `ubus` reply data or a subset of it as described in the
+	 * `expect` option of the RPC call declaration. In case of remote call
+	 * errors, `data` is numeric `ubus` error code instead.
+	 *
+	 * @param {Array<*>} args
+	 * The arguments the RPC method has been invoked with.
+	 *
+	 * @param {...*} extraArgs
+	 * All extraneous arguments passed to the RPC method exceeding the number
+	 * of arguments describes in the RPC call declaration.
+	 *
+	 * @return {*}
+	 * The return value of the filter function will be returned to the caller
+	 * of the RPC method as-is.
+	 */
+
+	/**
+	 * The generated invocation function is returned by
+	 * {@link LuCI.rpc#declare rpc.declare()} and encapsulates a single
+	 * RPC method call.
+	 *
+	 * Calling this function will execute a remote `ubus` HTTP call request
+	 * using the arguments passed to it as arguments and return a promise
+	 * resolving to the received reply values.
+	 *
+	 * @callback LuCI.rpc~invokeFn
+	 *
+	 * @param {...*} params
+	 * The parameters to pass to the remote procedure call. The given
+	 * positional arguments will be named to named RPC parameters according
+	 * to the names specified in the `params` array of the method declaration.
+	 *
+	 * Any additional parameters exceeding the amount of arguments in the
+	 * `params` declaration are passed as private extra arguments to the
+	 * declared filter function.
+	 *
+	 * @return {Promise<*>}
+	 * Returns a promise resolving to the result data of the remote `ubus`
+	 * RPC method invocation, optionally substituted and filtered according
+	 * to the `expect` and `filter` declarations.
+	 */
+
+	/**
+	 * Describes a remote RPC call procedure and returns a function
+	 * implementing it.
+	 *
+	 * @param {LuCI.rpc.DeclareOptions} options
+	 * If any object names are given, this function will return the method
+	 * signatures of each given object.
+	 *
+	 * @returns {LuCI.rpc~invokeFn}
+	 * Returns a new function implementing the method call described in
+	 * `options`.
+	 */
+	declare: function(options) {
+		return Function.prototype.bind.call(function(rpc, options) {
+			var args = this.varargs(arguments, 2);
+			return new Promise(function(resolveFn, rejectFn) {
+				/* build parameter object */
+				var p_off = 0;
+				var params = { };
+				if (Array.isArray(options.params))
+					for (p_off = 0; p_off < options.params.length; p_off++)
+						params[options.params[p_off]] = args[p_off];
+
+				/* all remaining arguments are private args */
+				var priv = [ undefined, undefined ];
+				for (; p_off < args.length; p_off++)
+					priv.push(args[p_off]);
+
+				/* store request info */
+				var req = {
+					expect:  options.expect,
+					filter:  options.filter,
+					resolve: resolveFn,
+					reject:  rejectFn,
+					params:  params,
+					priv:    priv,
+					object:  options.object,
+					method:  options.method,
+					raise:   options.reject
+				};
+
+				/* build message object */
+				var msg = {
+					jsonrpc: '2.0',
+					id:      rpcRequestID++,
+					method:  'call',
+					params:  [
+						rpcSessionID,
+						options.object,
+						options.method,
+						params
+					]
+				};
+
+				/* call rpc */
+				rpc.call(msg, rpc.parseCallReply.bind(rpc, req), options.nobatch);
+			});
+		}, this, this, options);
+	},
+
+	/**
+	 * Returns the current RPC session id.
+	 *
+	 * @returns {string}
+	 * Returns the 32 byte session ID string used for authenticating remote
+	 * requests.
+	 */
+	getSessionID: function() {
+		return rpcSessionID;
+	},
+
+	/**
+	 * Set the RPC session id to use.
+	 *
+	 * @param {string} sid
+	 * Sets the 32 byte session ID string used for authenticating remote
+	 * requests.
+	 */
+	setSessionID: function(sid) {
+		rpcSessionID = sid;
+	},
+
+	/**
+	 * Returns the current RPC base URL.
+	 *
+	 * @returns {string}
+	 * Returns the RPC URL endpoint to issue requests against.
+	 */
+	getBaseURL: function() {
+		return rpcBaseURL;
+	},
+
+	/**
+	 * Set the RPC base URL to use.
+	 *
+	 * @param {string} sid
+	 * Sets the RPC URL endpoint to issue requests against.
+	 */
+	setBaseURL: function(url) {
+		rpcBaseURL = url;
+	},
+
+	/**
+	 * Translates a numeric `ubus` error code into a human readable
+	 * description.
+	 *
+	 * @param {number} statusCode
+	 * The numeric status code.
+	 *
+	 * @returns {string}
+	 * Returns the textual description of the code.
+	 */
+	getStatusText: function(statusCode) {
+		switch (statusCode) {
+		case 0: return _('Command OK');
+		case 1: return _('Invalid command');
+		case 2: return _('Invalid argument');
+		case 3: return _('Method not found');
+		case 4: return _('Resource not found');
+		case 5: return _('No data received');
+		case 6: return _('Permission denied');
+		case 7: return _('Request timeout');
+		case 8: return _('Not supported');
+		case 9: return _('Unspecified error');
+		case 10: return _('Connection lost');
+		default: return _('Unknown error code');
+		}
+	},
+
+	/**
+	 * Registered interceptor functions are invoked before the standard reply
+	 * parsing and handling logic.
+	 *
+	 * By returning rejected promises, interceptor functions can cause the
+	 * invocation function to fail, regardless of the received reply.
+	 *
+	 * Interceptors may also modify their message argument in-place to
+	 * rewrite received replies before they're processed by the standard
+	 * response handling code.
+	 *
+	 * A common use case for such functions is to detect failing RPC replies
+	 * due to expired authentication in order to trigger a new login.
+	 *
+	 * @callback LuCI.rpc~interceptorFn
+	 *
+	 * @param {*} msg
+	 * The unprocessed, JSON decoded remote RPC method call reply.
+	 *
+	 * Since interceptors run before the standard parsing logic, the reply
+	 * data is not verified for correctness or filtered according to
+	 * `expect` and `filter` specifications in the declarations.
+	 *
+	 * @param {Object} req
+	 * The related request object which is an extended variant of the
+	 * declaration object, allowing access to internals of the invocation
+	 * function such as `filter`, `expect` or `params` values.
+	 *
+	 * @return {Promise<*>|*}
+	 * Interceptor functions may return a promise to defer response
+	 * processing until some delayed work completed. Any values the returned
+	 * promise resolves to are ignored.
+	 *
+	 * When the returned promise rejects with an error, the invocation
+	 * function will fail too, forwarding the error to the caller.
+	 */
+
+	/**
+	 * Registers a new interceptor function.
+	 *
+	 * @param {LuCI.rpc~interceptorFn} interceptorFn
+	 * The inteceptor function to register.
+	 *
+	 * @returns {LuCI.rpc~interceptorFn}
+	 * Returns the given function value.
+	 */
+	addInterceptor: function(interceptorFn) {
+		if (typeof(interceptorFn) == 'function')
+			rpcInterceptorFns.push(interceptorFn);
+		return interceptorFn;
+	},
+
+	/**
+	 * Removes a registered interceptor function.
+	 *
+	 * @param {LuCI.rpc~interceptorFn} interceptorFn
+	 * The inteceptor function to remove.
+	 *
+	 * @returns {boolean}
+	 * Returns `true` if the given function has been removed or `false`
+	 * if it has not been found.
+	 */
+	removeInterceptor: function(interceptorFn) {
+		var oldlen = rpcInterceptorFns.length, i = oldlen;
+		while (i--)
+			if (rpcInterceptorFns[i] === interceptorFn)
+				rpcInterceptorFns.splice(i, 1);
+		return (rpcInterceptorFns.length < oldlen);
+	}
+});
+EOF_ARGON_8080_RPC_JS
+    cat > "$argon_target_root/www/luci-static/resources/uci.js" <<'EOF_ARGON_8080_UCI_JS'
+﻿'use strict';
+'require rpc';
+'require baseclass';
+
+function isEmpty(object, ignore) {
+	for (var property in object)
+		if (object.hasOwnProperty(property) && property != ignore)
+			return false;
+
+	return true;
+}
+
+/**
+ * @class uci
+ * @memberof LuCI
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `LuCI.uci` class utilizes {@link LuCI.rpc} to declare low level
+ * remote UCI `ubus` procedures and implements a local caching and data
+ * manipulation layer on top to allow for synchroneous operations on
+ * UCI configuration data.
+ */
+return baseclass.extend(/** @lends LuCI.uci.prototype */ {
+	__init__: function() {
+		this.state = {
+			newidx:  0,
+			values:  { },
+			creates: { },
+			changes: { },
+			deletes: { },
+			reorder: { }
+		};
+
+		this.loaded = {};
+	},
+
+	callLoad: rpc.declare({
+		object: 'uci',
+		method: 'get',
+		params: [ 'config' ],
+		expect: { values: { } },
+		reject: true
+	}),
+
+	callOrder: rpc.declare({
+		object: 'uci',
+		method: 'order',
+		params: [ 'config', 'sections' ],
+		reject: true
+	}),
+
+	callAdd: rpc.declare({
+		object: 'uci',
+		method: 'add',
+		params: [ 'config', 'type', 'name', 'values' ],
+		expect: { section: '' },
+		reject: true
+	}),
+
+	callSet: rpc.declare({
+		object: 'uci',
+		method: 'set',
+		params: [ 'config', 'section', 'values' ],
+		reject: true
+	}),
+
+	callDelete: rpc.declare({
+		object: 'uci',
+		method: 'delete',
+		params: [ 'config', 'section', 'options' ],
+		reject: true
+	}),
+
+	callApply: rpc.declare({
+		object: 'uci',
+		method: 'apply',
+		params: [ 'timeout', 'rollback' ],
+		reject: true
+	}),
+
+	callConfirm: rpc.declare({
+		object: 'uci',
+		method: 'confirm',
+		reject: true
+	}),
+
+
+	/**
+	 * Generates a new, unique section ID for the given configuration.
+	 *
+	 * Note that the generated ID is temporary, it will get replaced by an
+	 * identifier in the form `cfgXXXXXX` once the configuration is saved
+	 * by the remote `ubus` UCI api.
+	 *
+	 * @param {string} config
+	 * The configuration to generate the new section ID for.
+	 *
+	 * @returns {string}
+	 * A newly generated, unique section ID in the form `newXXXXXX`
+	 * where `X` denotes a hexadecimal digit.
+	 */
+	createSID: function(conf) {
+		var v = this.state.values,
+		    n = this.state.creates,
+		    sid;
+
+		do {
+			sid = "new%06x".format(Math.random() * 0xFFFFFF);
+		} while ((n[conf] && n[conf][sid]) || (v[conf] && v[conf][sid]));
+
+		return sid;
+	},
+
+	/**
+	 * Resolves a given section ID in extended notation to the internal
+	 * section ID value.
+	 *
+	 * @param {string} config
+	 * The configuration to resolve the section ID for.
+	 *
+	 * @param {string} sid
+	 * The section ID to resolve. If the ID is in the form `@typename[#]`,
+	 * it will get resolved to an internal anonymous ID in the forms
+	 * `cfgXXXXXX`/`newXXXXXX` or to the name of a section in case it points
+	 * to a named section. When the given ID is not in extended notation,
+	 * it will be returned as-is.
+	 *
+	 * @returns {string|null}
+	 * Returns the resolved section ID or the original given ID if it was
+	 * not in extended notation. Returns `null` when an extended ID could
+	 * not be resolved to existing section ID.
+	 */
+	resolveSID: function(conf, sid) {
+		if (typeof(sid) != 'string')
+			return sid;
+
+		var m = /^@([a-zA-Z0-9_-]+)\[(-?[0-9]+)\]$/.exec(sid);
+
+		if (m) {
+			var type = m[1],
+			    pos = +m[2],
+			    sections = this.sections(conf, type),
+			    section = sections[pos >= 0 ? pos : sections.length + pos];
+
+			return section ? section['.name'] : null;
+		}
+
+		return sid;
+	},
+
+	/* private */
+	reorderSections: function() {
+		var v = this.state.values,
+		    n = this.state.creates,
+		    r = this.state.reorder,
+		    tasks = [];
+
+		if (Object.keys(r).length === 0)
+			return Promise.resolve();
+
+		/*
+		 gather all created and existing sections, sort them according
+		 to their index value and issue an uci order call
+		*/
+		for (var c in r) {
+			var o = [ ];
+
+			if (n[c])
+				for (var s in n[c])
+					o.push(n[c][s]);
+
+			for (var s in v[c])
+				o.push(v[c][s]);
+
+			if (o.length > 0) {
+				o.sort(function(a, b) {
+					return (a['.index'] - b['.index']);
+				});
+
+				var sids = [ ];
+
+				for (var i = 0; i < o.length; i++)
+					sids.push(o[i]['.name']);
+
+				tasks.push(this.callOrder(c, sids));
+			}
+		}
+
+		this.state.reorder = { };
+		return Promise.all(tasks);
+	},
+
+	/* private */
+	loadPackage: function(packageName) {
+		if (this.loaded[packageName] == null)
+			return (this.loaded[packageName] = this.callLoad(packageName));
+
+		return Promise.resolve(this.loaded[packageName]);
+	},
+
+	/**
+	 * Loads the given UCI configurations from the remote `ubus` api.
+	 *
+	 * Loaded configurations are cached and only loaded once. Subsequent
+	 * load operations of the same configurations will return the cached
+	 * data.
+	 *
+	 * To force reloading a configuration, it has to be unloaded with
+	 * {@link LuCI.uci#unload uci.unload()} first.
+	 *
+	 * @param {string|string[]} config
+	 * The name of the configuration or an array of configuration
+	 * names to load.
+	 *
+	 * @returns {Promise<string[]>}
+	 * Returns a promise resolving to the names of the configurations
+	 * that have been successfully loaded.
+	 */
+	load: function(packages) {
+		var self = this,
+		    pkgs = [ ],
+		    tasks = [];
+
+		if (!Array.isArray(packages))
+			packages = [ packages ];
+
+		for (var i = 0; i < packages.length; i++)
+			if (!self.state.values[packages[i]]) {
+				pkgs.push(packages[i]);
+				tasks.push(self.loadPackage(packages[i]));
+			}
+
+		return Promise.all(tasks).then(function(responses) {
+			for (var i = 0; i < responses.length; i++)
+				self.state.values[pkgs[i]] = responses[i];
+
+			if (responses.length)
+				document.dispatchEvent(new CustomEvent('uci-loaded'));
+
+			return pkgs;
+		});
+	},
+
+	/**
+	 * Unloads the given UCI configurations from the local cache.
+	 *
+	 * @param {string|string[]} config
+	 * The name of the configuration or an array of configuration
+	 * names to unload.
+	 */
+	unload: function(packages) {
+		if (!Array.isArray(packages))
+			packages = [ packages ];
+
+		for (var i = 0; i < packages.length; i++) {
+			delete this.state.values[packages[i]];
+			delete this.state.creates[packages[i]];
+			delete this.state.changes[packages[i]];
+			delete this.state.deletes[packages[i]];
+
+			delete this.loaded[packages[i]];
+		}
+	},
+
+	/**
+	 * Adds a new section of the given type to the given configuration,
+	 * optionally named according to the given name.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to add the section to.
+	 *
+	 * @param {string} type
+	 * The type of the section to add.
+	 *
+	 * @param {string} [name]
+	 * The name of the section to add. If the name is omitted, an anonymous
+	 * section will be added instead.
+	 *
+	 * @returns {string}
+	 * Returns the section ID of the newly added section which is equivalent
+	 * to the given name for non-anonymous sections.
+	 */
+	add: function(conf, type, name) {
+		var n = this.state.creates,
+		    sid = name || this.createSID(conf);
+
+		if (!n[conf])
+			n[conf] = { };
+
+		n[conf][sid] = {
+			'.type':      type,
+			'.name':      sid,
+			'.create':    name,
+			'.anonymous': !name,
+			'.index':     1000 + this.state.newidx++
+		};
+
+		return sid;
+	},
+
+	/**
+	 * Removes the section with the given ID from the given configuration.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to remove the section from.
+	 *
+	 * @param {string} sid
+	 * The ID of the section to remove.
+	 */
+	remove: function(conf, sid) {
+		var v = this.state.values,
+		    n = this.state.creates,
+		    c = this.state.changes,
+		    d = this.state.deletes;
+
+		/* requested deletion of a just created section */
+		if (n[conf] && n[conf][sid]) {
+			delete n[conf][sid];
+		}
+		else if (v[conf] && v[conf][sid]) {
+			if (c[conf])
+				delete c[conf][sid];
+
+			if (!d[conf])
+				d[conf] = { };
+
+			d[conf][sid] = true;
+		}
+	},
+
+	/**
+	 * A section object represents the options and their corresponding values
+	 * enclosed within a configuration section, as well as some additional
+	 * meta data such as sort indexes and internal ID.
+	 *
+	 * Any internal metadata fields are prefixed with a dot which is isn't
+	 * an allowed character for normal option names.
+	 *
+	 * @typedef {Object<string, boolean|number|string|string[]>} SectionObject
+	 * @memberof LuCI.uci
+	 *
+	 * @property {boolean} .anonymous
+	 * The `.anonymous` property specifies whether the configuration is
+	 * anonymous (`true`) or named (`false`).
+	 *
+	 * @property {number} .index
+	 * The `.index` property specifes the sort order of the section.
+	 *
+	 * @property {string} .name
+	 * The `.name` property holds the name of the section object. It may be
+	 * either an anonymous ID in the form `cfgXXXXXX` or `newXXXXXX` with `X`
+	 * being a hexadecimal digit or a string holding the name of the section.
+	 *
+	 * @property {string} .type
+	 * The `.type` property contains the type of the corresponding uci
+	 * section.
+	 *
+	 * @property {string|string[]} *
+	 * A section object may contain an arbitrary number of further properties
+	 * representing the uci option enclosed in the section.
+	 *
+	 * All option property names will be in the form `[A-Za-z0-9_]+` and
+	 * either contain a string value or an array of strings, in case the
+	 * underlying option is an UCI list.
+	 */
+
+	/**
+	 * The sections callback is invoked for each section found within
+	 * the given configuration and receives the section object and its
+	 * associated name as arguments.
+	 *
+	 * @callback LuCI.uci~sectionsFn
+	 *
+	 * @param {LuCI.uci.SectionObject} section
+	 * The section object.
+	 *
+	 * @param {string} sid
+	 * The name or ID of the section.
+	 */
+
+	/**
+	 * Enumerates the sections of the given configuration, optionally
+	 * filtered by type.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to enumerate the sections for.
+	 *
+	 * @param {string} [type]
+	 * Enumerate only sections of the given type. If omitted, enumerate
+	 * all sections.
+	 *
+	 * @param {LuCI.uci~sectionsFn} [cb]
+	 * An optional callback to invoke for each enumerated section.
+	 *
+	 * @returns {Array<LuCI.uci.SectionObject>}
+	 * Returns a sorted array of the section objects within the given
+	 * configuration, filtered by type of a type has been specified.
+	 */
+	sections: function(conf, type, cb) {
+		var sa = [ ],
+		    v = this.state.values[conf],
+		    n = this.state.creates[conf],
+		    c = this.state.changes[conf],
+		    d = this.state.deletes[conf];
+
+		if (!v)
+			return sa;
+
+		for (var s in v)
+			if (!d || d[s] !== true)
+				if (!type || v[s]['.type'] == type)
+					sa.push(Object.assign({ }, v[s], c ? c[s] : null));
+
+		if (n)
+			for (var s in n)
+				if (!type || n[s]['.type'] == type)
+					sa.push(Object.assign({ }, n[s]));
+
+		sa.sort(function(a, b) {
+			return a['.index'] - b['.index'];
+		});
+
+		for (var i = 0; i < sa.length; i++)
+			sa[i]['.index'] = i;
+
+		if (typeof(cb) == 'function')
+			for (var i = 0; i < sa.length; i++)
+				cb.call(this, sa[i], sa[i]['.name']);
+
+		return sa;
+	},
+
+	/**
+	 * Gets the value of the given option within the specified section
+	 * of the given configuration or the entire section object if the
+	 * option name is omitted.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to read the value from.
+	 *
+	 * @param {string} sid
+	 * The name or ID of the section to read.
+	 *
+	 * @param {string} [option]
+	 * The option name to read the value from. If the option name is
+	 * omitted or `null`, the entire section is returned instead.
+	 *
+	 * @returns {null|string|string[]|LuCI.uci.SectionObject}
+	 * - Returns a string containing the option value in case of a
+	 *   plain UCI option.
+	 * - Returns an array of strings containing the option values in
+	 *   case of `option` pointing to an UCI list.
+	 * - Returns a {@link LuCI.uci.SectionObject section object} if
+	 *   the `option` argument has been omitted or is `null`.
+	 * - Returns `null` if the config, section or option has not been
+	 *   found or if the corresponding configuration is not loaded.
+	 */
+	get: function(conf, sid, opt) {
+		var v = this.state.values,
+		    n = this.state.creates,
+		    c = this.state.changes,
+		    d = this.state.deletes;
+
+		sid = this.resolveSID(conf, sid);
+
+		if (sid == null)
+			return null;
+
+		/* requested option in a just created section */
+		if (n[conf] && n[conf][sid]) {
+			if (!n[conf])
+				return null;
+
+			if (opt == null)
+				return n[conf][sid];
+
+			return n[conf][sid][opt];
+		}
+
+		/* requested an option value */
+		if (opt != null) {
+			/* check whether option was deleted */
+			if (d[conf] && d[conf][sid])
+				if (d[conf][sid] === true || d[conf][sid][opt])
+					return null;
+
+			/* check whether option was changed */
+			if (c[conf] && c[conf][sid] && c[conf][sid][opt] != null)
+				return c[conf][sid][opt];
+
+			/* return base value */
+			if (v[conf] && v[conf][sid])
+				return v[conf][sid][opt];
+
+			return null;
+		}
+
+		/* requested an entire section */
+		if (v[conf]) {
+			/* check whether entire section was deleted */
+			if (d[conf] && d[conf][sid] === true)
+				return null;
+
+			var s = v[conf][sid] || null;
+
+			if (s) {
+				/* merge changes */
+				if (c[conf] && c[conf][sid])
+					for (var opt in c[conf][sid])
+						if (c[conf][sid][opt] != null)
+							s[opt] = c[conf][sid][opt];
+
+				/* merge deletions */
+				if (d[conf] && d[conf][sid])
+					for (var opt in d[conf][sid])
+						delete s[opt];
+			}
+
+			return s;
+		}
+
+		return null;
+	},
+
+	/**
+	 * Sets the value of the given option within the specified section
+	 * of the given configuration.
+	 *
+	 * If either config, section or option is null, or if `option` begins
+	 * with a dot, the function will do nothing.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to set the option value in.
+	 *
+	 * @param {string} sid
+	 * The name or ID of the section to set the option value in.
+	 *
+	 * @param {string} option
+	 * The option name to set the value for.
+	 *
+	 * @param {null|string|string[]} value
+	 * The option value to set. If the value is `null` or an empty string,
+	 * the option will be removed, otherwise it will be set or overwritten
+	 * with the given value.
+	 */
+	set: function(conf, sid, opt, val) {
+		var v = this.state.values,
+		    n = this.state.creates,
+		    c = this.state.changes,
+		    d = this.state.deletes;
+
+		sid = this.resolveSID(conf, sid);
+
+		if (sid == null || opt == null || opt.charAt(0) == '.')
+			return;
+
+		if (n[conf] && n[conf][sid]) {
+			if (val != null)
+				n[conf][sid][opt] = val;
+			else
+				delete n[conf][sid][opt];
+		}
+		else if (val != null && val !== '') {
+			/* do not set within deleted section */
+			if (d[conf] && d[conf][sid] === true)
+				return;
+
+			/* only set in existing sections */
+			if (!v[conf] || !v[conf][sid])
+				return;
+
+			if (!c[conf])
+				c[conf] = {};
+
+			if (!c[conf][sid])
+				c[conf][sid] = {};
+
+			/* undelete option */
+			if (d[conf] && d[conf][sid]) {
+				if (isEmpty(d[conf][sid], opt))
+					delete d[conf][sid];
+				else
+					delete d[conf][sid][opt];
+			}
+
+			c[conf][sid][opt] = val;
+		}
+		else {
+			/* revert any change for to-be-deleted option */
+			if (c[conf] && c[conf][sid]) {
+				if (isEmpty(c[conf][sid], opt))
+					delete c[conf][sid];
+				else
+					delete c[conf][sid][opt];
+			}
+
+			/* only delete existing options */
+			if (v[conf] && v[conf][sid] && v[conf][sid].hasOwnProperty(opt)) {
+				if (!d[conf])
+					d[conf] = { };
+
+				if (!d[conf][sid])
+					d[conf][sid] = { };
+
+				if (d[conf][sid] !== true)
+					d[conf][sid][opt] = true;
+			}
+		}
+	},
+
+	/**
+	 * Remove the given option within the specified section of the given
+	 * configuration.
+	 *
+	 * This function is a convenience wrapper around
+	 * `uci.set(config, section, option, null)`.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to remove the option from.
+	 *
+	 * @param {string} sid
+	 * The name or ID of the section to remove the option from.
+	 *
+	 * @param {string} option
+	 * The name of the option to remove.
+	 */
+	unset: function(conf, sid, opt) {
+		return this.set(conf, sid, opt, null);
+	},
+
+	/**
+	 * Gets the value of the given option or the entire section object of
+	 * the first found section of the specified type or the first found
+	 * section of the entire configuration if no type is specfied.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to read the value from.
+	 *
+	 * @param {string} [type]
+	 * The type of the first section to find. If it is `null`, the first
+	 * section of the entire config is read, otherwise the first section
+	 * matching the given type.
+	 *
+	 * @param {string} [option]
+	 * The option name to read the value from. If the option name is
+	 * omitted or `null`, the entire section is returned instead.
+	 *
+	 * @returns {null|string|string[]|LuCI.uci.SectionObject}
+	 * - Returns a string containing the option value in case of a
+	 *   plain UCI option.
+	 * - Returns an array of strings containing the option values in
+	 *   case of `option` pointing to an UCI list.
+	 * - Returns a {@link LuCI.uci.SectionObject section object} if
+	 *   the `option` argument has been omitted or is `null`.
+	 * - Returns `null` if the config, section or option has not been
+	 *   found or if the corresponding configuration is not loaded.
+	 */
+	get_first: function(conf, type, opt) {
+		var sid = null;
+
+		this.sections(conf, type, function(s) {
+			if (sid == null)
+				sid = s['.name'];
+		});
+
+		return this.get(conf, sid, opt);
+	},
+
+	/**
+	 * Sets the value of the given option within the first found section
+	 * of the given configuration matching the specified type or within
+	 * the first section of the entire config when no type has is specified.
+	 *
+	 * If either config, type or option is null, or if `option` begins
+	 * with a dot, the function will do nothing.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to set the option value in.
+	 *
+	 * @param {string} [type]
+	 * The type of the first section to find. If it is `null`, the first
+	 * section of the entire config is written to, otherwise the first
+	 * section matching the given type is used.
+	 *
+	 * @param {string} option
+	 * The option name to set the value for.
+	 *
+	 * @param {null|string|string[]} value
+	 * The option value to set. If the value is `null` or an empty string,
+	 * the option will be removed, otherwise it will be set or overwritten
+	 * with the given value.
+	 */
+	set_first: function(conf, type, opt, val) {
+		var sid = null;
+
+		this.sections(conf, type, function(s) {
+			if (sid == null)
+				sid = s['.name'];
+		});
+
+		return this.set(conf, sid, opt, val);
+	},
+
+	/**
+	 * Removes the given option within the first found section of the given
+	 * configuration matching the specified type or within the first section
+	 * of the entire config when no type has is specified.
+	 *
+	 * This function is a convenience wrapper around
+	 * `uci.set_first(config, type, option, null)`.
+	 *
+	 * @param {string} config
+	 * The name of the configuration to set the option value in.
+	 *
+	 * @param {string} [type]
+	 * The type of the first section to find. If it is `null`, the first
+	 * section of the entire config is written to, otherwise the first
+	 * section matching the given type is used.
+	 *
+	 * @param {string} option
+	 * The option name to set the value for.
+	 */
+	unset_first: function(conf, type, opt) {
+		return this.set_first(conf, type, opt, null);
+	},
+
+	/**
+	 * Move the first specified section within the given configuration
+	 * before or after the second specified section.
+	 *
+	 * @param {string} config
+	 * The configuration to move the section within.
+	 *
+	 * @param {string} sid1
+	 * The ID of the section to move within the configuration.
+	 *
+	 * @param {string} [sid2]
+	 * The ID of the target section for the move operation. If the
+	 * `after` argument is `false` or not specified, the section named by
+	 * `sid1` will be moved before this target section, if the `after`
+	 * argument is `true`, the `sid1` section will be moved after this
+	 * section.
+	 *
+	 * When the `sid2` argument is `null`, the section specified by `sid1`
+	 * is moved to the end of the configuration.
+	 *
+	 * @param {boolean} [after=false]
+	 * When `true`, the section `sid1` is moved after the section `sid2`,
+	 * when `false`, the section `sid1` is moved before `sid2`.
+	 *
+	 * If `sid2` is null, then this parameter has no effect and the section
+	 * `sid1` is moved to the end of the configuration instead.
+	 *
+	 * @returns {boolean}
+	 * Returns `true` when the section was successfully moved, or `false`
+	 * when either the section specified by `sid1` or by `sid2` is not found.
+	 */
+	move: function(conf, sid1, sid2, after) {
+		var sa = this.sections(conf),
+		    s1 = null, s2 = null;
+
+		sid1 = this.resolveSID(conf, sid1);
+		sid2 = this.resolveSID(conf, sid2);
+
+		for (var i = 0; i < sa.length; i++) {
+			if (sa[i]['.name'] != sid1)
+				continue;
+
+			s1 = sa[i];
+			sa.splice(i, 1);
+			break;
+		}
+
+		if (s1 == null)
+			return false;
+
+		if (sid2 == null) {
+			sa.push(s1);
+		}
+		else {
+			for (var i = 0; i < sa.length; i++) {
+				if (sa[i]['.name'] != sid2)
+					continue;
+
+				s2 = sa[i];
+				sa.splice(i + !!after, 0, s1);
+				break;
+			}
+
+			if (s2 == null)
+				return false;
+		}
+
+		for (var i = 0; i < sa.length; i++)
+			this.get(conf, sa[i]['.name'])['.index'] = i;
+
+		this.state.reorder[conf] = true;
+
+		return true;
+	},
+
+	/**
+	 * Submits all local configuration changes to the remove `ubus` api,
+	 * adds, removes and reorders remote sections as needed and reloads
+	 * all loaded configurations to resynchronize the local state with
+	 * the remote configuration values.
+	 *
+	 * @returns {string[]}
+	 * Returns a promise resolving to an array of configuration names which
+	 * have been reloaded by the save operation.
+	 */
+	save: function() {
+		var v = this.state.values,
+		    n = this.state.creates,
+		    c = this.state.changes,
+		    d = this.state.deletes,
+		    r = this.state.reorder,
+		    self = this,
+		    snew = [ ],
+		    pkgs = { },
+		    tasks = [];
+
+		if (d)
+			for (var conf in d) {
+				for (var sid in d[conf]) {
+					var o = d[conf][sid];
+
+					if (o === true)
+						tasks.push(self.callDelete(conf, sid, null));
+					else
+						tasks.push(self.callDelete(conf, sid, Object.keys(o)));
+				}
+
+				pkgs[conf] = true;
+			}
+
+		if (n)
+			for (var conf in n) {
+				for (var sid in n[conf]) {
+					var p = {
+						config: conf,
+						values: { }
+					};
+
+					for (var k in n[conf][sid]) {
+						if (k == '.type')
+							p.type = n[conf][sid][k];
+						else if (k == '.create')
+							p.name = n[conf][sid][k];
+						else if (k.charAt(0) != '.')
+							p.values[k] = n[conf][sid][k];
+					}
+
+					snew.push(n[conf][sid]);
+					tasks.push(self.callAdd(p.config, p.type, p.name, p.values));
+				}
+
+				pkgs[conf] = true;
+			}
+
+		if (c)
+			for (var conf in c) {
+				for (var sid in c[conf])
+					tasks.push(self.callSet(conf, sid, c[conf][sid]));
+
+				pkgs[conf] = true;
+			}
+
+		if (r)
+			for (var conf in r)
+				pkgs[conf] = true;
+
+		return Promise.all(tasks).then(function(responses) {
+			/*
+			 array "snew" holds references to the created uci sections,
+			 use it to assign the returned names of the new sections
+			*/
+			for (var i = 0; i < snew.length; i++)
+				snew[i]['.name'] = responses[i];
+
+			return self.reorderSections();
+		}).then(function() {
+			pkgs = Object.keys(pkgs);
+
+			self.unload(pkgs);
+
+			return self.load(pkgs);
+		});
+	},
+
+	/**
+	 * Instructs the remote `ubus` UCI api to commit all saved changes with
+	 * rollback protection and attempts to confirm the pending commit
+	 * operation to cancel the rollback timer.
+	 *
+	 * @param {number} [timeout=10]
+	 * Override the confirmation timeout after which a rollback is triggered.
+	 *
+	 * @returns {Promise<number>}
+	 * Returns a promise resolving/rejecting with the `ubus` RPC status code.
+	 */
+	apply: function(timeout) {
+		var self = this,
+		    date = new Date();
+
+		if (typeof(timeout) != 'number' || timeout < 1)
+			timeout = 10;
+
+		return self.callApply(timeout, true).then(function(rv) {
+			if (rv != 0)
+				return Promise.reject(rv);
+
+			var try_deadline = date.getTime() + 1000 * timeout;
+			var try_confirm = function() {
+				return self.callConfirm().then(function(rv) {
+					if (rv != 0) {
+						if (date.getTime() < try_deadline)
+							window.setTimeout(try_confirm, 250);
+						else
+							return Promise.reject(rv);
+					}
+
+					return rv;
+				});
+			};
+
+			window.setTimeout(try_confirm, 1000);
+		});
+	},
+
+	/**
+	 * An UCI change record is a plain array containing the change operation
+	 * name as first element, the affected section ID as second argument
+	 * and an optional third and fourth argument whose meanings depend on
+	 * the operation.
+	 *
+	 * @typedef {string[]} ChangeRecord
+	 * @memberof LuCI.uci
+	 *
+	 * @property {string} 0
+	 * The operation name - may be one of `add`, `set`, `remove`, `order`,
+	 * `list-add`, `list-del` or `rename`.
+	 *
+	 * @property {string} 1
+	 * The section ID targeted by the operation.
+	 *
+	 * @property {string} 2
+	 * The meaning of the third element depends on the operation.
+	 * - For `add` it is type of the section that has been added
+	 * - For `set` it either is the option name if a fourth element exists,
+	 *   or the type of a named section which has been added when the change
+	 *   entry only contains three elements.
+	 * - For `remove` it contains the name of the option that has been
+	 *   removed.
+	 * - For `order` it specifies the new sort index of the section.
+	 * - For `list-add` it contains the name of the list option a new value
+	 *   has been added to.
+	 * - For `list-del` it contains the name of the list option a value has
+	 *   been removed from.
+	 * - For `rename` it contains the name of the option that has been
+	 *   renamed if a fourth element exists, else it contains the new name
+	 *   a section has been renamed to if the change entry only contains
+	 *   three elements.
+	 *
+	 * @property {string} 4
+	 * The meaning of the fourth element depends on the operation.
+	 * - For `set` it is the value an option has been set to.
+	 * - For `list-add` it is the new value that has been added to a
+	 *   list option.
+	 * - For `rename` it is the new name of an option that has been
+	 *   renamed.
+	 */
+
+	/**
+	 * Fetches uncommitted UCI changes from the remote `ubus` RPC api.
+	 *
+	 * @method
+	 * @returns {Promise<Object<string, Array<LuCI.uci.ChangeRecord>>>}
+	 * Returns a promise resolving to an object containing the configuration
+	 * names as keys and arrays of related change records as values.
+	 */
+	changes: rpc.declare({
+		object: 'uci',
+		method: 'changes',
+		expect: { changes: { } }
+	})
+});
+EOF_ARGON_8080_UCI_JS
+    cat > "$argon_target_root/www/luci-static/resources/validation.js" <<'EOF_ARGON_8080_VALIDATION_JS'
+﻿'use strict';
+'require baseclass';
+
+function bytelen(x) {
+	return new Blob([x]).size;
+}
+
+function arrayle(a, b) {
+	if (!Array.isArray(a) || !Array.isArray(b))
+		return false;
+
+	for (var i = 0; i < a.length; i++)
+		if (a[i] > b[i])
+			return false;
+		else if (a[i] < b[i])
+			return true;
+
+	return true;
+}
+
+var Validator = baseclass.extend({
+	__name__: 'Validation',
+
+	__init__: function(field, type, optional, vfunc, validatorFactory) {
+		this.field = field;
+		this.optional = optional;
+		this.vfunc = vfunc;
+		this.vstack = validatorFactory.compile(type);
+		this.factory = validatorFactory;
+	},
+
+	assert: function(condition, message) {
+		if (!condition) {
+			this.field.classList.add('cbi-input-invalid');
+			this.error = message;
+			return false;
+		}
+
+		this.field.classList.remove('cbi-input-invalid');
+		this.error = null;
+		return true;
+	},
+
+	apply: function(name, value, args) {
+		var func;
+
+		if (typeof(name) === 'function')
+			func = name;
+		else if (typeof(this.factory.types[name]) === 'function')
+			func = this.factory.types[name];
+		else
+			return false;
+
+		if (value != null)
+			this.value = value;
+
+		return func.apply(this, args);
+	},
+
+	validate: function() {
+		/* element is detached */
+		if (!findParent(this.field, 'body') && !findParent(this.field, '[data-field]'))
+			return true;
+
+		this.field.classList.remove('cbi-input-invalid');
+		this.value = (this.field.value != null) ? this.field.value : '';
+		this.error = null;
+
+		var valid;
+
+		if (this.value.length === 0)
+			valid = this.assert(this.optional, _('non-empty value'));
+		else
+			valid = this.vstack[0].apply(this, this.vstack[1]);
+
+		if (valid !== true) {
+			var message = _('Expecting: %s').format(this.error);
+			this.field.setAttribute('data-tooltip', message);
+			this.field.setAttribute('data-tooltip-style', 'error');
+			this.field.dispatchEvent(new CustomEvent('validation-failure', {
+				bubbles: true,
+				detail: {
+					message: message
+				}
+			}));
+			return false;
+		}
+
+		if (typeof(this.vfunc) == 'function')
+			valid = this.vfunc(this.value);
+
+		if (valid !== true) {
+			this.assert(false, valid);
+			this.field.setAttribute('data-tooltip', valid);
+			this.field.setAttribute('data-tooltip-style', 'error');
+			this.field.dispatchEvent(new CustomEvent('validation-failure', {
+				bubbles: true,
+				detail: {
+					message: valid
+				}
+			}));
+			return false;
+		}
+
+		this.field.removeAttribute('data-tooltip');
+		this.field.removeAttribute('data-tooltip-style');
+		this.field.dispatchEvent(new CustomEvent('validation-success', { bubbles: true }));
+		return true;
+	},
+
+});
+
+var ValidatorFactory = baseclass.extend({
+	__name__: 'ValidatorFactory',
+
+	create: function(field, type, optional, vfunc) {
+		return new Validator(field, type, optional, vfunc, this);
+	},
+
+	compile: function(code) {
+		var pos = 0;
+		var esc = false;
+		var depth = 0;
+		var stack = [ ];
+
+		code += ',';
+
+		for (var i = 0; i < code.length; i++) {
+			if (esc) {
+				esc = false;
+				continue;
+			}
+
+			switch (code.charCodeAt(i))
+			{
+			case 92:
+				esc = true;
+				break;
+
+			case 40:
+			case 44:
+				if (depth <= 0) {
+					if (pos < i) {
+						var label = code.substring(pos, i);
+							label = label.replace(/\\(.)/g, '$1');
+							label = label.replace(/^[ \t]+/g, '');
+							label = label.replace(/[ \t]+$/g, '');
+
+						if (label && !isNaN(label)) {
+							stack.push(parseFloat(label));
+						}
+						else if (label.match(/^(['"]).*\1$/)) {
+							stack.push(label.replace(/^(['"])(.*)\1$/, '$2'));
+						}
+						else if (typeof this.types[label] == 'function') {
+							stack.push(this.types[label]);
+							stack.push(null);
+						}
+						else {
+							L.raise('SyntaxError', 'Unhandled token "%s"', label);
+						}
+					}
+
+					pos = i+1;
+				}
+
+				depth += (code.charCodeAt(i) == 40);
+				break;
+
+			case 41:
+				if (--depth <= 0) {
+					if (typeof stack[stack.length-2] != 'function')
+						L.raise('SyntaxError', 'Argument list follows non-function');
+
+					stack[stack.length-1] = this.compile(code.substring(pos, i));
+					pos = i+1;
+				}
+
+				break;
+			}
+		}
+
+		return stack;
+	},
+
+	parseInteger: function(x) {
+		return (/^-?\d+$/.test(x) ? +x : NaN);
+	},
+
+	parseDecimal: function(x) {
+		return (/^-?\d+(?:\.\d+)?$/.test(x) ? +x : NaN);
+	},
+
+	parseIPv4: function(x) {
+		if (!x.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/))
+			return null;
+
+		if (RegExp.$1 > 255 || RegExp.$2 > 255 || RegExp.$3 > 255 || RegExp.$4 > 255)
+			return null;
+
+		return [ +RegExp.$1, +RegExp.$2, +RegExp.$3, +RegExp.$4 ];
+	},
+
+	parseIPv6: function(x) {
+		if (x.match(/^([a-fA-F0-9:]+):(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/)) {
+			var v6 = RegExp.$1, v4 = this.parseIPv4(RegExp.$2);
+
+			if (!v4)
+				return null;
+
+			x = v6 + ':' + (v4[0] * 256 + v4[1]).toString(16)
+			       + ':' + (v4[2] * 256 + v4[3]).toString(16);
+		}
+
+		if (!x.match(/^[a-fA-F0-9:]+$/))
+			return null;
+
+		var prefix_suffix = x.split(/::/);
+
+		if (prefix_suffix.length > 2)
+			return null;
+
+		var prefix = (prefix_suffix[0] || '0').split(/:/);
+		var suffix = prefix_suffix.length > 1 ? (prefix_suffix[1] || '0').split(/:/) : [];
+
+		if (suffix.length ? (prefix.length + suffix.length > 7)
+		                  : ((prefix_suffix.length < 2 && prefix.length < 8) || prefix.length > 8))
+			return null;
+
+		var i, word;
+		var words = [];
+
+		for (i = 0, word = parseInt(prefix[0], 16); i < prefix.length; word = parseInt(prefix[++i], 16))
+			if (prefix[i].length <= 4 && !isNaN(word) && word <= 0xFFFF)
+				words.push(word);
+			else
+				return null;
+
+		for (i = 0; i < (8 - prefix.length - suffix.length); i++)
+			words.push(0);
+
+		for (i = 0, word = parseInt(suffix[0], 16); i < suffix.length; word = parseInt(suffix[++i], 16))
+			if (suffix[i].length <= 4 && !isNaN(word) && word <= 0xFFFF)
+				words.push(word);
+			else
+				return null;
+
+		return words;
+	},
+
+	types: {
+		integer: function() {
+			return this.assert(!isNaN(this.factory.parseInteger(this.value)), _('valid integer value'));
+		},
+
+		uinteger: function() {
+			return this.assert(this.factory.parseInteger(this.value) >= 0, _('positive integer value'));
+		},
+
+		float: function() {
+			return this.assert(!isNaN(this.factory.parseDecimal(this.value)), _('valid decimal value'));
+		},
+
+		ufloat: function() {
+			return this.assert(this.factory.parseDecimal(this.value) >= 0, _('positive decimal value'));
+		},
+
+		ipaddr: function(nomask) {
+			return this.assert(this.apply('ip4addr', null, [nomask]) || this.apply('ip6addr', null, [nomask]),
+				nomask ? _('valid IP address') : _('valid IP address or prefix'));
+		},
+
+		ip4addr: function(nomask) {
+			var re = nomask ? /^(\d+\.\d+\.\d+\.\d+)$/ : /^(\d+\.\d+\.\d+\.\d+)(?:\/(\d+\.\d+\.\d+\.\d+)|\/(\d{1,2}))?$/,
+			    m = this.value.match(re);
+
+			return this.assert(m && this.factory.parseIPv4(m[1]) && (m[2] ? this.factory.parseIPv4(m[2]) : (m[3] ? this.apply('ip4prefix', m[3]) : true)),
+				nomask ? _('valid IPv4 address') : _('valid IPv4 address or network'));
+		},
+
+		ip6addr: function(nomask) {
+			var re = nomask ? /^([0-9a-fA-F:.]+)$/ : /^([0-9a-fA-F:.]+)(?:\/(\d{1,3}))?$/,
+			    m = this.value.match(re);
+
+			return this.assert(m && this.factory.parseIPv6(m[1]) && (m[2] ? this.apply('ip6prefix', m[2]) : true),
+				nomask ? _('valid IPv6 address') : _('valid IPv6 address or prefix'));
+		},
+
+		ip4prefix: function() {
+			return this.assert(!isNaN(this.value) && this.value >= 0 && this.value <= 32,
+				_('valid IPv4 prefix value (0-32)'));
+		},
+
+		ip6prefix: function() {
+			return this.assert(!isNaN(this.value) && this.value >= 0 && this.value <= 128,
+				_('valid IPv6 prefix value (0-128)'));
+		},
+
+		cidr: function(negative) {
+			return this.assert(this.apply('cidr4', null, [negative]) || this.apply('cidr6', null, [negative]),
+				_('valid IPv4 or IPv6 CIDR'));
+		},
+
+		cidr4: function(negative) {
+			var m = this.value.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(-)?(\d{1,2})$/);
+			return this.assert(m && this.factory.parseIPv4(m[1]) && (negative || !m[2]) && this.apply('ip4prefix', m[3]),
+				_('valid IPv4 CIDR'));
+		},
+
+		cidr6: function(negative) {
+			var m = this.value.match(/^([0-9a-fA-F:.]+)\/(-)?(\d{1,3})$/);
+			return this.assert(m && this.factory.parseIPv6(m[1]) && (negative || !m[2]) && this.apply('ip6prefix', m[3]),
+				_('valid IPv6 CIDR'));
+		},
+
+		ipnet4: function() {
+			var m = this.value.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+			return this.assert(m && this.factory.parseIPv4(m[1]) && this.factory.parseIPv4(m[2]), _('IPv4 network in address/netmask notation'));
+		},
+
+		ipnet6: function() {
+			var m = this.value.match(/^([0-9a-fA-F:.]+)\/([0-9a-fA-F:.]+)$/);
+			return this.assert(m && this.factory.parseIPv6(m[1]) && this.factory.parseIPv6(m[2]), _('IPv6 network in address/netmask notation'));
+		},
+
+		ip6hostid: function() {
+			if (this.value == "eui64" || this.value == "random")
+				return true;
+
+			var v6 = this.factory.parseIPv6(this.value);
+			return this.assert(!(!v6 || v6[0] || v6[1] || v6[2] || v6[3]), _('valid IPv6 host id'));
+		},
+
+		ipmask: function(negative) {
+			return this.assert(this.apply('ipmask4', null, [negative]) || this.apply('ipmask6', null, [negative]),
+				_('valid network in address/netmask notation'));
+		},
+
+		ipmask4: function(negative) {
+			return this.assert(this.apply('cidr4', null, [negative]) || this.apply('ipnet4') || this.apply('ip4addr'),
+				_('valid IPv4 network'));
+		},
+
+		ipmask6: function(negative) {
+			return this.assert(this.apply('cidr6', null, [negative]) || this.apply('ipnet6') || this.apply('ip6addr'),
+				_('valid IPv6 network'));
+		},
+
+		iprange: function(negative) {
+			return this.assert(this.apply('iprange4', null, [negative]) || this.apply('iprange6', null, [negative]),
+				_('valid IP address range'));
+		},
+
+		iprange4: function(negative) {
+			var m = this.value.split('-');
+			return this.assert(m.length == 2 && arrayle(this.factory.parseIPv4(m[0]), this.factory.parseIPv4(m[1])),
+				_('valid IPv4 address range'));
+		},
+
+		iprange6: function(negative) {
+			var m = this.value.split('-');
+			return this.assert(m.length == 2 && arrayle(this.factory.parseIPv6(m[0]), this.factory.parseIPv6(m[1])),
+				_('valid IPv6 address range'));
+		},
+
+		port: function() {
+			var p = this.factory.parseInteger(this.value);
+			return this.assert(p >= 0 && p <= 65535, _('valid port value'));
+		},
+
+		portrange: function() {
+			if (this.value.match(/^(\d+)-(\d+)$/)) {
+				var p1 = +RegExp.$1;
+				var p2 = +RegExp.$2;
+				return this.assert(p1 <= p2 && p2 <= 65535,
+					_('valid port or port range (port1-port2)'));
+			}
+
+			return this.assert(this.apply('port'), _('valid port or port range (port1-port2)'));
+		},
+
+		macaddr: function(multicast) {
+			var m = this.value.match(/^([a-fA-F0-9]{2}):([a-fA-F0-9]{2}:){4}[a-fA-F0-9]{2}$/);
+			return this.assert(m != null && !(+m[1] & 1) == !multicast,
+				multicast ? _('valid multicast MAC address') : _('valid MAC address'));
+		},
+
+		host: function(ipv4only) {
+			return this.assert(this.apply('hostname') || this.apply(ipv4only == 1 ? 'ip4addr' : 'ipaddr', null, ['nomask']),
+				_('valid hostname or IP address'));
+		},
+
+		hostname: function(strict) {
+			if (this.value.length <= 253)
+				return this.assert(
+					(this.value.match(/^[a-zA-Z0-9_]+$/) != null ||
+						(this.value.match(/^[a-zA-Z0-9_][a-zA-Z0-9_\-.]*[a-zA-Z0-9]$/) &&
+						 this.value.match(/[^0-9.]/))) &&
+					(!strict || !this.value.match(/^_/)),
+					_('valid hostname'));
+
+			return this.assert(false, _('valid hostname'));
+		},
+
+		network: function() {
+			return this.assert(this.apply('uciname') || this.apply('hostname') || this.apply('ip4addr') || this.apply('ip6addr'),
+				_('valid UCI identifier, hostname or IP address range'));
+		},
+
+		hostport: function(ipv4only) {
+			var hp = this.value.split(/:/);
+			return this.assert(hp.length == 2 && this.apply('host', hp[0], [ipv4only]) && this.apply('port', hp[1]),
+				_('valid host:port'));
+		},
+
+		ip4addrport: function() {
+			var hp = this.value.split(/:/);
+			return this.assert(hp.length == 2 && this.apply('ip4addr', hp[0], [true]) && this.apply('port', hp[1]),
+				_('valid IPv4 address:port'));
+		},
+
+		ipaddrport: function(bracket) {
+			var m4 = this.value.match(/^([^\[\]:]+):(\d+)$/),
+			    m6 = this.value.match((bracket == 1) ? /^\[(.+)\]:(\d+)$/ : /^([^\[\]]+):(\d+)$/);
+
+			if (m4)
+				return this.assert(this.apply('ip4addr', m4[1], [true]) && this.apply('port', m4[2]),
+					_('valid address:port'));
+
+			return this.assert(m6 && this.apply('ip6addr', m6[1], [true]) && this.apply('port', m6[2]),
+				_('valid address:port'));
+		},
+
+		wpakey: function() {
+			var v = this.value;
+
+			if (v.length == 64)
+				return this.assert(v.match(/^[a-fA-F0-9]{64}$/), _('valid hexadecimal WPA key'));
+
+			return this.assert((v.length >= 8) && (v.length <= 63), _('key between 8 and 63 characters'));
+		},
+
+		wepkey: function() {
+			var v = this.value;
+
+			if (v.substr(0, 2) === 's:')
+				v = v.substr(2);
+
+			if ((v.length == 10) || (v.length == 26))
+				return this.assert(v.match(/^[a-fA-F0-9]{10,26}$/), _('valid hexadecimal WEP key'));
+
+			return this.assert((v.length === 5) || (v.length === 13), _('key with either 5 or 13 characters'));
+		},
+
+		uciname: function() {
+			return this.assert(this.value.match(/^[a-zA-Z0-9_]+$/), _('valid UCI identifier'));
+		},
+
+		netdevname: function() {
+			var v = this.value;
+
+			if (v == '.' || v == '..')
+				return this.assert(false, _('valid network device name, not "." or ".."'));
+
+			return this.assert(v.match(/^[^:\/%\s]{1,15}$/), _('valid network device name between 1 and 15 characters not containing ":", "/", "%" or spaces'));
+		},
+
+		range: function(min, max) {
+			var val = this.factory.parseDecimal(this.value);
+			return this.assert(val >= +min && val <= +max, _('value between %f and %f').format(min, max));
+		},
+
+		min: function(min) {
+			return this.assert(this.factory.parseDecimal(this.value) >= +min, _('value greater or equal to %f').format(min));
+		},
+
+		max: function(max) {
+			return this.assert(this.factory.parseDecimal(this.value) <= +max, _('value smaller or equal to %f').format(max));
+		},
+
+		length: function(len) {
+			return this.assert(bytelen(this.value) == +len,
+				_('value with %d characters').format(len));
+		},
+
+		rangelength: function(min, max) {
+			var len = bytelen(this.value);
+			return this.assert((len >= +min) && (len <= +max),
+				_('value between %d and %d characters').format(min, max));
+		},
+
+		minlength: function(min) {
+			return this.assert(bytelen(this.value) >= +min,
+				_('value with at least %d characters').format(min));
+		},
+
+		maxlength: function(max) {
+			return this.assert(bytelen(this.value) <= +max,
+				_('value with at most %d characters').format(max));
+		},
+
+		or: function() {
+			var errors = [];
+
+			for (var i = 0; i < arguments.length; i += 2) {
+				if (typeof arguments[i] != 'function') {
+					if (arguments[i] == this.value)
+						return this.assert(true);
+					errors.push('"%s"'.format(arguments[i]));
+					i--;
+				}
+				else if (arguments[i].apply(this, arguments[i+1])) {
+					return this.assert(true);
+				}
+				else {
+					errors.push(this.error);
+				}
+			}
+
+			var t = _('One of the following: %s');
+
+			return this.assert(false, t.format('\n - ' + errors.join('\n - ')));
+		},
+
+		and: function() {
+			for (var i = 0; i < arguments.length; i += 2) {
+				if (typeof arguments[i] != 'function') {
+					if (arguments[i] != this.value)
+						return this.assert(false, '"%s"'.format(arguments[i]));
+					i--;
+				}
+				else if (!arguments[i].apply(this, arguments[i+1])) {
+					return this.assert(false, this.error);
+				}
+			}
+
+			return this.assert(true);
+		},
+
+		neg: function() {
+			this.value = this.value.replace(/^[ \t]*![ \t]*/, '');
+
+			if (arguments[0].apply(this, arguments[1]))
+				return this.assert(true);
+
+			return this.assert(false, _('Potential negation of: %s').format(this.error));
+		},
+
+		list: function(subvalidator, subargs) {
+			this.field.setAttribute('data-is-list', 'true');
+
+			var tokens = this.value.match(/[^ \t]+/g);
+			for (var i = 0; i < tokens.length; i++)
+				if (!this.apply(subvalidator, tokens[i], subargs))
+					return this.assert(false, this.error);
+
+			return this.assert(true);
+		},
+
+		phonedigit: function() {
+			return this.assert(this.value.match(/^[0-9\*#!\.]+$/),
+				_('valid phone digit (0-9, "*", "#", "!" or ".")'));
+		},
+
+		timehhmmss: function() {
+			return this.assert(this.value.match(/^(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)$/),
+				_('valid time (HH:MM:SS)'));
+		},
+
+		dateyyyymmdd: function() {
+			if (this.value.match(/^(\d\d\d\d)-(\d\d)-(\d\d)/)) {
+				var year  = +RegExp.$1,
+				    month = +RegExp.$2,
+				    day   = +RegExp.$3,
+				    days_in_month = [ 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 ];
+
+				var is_leap_year = function(year) {
+					return ((!(year % 4) && (year % 100)) || !(year % 400));
+				}
+
+				var get_days_in_month = function(month, year) {
+					return (month === 2 && is_leap_year(year)) ? 29 : days_in_month[month - 1];
+				}
+
+				/* Firewall rules in the past don't make sense */
+				return this.assert(year >= 2015 && month && month <= 12 && day && day <= get_days_in_month(month, year),
+					_('valid date (YYYY-MM-DD)'));
+
+			}
+
+			return this.assert(false, _('valid date (YYYY-MM-DD)'));
+		},
+
+		unique: function(subvalidator, subargs) {
+			var ctx = this,
+			    option = findParent(ctx.field, '[data-widget][data-name]'),
+			    section = findParent(option, '.cbi-section'),
+			    query = '[data-widget="%s"][data-name="%s"]'.format(option.getAttribute('data-widget'), option.getAttribute('data-name')),
+			    unique = true;
+
+			section.querySelectorAll(query).forEach(function(sibling) {
+				if (sibling === option)
+					return;
+
+				var input = sibling.querySelector('[data-type]'),
+				    values = input ? (input.getAttribute('data-is-list') ? input.value.match(/[^ \t]+/g) : [ input.value ]) : null;
+
+				if (values !== null && values.indexOf(ctx.value) !== -1)
+					unique = false;
+			});
+
+			if (!unique)
+				return this.assert(false, _('unique value'));
+
+			if (typeof(subvalidator) === 'function')
+				return this.apply(subvalidator, null, subargs);
+
+			return this.assert(true);
+		},
+
+		hexstring: function() {
+			return this.assert(this.value.match(/^([A-F0-9]{2})+$/i),
+				_('hexadecimal encoded value'));
+		},
+
+		string: function() {
+			return true;
+		},
+
+		directory: function() {
+			return true;
+		},
+
+		file: function() {
+			return true;
+		},
+
+		device: function() {
+			return true;
+		}
+	}
+});
+
+return ValidatorFactory;
+EOF_ARGON_8080_VALIDATION_JS
+    cat > "$argon_target_root/www/luci-static/resources/xhr.js" <<'EOF_ARGON_8080_XHR_JS'
+/*
+ * xhr.js - XMLHttpRequest helper class
+ * (c) 2008-2010 Jo-Philipp Wich
+ */
+
+XHR = function()
+{
+	this.reinit = function()
+	{
+		if (window.XMLHttpRequest) {
+			this._xmlHttp = new XMLHttpRequest();
+		}
+		else if (window.ActiveXObject) {
+			this._xmlHttp = new ActiveXObject("Microsoft.XMLHTTP");
+		}
+		else {
+			alert("xhr.js: XMLHttpRequest is not supported by this browser!");
+		}
+	}
+
+	this.busy = function() {
+		if (!this._xmlHttp)
+			return false;
+
+		switch (this._xmlHttp.readyState)
+		{
+			case 1:
+			case 2:
+			case 3:
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	this.abort = function() {
+		if (this.busy())
+			this._xmlHttp.abort();
+	}
+
+	this.get = function(url,data,callback)
+	{
+		this.reinit();
+
+		var xhr  = this._xmlHttp;
+		var code = this._encode(data);
+
+		url = location.protocol + '//' + location.host + url;
+
+		if (code)
+			if (url.substr(url.length-1,1) == '&')
+				url += code;
+			else
+				url += '?' + code;
+
+		xhr.open('GET', url, true);
+
+		xhr.onreadystatechange = function()
+		{
+			if (xhr.readyState == 4) {
+				var json = null;
+				if (xhr.getResponseHeader("Content-Type") == "application/json") {
+					try {
+						json = eval('(' + xhr.responseText + ')');
+					}
+					catch(e) {
+						json = null;
+					}
+				}
+
+				callback(xhr, json);
+			}
+		}
+
+		xhr.send(null);
+	}
+
+	this.post = function(url,data,callback)
+	{
+		this.reinit();
+
+		var xhr  = this._xmlHttp;
+		var code = this._encode(data);
+
+		xhr.onreadystatechange = function()
+		{
+			if (xhr.readyState == 4)
+				callback(xhr);
+		}
+
+		xhr.open('POST', url, true);
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.setRequestHeader('Content-length', code.length);
+		xhr.setRequestHeader('Connection', 'close');
+		xhr.send(code);
+	}
+
+	this.cancel = function()
+	{
+		this._xmlHttp.onreadystatechange = function(){};
+		this._xmlHttp.abort();
+	}
+
+	this.send_form = function(form,callback,extra_values)
+	{
+		var code = '';
+
+		for (var i = 0; i < form.elements.length; i++)
+		{
+			var e = form.elements[i];
+
+			if (e.options)
+			{
+				code += (code ? '&' : '') +
+					form.elements[i].name + '=' + encodeURIComponent(
+						e.options[e.selectedIndex].value
+					);
+			}
+			else if (e.length)
+			{
+				for (var j = 0; j < e.length; j++)
+					if (e[j].name) {
+						code += (code ? '&' : '') +
+							e[j].name + '=' + encodeURIComponent(e[j].value);
+					}
+			}
+			else
+			{
+				code += (code ? '&' : '') +
+					e.name + '=' + encodeURIComponent(e.value);
+			}
+		}
+
+		if (typeof extra_values == 'object')
+			for (var key in extra_values)
+				code += (code ? '&' : '') +
+					key + '=' + encodeURIComponent(extra_values[key]);
+
+		return(
+			(form.method == 'get')
+				? this.get(form.getAttribute('action'), code, callback)
+				: this.post(form.getAttribute('action'), code, callback)
+		);
+	}
+
+	this._encode = function(obj)
+	{
+		obj = obj ? obj : { };
+		obj['_'] = Math.random();
+
+		if (typeof obj == 'object')
+		{
+			var code = '';
+			var self = this;
+
+			for (var k in obj)
+				code += (code ? '&' : '') +
+					k + '=' + encodeURIComponent(obj[k]);
+
+			return code;
+		}
+
+		return obj;
+	}
+}
+
+XHR.get = function(url, data, callback)
+{
+	(new XHR()).get(url, data, callback);
+}
+
+XHR.poll = function(interval, url, data, callback)
+{
+	if (isNaN(interval) || interval < 1)
+		interval = 5;
+
+	if (!XHR._q)
+	{
+		XHR._t = 0;
+		XHR._q = [ ];
+		XHR._r = function() {
+			for (var i = 0, e = XHR._q[0]; i < XHR._q.length; e = XHR._q[++i])
+			{
+				if (!(XHR._t % e.interval) && !e.xhr.busy())
+					e.xhr.get(e.url, e.data, e.callback);
+			}
+
+			XHR._t++;
+		};
+	}
+
+	XHR._q.push({
+		interval: interval,
+		callback: callback,
+		url:      url,
+		data:     data,
+		xhr:      new XHR()
+	});
+
+	XHR.run();
+}
+
+XHR.halt = function()
+{
+	if (XHR._i)
+	{
+		/* show & set poll indicator */
+		try {
+			document.getElementById('xhr_poll_status').style.display = '';
+			document.getElementById('xhr_poll_status_on').style.display = 'none';
+			document.getElementById('xhr_poll_status_off').style.display = '';
+		} catch(e) { }
+
+		window.clearInterval(XHR._i);
+		XHR._i = null;
+	}
+}
+
+XHR.run = function()
+{
+	if (XHR._r && !XHR._i)
+	{
+		/* show & set poll indicator */
+		try {
+			document.getElementById('xhr_poll_status').style.display = '';
+			document.getElementById('xhr_poll_status_on').style.display = '';
+			document.getElementById('xhr_poll_status_off').style.display = 'none';
+		} catch(e) { }
+
+		/* kick first round manually to prevent one second lag when setting up
+		 * the poll interval */
+		XHR._r();
+		XHR._i = window.setInterval(XHR._r, 1000);
+	}
+}
+
+XHR.running = function()
+{
+	return !!(XHR._r && XHR._i);
+}
+EOF_ARGON_8080_XHR_JS
+    cat > "$argon_target_root/usr/lib/lua/luci/view/themes/argon/header.htm" <<'EOF_ARGON_8080_HEADER_HTM'
+<%#
+	Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-material Argon Template
+
+	luci-theme-argon
+	Copyright 2020 Jerrykuku <jerrykuku@qq.com>
+
+	Have a bug? Please create an issue here on GitHub!
+	https://github.com/jerrykuku/luci-theme-argon/issues
+
+	luci-theme-material:
+	Copyright 2015 Lutty Yang <lutty@wcan.in>
+
+	Argon Theme
+	https://demos.creative-tim.com/argon-dashboard/index.html
+
+	Licensed to the public under the Apache License 2.0
+-%>
+
+<%
+	local sys = require "luci.sys"
+	local util = require "luci.util"
+	local http = require "luci.http"
+	local disp = require "luci.dispatcher"
+    local ver = require "luci.version"
+
+	local boardinfo = util.ubus("system", "board")
+
+	local node = disp.context.dispatched
+
+	local fs = require "nixio.fs"
+	local nutil = require "nixio.util"
+	local uci = require 'luci.model.uci'.cursor()
+
+	-- send as HTML5
+	http.prepare_content("text/html")
+
+	math.randomseed(os.time())
+
+	-- Custom settings
+	local mode = 'normal'
+	local private_webroot = NRADIO_8080_INSTANCE_ROOT and (NRADIO_8080_INSTANCE_ROOT .. "/www")
+		or (os.getenv("SCRIPT_FILENAME") or ""):match("^(.*)/cgi%-bin/luci$") or "/www"
+	local dark_css = fs.readfile(private_webroot .. '/luci-static/argon/css/dark.css') or ""
+	local bar_color = '#5e72e4'
+	local primary, dark_primary, blur_radius, blur_radius_dark, blur_opacity
+	if fs.access('/etc/config/argon') then
+		primary = uci:get_first('argon', 'global', 'primary') or '#5e72e4'
+		dark_primary = uci:get_first('argon', 'global', 'dark_primary') or '#483d8b'
+		blur_radius = uci:get_first('argon', 'global', 'blur') or '10'
+		blur_radius_dark = uci:get_first('argon', 'global', 'blur_dark') or '10'
+		blur_opacity = uci:get_first('argon', 'global', 'transparency') or '0.5'
+		blur_opacity_dark = uci:get_first('argon', 'global', 'transparency_dark') or '0.5'
+		mode = uci:get_first('argon', 'global', 'mode') or 'normal'
+		bar_color = mode == 'dark' and dark_primary or primary
+	end
+
+	-- Brand name
+	local brand_name = "OpenWrt"
+-%>
+<!DOCTYPE html>
+<html lang="<%=luci.i18n.context.lang%>">
+
+<head>
+    <meta charset="utf-8">
+    <title>
+        <%=striptags( ("OpenWrt") .. ( (node and node.title) and ' - ' .. translate(node.title) or '')) %>
+        - LuCI</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
+    <meta name="format-detection" content="telephone=no, email=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="full-screen" content="yes">
+    <meta name="x5-page-mode" content="app">
+    <meta name="browsermode" content="application">
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="msapplication-TileColor" content="<%=bar_color%>">
+    <meta name="application-name" content="<%=striptags( ("OpenWrt") ) %> - LuCI">
+    <meta name="apple-mobile-web-app-title" content="<%=striptags( ("OpenWrt") ) %> - LuCI">
+    <link rel="apple-touch-icon" sizes="60x60" href="<%=media%>/icon/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="<%=media%>/icon/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="<%=media%>/icon/apple-icon-144x144.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="<%=media%>/icon/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="<%=media%>/icon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="<%=media%>/icon/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="<%=media%>/icon/favicon-16x16.png">
+    <link rel="manifest" href="<%=media%>/icon/manifest.json"  crossorigin="use-credentials">
+    <meta name="msapplication-TileColor" content="<%=bar_color%>">
+    <meta name="msapplication-TileImage" content="<%=media%>/icon/ms-icon-144x144.png">
+    <meta name="theme-color" content="<%=bar_color%>">
+    <link rel="stylesheet" href="<%=media%>/css/cascade.css?v=2.2.9.4">
+    <style title="text/css">
+        <% if mode == 'normal' then %>
+            @media (prefers-color-scheme: dark) {
+                <%=dark_css%>
+            }
+        <% elseif mode == 'dark' then %>
+            <%=dark_css%>
+        <% end -%>
+        <% if fs.access('/etc/config/argon') then %>
+        :root {
+            --primary: <%=primary%>;
+            --dark-primary: <%=dark_primary%>;
+            --blur-radius:<%=blur_radius%>px;
+            --blur-opacity:<%=blur_opacity%>;
+            --blur-radius-dark:<%=blur_radius_dark%>px;
+            --blur-opacity-dark:<%=blur_opacity_dark%>;
+        }
+        <% end -%>
+    </style>
+	<link rel="shortcut icon" href="<%=media%>/favicon.ico">
+	<% if node and node.css then %>
+	<link rel="stylesheet" href="<%=resource%>/<%=node.css%>">
+	<% end -%>
+	<% if css then %>
+	<style title="text/css">
+		<%=css %>
+	</style>
+	<% end -%>
+	<script src="<%=media%>/js/polyfill.min.js?v=2.2.9.4"></script>
+	<script src="<%=url('admin/translations', luci.i18n.context.lang)%>?v=<%=ver.luciversion%>"></script>
+	<script src="<%=resource%>/cbi.js?v=<%=ver.luciversion%>-argonfix"></script>
+	<script src="<%=resource%>/luci.js?v=<%=ver.luciversion%>-argonfix"></script>
+	<script src="<%=resource%>/xhr.js?v=<%=ver.luciversion%>-argonfix"></script>
+	<script src="<%=media%>/js/jquery.min.js?v=3.5.1"></script>
+</head>
+
+<body
+	class="lang_<%=luci.i18n.context.lang%> <% if node then %><%= striptags( node.title ) %><% end %> <% if luci.dispatcher.context.authsession then %>logged-in<% end %>"
+	data-page="<%= table.concat(disp.context.requestpath, "-") %>">
+
+	<div class="main">
+		<div class="main-left" id="mainmenu" style="display:none">
+			<div class="sidenav-header d-flex align-items-center">
+				<a class="brand" href="#"><%=brand_name%></a>
+				<div class="ml-auto">
+					<!-- Sidenav toggler -->
+					<div class="sidenav-toggler d-none d-xl-block active" data-action="sidenav-unpin"
+						data-target="#sidenav-main">
+						<div class="sidenav-toggler-inner">
+							<i class="sidenav-toggler-line"></i>
+							<i class="sidenav-toggler-line"></i>
+							<i class="sidenav-toggler-line"></i>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="main-right">
+			<header class="bg-primary">
+				<div class="fill">
+					<div class="container">
+						<div class="flex1">
+							<a class="showSide"></a>
+							<a class="brand" href="#"><%=brand_name%></a>
+						</div>
+						<div class="status" id="indicators"></div>
+					</div>
+				</div>
+			</header>
+			<div class="darkMask"></div>
+			<div id="maincontent">
+				<div class="container">
+					<%- if luci.sys.process.info("uid") == 0 and luci.sys.user.getuser("root") and not luci.sys.user.getpasswd("root") then -%>
+					<div class="alert-message error">
+						<h4><%:No password set!%></h4>
+						<p><%:There is no password set on this router. Please configure a root password to protect the web interface.%>
+						</p>
+						<% if disp.lookup("admin/system/admin") then %>
+						<div class="right"><a class="btn"
+								href="<%=url("admin/system/admin")%>"><%:Go to password configuration...%></a></div>
+						<% end %>
+					</div>
+					<%- end -%>
+
+					<noscript>
+						<div class="alert-message error">
+							<h4><%:JavaScript required!%></h4>
+							<p><%:You must enable JavaScript in your browser or LuCI will not work properly.%></p>
+						</div>
+					</noscript>
+
+					<div id="tabmenu" style="display:none"></div>
+EOF_ARGON_8080_HEADER_HTM
+    cat > "$argon_target_root/usr/lib/lua/luci/view/themes/argon/footer.htm" <<'EOF_ARGON_8080_FOOTER_HTM'
+<%#
+	Argon theme footer - clean version with L init
+-%>
+
+<% local ver = require "luci.version" %>
+</div>
+<footer class="mobile-hide">
+	<div>
+		<a class="luci-link" href="https://github.com/openwrt/luci">Powered by <%= ver.luciname %> (<%= ver.luciversion %>)</a> /
+		<a href="https://github.com/jerrykuku/luci-theme-argon">ArgonTheme v2.2.9.4</a> /
+		<%= ver.distversion %>
+		<ul class="breadcrumb pull-right" id="modemenu" style="display:none"></ul>
+	</div>
+</footer>
+</div>
+</div>
+<script>
+	var luciLocation = <%= luci.http.write_json(luci.dispatcher.context.path) %>;
+	if (typeof window.L === 'undefined' && typeof window.LuCI === 'function') {
+		var _origError = window.LuCI.prototype.error;
+		window.LuCI.prototype.error = function(type, fmt) {
+			var msg = (fmt && String(fmt)) || (type && type.message) || String(type || '');
+			if (msg.indexOf('No related RPC reply') !== -1 || msg.indexOf('RPC') !== -1)
+				return;
+			return _origError.apply(this, arguments);
+		};
+		try {
+			var luciPath = luciLocation.slice(0);
+			window.L = new LuCI({scriptname:'/cgi-bin/luci', requestpath: luciPath, dispatchpath: luciPath});
+		} catch(e) {}
+	}
+	if (window.L && window.LuCI) {
+		var _origError = window.LuCI.prototype.error;
+		window.LuCI.prototype.error = function(type, fmt) {
+			var msg = (fmt && String(fmt)) || (type && type.message) || String(type || '');
+			if (msg.indexOf('No related RPC reply') !== -1 || msg.indexOf('RPC') !== -1)
+				return;
+			return _origError.apply(this, arguments);
+		};
+	}
+	window.TR={"663359c9":"状态","48e137c0":"系统日志","4f261233":"内核日志","919b0d7c":"路由表","adbaae97":"总览","8e770194":"进程","3b61f469":"实时图表","34f9da4c":"防火墙","93a3f9dd":"流量","d55cef16":"无线网络","14d9d010":"连接","ee1cb0cb":"负载","e54695b9":"网络","d6cdbe5e":"网络接口","9ff4dd9e":"DHCP 与 DNS","a0c974c7":"诊断","a4045d6b":"主机名","6c218dd2":"静态路由","246f4de5":"服务","5675672c":"系统","5f721cb8":"启动项","8e8dba2a":"软件包","c755ff17":"重启","a958389f":"安全","7ee2e566":"计划任务","e4b34079":"备份 / 升级","a58e56be":"配置","420558ef":"注销","bc925621":"AC 服务","afd81cd4":"管理","03e953fd":"插件","7ec58e04":"全部插件入口","7ead2d19":"OpenClash","612c0d89":"OpenVPN","63e7ceb2":"AdGuardHome","a27fff15":"第二系统"};
+</script>
+<script type="text/javascript">L.require('menu-argon')</script>
+</body>
+</html>
+EOF_ARGON_8080_FOOTER_HTM
+    cat > "$argon_target_root/usr/lib/lua/luci/view/themes/argon/header_login.htm" <<'EOF_ARGON_8080_HEADER_LOGIN_HTM'
+<%#
+	Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-material Argon Template
+
+	luci-theme-argon
+	Copyright 2020 Jerrykuku <jerrykuku@qq.com>
+
+	Have a bug? Please create an issue here on GitHub!
+	https://github.com/jerrykuku/luci-theme-argon/issues
+
+	luci-theme-material:
+	Copyright 2015 Lutty Yang <lutty@wcan.in>
+
+	Argon Theme
+	https://demos.creative-tim.com/argon-dashboard/index.html
+
+	Licensed to the public under the Apache License 2.0
+-%>
+
+<%
+	local sys = require "luci.sys"
+	local util = require "luci.util"
+	local http = require "luci.http"
+	local disp = require "luci.dispatcher"
+    local ver = require "luci.version"
+
+	local boardinfo = util.ubus("system", "board")
+
+	local node = disp.context.dispatched
+
+	local fs = require "nixio.fs"
+	local nutil = require "nixio.util"
+	local uci = require 'luci.model.uci'.cursor()
+
+	-- send as HTML5
+	http.prepare_content("text/html")
+
+	math.randomseed(tonumber(tostring(os.time()):reverse():sub(1, 9)))
+
+	-- Custom settings
+	local mode = 'normal'
+	local private_webroot = NRADIO_8080_INSTANCE_ROOT and (NRADIO_8080_INSTANCE_ROOT .. "/www")
+		or (os.getenv("SCRIPT_FILENAME") or ""):match("^(.*)/cgi%-bin/luci$") or "/www"
+	local dark_css = fs.readfile(private_webroot .. '/luci-static/argon/css/dark.css') or ""
+	local bar_color = '#5e72e4'
+	local primary, dark_primary, blur_radius, blur_radius_dark, blur_opacity
+	if fs.access('/etc/config/argon') then
+		primary = uci:get_first('argon', 'global', 'primary') or '#5e72e4'
+		dark_primary = uci:get_first('argon', 'global', 'dark_primary') or '#483d8b'
+		blur_radius = uci:get_first('argon', 'global', 'blur') or '10'
+		blur_radius_dark = uci:get_first('argon', 'global', 'blur_dark') or '10'
+		blur_opacity = uci:get_first('argon', 'global', 'transparency') or '0.5'
+		blur_opacity_dark = uci:get_first('argon', 'global', 'transparency_dark') or '0.5'
+		mode = uci:get_first('argon', 'global', 'mode') or 'normal'
+		bar_color = mode == 'dark' and dark_primary or primary
+	end
+-%>
+<!DOCTYPE html>
+<html lang="<%=luci.i18n.context.lang%>">
+
+<head>
+    <meta charset="utf-8">
+    <title>
+        <%=striptags( ("OpenWrt") .. ( (node and node.title) and ' - ' .. translate(node.title) or '')) %>
+        - LuCI</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
+    <meta name="format-detection" content="telephone=no, email=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="full-screen" content="yes">
+    <meta name="x5-page-mode" content="app">
+    <meta name="browsermode" content="application">
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="msapplication-TileColor" content="<%=bar_color%>">
+    <meta name="application-name" content="<%=striptags( ("OpenWrt") ) %> - LuCI">
+    <meta name="apple-mobile-web-app-title" content="<%=striptags( ("OpenWrt") ) %> - LuCI">
+    <link rel="apple-touch-icon" sizes="60x60" href="<%=media%>/icon/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="<%=media%>/icon/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="<%=media%>/icon/apple-icon-144x144.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="<%=media%>/icon/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="<%=media%>/icon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="<%=media%>/icon/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="<%=media%>/icon/favicon-16x16.png">
+    <link rel="manifest" href="<%=media%>/icon/manifest.json" crossorigin="use-credentials">
+    <meta name="msapplication-TileColor" content="<%=bar_color%>">
+    <meta name="msapplication-TileImage" content="<%=media%>/icon/ms-icon-144x144.png">
+    <meta name="theme-color" content="<%=bar_color%>">
+    <link rel="stylesheet" href="<%=media%>/css/cascade.css?v=2.2.9.4">
+    <style title="text/css">
+        <% if mode == 'normal' then %>
+            @media (prefers-color-scheme: dark) {
+                <%=dark_css%>
+            }
+        <% elseif mode == 'dark' then %>
+            <%=dark_css%>
+        <% end -%>
+        <% if fs.access('/etc/config/argon') then %>
+        :root {
+            --primary: <%=primary%>;
+            --dark-primary: <%=dark_primary%>;
+            --blur-radius:<%=blur_radius%>px;
+            --blur-opacity:<%=blur_opacity%>;
+            --blur-radius-dark:<%=blur_radius_dark%>px;
+            --blur-opacity-dark:<%=blur_opacity_dark%>;
+        }
+        <% end -%>
+    </style>
+    <link rel="shortcut icon" href="<%=media%>/favicon.ico">
+    <% if node and node.css then %>
+    <link rel="stylesheet" href="<%=resource%>/<%=node.css%>">
+    <% end -%>
+    <% if css then %>
+    <style title="text/css">
+        <%=css %>
+    </style>
+    <% end -%>
+    <script src="<%=media%>/js/jquery.min.js?v=3.5.1"></script>
+
+</head>
+
+<body>
+EOF_ARGON_8080_HEADER_LOGIN_HTM
+    cat > "$argon_target_root/usr/lib/lua/luci/view/themes/argon/sysauth.htm" <<'EOF_ARGON_8080_SYSAUTH_HTM'
+<%#
+	Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-bootstrap and MUI and Argon Template
+
+	luci-theme-argon
+	Copyright 2020 Jerryk <jerrykuku@gmail.com>
+
+	Have a bug? Please create an issue here on GitHub!
+	https://github.com/jerrykuku/luci-theme-argon/issues
+
+	luci-theme-bootstrap:
+	Copyright 2008 Steven Barth <steven@midlink.org>
+	Copyright 2008-2016 Jo-Philipp Wich <jow@openwrt.org>
+	Copyright 2012 David Menting <david@nut-bolt.nl>
+
+	MUI:
+	https://github.com/muicss/mui
+
+	Argon Theme
+	https://demos.creative-tim.com/argon-dashboard/index.html
+
+	Licensed to the public under the Apache License 2.0
+-%>
+
+<%+themes/argon/header_login%>
+<%
+	local util		= require "luci.util"
+	local fs		= require "nixio.fs"
+	local nutil		= require "nixio.util"
+	local json		= require "luci.jsonc"
+	local sys		= require "luci.sys"
+	local uci		= require 'luci.model.uci'.cursor()
+
+	-- Fetch Local Background Media
+
+	function glob(...)
+		local iter, code, msg = fs.glob(...)
+		if iter then
+			return nutil.consume(iter)
+		else
+			return nil, code, msg
+		end
+	end
+
+
+	local imageTypes = " jpg png gif "
+	local videoTypes = " mp4 webm "
+	local allTypes = imageTypes .. videoTypes
+	function fetchMedia(path,themeDir)
+		local backgroundTable 	= {}
+		local backgroundCount 	= 0
+		for i, f in ipairs(glob(path) or {}) do
+			local attr = fs.stat(f)
+			if attr then
+				local ext = fs.basename(f):match(".+%.(%w+)$")
+				if ext ~= nil and string.match(allTypes, " "..ext.." ") ~= nil then
+					local bg = {}
+					bg.type = ext
+					bg.url = themeDir .. fs.basename(f)
+					table.insert(backgroundTable,bg)
+					backgroundCount = backgroundCount + 1
+				end
+			end
+		end
+		return backgroundTable,backgroundCount
+	end
+
+	local boardinfo			= util.ubus("system", "board") or {}
+	local themeDir			= media .. "/background/"
+	local bgUrl 			= media .. "/img/bg1.jpg"
+	local privateWebroot	= NRADIO_8080_INSTANCE_ROOT and (NRADIO_8080_INSTANCE_ROOT .. "/www")
+		or (os.getenv("SCRIPT_FILENAME") or ""):match("^(.*)/cgi%-bin/luci$") or "/www"
+	local backgroundTable, backgroundCount 		= fetchMedia(privateWebroot .. themeDir .. "*",themeDir)
+	local backgroundType 	= "Image"
+	local mimeType 			= ""
+
+	if ( backgroundCount > 0 ) then
+		local currentBg = backgroundTable[math.random(1,backgroundCount)]
+		bgUrl 			= currentBg.url
+		if (string.match(videoTypes, " "..currentBg.type.." ") ~= nil) then
+			backgroundType 	= "Video"
+			mimeType 		= "video/" .. currentBg.type
+		end
+	elseif uci:get_first('argon', 'global', 'bing_background') == '1' then
+		local bing_script = privateWebroot:gsub('/www$', '') .. '/usr/libexec/argon/bing_wallpaper'
+		local bing = fs.access(bing_script) and sys.exec('sh ' .. util.shellquote(bing_script)) or nil
+		if bing then bing = bing:gsub('%s+$', '') end
+		if bing and bing ~= '' then bgUrl = bing end
+	end
+%>
+<!-- Login Page Start -->
+<div class="login-page">
+	<% if ( backgroundType == "Video" ) then %>
+	<!-- Video Player Start -->
+	<div class="video">
+		<video autoplay loop muted id="video">
+			<source src="<%=bgUrl%>" type="<%=mimeType%>">
+		</video>
+	</div>
+	<div class="volume-control mute"></div>
+	<script>
+		$(".volume-control").click(function(){
+			if($(this).hasClass("mute")){
+				$(this).removeClass("mute")
+				$("#video").prop('muted', false);
+			}else{
+				$(this).addClass("mute")
+				$("#video").prop('muted', true);
+			}
+		})
+	</script>
+	<!-- Video Player End -->
+	<% else %>
+	<!-- Image Background Start -->
+	<div class="main-bg" id="main-bg" style="background-image:url(<%=bgUrl%>)"></div>
+	<!-- Image Background End -->
+	<% end %>
+	<!-- Login Container Start -->
+	<div class="login-container">
+		<div class="login-form">
+			<!-- Logo Start -->
+			<a class="brand" href="/"><img src="<%=media%>/img/argon.svg" class="icon">
+				<span class="brand-text"><%=striptags( (boardinfo.hostname or "?") .. ( (node and node.title) and ' - ' .. translate(node.title) or '')) %></span>
+			</a>
+			<!-- Logo End -->
+			<!-- Login Form Start -->
+			<form class="form-login" method="post" action="<%=pcdata(luci.http.getenv("REQUEST_URI"))%>">
+
+				<%- if fuser then %>
+				<div class="errorbox"><%:Invalid username and/or password! Please try again.%></div>
+				<% end -%>
+
+				<div class="input-container">
+					<div class="input-group user-icon">
+						<input class="cbi-input-user" id="cbi-input-user" type="text" name="luci_username" value="<%=duser%>" />
+						<label class="border" for="cbi-input-user"></label>
+					</div>
+					<div class="input-group pass-icon">
+						<input class="cbi-input-password" id="cbi-input-password" type="password" name="luci_password" />
+						<label class="border" for="cbi-input-password"></label>
+					</div>
+				</div>
+				<div>
+					<input type="submit" value="<%:Login%>" class="cbi-button cbi-button-apply" />
+				</div>
+			</form>
+			<!-- Login Form End -->
+			<script type="text/javascript">//<![CDATA[
+				var input = document.getElementsByName('luci_password')[0];
+				if (input)
+					input.focus();
+			//]]></script>
+<%+themes/argon/footer_login%>
+EOF_ARGON_8080_SYSAUTH_HTM
+    cat > "$argon_target_root/usr/lib/lua/luci/view/themes/argon/footer_login.htm" <<'EOF_ARGON_8080_FOOTER_LOGIN_HTM'
+<%#
+	Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-material Argon Template
+
+	luci-theme-argon
+	Copyright 2020 Jerrykuku <jerrykuku@qq.com>
+
+	Have a bug? Please create an issue here on GitHub!
+	https://github.com/jerrykuku/luci-theme-argon/issues
+
+	luci-theme-material:
+	Copyright 2015 Lutty Yang <lutty@wcan.in>
+
+	Agron Theme
+	https://demos.creative-tim.com/argon-dashboard/index.html
+
+	Licensed to the public under the Apache License 2.0
+-%>
+
+<% local ver = require "luci.version" %>
+</div>
+<footer>
+	<div>
+		<a class="luci-link" href="https://github.com/openwrt/luci">Powered by <%= ver.luciname %> (<%= ver.luciversion %>)</a> /
+						<a href="https://github.com/jerrykuku/luci-theme-argon">ArgonTheme v2.2.9.4</a> /
+						<%= ver.distversion %>
+	</div>
+</footer>
+</div>
+</div>
+<script>
+	// thanks for Jo-Philipp Wich <jow@openwrt.org>
+	var luciLocation = <%= luci.http.write_json(luci.dispatcher.context.path) %>;
+	var winHeight = $(window).height();
+	$(window).resize(function () {
+		var winWidth = $(window).width()
+		if(winWidth < 600){
+			var newHeight = $(this).height();
+			var keyboradHeight = newHeight - winHeight;
+			$(".ftc").css("bottom", keyboradHeight + 30);
+		}
+	})
+</script>
+</body>
+</html>
+EOF_ARGON_8080_FOOTER_LOGIN_HTM
+
+    mkdir -p "$argon_target_root/usr/lib/lua/luci/model/cbi" "$argon_target_root/usr/lib/lua/luci/view/argon-config" || die "创建 argon 设置插件目录失败"
+    cat > "$argon_target_root/usr/lib/lua/luci/model/cbi/argon-config.lua" <<'EOF_ARGON_8080_CONFIG_MODEL'
+-- 8080-private adaptation of luci-app-argon-config v0.9 (Apache-2.0).
+local nixio = require 'nixio'
+local fs = require 'nixio.fs'
+local http = require 'luci.http'
+local nutil = require 'nixio.util'
+local uci = require 'luci.model.uci'.cursor()
+local instance = NRADIO_8080_INSTANCE_ROOT
+    or (os.getenv('SCRIPT_FILENAME') or ''):match('^(.*)/www/cgi%-bin/luci$')
+assert(instance and instance ~= '', 'Argon 8080 private instance unavailable')
+local webroot = instance .. '/www'
+local dir = webroot .. '/luci-static/argon/background/'
+fs.mkdir(dir)
+
+local function get(name, fallback)
+    return uci:get_first('argon', 'global', name) or fallback
+end
+
+local function color(option)
+    option.validate = function(self, value)
+        if type(value) == 'string' and value:match('^#%x%x%x%x%x%x$') then return value end
+        return nil, translate('Enter a six-digit HEX color, such as #5e72e4')
+    end
+end
+
+local function radius(option)
+    option.validate = function(self, value)
+        local number = tonumber(value)
+        if number and number >= 0 and number <= 40 then return tostring(number) end
+        return nil, translate('Enter a radius from 0 to 40')
+    end
+end
+
+local settings = SimpleForm('config', translate('Argon Config'), translate('Set the Argon login background, theme colors, blur and transparency.'))
+settings.reset = false
+settings.submit = false
+local section = settings:section(SimpleSection)
+local option = section:option(ListValue, 'bing_background', translate('Wallpaper Source'))
+option:value('0', translate('Built-in'))
+option:value('1', translate('Bing Wallpapers'))
+option.default = get('bing_background', '0')
+option.rmempty = false
+
+option = section:option(ListValue, 'mode', translate('Theme mode'))
+option:value('normal', translate('Follow System'))
+option:value('light', translate('Force Light'))
+option:value('dark', translate('Force Dark'))
+option.default = get('mode', 'normal')
+option.rmempty = false
+
+option = section:option(Value, 'primary', translate('[Light mode] Primary Color'))
+option.default = get('primary', '#5e72e4')
+option.rmempty = false
+color(option)
+
+option = section:option(ListValue, 'transparency', translate('[Light mode] Transparency'))
+for _, value in ipairs({'0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1'}) do option:value(value) end
+option.default = get('transparency', '0.5')
+option.rmempty = false
+
+option = section:option(Value, 'blur', translate('[Light mode] Frosted Glass Radius'))
+option.default = get('blur', '10')
+option.rmempty = false
+radius(option)
+
+option = section:option(Value, 'dark_primary', translate('[Dark mode] Primary Color'))
+option.default = get('dark_primary', '#483d8b')
+option.rmempty = false
+color(option)
+
+option = section:option(ListValue, 'transparency_dark', translate('[Dark mode] Transparency'))
+for _, value in ipairs({'0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1'}) do option:value(value) end
+option.default = get('transparency_dark', '0.5')
+option.rmempty = false
+
+option = section:option(Value, 'blur_dark', translate('[Dark mode] Frosted Glass Radius'))
+option.default = get('blur_dark', '10')
+option.rmempty = false
+radius(option)
+
+option = section:option(Button, 'save', translate('Save Changes'))
+option.inputstyle = 'reload'
+
+function settings.handle(self, state, data)
+    if state == FORM_VALID and type(data) == 'table' then
+        local valid_mode = data.mode == 'normal' or data.mode == 'light' or data.mode == 'dark'
+        local valid_bing = data.bing_background == '0' or data.bing_background == '1'
+        local valid_colors = type(data.primary) == 'string' and data.primary:match('^#%x%x%x%x%x%x$')
+            and type(data.dark_primary) == 'string' and data.dark_primary:match('^#%x%x%x%x%x%x$')
+        local blur = tonumber(data.blur)
+        local blur_dark = tonumber(data.blur_dark)
+        local transparency = tonumber(data.transparency)
+        local transparency_dark = tonumber(data.transparency_dark)
+        if valid_mode and valid_bing and valid_colors and blur and blur_dark and
+           blur >= 0 and blur <= 40 and blur_dark >= 0 and blur_dark <= 40 and
+           transparency and transparency_dark and transparency >= 0 and transparency <= 1 and
+           transparency_dark >= 0 and transparency_dark <= 1 then
+            for _, key in ipairs({'bing_background', 'mode', 'primary', 'dark_primary', 'blur', 'blur_dark', 'transparency', 'transparency_dark'}) do
+                uci:set('argon', '@global[0]', key, data[key])
+            end
+            uci:commit('argon')
+        end
+    end
+    return true
+end
+
+local stat = fs.statvfs(dir)
+local free_bytes = stat and (stat.bavail or stat.bfree or 0) * (stat.frsize or 0) or 0
+local upload = SimpleForm('upload', translate('Upload  (Free: ') .. string.format('%.1f MB', free_bytes / 1048576) .. ')', translate('Upload jpg, png, gif, mp4 or webm files to change the login background.'))
+upload.reset = false
+upload.submit = false
+local upload_section = upload:section(SimpleSection, '', translate('Upload a local background file'))
+local file = upload_section:option(DummyValue, 'ulfile')
+file.template = 'argon-config/other_upload'
+local upload_message = upload_section:option(DummyValue, '', nil)
+upload_message.template = 'argon-config/other_dvalue'
+
+local fd, uploaded_name, upload_error, uploaded_bytes = nil, nil, nil, 0
+http.setfilehandler(function(meta, chunk, eof)
+    if meta and not fd and not uploaded_name and not upload_error then
+        local name = meta.file and fs.basename(meta.file) or ''
+        local extension = name:match('%.([^.]+)$')
+        extension = extension and extension:lower() or ''
+        if name == '' or name == '.' or name == '..' or not name:match('^[%w%._%-]+$') or
+           not ({jpg=true, jpeg=true, png=true, gif=true, mp4=true, webm=true})[extension] then
+            upload_error = translate('Unsupported background file name or type.')
+        else
+            fd = nixio.open(dir .. name, 'w')
+            if fd then uploaded_name = name else upload_error = translate('Create upload file error.') end
+        end
+    end
+    if chunk and fd then
+        uploaded_bytes = uploaded_bytes + #chunk
+        if uploaded_bytes > 33554432 or not fd:write(chunk) then
+            fd:close()
+            fd = nil
+            fs.unlink(dir .. uploaded_name)
+            upload_error = translate('Upload failed or exceeds 32 MB.')
+        end
+    end
+    if eof then
+        if fd then fd:close(); fd = nil end
+        if uploaded_name and not upload_error and not fs.chmod(dir .. uploaded_name, 420) then
+            fs.unlink(dir .. uploaded_name)
+            upload_error = translate('Could not make the uploaded file readable.')
+        end
+        if upload_error then
+            upload_message.value = upload_error
+        elseif uploaded_name then
+            upload_message.value = translate('File saved to') .. ' "' .. dir .. uploaded_name .. '"'
+        end
+    end
+end)
+if http.formvalue('upload') and not uploaded_name and not upload_error then
+    upload_message.value = translate('No file selected.')
+end
+
+local entries = {}
+local iterator = fs.glob(dir .. '*')
+if iterator then
+    for path in iterator do
+        local attr = fs.stat(path)
+        if attr and attr.type == 'reg' then
+            entries[#entries + 1] = {
+                name = fs.basename(path),
+                mtime = os.date('%Y-%m-%d %H:%M:%S', attr.mtime),
+                size = string.format('%.1f kB', attr.size / 1024)
+            }
+        end
+    end
+end
+table.sort(entries, function(a, b) return a.name < b.name end)
+
+local files = SimpleForm('filelist', translate('Background file list'))
+files.reset = false
+files.submit = false
+local table_section = files:section(Table, entries)
+table_section:option(DummyValue, 'name', translate('File name'))
+table_section:option(DummyValue, 'mtime', translate('Modify time'))
+table_section:option(DummyValue, 'size', translate('Size'))
+local remove = table_section:option(Button, 'remove', translate('Remove'))
+remove.inputstyle = 'remove'
+remove.write = function(self, section)
+    local index = tonumber(section)
+    local row = index and entries[index]
+    if row and fs.unlink(dir .. row.name) then
+        table.remove(entries, index)
+        return true
+    end
+    return false
+end
+
+return settings, upload, files
+EOF_ARGON_8080_CONFIG_MODEL
+    cat > "$argon_target_root/usr/lib/lua/luci/view/argon-config/other_upload.htm" <<'EOF_ARGON_8080_CONFIG_UPLOAD'
+<%+cbi/valueheader%>
+<label class="cbi-value" for="ulfile"><%:Choose local file:%></label>
+<input class="cbi-input-file" type="file" id="ulfile" name="ulfile" accept="image/png,image/jpeg,image/gif,video/mp4,video/webm" />
+<input type="submit" class="btn cbi-button cbi-input-apply" name="upload" value="<%:Upload%>" />
+<%+cbi/valuefooter%>
+EOF_ARGON_8080_CONFIG_UPLOAD
+    cat > "$argon_target_root/usr/lib/lua/luci/view/argon-config/other_dvalue.htm" <<'EOF_ARGON_8080_CONFIG_DVALUE'
+<%+cbi/valueheader%>
+<span class="error"><% write(pcdata(self:cfgvalue(section) or self.default or '')) %></span>
+<%+cbi/valuefooter%>
+EOF_ARGON_8080_CONFIG_DVALUE
+
+    # 收敛 argon 私有目录权限：脚本 umask 077 会让 tar 解包产出 700/600，
+    # uhttpd 吐静态文件 403（HC-WT9500 8080 argon 实机复现）。
+    # -P 不跟随软链，避免改动全局 /www/luci-static 与 luci-static 链接目标。
+    find -P "$argon_target_root/www/luci-static" -type d -exec chmod 755 {} \;
+    find -P "$argon_target_root/www/luci-static" -type f -exec chmod 644 {} \;
+    find -P "$argon_target_root/usr/lib/lua/luci/view" -type d -exec chmod 755 {} \;
+    find -P "$argon_target_root/usr/lib/lua/luci/view" -type f -exec chmod 644 {} \;
+    chmod 755 "$argon_target_root/usr/lib" "$argon_target_root/usr/lib/lua" "$argon_target_root/usr/lib/lua/luci" "$argon_target_root/usr/lib/lua/luci/model" "$argon_target_root/usr/lib/lua/luci/model/cbi" "$argon_target_root/usr/libexec" "$argon_target_root/usr/libexec/argon"
+    chmod 644 "$argon_target_root/usr/lib/lua/luci/model/cbi/argon-config.lua" "$argon_target_root/usr/libexec/argon/bing_wallpaper"
+    if [ -f "$argon_target_root/www/cgi-bin/luci" ]; then
+        chmod 755 "$argon_target_root/www/cgi-bin/luci" || die "恢复 argon 实例 CGI 可执行权限失败"
+    fi
 }
 
 # Hardware acceleration uses the OEM mode controller, independently of the
@@ -70061,6 +86236,10 @@ run_menu_feature() {
             run_recorded_menu_feature "1 > 10" "Open-Box 安装" install_openbox
             MENU_ACTION_COMPLETED='1'
             ;;
+        35)
+            run_recorded_menu_feature "4 > 4" "argon 主题（8080）" install_argon_8080
+            MENU_ACTION_COMPLETED='1'
+            ;;
         *)
             die_menu_input_issue "$feature_choice"
             ;;
@@ -70183,9 +86362,10 @@ appcenter_polish_menu() {
         fi
         if openwrt_luci_8080_model_supported; then
             print_menu_item 3 'OpenWrt 原版 LuCI（8080）'
+            print_menu_item 4 'argon 主题（8080）'
         fi
         if lightweight_appcenter_model_supported; then
-            print_menu_item 4 '轻量应用商店'
+            print_menu_item 5 '轻量应用商店'
         fi
         print_menu_item 0 '返回功能分类'
         print_menu_prompt '上方编号，0 返回'
@@ -70204,6 +86384,15 @@ appcenter_polish_menu() {
                 fi
                 ;;
             4)
+                if openwrt_luci_8080_model_supported; then
+                    run_menu_feature 35
+                    [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0
+                    continue
+                else
+                    die_menu_input_issue "$UI_READ_RESULT"
+                fi
+                ;;
+            5)
                 lightweight_appcenter_menu
                 [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0
                 continue
@@ -72454,5 +88643,42 @@ main_menu() {
         [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0
     done
 }
+
+if [ "${1:-}" = '--verify-argon8080-code' ]; then
+    require_root
+    verify_argon_8080_code
+    exit 0
+fi
+
+if [ "${1:-}" = '--install-argon8080' ]; then
+    require_root
+    acquire_script_lock
+    require_nradio_menu_environment
+    install_argon_8080 --yes
+    exit 0
+fi
+
+if [ "${1:-}" = '--sync-luci8080' ]; then
+    require_root
+    acquire_script_lock
+    sync_openwrt_luci_8080_plugins
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-adguard-popup' ]; then
+    require_root
+    require_nradio_oem_appcenter
+    write_adguard_wrapper_files
+    patch_common_template
+    refresh_luci_appcenter
+    verify_luci_route admin/services/AdGuardHome "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/overview "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/settings "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/base "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/manual "AdGuardHome"
+    verify_luci_route admin/services/AdGuardHome/log "AdGuardHome"
+    log "AdGuardHome LuCI 与应用商店弹窗修复完成"
+    exit 0
+fi
 
 main_menu "$@"
