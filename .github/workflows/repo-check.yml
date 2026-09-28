@@ -36,10 +36,10 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V3.2.3 script state
+      - name: Verify V3.2.4 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V3.2.3"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-09-27"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V3.2.4"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-09-28"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_HOME_TEMP_VERSION="20260912-6"' 00-current/ssh-nradio-plugin-installer.sh
@@ -62,15 +62,16 @@ jobs:
           grep -q 'NRadio AI runtime compatibility v3' 00-current/ssh-nradio-plugin-installer.sh
           grep -q "'map,firmware,cache'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^install_nradio_cpe_connection_monitoring()' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '5G 连接监听（C5800-688，已集成智能频段）' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '5G 连接监听（C5800-650 / C2000MAX）' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_note 'C5800-688 · 已集成智能频段'" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_note 'C5800-650 / C2000MAX'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_AK68-798' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HC-WT9194' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HCMT7987-S256' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRadio_C2000Ultra' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'HC-WT9500' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'C2000Pro / AK68-798 轻量应用商店' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q "print_menu_header '5 / 设备维护 · AK68-798'" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_header '主菜单 > 设备维护与检测'" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_note 'AK68-798'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^install_openwrt_luci_8080()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'OpenWrt 原版 LuCI（8080）安装或更新' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'SIM 状态已变化或无法确认' 00-current/ssh-nradio-plugin-installer.sh
@@ -84,9 +85,9 @@ jobs:
           grep -q '^write_nradio_smart_band_script()' 00-current/ssh-nradio-plugin-installer.sh
           grep -q '^run_nradio_smart_band_selfcheck()' 00-current/ssh-nradio-plugin-installer.sh
           ! grep -q '^manage_nradio_smart_band()' 00-current/ssh-nradio-plugin-installer.sh || exit 1
-          grep -q '5G 连接监听（C5800-688，已集成智能频段）' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '1. 安装或更新 5G 连接监听' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q '2. 卸载 5G 连接监听' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_header '设备维护 > 5G 连接监听'" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_item 1 '安装或更新'" 00-current/ssh-nradio-plugin-installer.sh
+          grep -q "print_menu_item 2 '卸载'" 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'action_smart_disable' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'action_smart_enable' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'id="nr5g-smart-toggle"' 00-current/ssh-nradio-plugin-installer.sh
@@ -138,7 +139,9 @@ jobs:
           source = re.sub(r"/tmp/luci-modulecache/[0-9a-fA-F]+(?=\s|$)", "", source)
           # LuCI's anonymous RPC session is a protocol value, not a download checksum.
           source = re.sub(r"((?:L\.)?env\.sessionid \|\| )'0{32}'", r"\1''", source)
-          assert not re.search(r"[0-9a-fA-F]{32,}", source), "Unexpected fixed hash outside LuCI cache paths"
+          # The bundled LuCI form.js records its upstream source commit in a comment.
+          source = re.sub(r"(?m)^    # LuCI openwrt-23\.05, commit [0-9a-f]{40}\.$", "", source)
+          assert not re.search(r"[0-9a-fA-F]{32,}", source), "Unexpected fixed hash outside LuCI metadata"
           # Removing OpenClash's old temporary archive does not create a backup.
           for line in source.splitlines():
               if ".bak" in line:
@@ -315,13 +318,13 @@ jobs:
 
       - name: Verify support page state
         run: |
-          grep -q '<title>NRadio 插件脚本 V3.2.3 | 支持页</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'aria-label="当前版本">V3.2.3' 40-server-web/mayebano-support/index.html
-          grep -q 'V3.2.3 / 2026-09-27' 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件脚本 V3.2.4 | 支持页</title>' 40-server-web/mayebano-support/index.html
+          grep -q 'aria-label="当前版本">V3.2.4' 40-server-web/mayebano-support/index.html
+          grep -q 'V3.2.4 / 2026-09-28' 40-server-web/mayebano-support/index.html
           grep -q '10 款 NRadio 机型' 40-server-web/mayebano-support/index.html
           grep -q '5G 连接监听' 40-server-web/mayebano-support/index.html
           grep -q 'GitHub 下载加速' 40-server-web/mayebano-support/index.html
-          grep -q 'SD 卡与 Swap 适配' 40-server-web/mayebano-support/index.html
+          grep -q 'C2000Ultra · SD 卡 / Swap' 40-server-web/mayebano-support/index.html
           grep -q '安装密码设置修复' 40-server-web/mayebano-support/index.html
           grep -q '缓存安装包与自动同步' 40-server-web/mayebano-support/index.html
           grep -q '5800 双线路页面' 40-server-web/mayebano-support/index.html
@@ -330,7 +333,7 @@ jobs:
           grep -q '<div class="step-index">04</div>' 40-server-web/mayebano-support/index.html
           grep -q '配置双栈多线分流' 40-server-web/mayebano-support/index.html
           grep -q '5 → 5 → 2' 40-server-web/mayebano-support/index.html
-          grep -q 'Argon 8080 与应用商店' 40-server-web/mayebano-support/index.html
+          grep -q '雷神安装修复与插件页面更新' 40-server-web/mayebano-support/index.html
           grep -q 'role="progressbar"' 40-server-web/mayebano-support/index.html
           grep -q 'aria-current="page"' 40-server-web/mayebano-support/index.html
           grep -q 'history-toggle' 40-server-web/mayebano-support/index.html
@@ -375,7 +378,7 @@ jobs:
           grep -q 'V2.6.0' 40-server-web/mayebano-support/index.html
           grep -q 'V2.5.0' 40-server-web/mayebano-support/index.html
           grep -q 'PicoClaw / 鲲鹏小龙虾' 40-server-web/mayebano-support/index.html
-          grep -q '当前页面：V3.2.3 / 2026-09-27｜Argon 8080 与应用商店' 40-server-web/mayebano-support/index.html
+          grep -q '当前页面：V3.2.4 / 2026-09-28｜雷神安装修复与插件页面更新' 40-server-web/mayebano-support/index.html
           ! grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html || exit 1
           grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
           grep -q '/_vercel/insights/script.js' 40-server-web/mayebano-support/index.html
@@ -553,8 +556,8 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'NRadio V3.2.3 release checksums' CHECKSUMS.txt
-          grep -q 'Generated from local file contents on 2026-09-27' CHECKSUMS.txt
+          grep -q 'NRadio V3.2.4 release checksums' CHECKSUMS.txt
+          grep -q 'Generated from local file contents on 2026-09-28' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt || exit 1
           records=0
           main_seen=0
@@ -600,10 +603,10 @@ jobs:
           grep -q '## Mesh组网插件 1.20.1-4' README.md
           grep -q '## AK68-798 透传插件 1.2.0-5' README.md
           grep -q '## NRadio Mesh 1.0.14 - 2026-09-02' CHANGELOG.md
-          grep -q '当前版本：`V3.2.3`' README.md
+          grep -q '当前版本：`V3.2.4`' README.md
           grep -q '公开版本：以 GitHub Releases 页面为准' README.md
-          grep -q '## V3.2.3 更新' README.md
-          grep -q '## V3.2.3 - 2026-09-27（本地更新）' CHANGELOG.md
+          grep -q '## V3.2.4 更新' README.md
+          grep -q '## V3.2.4 - 2026-09-28（本地更新）' CHANGELOG.md
           grep -q '## NRadio Mesh 1.20.1-4 - 2026-09-14（本地下载包更新）' CHANGELOG.md
           grep -q '## AK68-798 透传插件 1.2.0-5 - 2026-09-14（本地下载包新增）' CHANGELOG.md
           grep -q '## V3.1.0 - 2026-09-12（正式发布）' CHANGELOG.md

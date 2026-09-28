@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.2.3"
+SCRIPT_VERSION="V3.2.4"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-27"
+SCRIPT_RELEASE_DATE="2026-09-28"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -90,6 +90,7 @@ OPENWRT_LUCI_8080_INDEX_CACHE="/tmp/luci-indexcache-bootstrap"
 OPENWRT_LUCI_8080_THEME_VERSION="git-20.356.64372-1259bb1-1"
 OPENWRT_LUCI_8080_THEME_URL="https://downloads.openwrt.org/releases/18.06.9/packages/aarch64_cortex-a53/luci/luci-theme-bootstrap_git-20.356.64372-1259bb1-1_all.ipk"
 OPENWRT_LUCI_8080_ARGON_URL="https://github.com/jerrykuku/luci-theme-argon/releases/download/v2.2.9.4/luci-theme-argon-master_2.2.9.4_all.ipk"
+OPENWRT_LUCI_8080_FIREWALL_FEED="https://downloads.openwrt.org/releases/18.06.9/packages/aarch64_cortex-a53/luci"
 TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
 OPENCLASH_BRANCH="${OPENCLASH_BRANCH:-master}"
 OPENCLASH_DISPLAY_NAME="${OPENCLASH_DISPLAY_NAME:-哈基米}"
@@ -1005,9 +1006,9 @@ require_startup_disclaimer_acceptance_once() {
     prime_startup_disclaimer_model || true
     clear_startup_screen
     print_startup_disclaimer_text
-    printf '\n'
+    printf '请完整阅读以上条款。\n'
     run_startup_disclaimer_countdown 10
-    printf '\n同意并继续 [y/N，回车退出]: '
+    printf '同意并继续 [y/N，回车退出]: '
     ui_read_line || die "input cancelled"
     disclaimer_answer="$UI_READ_RESULT"
 
@@ -1386,6 +1387,20 @@ get_mount_available_kib() {
     esac
 
     printf '%s\n' "$avail_kib"
+}
+
+get_mount_total_gb() {
+    local mount_path="$1"
+    local total_kib
+
+    [ -n "$mount_path" ] || return 1
+    total_kib="$(df -kP "$mount_path" 2>/dev/null | awk 'NR == 2 { print $2 }' | tr -d '\r' || true)"
+    case "$total_kib" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$total_kib" -gt 0 ] 2>/dev/null || return 1
+
+    awk -v kib="$total_kib" 'BEGIN { printf "%.1f", kib * 1024 / 1000000000 }'
 }
 
 format_mib_or_gib() {
@@ -2954,12 +2969,12 @@ run_final_diagnostic_report_export() {
 
 run_final_stability_toolbox() {
     while :; do
-        printf '\n封版工具箱:\n'
-        printf '1. 导出脱敏诊断报告\n'
-        printf '2. 查看备份清单\n'
-        printf '3. 查看动作日志\n'
-        printf '0. 返回设备维护与检测\n'
-        printf '请选择 0、1、2 或 3: '
+        print_menu_header '设备维护 > 封版工具箱'
+        print_menu_item 1 '导出脱敏诊断报告'
+        print_menu_item 2 '查看备份清单'
+        print_menu_item 3 '查看动作日志'
+        print_menu_item 0 '返回上级'
+        print_menu_prompt '0-3'
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 0 ;;
@@ -3922,6 +3937,8 @@ cleanup_openvpn() {
         /usr/lib/lua/luci/model/cbi/openvpn-advanced.lua \
         /usr/lib/lua/luci/model/cbi/openvpn-file.lua \
         /usr/lib/lua/luci/view/openvpn/ovpn_css.htm \
+        /usr/lib/lua/luci/view/openvpn/navigation.htm \
+        /usr/lib/lua/luci/view/openvpn/tblsection.htm \
         /usr/lib/lua/luci/view/openvpn/pageswitch.htm \
         /usr/lib/lua/luci/view/openvpn/cbi-select-input-add.htm \
         /usr/lib/lua/luci/view/openvpn/overview_intro.htm \
@@ -4477,6 +4494,13 @@ docker_cleanup_legacy_payloads() {
 
 cleanup_docker() {
     resolve_docker_uninstall_root
+    case "$DOCKER_ROOT" in
+        /tmp/storage/*/nradio-apps/docker|/mnt/app_data/nradio-apps/docker)
+            docker_card_mount="${DOCKER_ROOT%/nradio-apps/docker}"
+            awk -v m="$docker_card_mount" '$1 ~ /^\/dev\/mmcblk[0-9]+p[0-9]+$/ && $2 == m { found=1 } END { exit !found }' /proc/mounts 2>/dev/null ||
+                die "Docker 卸载需要原 SD 存储卡已挂载：$docker_card_mount"
+            ;;
+    esac
     stop_disable /etc/init.d/dockerd
     stop_disable /etc/init.d/cgroupfs-mount
     kill_name dockerd
@@ -7087,8 +7111,9 @@ function index()
 	root.dependent = false
 	local system = entry({"nradioadv", "system"}, firstchild(), _("System"), 20)
 	system.dependent = false
-	local page = entry({"nradioadv", "system", "appcenter"}, template("nradio_appcenter/appcenter"), _("AppCenter"), 30)
+	local page = entry({"nradioadv", "system", "appcenter"}, template("nradio_appcenter/appcenter"), _("应用商店"), 30)
 	page.dependent = false
+	page.icon = "nradio-appcenter"
 	entry({"nradioadv", "system", "appcenter", "list"}, call("action_list"), nil, nil, true).leaf = true
 	entry({"nradioadv", "system", "appcenter", "memory"}, call("action_memory"), nil, nil, true).leaf = true
 	entry({"nradioadv", "system", "appcenter", "sys_status"}, call("action_sys_status"), nil, nil, true).leaf = true
@@ -7633,8 +7658,9 @@ write("appcenter", config)
 
 local controller = read("appcenter.lua"):gsub("NRadio C2000Pro compatibility appcenter layer", marker)
 controller = replace_function(controller, "index", "action_list", [[function index()
-    local page = entry({"nradioadv", "system", "appcenter"}, template("nradio_appcenter/appcenter"), _("AppCenter"), 30, true)
+    local page = entry({"nradioadv", "system", "appcenter"}, template("nradio_appcenter/appcenter"), _("应用商店"), 30, true)
     page.dependent = false
+    page.icon = "nradio-appcenter"
     page.show = true
     page.sysauth = "root"
     page.sysauth_authenticator = "htmlauth"
@@ -15519,11 +15545,12 @@ patch_appcenter_card_polish_v3() {
         position: relative;
         z-index: 10;
     }
-    .appcontainer, #app_top_menu{
-        --nr-v3-bg: #07101b;
-        --nr-v3-panel: #0f1d2b;
-        --nr-v3-panel-2: #0f1d2d;
+    .main.nr-appcenter-main, .appcontainer, #app_top_menu{
+        --nr-v3-bg: #0b1724;
+        --nr-v3-panel: #112337;
+        --nr-v3-panel-2: #0e1c2b;
         --nr-v3-line: rgba(128,157,184,.16);
+        --nr-v3-line-soft: rgba(128,157,184,.12);
         --nr-v3-line-strong: rgba(70,190,214,.42);
         --nr-v3-text: #edf5fb;
         --nr-v3-text-soft: #c5d2de;
@@ -15533,6 +15560,9 @@ patch_appcenter_card_polish_v3() {
         --nr-v3-green: #50c697;
         --nr-v3-amber: #e1ad64;
         --nr-v3-red: #df7d82;
+    }
+    @media (min-width: 768px){
+        .main.nr-appcenter-main{ background: var(--nr-v3-bg); }
     }
     .appcontainer{
         position: relative;
@@ -15576,9 +15606,9 @@ patch_appcenter_card_polish_v3() {
         padding: 6px 10px !important;
         overflow: hidden !important;
         box-sizing: border-box;
-        border: 1px solid var(--nr-v3-line);
+        border: 1px solid var(--nr-v3-line-soft);
         border-radius: 12px;
-        background: #0c1825;
+        background: var(--nr-v3-panel-2);
         font-size: 13px;
         line-height: 1.4;
     }
@@ -15634,12 +15664,12 @@ patch_appcenter_card_polish_v3() {
     #app_top_menu .nr_tabs_before::before{
         content: "";
         left: 0;
-        background: linear-gradient(90deg,#0c1825,transparent);
+        background: linear-gradient(90deg,var(--nr-v3-panel-2),transparent);
     }
     #app_top_menu .nr_tabs_after::after{
         content: "";
         right: 0;
-        background: linear-gradient(270deg,#0c1825,transparent);
+        background: linear-gradient(270deg,var(--nr-v3-panel-2),transparent);
     }
     #app_top_menu .top_menu{
         display: inline-flex;
@@ -15762,14 +15792,14 @@ patch_appcenter_card_polish_v3() {
         grid-area: toolbar;
         display: grid;
         grid-template-columns: minmax(210px,1fr) minmax(180px,320px) auto;
-        gap: 12px;
+        gap: 4px 12px;
         align-items: center;
         width: 100%;
         min-width: 0;
         padding: 11px 12px;
-        border: 1px solid var(--nr-v3-line);
+        border: 1px solid var(--nr-v3-line-soft);
         border-radius: 12px;
-        background: #0c1825;
+        background: var(--nr-v3-panel-2);
         box-shadow: none;
     }
     .app_btn_box .mem_track{
@@ -15949,22 +15979,34 @@ patch_appcenter_card_polish_v3() {
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 7px 10px;
-        border: 1px solid rgba(76,198,216,.25);
-        border-radius: 8px;
-        background: rgba(76,198,216,.07);
-        color: var(--nr-v3-text-soft);
+        height: 32px;
+        min-width: 0;
+        padding: 0 6px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--nr-v3-muted);
         font-size: 12px;
     }
-    .nr_app_list_feedback[hidden],
-    .nr_app_list_retry[hidden]{ display: none !important; }
+    .nr_app_list_message{
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .nr_app_list_feedback[hidden]{ display: flex !important; visibility: hidden; pointer-events: none; }
+    .nr_app_list_retry[hidden]{ display: inline-flex !important; visibility: hidden; pointer-events: none; }
     .nr_app_list_feedback.nr_app_list_error{
         border-color: rgba(223,125,130,.38);
         background: rgba(223,125,130,.09);
         color: #f4c8ce;
     }
     .nr_app_list_retry{
-        min-height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        min-height: 28px;
         padding: 0 10px;
         border: 1px solid currentColor;
         border-radius: 6px;
@@ -15985,9 +16027,9 @@ patch_appcenter_card_polish_v3() {
         min-width: 0;
         margin: 0 !important;
         padding: 8px;
-        border: 1px solid var(--nr-v3-line);
+        border: 1px solid var(--nr-v3-line-soft);
         border-radius: 12px;
-        background: rgba(8,18,30,.86);
+        background: var(--nr-v3-panel-2);
     }
     .container_left ul{
         margin: 0;
@@ -16080,7 +16122,7 @@ patch_appcenter_card_polish_v3() {
         float: none !important;
         padding: 16px;
         overflow: hidden;
-        border: 1px solid var(--nr-v3-line);
+        border: 1px solid var(--nr-v3-line-soft);
         border-radius: 12px;
         background: var(--nr-v3-panel);
         box-shadow: 0 3px 10px rgba(0,0,0,.10);
@@ -16091,7 +16133,7 @@ patch_appcenter_card_polish_v3() {
     .container_right .app_box:focus-within{
         transform: none;
         border-color: var(--nr-v3-line-strong);
-        background: #132334;
+        background: #183047;
         box-shadow: 0 5px 14px rgba(0,0,0,.14);
     }
     .container_right .app_icon{
@@ -16170,12 +16212,33 @@ patch_appcenter_card_polish_v3() {
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .container_right .app_name.nr_text_expandable,
-    .container_right .app_version.nr_text_expandable{
+    .container_right .app_name,
+    .container_right .app_version,
+    .container_right .app_des{
+        position: relative;
+        padding-right: 20px;
+    }
+    .container_right .nr_text_expandable{
         cursor: pointer;
     }
-    .container_right .app_name.nr_text_expandable:focus-visible,
-    .container_right .app_version.nr_text_expandable:focus-visible{
+    .container_right .nr_text_expandable::after{
+        content: "";
+        position: absolute;
+        top: 5px;
+        right: 3px;
+        width: 7px;
+        height: 7px;
+        border-right: 1.5px solid var(--nr-v3-cyan);
+        border-bottom: 1.5px solid var(--nr-v3-cyan);
+        transform: rotate(45deg);
+        pointer-events: none;
+    }
+    .container_right .nr_text_expanded::after,
+    .container_right .nr_desc_expanded::after{
+        top: 8px;
+        transform: rotate(225deg);
+    }
+    .container_right .nr_text_expandable:focus-visible{
         outline: 2px solid var(--nr-v3-cyan);
         outline-offset: 2px;
     }
@@ -16217,7 +16280,11 @@ patch_appcenter_card_polish_v3() {
         background: rgba(95,158,234,.09);
         color: #bcd9fb;
     }
-    .container_right .app_state_1,
+    .container_right .app_state_1{
+        border-color: rgba(128,157,184,.22);
+        background: rgba(128,157,184,.07);
+        color: #b9cad9;
+    }
     .container_right .app_open_badge{
         border-color: rgba(80,198,151,.30);
         background: rgba(80,198,151,.09);
@@ -16351,38 +16418,32 @@ patch_appcenter_card_polish_v3() {
         background: rgba(223,125,130,.09);
         color: #f2b8c0;
     }
-    .app_empty_state{
-        grid-column: 1 / -1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 220px;
-        padding: 28px;
-        border: 1px dashed rgba(128,157,184,.25);
-        border-radius: 13px;
-        background: rgba(8,18,30,.52);
-        color: var(--nr-v3-muted);
-        text-align: center;
-    }
-    .app_empty_state strong{
-        margin-bottom: 5px;
-        color: var(--nr-v3-text-soft);
-        font-size: 14px;
-    }
+    .app_empty_state,
     .nr_search_empty{
         grid-column: 1 / -1;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 165px;
+        min-height: 180px;
         padding: 24px;
         border: 1px dashed rgba(76,198,216,.25);
         border-radius: 12px;
-        background: #0c1825;
+        background: var(--nr-v3-panel-2);
         color: var(--nr-v3-muted);
         text-align: center;
+    }
+    .app_empty_state strong,
+    .nr_search_empty strong{
+        color: var(--nr-v3-text-soft);
+        font-size: 14px;
+    }
+    .nr_empty_icon{
+        width: 28px;
+        height: 28px;
+        margin-bottom: 9px;
+        color: var(--nr-v3-cyan);
+        opacity: .68;
     }
     .nr_search_empty::before{
         content: "";
@@ -16395,15 +16456,13 @@ patch_appcenter_card_polish_v3() {
         line-height: 1;
         opacity: .68;
     }
-    .nr_search_empty strong{
-        color: var(--nr-v3-text-soft);
-        font-size: 13px;
-    }
+    .app_empty_state > span,
     .nr_search_empty span{
         margin-top: 4px;
         font-size: 12px;
     }
-    .nr_search_reset{
+    .nr_search_reset,
+    .nr_browse_apps{
         min-height: 44px;
         margin-top: 12px;
         padding: 0 16px;
@@ -16412,6 +16471,16 @@ patch_appcenter_card_polish_v3() {
         background: rgba(76,198,216,.08);
         color: #c8f6fb;
         cursor: pointer;
+    }
+    .nr_search_reset:hover,
+    .nr_browse_apps:hover{
+        background: rgba(76,198,216,.15);
+        color: #e7fbff;
+    }
+    .nr_search_reset:focus-visible,
+    .nr_browse_apps:focus-visible{
+        outline: 2px solid var(--nr-v3-cyan);
+        outline-offset: 2px;
     }
     #app_status_mount{
         grid-area: status;
@@ -16424,9 +16493,9 @@ patch_appcenter_card_polish_v3() {
         gap: 8px;
         align-items: stretch;
         padding: 10px 12px;
-        border: 1px solid var(--nr-v3-line);
+        border: 1px solid var(--nr-v3-line-soft);
         border-radius: 10px;
-        background: #0c1825;
+        background: var(--nr-v3-panel-2);
         box-shadow: none;
     }
     .app_status_head{
@@ -16481,6 +16550,7 @@ patch_appcenter_card_polish_v3() {
         display: flex;
         flex-direction: column;
         justify-content: center;
+        min-width: 0;
         margin: 0;
         padding: 6px 8px;
         border: 0;
@@ -16503,13 +16573,23 @@ patch_appcenter_card_polish_v3() {
     .app_status_metric_row strong{
         max-width: 100%;
         overflow: hidden;
-        color: var(--nr-v3-text-soft);
-        font-size: 12px;
+        color: var(--nr-v3-text);
+        font-size: 16px;
         font-weight: 700;
         text-overflow: ellipsis;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
     }
+    .app_status_metric_detail{
+        display: block;
+        margin-bottom: 6px;
+        color: var(--nr-v3-muted);
+        font-size: 11px;
+        line-height: 1.4;
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+    }
+    .app_status_metric_detail[hidden]{ display: none; }
     .app_status_bar{
         height: 4px;
         overflow: hidden;
@@ -16739,6 +16819,120 @@ patch_appcenter_card_polish_v3() {
         border-radius: 0 0 14px 14px;
         background: #0d1a29;
     }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-dialog{
+        width: 460px;
+        max-width: calc(100vw - 32px) !important;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-header{
+        padding: 10px 16px;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .bootstrap-dialog-title{
+        font-size: 15px;
+        line-height: 1.5;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-body{
+        padding: 12px 18px;
+        border-radius: 0;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .bootstrap-dialog-message{
+        padding: 0 !important;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_state{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 120px;
+        padding: 12px 6px;
+        box-sizing: border-box;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_icon{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        margin-bottom: 2px;
+        color: #4cc6d8;
+        font-size: 27px;
+        line-height: 1;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_icon .nr_dialog_spinner{
+        display: block;
+        width: 30px;
+        height: 30px;
+        margin: 0;
+        box-sizing: border-box;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_success .nr_update_check_icon{
+        color: #50c697;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_error .nr_update_check_icon{
+        color: #df7d82;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_state strong{
+        max-width: 100%;
+        margin: 0;
+        color: #edf5fb;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.45;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .nr_update_check_detail{
+        max-width: 100%;
+        margin: 0;
+        color: #9aaec0;
+        font-size: 13px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer{
+        padding: 10px 16px;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .bootstrap-dialog-footer-buttons{
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer .btn{
+        min-width: 80px;
+        max-width: 100%;
+        min-height: 44px;
+        margin: 0;
+        padding: 8px 16px;
+        border: 1px solid rgba(128,157,184,.30);
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.4;
+        white-space: normal;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer .btn-default{
+        background: rgba(128,157,184,.07);
+        color: #c5d2de;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer .btn-primary{
+        border-color: rgba(76,198,216,.48);
+        background: #1b424e;
+        color: #e4fbfd;
+        font-weight: 600;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer .btn-default:hover{
+        border-color: rgba(128,157,184,.50);
+        background: rgba(128,157,184,.13);
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer .btn-primary:hover{
+        border-color: #4cc6d8;
+        background: #245969;
+    }
+    .modal.bootstrap-dialog.nr_update_check_dialog .modal-footer .btn:focus-visible{
+        outline: 2px solid #4cc6d8;
+        outline-offset: 2px;
+    }
     .modal.bootstrap-dialog.nr_import_dialog .modal-dialog{
         width: 520px;
         max-width: calc(100vw - 32px) !important;
@@ -16863,6 +17057,8 @@ patch_appcenter_card_polish_v3() {
     }
     @media (max-width: 680px){
         #app_top_menu{ padding: 4px 6px !important; gap: 5px; }
+        .nr_app_list_feedback{ height: 46px; }
+        .nr_app_list_retry{ min-height: 44px; }
         #app_top_menu .top_menu{ min-height: 44px; }
         #app_top_menu .nr_tabs_nav{ flex-basis: 44px; width: 44px; min-height: 44px; }
         #app_top_menu .nr_top_name{ max-width: 120px; }
@@ -16995,11 +17191,11 @@ patch_appcenter_card_polish_v3() {
             min-width: 0;
         }
         .app_status_panel{
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2,minmax(0,1fr));
         }
         .app_status_head,
         .app_status_grid{
-            grid-column: auto;
+            grid-column: 1 / -1;
         }
     }
     @media (prefers-reduced-motion: reduce){
@@ -17074,11 +17270,11 @@ EOF_APPCENTER_V3_CSS
         if(window.ResizeObserver) new window.ResizeObserver(nr_sync_toolbar_height).observe(toolbar);
     }
     function nr_init_topnav_layout(){
-        if(!NR_APP_TOP_NAV) return;
         var main = $(".appcontainer").closest(".main")[0];
         if(!main) return;
-        document.body.classList.add("nr-appcenter-topnav");
         main.classList.add("nr-appcenter-main");
+        if(!NR_APP_TOP_NAV) return;
+        document.body.classList.add("nr-appcenter-topnav");
         var footer = document.querySelector("body > footer.footer");
         var pending = false;
         function update_height(){
@@ -17197,6 +17393,102 @@ EOF_APPCENTER_V3_CSS
         dialog.setMessage(nr_result_markup(ok, message));
     }
 
+    var NR_APP_CHECK = null;
+    var NR_APP_CHECK_TIMEOUT = 80000;
+    function nr_stop_appstore_check(job){
+        if(!job) return;
+        job.done = true;
+        window.clearTimeout(job.pollTimer);
+        window.clearTimeout(job.deadlineTimer);
+        var xhr = job.xhr;
+        job.xhr = null;
+        if(xhr && xhr.readyState !== 4) xhr.abort();
+    }
+
+    function nr_render_appstore_check(job, state, title, detail){
+        var waiting = state === "waiting";
+        var failed = state === "error";
+        var icon = waiting ? '<span class="nr_dialog_spinner" aria-hidden="true"></span>' : failed ? '!' : '✓';
+        var buttons = [{label:"关闭", cssClass:"btn-default", action:function(dialog){ dialog.close(); }}];
+        if(failed) buttons.push({label:"重新检测", cssClass:"btn-primary", action:function(){ nr_check_appstore_version(); }});
+        job.dialog.setTitle("检测应用更新");
+        job.dialog.setType(BootstrapDialog.TYPE_DEFAULT);
+        job.dialog.setMessage('<div class="nr_update_check_state nr_update_check_'+state+'" role="status" aria-live="polite">'+
+            '<span class="nr_update_check_icon" aria-hidden="true">'+icon+'</span><strong>'+nr_escape_html(title)+'</strong>'+
+            (detail ? '<div class="nr_update_check_detail">'+nr_escape_html(detail)+'</div>' : '')+'</div>');
+        job.dialog.setButtons(buttons);
+    }
+
+    function nr_finish_appstore_check(job, code, message){
+        if(NR_APP_CHECK !== job || job.done) return;
+        nr_stop_appstore_check(job);
+        var ok = code === 0 || code === 5;
+        nr_render_appstore_check(job, ok ? "success" : "error",
+            code === 5 ? "应用列表已是最新" : code === 0 ? "应用列表已更新" : "检测失败",
+            ok ? "" : message || "暂时无法获取应用列表，请重新检测");
+        if(ok) refresh_data();
+    }
+
+    function nr_request_appstore_check(job, initial){
+        if(!job || NR_APP_CHECK !== job || job.done || job.xhr) return;
+        var remaining = job.deadline - Date.now();
+        if(remaining <= 0){ nr_finish_appstore_check(job, -1, "检测超时，请重新检测"); return; }
+        job.xhr = $.ajax({
+            type:"POST",
+            url:'<%=controller%>nradioadv/system/appcenter/' + (initial ? "appstore" : "check_appstore"),
+            data:{token:'<%=token%>'},
+            dataType:"json",
+            timeout:Math.min(10000, remaining),
+            success:function(response){
+                if(NR_APP_CHECK !== job || job.done) return;
+                var result = response && response.result;
+                var raw = result && result.code;
+                if((typeof raw !== "number" && typeof raw !== "string") || !/^-?\d+$/.test(String(raw))){
+                    nr_finish_appstore_check(job, -1, "检测响应无效，请重新检测");
+                    return;
+                }
+                var code = Number(raw);
+                if(code === 13 || code === 14){
+                    nr_render_appstore_check(job, "waiting", code === 14 ? "等待更新" : "正在检测",
+                        code === 14 ? "服务正在处理请求" : "正在获取应用列表");
+                    job.pollTimer = window.setTimeout(function(){ nr_request_appstore_check(job, false); }, 4000);
+                } else nr_finish_appstore_check(job, code, result.msg);
+            },
+            error:function(xhr, status){
+                if(NR_APP_CHECK !== job || job.done) return;
+                nr_finish_appstore_check(job, -1, status === "timeout" ? "检测请求超时，请重新检测" :
+                    status === "parsererror" ? "检测响应无效，请重新检测" : "无法获取检测结果，请检查连接后重试");
+            },
+            complete:function(){ job.xhr = null; }
+        });
+    }
+
+    function nr_check_appstore_version(){
+        if(NR_APP_CHECK && !NR_APP_CHECK.done) return;
+        var dialog = appstore_check_dial;
+        if(!dialog || !dialog.isOpened()){
+            dialog = BootstrapDialog.show({
+                type:BootstrapDialog.TYPE_DEFAULT,
+                cssClass:"nr_update_check_dialog",
+                closeByBackdrop:false,
+                title:"检测应用更新",
+                message:"",
+                onhide:function(closed){
+                    if(NR_APP_CHECK && NR_APP_CHECK.dialog === closed) nr_stop_appstore_check(NR_APP_CHECK);
+                }
+            });
+            appstore_check_dial = dialog;
+        }
+        var job = {dialog:dialog, done:false, xhr:null, pollTimer:null, deadlineTimer:null,
+            deadline:Date.now() + NR_APP_CHECK_TIMEOUT};
+        NR_APP_CHECK = job;
+        nr_render_appstore_check(job, "waiting", "正在检测", "");
+        job.deadlineTimer = window.setTimeout(function(){
+            nr_finish_appstore_check(job, -1, "检测超时，请重新检测");
+        }, NR_APP_CHECK_TIMEOUT);
+        nr_request_appstore_check(job, true);
+    }
+
     function nr_appcenter_display_version(name, version){
         var raw = version || "";
         var key = (name || "").toLowerCase();
@@ -17216,8 +17508,11 @@ EOF_APPCENTER_V3_CSS
         return "应用功能与运行入口";
     }
 
-    function nr_appcenter_empty_state(title){
-        return '<div class="app_empty_state"><strong>'+title+'</strong><span>当前没有可显示的应用</span></div>';
+    function nr_appcenter_empty_state(title, browse){
+        var icon = '<svg class="nr_empty_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+        return '<div class="app_empty_state" role="status">'+icon+'<strong>'+nr_escape_html(title)+'</strong><span>'+
+            (browse ? '前往全部应用，选择需要的工具' : '应用列表为空，可刷新后再试')+'</span>'+
+            (browse ? '<button type="button" class="nr_browse_apps">浏览全部应用</button>' : '')+'</div>';
     }
 
     function nr_appcenter_search_empty(){
@@ -17234,7 +17529,7 @@ EOF_APPCENTER_V3_CSS
         var message = state === "busy" ? "应用列表刷新中" : state === "error" ?
             "列表刷新失败，当前显示上次结果" : "应用列表已更新";
         box.prop("hidden", false).toggleClass("nr_app_list_error", state === "error");
-        box.find(".nr_app_list_message").text(message);
+        box.find(".nr_app_list_message").text(message).attr("title", message);
         box.find(".nr_app_list_retry").prop("hidden", state !== "error");
         nr_sync_toolbar_height();
         if(state === "ok") NR_APP_LIST_FEEDBACK_TIMER = window.setTimeout(function(){
@@ -17315,8 +17610,8 @@ EOF_APPCENTER_V3_CSS
         '  </div>'+
         '  <div class="app_status_metric"><div class="app_status_metric_row"><span>设备最高温度</span><strong class="app_status_temp">--</strong></div><div class="app_status_bar"><span class="app_status_temp_bar"></span></div></div>'+
         '  <div class="app_status_metric"><div class="app_status_metric_row"><span>CPU 使用率</span><strong class="app_status_cpu">采样中</strong></div><div class="app_status_bar"><span class="app_status_cpu_bar"></span></div></div>'+
-        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>内存占用</span><strong class="app_status_mem">--</strong></div><div class="app_status_bar"><span class="app_status_mem_bar"></span></div></div>'+
-        '  <div class="app_status_metric app_status_swap_metric" style="display:none"><div class="app_status_metric_row"><span>Swap 虚拟内存</span><strong class="app_status_swap">--</strong></div><div class="app_status_bar"><span class="app_status_swap_bar"></span></div></div>'+
+        '  <div class="app_status_metric"><div class="app_status_metric_row"><span>内存占用</span><strong class="app_status_mem">--</strong></div><small class="app_status_metric_detail app_status_mem_detail">-- / --</small><div class="app_status_bar"><span class="app_status_mem_bar"></span></div></div>'+
+        '  <div class="app_status_metric app_status_swap_metric" style="display:none"><div class="app_status_metric_row"><span>Swap 虚拟内存</span><strong class="app_status_swap">--</strong></div><small class="app_status_metric_detail app_status_swap_detail" hidden></small><div class="app_status_bar"><span class="app_status_swap_bar"></span></div></div>'+
         '</aside>';
     }
 
@@ -17357,7 +17652,8 @@ EOF_APPCENTER_V3_CSS
             $(".app_status_cpu").text(cpu.toFixed(1)+"%");
             nr_set_status_width(".app_status_cpu_bar", cpu);
         }
-        $(".app_status_mem").text(memText).attr("title", memText+" · "+memPercent.toFixed(1)+"%");
+        $(".app_status_mem").text(memPercent.toFixed(1)+"%").attr("title", memText+" · "+memPercent.toFixed(1)+"%");
+        $(".app_status_mem_detail").text(memText);
         nr_set_status_width(".app_status_mem_bar", memPercent);
         var supportsSwap = data.supports_swap === true || data.supports_swap == 1 || data.is_c2000max === true || data.is_c2000max == 1 || data.model_name == "NRadio_C2000MAX" || data.model == "NRadio_C2000MAX" || data.model_name == "NRadio_C2000Ultra" || data.model == "NRadio_C2000Ultra";
         if(supportsSwap){
@@ -17370,7 +17666,8 @@ EOF_APPCENTER_V3_CSS
             var swapUsed = Number(data.swap_used || 0);
             var swapPercent = Number(data.swap_percent || 0);
             $(".app_status_swap_metric").show();
-            $(".app_status_swap").text(swapTotal > 0 ? nr_format_kib(swapUsed)+" / "+nr_format_kib(swapTotal) : "未启用");
+            $(".app_status_swap").text(swapTotal > 0 ? swapPercent.toFixed(1)+"%" : "未启用");
+            $(".app_status_swap_detail").text(swapTotal > 0 ? nr_format_kib(swapUsed)+" / "+nr_format_kib(swapTotal) : "").prop("hidden", swapTotal <= 0);
             nr_set_status_width(".app_status_swap_bar", swapPercent);
         } else {
             $(".app_status_swap_metric").hide();
@@ -17426,12 +17723,15 @@ EOF_APPCENTER_V3_CSS
     }
 
     function nr_mark_expandable_text(){
-        $(".container_right:not(.hide) .app_name, .container_right:not(.hide) .app_version").each(function(){
-            if(this.classList.contains("nr_text_expanded")) return;
-            var clipped = this.scrollWidth > this.clientWidth + 1 || this.scrollHeight > this.clientHeight + 1;
+        $(".container_right:not(.hide) .app_name, .container_right:not(.hide) .app_version, .container_right:not(.hide) .app_des").each(function(){
+            var expanded = this.classList.contains("nr_text_expanded") || this.classList.contains("nr_desc_expanded");
+            var clipped = expanded || this.scrollWidth > this.clientWidth + 1 || this.scrollHeight > this.clientHeight + 1;
             $(this).toggleClass("nr_text_expandable", clipped);
-            if(clipped) $(this).attr({role:"button", tabindex:"0", "aria-expanded":"false"});
-            else $(this).removeAttr("role tabindex aria-expanded");
+            if(clipped){
+                var label = this.classList.contains("app_des") ? "应用说明" : this.classList.contains("app_version") ? "版本" : "应用名称";
+                $(this).attr({role:"button", tabindex:"0", "aria-expanded":expanded ? "true" : "false",
+                    "aria-label":(expanded ? "收起" : "展开")+label+"："+($(this).attr("data-nr-text") || "")});
+            } else $(this).removeAttr("role tabindex aria-expanded aria-label");
         });
     }
 
@@ -17514,7 +17814,7 @@ EOF_APPCENTER_V3_CSS
             if(db.status == APP_STATUS_APP_INSTALLED || db.status == APP_STATUS_APP_UPDATEED) htm_installed += row;
             htm += row;
         });
-        if(!htm_installed) htm_installed = nr_appcenter_empty_state("暂无已安装应用");
+        if(!htm_installed) htm_installed = nr_appcenter_empty_state("暂无已安装应用", true);
         if(!htm) htm = nr_appcenter_empty_state("暂无应用");
         $("#app_top_menu").removeClass("nr_tabs_overflow").html(top_menu_ht + '</div></div><button type="button" class="nr_tabs_nav nr_tabs_next" aria-label="向右查看已打开应用" title="向右查看已打开应用">›</button>');
         var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
@@ -17535,14 +17835,16 @@ EOF_APPCENTER_V3_CSS
         nr_apply_app_search();
     });
     $(document).on("click", "#nr_app_list_feedback .nr_app_list_retry", nr_refresh_app_list);
-    $(document).on("click", ".app_des[role='button']", function(){
-        var expanded = $(this).attr("aria-expanded") !== "true";
-        $(this).toggleClass("nr_desc_expanded", expanded).attr("aria-expanded", expanded ? "true" : "false");
+    $(document).on("click", ".nr_browse_apps", function(){
+        $("#nr_app_search_input").val("");
+        var all_menu = $(".container_left .app_menu").eq(1);
+        all_menu.trigger("click").focus();
+        nr_apply_app_search();
     });
     $(document).on("click", ".container_right .nr_text_expandable", function(){
-        var expanded = !this.classList.contains("nr_text_expanded");
-        $(this).toggleClass("nr_text_expanded", expanded).attr("aria-expanded", expanded ? "true" : "false");
-        if(!expanded) nr_mark_expandable_text();
+        var expanded_class = this.classList.contains("app_des") ? "nr_desc_expanded" : "nr_text_expanded";
+        $(this).toggleClass(expanded_class, !this.classList.contains(expanded_class));
+        nr_mark_expandable_text();
     });
     $(document).on("click", "#app_top_menu .nr_store_tab", function(){
         if(typeof sub_dialogDeal !== "undefined" && sub_dialogDeal) sub_dialogDeal.close();
@@ -17671,7 +17973,7 @@ local row = [[    var APPTableRow = ''+
         '            <div class="app_version" title="{{version}}" data-nr-text="{{display_version}}">{{display_version}}</div>'+
         '            <div class="app_meta_row"><span class="app_state_badge app_state_{{status}}">{{status_label}}</span>{{open_badge}}</div>'+
         '        </div>'+
-        '        <div class="app_des" title="{{des}}" data-nr-text="{{des}}" role="button" tabindex="0" aria-expanded="false" aria-label="{{display_name}}，应用说明：{{des}}">{{des}}</div>'+
+        '        <div class="app_des" title="{{des}}" data-nr-text="{{des}}">{{des}}</div>'+
         '    </div>'+
         '    <div class="app_action"><ul class="action_list">{{opt}}</ul></div>'+
         '</div>';
@@ -17728,21 +18030,16 @@ polish_function("check_upload", {
 assert(html:find("cssClass: 'list-dialog dialog_box nr_import_dialog',", 1, true), "import dialog class not found")
 assert(html:find('type="submit" disabled="disabled" value="<%:APPImportBTn%>"', 1, true), "initial upload button state not found")
 assert(html:find("if (!obj.files || !obj.files.length){", 1, true), "empty file guard not found")
-polish_function("check_version", {
-    {'loading_htm+"<br><%:APPVerisonCheckNote%>"', 'nr_appcenter_loading("check", "")'},
-    {'message: loading_htm', 'message: nr_appcenter_loading("check", "")'},
-    {'refresh_data();', 'nr_appcenter_result(appstore_check_dial, true, "check", "", nr_escape_html(msg)); refresh_data();'},
-    {'appstore_check_dial.setMessage(\'<i class="far fa-nradio-note fa-fw icon_disable" ></i>\'+error_info);', 'nr_appcenter_result(appstore_check_dial, false, "check", "", nr_escape_html(error_info));'},
-    {'appstore_check_dial.setMessage(data_res.result.msg);', 'nr_appcenter_result(appstore_check_dial, code == 0, "check", "", nr_escape_html(data_res.result.msg));'}
-})
+local check_start = assert(html:find("    function check_version(){", 1, true), "check_version start not found")
+local check_end = assert(html:find("\n    function check_upload(", check_start, true), "check_version end not found")
+html = html:sub(1, check_start - 1) .. "    function check_version(){ nr_check_appstore_version(); }\n" .. html:sub(check_end)
 polish_function("request_result", {
     {'check_dial.setMessage(err_info);', 'nr_appcenter_result(check_dial, code == APPCENTER_OK, action, name, err_info);'},
     {'check_dial.setMessage("<%:APPErrorTimeout%>");', 'nr_appcenter_result(check_dial, false, action, name, "<%:APPErrorTimeout%>");'}
 })
-polish_function("request_appstore_result", {
-    {'appstore_check_dial.setMessage(data_res.result.msg);', 'nr_appcenter_result(appstore_check_dial, code == 0, "check", "", nr_escape_html(data_res.result.msg));'},
-    {'appstore_check_dial.setMessage("<%:APPstoreErrorTimeout%>");', 'nr_appcenter_result(appstore_check_dial, false, "check", "", "<%:APPstoreErrorTimeout%>");'}
-})
+local poll_start = assert(html:find("    function request_appstore_result(", 1, true), "appstore polling start not found")
+local poll_end = assert(html:find("\n    function process_deal(", poll_start, true), "appstore polling end not found")
+html = html:sub(1, poll_start - 1) .. "    function request_appstore_result(){ nr_request_appstore_check(NR_APP_CHECK, false); }\n" .. html:sub(poll_end)
 polish_function("process_deal", {
     {'refresh_data();', 'if(dialogDeal && !callback) nr_appcenter_result(dialogDeal, true, action, name, nr_escape_html(msg)); refresh_data();'},
     {'var htm = genarate_loading_box(error_info,0);', 'var htm = nr_appcenter_loading(action, name);'},
@@ -19970,12 +20267,261 @@ nradio_5g_aggregation_restart_abnormal_ifaces() {
     [ "$agg_restarted" = '1' ] || log "修复:   未发现需要重拉的异常接口"
 }
 
+nradio_5g_aggregation_install_runtime_fixes() {
+    local agg_fix_changed agg_fix_rc agg_fix_iface agg_fix_status agg_fix_dev
+    command -v lua >/dev/null 2>&1 || { log "缺少 Lua，无法应用 5G 聚合修复"; return 1; }
+    agg_fix_changed=$(lua - <<'EOF_NRADIO_AGGREGATION_FIXES'
+local function require_text(ok, message)
+    if not ok then error(message, 0) end
+end
+local function contains(text, needle)
+    return text:find(needle, 1, true) ~= nil
+end
+local function replace_once(text, old, new)
+    local first, last = text:find(old, 1, true)
+    require_text(first and not text:find(old, last + 1, true), "修复位置缺失或重复: " .. old:sub(1, 80))
+    return text:sub(1, first - 1) .. new .. text:sub(last + 1)
+end
+local function edit_function(text, name, edit)
+    local first, last = text:find("\n" .. name .. "%s*%(%s*%)%s*{.-\n}")
+    require_text(first, "缺少固件函数: " .. name)
+    return text:sub(1, first - 1) .. edit(text:sub(first, last)) .. text:sub(last + 1)
+end
+local function compact(text)
+    return (text:gsub("%s+", ""))
+end
+
+local function fix_mwan(text)
+    text = edit_function(text, "mwan3_set_policy", function(body)
+        local lines, kept, i = {}, {}, 1
+        for line in (body .. "\n"):gmatch("([^\n]*)\n") do lines[#lines + 1] = line end
+        while i <= #lines do
+            local line = lines[i]
+            if contains(line, 'if [ ! "$(ls /tmp/odu_scan_*)" ];then') then
+                local found_flush = false
+                i = i + 1
+                while i <= #lines and not lines[i]:match("^%s*fi%s*$") do
+                    local item = lines[i]
+                    require_text(item:match("^%s*%$LOG ") or item:match("^%s*else%s*$") or
+                        item:match("^%s*conntrack %-D %-f ipv4 >.*$"), "扫描保护块包含未知操作")
+                    if item:match("^%s*conntrack %-D %-f ipv4 ") then found_flush = true end
+                    i = i + 1
+                end
+                require_text(i <= #lines and found_flush, "扫描保护块不完整")
+            elseif line:match("^%s*conntrack %-D %-f ipv[46] >.*$") or
+                   contains(line, '"conntrack clean as for ') then
+                -- A policy rebuild must preserve connections on healthy links.
+            else
+                kept[#kept + 1] = line
+            end
+            i = i + 1
+        end
+        local result = table.concat(kept, "\n")
+        require_text(not result:match("conntrack%s+%-D"), "策略函数仍含未知连接清理操作")
+        return result
+    end)
+    return edit_function(text, "mwan3_set_policies_iptables", function(body)
+        if contains(body, "conntrack cleanup offline interface:") then
+            require_text(contains(body, '[ "$ACTION" = "ifdown" ]') and contains(body, '--mark "$((ct_id*256))/0xff00"'), "现有连接修复不完整")
+            return body
+        end
+        require_text(compact(body) == compact([[
+mwan3_set_policies_iptables()
+{
+	config_foreach mwan3_create_policies_iptables policy "$1"
+}]]), "mwan3 策略入口含其他修改")
+        return [[
+
+mwan3_set_policies_iptables()
+{
+	local ct_id ct_family
+	config_foreach mwan3_create_policies_iptables policy "$1"
+	[ "$ACTION" = "ifdown" ] || return 0
+	[ "$(mwan3_get_iface_hotplug_state "$1")" = "offline" ] || return 0
+	config_get ct_family "$1" family
+	case "$ct_family" in ipv4|ipv6) ;; *) return 0 ;; esac
+	mwan3_get_iface_id ct_id "$1"
+	case "$ct_id" in ''|*[!0-9]*) return 0 ;; esac
+	[ "$ct_id" -gt 0 ] && [ "$ct_id" -lt 253 ] || return 0
+	if [ "$ct_family" = "ipv4" ] && ls /tmp/odu_scan_* >/dev/null 2>&1; then
+		return 0
+	fi
+	$LOG notice "conntrack cleanup offline interface:$1 family:$ct_family mark:$((ct_id*256))/0xff00"
+	conntrack -D -f "$ct_family" --mark "$((ct_id*256))/0xff00" >/dev/null 2>&1
+	return 0
+}]]
+    end)
+end
+
+local function fix_prefix(text)
+    if contains(text, "clean_lan_addr6(){") then
+        text = edit_function(text, "clean_lan_addr6", function(body)
+            require_text(contains(body, "dev br-lan valid_lft 5"), "未知 LAN 前缀清理实现")
+            return ""
+        end)
+        text = edit_function(text, "reset_globals_prefix", function(body)
+            require_text(contains(body, 'clean_lan_addr6 "$lan_addr"'), "未知前缀重置实现")
+            return ""
+        end)
+        text = replace_once(text,
+            '\t\t\treset_globals_prefix "$addr/$mask" "$INTERFACE" "$INTERFACE_PREFIX"\n', "")
+    end
+    require_text(not contains(text, "clean_lan_addr6") and not contains(text, "reset_globals_prefix"), "前缀清理未完全移除")
+    require_text(contains(text, 'proto_add_ipv6_prefix "$addr/$mask,$preferred,$valid"'), "缺少 netifd 前缀更新")
+    return text
+end
+
+local function fix_checker(text)
+    if contains(text, "g6ProbeFails=") then
+        require_text(contains(text, '[ "$g6ProbeFails" -lt 3 ]') and
+            contains(text, 'ubus call "network.interface.$_ifaces" renew') and
+            contains(text, '[ "$g6ProbeFails" -eq 0 ]'), "现有 IPv6 检测修复不完整")
+        return text
+    end
+    text = replace_once(text, "\ng6Rcnt=0\n", "\ng6Rcnt=0\ng6ProbeFails=0\n")
+    text = replace_once(text, 'if [ $g6ATtime -ne 0 ];then',
+        'if [ $g6ATtime -ne 0 ] && [ "$g6ProbeFails" -eq 0 ];then')
+    text = replace_once(text, [[	if check_all "$_nets" "$_ifaces" "$_ifaces_label" "$_l3" "$_Ostatus" ; then
+		_Nstatus="up"
+		_failcnt=0
+	fi]], [[	if check_all "$_nets" "$_ifaces" "$_ifaces_label" "$_l3" "$_Ostatus" ; then
+		_Nstatus="up"
+		_failcnt=0
+		[ -n "$_info" ] && g6ProbeFails=0
+	elif [ -n "$_info" ] && [ "$_Ostatus" = "up" ] && [ "$_ip_diff_check" -eq 0 ]; then
+		g6ProbeFails=$((g6ProbeFails+1))
+		if [ "$g6ProbeFails" -lt 3 ]; then
+			log_info "v6 probe failed $g6ProbeFails/3 on $_ifaces; retain online state"
+			_Nstatus="up"
+		fi
+	fi]])
+    local count
+    text, count = text:gsub('(%s*)log_info "%$_info dhcp renew %$_ifaces right now as for down%s*"%s*\n%s*ubus call network%.interface notify_proto [^\n]+', function(indent)
+        return indent .. 'log_info "$_info soft DHCP renew $_ifaces after confirmed probe failures"\n' ..
+            '\t\t\tubus call "network.interface.$_ifaces" renew'
+    end)
+    require_text(count == 1, "缺少 IPv6 检测失败重拨位置")
+    return text
+end
+
+local function fix_dhcp_start(text)
+    if contains(text, "proto_dhcpv6_ensure_linklocal()") then
+        require_text(contains(text, '\tproto_dhcpv6_ensure_linklocal "$iface"'), "缺少 DHCPv6 地址补齐调用")
+        return text
+    end
+    return replace_once(text, [[proto_dhcpv6_setup() {
+	local config="$1"
+	local iface="$2"]], [[proto_dhcpv6_ensure_linklocal() {
+	local device="$1"
+	local m1 m2 m3 m4 m5 m6 linklocal
+	ip -6 addr show dev "$device" scope link | grep -q 'inet6 ' && return 0
+	IFS=: read -r m1 m2 m3 m4 m5 m6 < "/sys/class/net/$device/address" || return 0
+	[ -n "$m6" ] || return 0
+	linklocal=$(printf 'fe80::%x%02x:%02xff:fe%02x:%02x%02x' \
+		"$((0x$m1 ^ 2))" "$((0x$m2))" "$((0x$m3))" \
+		"$((0x$m4))" "$((0x$m5))" "$((0x$m6))")
+	ip -6 addr add "$linklocal/64" dev "$device"
+}
+
+proto_dhcpv6_setup() {
+	local config="$1"
+	local iface="$2"
+	proto_dhcpv6_ensure_linklocal "$iface"]])
+end
+
+local targets = {
+    {"/lib/mwan3/mwan3.sh", fix_mwan},
+    {"/lib/netifd/dhcpv6.script", fix_prefix},
+    {"/usr/bin/wanchk.sh", fix_checker},
+    {"/lib/netifd/proto/dhcpv6.sh", fix_dhcp_start}
+}
+local pending = {}
+local ok, message = pcall(function()
+    -- Prepare every transformation before publishing any firmware file.
+    for _, target in ipairs(targets) do
+        local path, transform = target[1], target[2]
+        local file = assert(io.open(path, "rb"), "无法读取 " .. path)
+        local original = file:read("*a")
+        file:close()
+        local result = transform(original)
+        if result ~= original then
+            pending[#pending + 1] = {path = path, stage = path .. ".nragg-new", data = result}
+        end
+    end
+    for _, item in ipairs(pending) do
+        local file = assert(io.open(item.stage, "wb"))
+        assert(file:write(item.data))
+        assert(file:close())
+        require_text(os.execute("sh -n " .. item.stage) == 0, "Shell 语法错误: " .. item.path)
+        require_text(os.execute("chmod 755 " .. item.stage) == 0, "无法设置权限: " .. item.path)
+    end
+    for _, item in ipairs(pending) do
+        assert(os.rename(item.stage, item.path))
+        print(item.path)
+    end
+end)
+if not ok then
+    for _, item in ipairs(pending) do os.remove(item.stage) end
+    io.stderr:write("5G 聚合修复失败: " .. tostring(message) .. "\n")
+    os.exit(1)
+end
+EOF_NRADIO_AGGREGATION_FIXES
+    )
+    agg_fix_rc=$?
+    [ "$agg_fix_rc" -eq 0 ] || return "$agg_fix_rc"
+    for agg_fix_iface in cpe_6 cpe1_6 wan6; do
+        agg_fix_status=$(ifstatus "$agg_fix_iface" 2>/dev/null || true)
+        [ -n "$agg_fix_status" ] || continue
+        if [ "$(nradio_5g_aggregation_ifstatus_bool "$agg_fix_status" up)" != true ] &&
+           [ "$(nradio_5g_aggregation_ifstatus_bool "$agg_fix_status" pending)" != true ]; then
+            continue
+        fi
+        agg_fix_dev=$(nradio_5g_aggregation_ifstatus_field "$agg_fix_status" l3_device)
+        [ -n "$agg_fix_dev" ] || agg_fix_dev=$(nradio_5g_aggregation_ifstatus_field "$agg_fix_status" device)
+        [ -n "$agg_fix_dev" ] || continue
+        nradio_5g_aggregation_ipv6_ensure_dev_link_local "$agg_fix_dev" || {
+            log "IPv6 链路本地地址恢复失败: $agg_fix_iface ($agg_fix_dev)"; return 1;
+        }
+    done
+    if printf '%s\n' "$agg_fix_changed" | grep -Fx '/usr/bin/wanchk.sh' >/dev/null 2>&1; then
+        /etc/init.d/wanchk restart >/dev/null 2>&1 || { log "线路检测服务重启失败"; return 1; }
+    fi
+    log "5G 聚合修复已应用：连接保护、IPv6 前缀、检测防抖、启动地址补齐"
+}
+
+nradio_5g_aggregation_enable_nat6() {
+    [ "$(uci -q get luci.main.ipv6_nat_disabled 2>/dev/null || true)" != 1 ] || {
+        log "当前固件禁用了 IPv6 NAT，无法应用双栈权重"; return 1;
+    }
+    ip6tables -t nat -S >/dev/null 2>&1 || { log "当前固件缺少 IPv6 NAT 支持"; return 1; }
+    if [ "$(uci -q get firewall.@defaults[0].ipv6_nat 2>/dev/null || true)" != 1 ]; then
+        uci set firewall.@defaults[0].ipv6_nat=1 && uci commit firewall || return 1
+        /etc/init.d/firewall reload >/dev/null 2>&1 || { log "IPv6 NAT 应用失败"; return 1; }
+    fi
+}
+
+nradio_5g_aggregation_sync_multiwan_weights() {
+    local agg_sync_iface agg_sync_member agg_sync_weight
+    [ "$(uci -q get nradio_multiwan.main.enabled 2>/dev/null || true)" = 1 ] || return 0
+    for agg_sync_iface in $(uci -q get nradio_multiwan.main.interfaces 2>/dev/null); do
+        agg_sync_member=$(nradio_5g_aggregation_mwan_members_for_iface "$agg_sync_iface" | head -n 1)
+        [ -n "$agg_sync_member" ] || { log "未找到 $agg_sync_iface 的 LuCI 权重"; return 1; }
+        agg_sync_weight=$(uci -q get "mwan3.$agg_sync_member.weight" 2>/dev/null)
+        case "$agg_sync_weight" in ''|*[!0-9]*|0*) log "LuCI 权重无效: $agg_sync_iface"; return 1 ;; esac
+        uci set "nradio_multiwan.l_$agg_sync_iface.weight=$agg_sync_weight" || return 1
+    done
+    uci commit nradio_multiwan || return 1
+}
+
 nradio_5g_aggregation_light_repair() {
     selfcheck_print_header "5G聚合轻量修复"
     if ! nradio_5g_aggregation_model_supported; then
         log "结果:   当前机型无 5G 聚合修复动作"
         return 0
     fi
+
+    nradio_5g_aggregation_install_runtime_fixes || return 1
+    nradio_5g_aggregation_enable_nat6 || return 1
 
     if [ -x /etc/init.d/net_switch ]; then
         log "修复:   重新应用 net_switch"
@@ -19993,19 +20539,24 @@ nradio_5g_aggregation_light_repair() {
         log "修复:   未发现 net6_switch init"
     fi
 
+    nradio_5g_aggregation_sync_multiwan_weights || return 1
     nradio_5g_aggregation_restart_abnormal_ifaces
 
     if [ -x /etc/init.d/mwan3 ]; then
         log "修复:   重启 mwan3"
-        /etc/init.d/mwan3 restart >/dev/null 2>&1 || true
+        /etc/init.d/mwan3 restart >/dev/null 2>&1 || return 1
     elif command -v mwan3 >/dev/null 2>&1; then
         log "修复:   reload mwan3"
-        mwan3 restart >/dev/null 2>&1 || true
+        mwan3 restart >/dev/null 2>&1 || return 1
     else
         log "修复:   未发现 mwan3"
+        return 1
     fi
 
     sleep 5
+    if [ "$(uci -q get nradio_multiwan.main.enabled 2>/dev/null || true)" = 1 ]; then
+        nradio_multiwan_activate || return 1
+    fi
 }
 
 nradio_multiwan_install_assets() {
@@ -20478,6 +21029,8 @@ nradio_multiwan_configure() {
     log "现有系统固定出口规则优先；IPv4 与 IPv6 分别按各自在线线路分配。"
     log "增强分流的 IPv6 出站连接使用所选线路的 IPv6 源地址（NAT66）。"
     confirm_or_exit "确认应用以上双栈线路、权重及 IPv6 源地址转换吗？"
+    nradio_5g_aggregation_install_runtime_fixes || return 1
+    nradio_5g_aggregation_enable_nat6 || return 1
     [ -f /etc/config/nradio_multiwan ] || : > /etc/config/nradio_multiwan || return 1
     uci set nradio_multiwan.main=core || return 1
     uci set nradio_multiwan.main.enabled=1 || return 1
@@ -20541,8 +21094,15 @@ nradio_multiwan_delete_rule() {
 nradio_5g_aggregation_fix_mwan_weight() {
     local mwui_choice
     nradio_multiwan_install_assets || return 1
-    printf '\n5→5→2 / IPv4 + IPv6 多线宽带叠加\n'
-    printf '1. 启用或调整线路、权重\n2. 添加 IP/端口固定出口\n3. 移除固定出口规则\n4. 查看连接数与每线速率\n5. 停用增强分流，使用系统策略\n0. 返回\n请选择: '
+    print_menu_header '5G 聚合 > 多线宽带叠加'
+    print_menu_note 'IPv4 / IPv6'
+    print_menu_item 1 '启用或调整线路、权重'
+    print_menu_item 2 '添加 IP/端口固定出口'
+    print_menu_item 3 '移除固定出口规则'
+    print_menu_item 4 '查看连接数与每线速率'
+    print_menu_item 5 '停用增强分流' '使用系统策略'
+    print_menu_item 0 '返回上级'
+    print_menu_prompt '0-5'
     ui_read_line || return 1
     mwui_choice="$UI_READ_RESULT"
     case "$mwui_choice" in
@@ -21253,15 +21813,15 @@ run_5g_aggregation_repair_check() {
         return 0
     fi
 
-    printf '\n5G聚合修复检查:\n'
-    printf '1. 轻量修复后复查\n'
-    printf '2. 多线宽带叠加（IPv4/IPv6 权重/固定出口/连接数）\n'
-    printf '3. 30秒测速流量监控\n'
-    printf '4. 开启硬件 offload 并验证\n'
-    printf '5. 还原为软件 offload 并验证\n'
-    printf '6. IPv6 轻量恢复（自动检测双接口）\n'
-    printf '0. 结束\n'
-    printf '请选择 0、1、2、3、4、5 或 6: '
+    print_menu_header '设备维护 > 5G 聚合修复检查'
+    print_menu_item 1 '轻量修复后复查'
+    print_menu_item 2 '多线宽带叠加' 'IPv4/IPv6 权重、固定出口、连接数'
+    print_menu_item 3 '30 秒测速流量监控'
+    print_menu_item 4 '开启硬件 offload 并验证'
+    print_menu_item 5 '还原为软件 offload 并验证'
+    print_menu_item 6 'IPv6 轻量恢复' '自动检测双接口'
+    print_menu_item 0 '结束'
+    print_menu_prompt '0-6'
     if ! ui_read_line; then
         log "提示:   诊断完成；需要修复或监控时请选择 1/2/3/4/5/6"
         return 0
@@ -21272,9 +21832,9 @@ run_5g_aggregation_repair_check() {
             return 0
             ;;
         1)
-            nradio_5g_aggregation_light_repair
+            nradio_5g_aggregation_light_repair || return 1
             nradio_5g_aggregation_print_diagnostics
-            record_action_history "5 > 5 > 1" "5G聚合轻量修复后复查" "PASS" "$BACKUP_DIR"
+            record_action_history "5 > 5 > 1" "5G聚合轻量修复后复查" "PASS" ""
             ;;
         2)
             nradio_5g_aggregation_fix_mwan_weight || return 1
@@ -22688,11 +23248,11 @@ hakimi_print_policy_menu() {
 
     while IFS= read -r target_name; do
         [ -n "$target_name" ] || continue
-        printf '%s. %s\n' "$idx" "$(hakimi_policy_label "$target_name")"
+        print_menu_item "$idx" "$(hakimi_policy_label "$target_name")"
         idx=$((idx + 1))
     done < "$list_file"
-    printf '99. 手动输入策略名\n'
-    printf '0. 返回\n'
+    print_menu_item 99 '手动输入策略名'
+    print_menu_item 0 '返回上级'
 }
 
 hakimi_select_policy_target() {
@@ -22700,7 +23260,7 @@ hakimi_select_policy_target() {
     count="$(wc -l < "$list_file" 2>/dev/null | tr -d ' ' || printf 0)"
 
     while :; do
-        printf '请选择要加入的分流目标数字: '
+        print_menu_prompt '上方策略编号'
         ui_read_line || die "input cancelled"
         choice="$UI_READ_RESULT"
         case "$choice" in
@@ -26300,6 +26860,7 @@ EOF
 
     cat > /usr/lib/lua/luci/view/AdGuardHome/ui_skin.htm <<'EOF_ADG_UI_SKIN'
 <script type="text/javascript">
+document.documentElement.className += " adg-content-page";
 if (window.parent && window.parent !== window)
     document.documentElement.className += " adg-ui-embedded";
 </script>
@@ -26323,8 +26884,10 @@ html.adg-ui-embedded .cbi-button-apply { border-color:#338dc3!important; backgro
 html.adg-ui-embedded .cbi-button:focus-visible,
 html.adg-ui-embedded .cbi-input-text:focus-visible,
 html.adg-ui-embedded .cbi-input-password:focus-visible { outline:2px solid #67d8fb!important; outline-offset:2px!important; }
+html.adg-content-page .cbi-map { width:100%!important; max-width:1076px!important; margin:0 auto!important; padding:16px 18px!important; box-sizing:border-box!important; }
+.adg-content-page .cbi-page-actions { max-width:1040px; margin-left:auto!important; margin-right:auto!important; box-sizing:border-box; }
 @media(max-width:720px) {
-    html.adg-ui-embedded .cbi-map { padding:8px!important; }
+    html.adg-content-page .cbi-map { padding:8px!important; }
     html.adg-ui-embedded .cbi-section { padding:12px!important; }
 }
 </style>
@@ -26485,6 +27048,56 @@ function adgBuildAreaPath(values, width, height, padding) {
 	return line + " L" + (width - padding).toFixed(2) + " " + (height - padding).toFixed(2) + " L" + padding.toFixed(2) + " " + (height - padding).toFixed(2) + " Z";
 }
 
+var adgChartUnits = "";
+function adgChartBucket(index, count) {
+	var unit = adgChartUnits === "hours" ? "小时" : (adgChartUnits === "days" ? "天" : "段");
+	return "第 " + (index + 1) + " " + unit + " / 共 " + count + " " + unit;
+}
+function adgChartDetails(shellNode, values) {
+	if (!shellNode) return;
+	var footer = shellNode.nextElementSibling;
+	if (!footer || !adgHasClass(footer, "adg-chart-footer")) return;
+	var start = footer.querySelector(".adg-chart-start");
+	var end = footer.querySelector(".adg-chart-end");
+	var hint = footer.querySelector(".adg-chart-hint");
+	var guide = shellNode.querySelector(".adg-chart-guide");
+	var unit = adgChartUnits === "hours" ? "小时" : (adgChartUnits === "days" ? "天" : "段");
+	var samples = values.map(function(value) { return Math.max(0, Number(value) || 0); });
+	var peak = samples.reduce(function(max, value) { return Math.max(max, value); }, 0);
+	var summary = samples.length ? "峰值 " + adgFormatNumber(peak) + " 次 / " + unit : "暂无趋势数据";
+	start.textContent = samples.length ? "第 1 " + unit : "—";
+	end.textContent = samples.length ? "第 " + samples.length + " " + unit : "—";
+	hint.textContent = summary;
+	shellNode.setAttribute("aria-label", summary + "；左右方向键、悬停或点按查看各时段");
+	var active = Math.max(0, samples.length - 1);
+	function show(index) {
+		if (!samples.length) return;
+		active = Math.max(0, Math.min(samples.length - 1, index));
+		hint.textContent = adgChartBucket(active, samples.length) + " · " + adgFormatNumber(samples[active]) + " 次";
+		if (guide) {
+			guide.style.left = (8 / 360 * 100 + (samples.length > 1 ? active / (samples.length - 1) : 0) * 344 / 360 * 100) + "%";
+			guide.hidden = false;
+		}
+	}
+	function point(event) {
+		var bounds = shellNode.getBoundingClientRect();
+		var fraction = ((event.clientX - bounds.left) / (bounds.width || 1) * 360 - 8) / 344;
+		show(Math.round(fraction * Math.max(0, samples.length - 1)));
+	}
+	function clear() { hint.textContent = summary; if (guide) guide.hidden = true; }
+	shellNode.onpointermove = point;
+	shellNode.onclick = point;
+	shellNode.onpointerleave = clear;
+	shellNode.onfocus = function() { show(active); };
+	shellNode.onblur = clear;
+	shellNode.onkeydown = function(event) {
+		if (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "Home" || event.key === "End") {
+			event.preventDefault();
+			show(event.key === "Home" ? 0 : event.key === "End" ? samples.length - 1 : active + (event.key === "ArrowLeft" ? -1 : 1));
+		}
+	};
+	clear();
+}
 function adgApplyChart(lineId, areaId, values) {
 	var lineNode = document.getElementById(lineId);
 	var areaNode = document.getElementById(areaId);
@@ -26511,6 +27124,7 @@ function adgApplyChart(lineId, areaId, values) {
 			adgAddClass(shellNode, "adg-chart-empty");
 		}
 	}
+	adgChartDetails(shellNode, values || []);
 }
 
 function adgSetInlineNote(message, tone) {
@@ -26782,6 +27396,7 @@ function adgApplyRuntime(runtime, status) {
 	}
 	if (protectNode) {
 		protectNode.textContent = protectText;
+		protectNode.parentNode.setAttribute("data-state", runtimeOk && typeof runtime.protection_enabled !== "undefined" ? (runtime.protection_enabled ? "on" : "off") : "unknown");
 	}
 	if (redirectNode) {
 		redirectNode.textContent = redirectText;
@@ -26798,6 +27413,7 @@ function adgApplyRuntime(runtime, status) {
 }
 
 function adgApplyDashboardStats(data) {
+	adgChartUnits = data && data.time_units || "";
 	var totalNode = document.getElementById("adg-stats-total");
 	var blockedNode = document.getElementById("adg-stats-blocked");
 	var metaNode = document.getElementById("adg-stats-meta");
@@ -26867,7 +27483,9 @@ function adgApplyDashboardStats(data) {
 		blockedPercentNode.textContent = "拦截率 " + ratioText;
 	}
 	if (metaNode) {
-		metaNode.textContent = "最近 24 小时";
+		var count = data && data.dns_queries ? data.dns_queries.length : 0;
+		metaNode.textContent = count && (adgChartUnits === "hours" || adgChartUnits === "days")
+			? "统计区间 · " + count + (adgChartUnits === "days" ? " 天" : " 小时") : "统计概览";
 	}
 	if (authNode) {
 		authNode.textContent = "已认证";
@@ -26878,6 +27496,59 @@ function adgApplyDashboardStats(data) {
 	adgApplyChart("adg-chart-blocked-line", "adg-chart-blocked-area", data && data.blocked_filtering ? data.blocked_filtering : []);
 }
 
+function adgGroupSettings() {
+	var first = document.getElementById("cbi-AdGuardHome-AdGuardHome-enabled");
+	if (!first || !first.parentNode) return;
+	var parent = first.parentNode;
+	if (adgHasClass(parent, "adg-settings-fields")) return;
+	var groups = [
+		{title:"服务与接入", fields:["enabled", "httpport", "redirect"]},
+		{title:"仪表盘认证", fields:["dashboard_user", "dashboard_password", "hashpass"]},
+		{title:"核心与路径", fields:[]}
+	];
+	var rows = Array.prototype.slice.call(parent.children);
+	// Dependency-controlled fields may currently be detached by LuCI.
+	if (typeof cbi_d !== "undefined") cbi_d.forEach(function(entry) {
+		if (entry.parent === parent.id && rows.indexOf(entry.node) < 0) rows.push(entry.node);
+	});
+	rows.forEach(function(row) {
+		if (!row.id || row.id.indexOf("cbi-AdGuardHome-AdGuardHome-") !== 0) return;
+		var name = row.id.slice("cbi-AdGuardHome-AdGuardHome-".length);
+		var group = groups[0].fields.indexOf(name) >= 0 ? 0 : groups[1].fields.indexOf(name) >= 0 ? 1 : 2;
+		row.style.order = String(group * 2 + 1);
+		adgAddClass(row, "adg-setting-row");
+		if (group === 2) adgAddClass(row, "adg-setting-advanced");
+	});
+	adgAddClass(parent, "adg-settings-fields");
+	adgAddClass(parent, "adg-advanced-collapsed");
+	var toggle;
+	function setExpanded(expanded) {
+		parent.classList.toggle("adg-advanced-collapsed", !expanded);
+		toggle.setAttribute("aria-expanded", String(expanded));
+		toggle.textContent = expanded ? "收起高级选项" : "展开高级选项";
+	}
+	groups.forEach(function(group, index) {
+		var heading = document.createElement("div");
+		heading.className = "adg-settings-heading";
+		heading.style.order = String(index * 2);
+		var title = document.createElement("h3");
+		title.textContent = group.title;
+		heading.appendChild(title);
+		if (index === 2) {
+			toggle = document.createElement("button");
+			toggle.type = "button";
+			toggle.className = "adg-settings-toggle";
+			toggle.onclick = function() { setExpanded(toggle.getAttribute("aria-expanded") !== "true"); };
+			heading.appendChild(toggle);
+		}
+		parent.appendChild(heading);
+	});
+	setExpanded(!!parent.querySelector(".cbi-value-error, .cbi-input-invalid"));
+	parent.addEventListener("invalid", function() { setExpanded(true); }, true);
+	if (first.closest("form")) first.closest("form").addEventListener("submit", function() {
+		if (parent.querySelector(".cbi-value-error, .cbi-input-invalid")) setExpanded(true);
+	}, true);
+}
 function adgApplyPageSkin() {
 	var map = document.querySelector(".cbi-map");
 	var sections = document.querySelectorAll(".cbi-section");
@@ -26970,6 +27641,7 @@ function adgApplyPageSkin() {
 	for (i = 0; i < pageActions.length; i++) {
 		adgAddClass(pageActions[i], "adg-page-actions");
 	}
+	adgGroupSettings();
 }
 
 var adgRefreshTimer = null;
@@ -30784,7 +31456,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		background: #202833 !important;
 	}
 	#adg-dashboard-shell {
-		padding: 16px 18px 20px !important;
+		padding: 0 !important;
 		background: #202833 !important;
 	}
 	#adg-dashboard-shell .adg-overview-head {
@@ -30814,7 +31486,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 	}
 	#adg-dashboard-shell .adg-runtime-panel,
 	#adg-dashboard-shell .adg-dashboard-card {
-		min-height: 0;
+		min-height: 0 !important;
 		padding: 14px 16px !important;
 		border: 1px solid #405064 !important;
 		border-radius: 12px !important;
@@ -30842,6 +31514,18 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		gap: 7px !important;
 		margin-top: 0 !important;
 	}
+	#adg-dashboard-shell .adg-runtime-primary { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+	#adg-dashboard-shell .adg-runtime-primary .adg-runtime-pill,
+	#adg-dashboard-shell .adg-runtime-primary .adg-runtime-item { min-height:38px!important; padding:7px 12px!important; font-size:14px!important; }
+	#adg-dashboard-shell.adg-tone-ok .adg-runtime-pill,
+	#adg-dashboard-shell .adg-runtime-primary [data-state="on"] { background:#203f3c!important; border-color:#3c7167!important; color:#b6efd5!important; }
+	#adg-dashboard-shell.adg-tone-bad .adg-runtime-pill,
+	#adg-dashboard-shell .adg-runtime-primary [data-state="off"] { background:#4a3435!important; border-color:#855558!important; color:#ffd1c9!important; }
+	#adg-dashboard-shell .adg-runtime-details { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px 16px; padding-top:12px; border-top:1px solid #3b4a5c; }
+	#adg-dashboard-shell .adg-runtime-details .adg-runtime-item { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:flex-start; gap:4px 8px; min-width:0; min-height:0!important; padding:0!important; border:0!important; background:transparent!important; }
+	#adg-dashboard-shell .adg-runtime-details .adg-runtime-key { font-size:12px; color:#96aabe; }
+	#adg-dashboard-shell .adg-runtime-details .adg-runtime-value { font-size:12px!important; font-weight:500!important; color:#c7d5e3!important; overflow-wrap:anywhere; }
+	#adg-dashboard-shell .adg-runtime-listen-item { grid-column:span 2; }
 	#adg-dashboard-shell .adg-runtime-pill,
 	#adg-dashboard-shell .adg-runtime-item {
 		min-height: 30px !important;
@@ -30901,6 +31585,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		text-shadow: none !important;
 	}
 	#adg-dashboard-shell .adg-dashboard-number {
+		margin: 0 !important;
 		font-size: 30px !important;
 		color: #f2f7fb !important;
 		text-shadow: none !important;
@@ -30921,6 +31606,14 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 	#adg-dashboard-shell .adg-chart-shell::before {
 		display: none !important;
 	}
+	#adg-dashboard-shell .adg-dashboard-card { display:flex; flex-direction:column; gap:0; }
+	#adg-dashboard-shell .adg-stat-value-row { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; min-height:46px; padding-top:10px; }
+	#adg-dashboard-shell .adg-stat-value-row .adg-percentage { margin:0!important; padding:0!important; border:0!important; background:transparent!important; box-shadow:none!important; font-size:12px!important; }
+	#adg-dashboard-shell .adg-chart-shell { flex:0 0 96px; height:96px!important; min-height:96px!important; padding:0!important; cursor:crosshair; }
+	#adg-dashboard-shell .adg-chart-guide { position:absolute; top:0; bottom:0; width:1px; border-left:1px dashed #c0d4e7; pointer-events:none; }
+	#adg-dashboard-shell .adg-chart-footer { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:6px; font-size:11px; line-height:1.5; color:#98adc2; font-variant-numeric:tabular-nums; }
+	#adg-dashboard-shell .adg-chart-end { text-align:right; }
+	#adg-dashboard-shell .adg-chart-hint { grid-column:1 / -1; min-height:17px; color:#c1d5e5; }
 	#AdGuardHome_status_fieldset.cbi-section {
 		margin: 0 !important;
 		padding: 0 !important;
@@ -30929,8 +31622,8 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		box-shadow: none !important;
 	}
 	.cbi-map.adg-themed-map .adg-themed-section {
-		margin: 0 auto 12px !important;
-		width: min(100%, 1040px) !important;
+		margin: 0 0 12px !important;
+		width: 100% !important;
 		box-sizing: border-box !important;
 		padding: 10px 20px !important;
 		border: 1px solid #405064 !important;
@@ -30985,6 +31678,15 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		background: transparent !important;
 		box-shadow: none !important;
 	}
+	.cbi-map.adg-themed-map .adg-themed-section .adg-settings-fields { display:flex!important; flex-direction:column; }
+	.cbi-map.adg-themed-map .adg-settings-fields > .adg-setting-row { width:100%!important; box-sizing:border-box; }
+	.cbi-map.adg-themed-map .adg-settings-fields.adg-advanced-collapsed > .adg-setting-advanced { display:none!important; }
+	.cbi-map.adg-themed-map .adg-settings-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:16px 0 8px; }
+	.cbi-map.adg-themed-map .adg-settings-heading h3 { margin:0!important; padding:0!important; border:0!important; font-size:14px!important; line-height:1.5!important; color:#eef4fb!important; text-shadow:none!important; }
+	.cbi-map.adg-themed-map .adg-settings-heading h3::before,
+	.cbi-map.adg-themed-map .adg-settings-heading h3::after { display:none!important; }
+	.cbi-map.adg-themed-map .adg-settings-toggle { padding:6px 10px; border:1px solid #52657b; border-radius:7px; background:#303d4d; color:#bfdced; font-size:12px; line-height:1.5; cursor:pointer; }
+	.cbi-map.adg-themed-map .adg-settings-toggle:focus-visible { outline:2px solid #67d8fb; outline-offset:2px; }
 	@media (max-width: 960px) {
 		#adg-dashboard-shell .adg-hero-grid {
 			grid-template-columns: 1fr !important;
@@ -30992,7 +31694,7 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 	}
 	@media (max-width: 720px) {
 		#adg-dashboard-shell {
-			padding: 10px 8px 16px !important;
+			padding: 0 !important;
 		}
 		#adg-dashboard-shell .adg-overview-head {
 			align-items: flex-start;
@@ -31003,9 +31705,12 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		#adg-dashboard-shell .adg-dashboard-grid {
 			grid-template-columns: 1fr !important;
 		}
+		#adg-dashboard-shell .adg-runtime-primary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+		#adg-dashboard-shell .adg-runtime-details { grid-template-columns:repeat(2,minmax(0,1fr)); }
+		#adg-dashboard-shell .adg-runtime-listen-item { grid-column:1 / -1; }
 		.cbi-map.adg-themed-map .adg-themed-section {
-			margin: 0 8px 10px !important;
-			width: calc(100% - 16px) !important;
+			margin: 0 0 10px !important;
+			width: 100% !important;
 			padding: 12px !important;
 		}
 		.cbi-map.adg-themed-map .adg-themed-section .adg-themed-value {
@@ -31029,14 +31734,16 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 		</div>
 		<div class="adg-hero-grid">
 			<div class="adg-runtime-panel">
-				<div class="adg-runtime-wrap">
+				<div class="adg-runtime-primary">
 					<div class="adg-runtime-pill"><span class="adg-runtime-dot"></span><span id="adg-runtime-running">读取中</span></div>
-					<div class="adg-runtime-item"><span class="adg-runtime-key">认证</span><span id="adg-runtime-auth" class="adg-runtime-value">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">保护</span><span id="adg-runtime-protect" class="adg-runtime-value">读取中</span></div>
+				</div>
+				<div class="adg-runtime-details">
+					<div class="adg-runtime-item"><span class="adg-runtime-key">认证</span><span id="adg-runtime-auth" class="adg-runtime-value">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">重定向</span><span id="adg-runtime-redirect" class="adg-runtime-value">读取中</span></div>
-					<div class="adg-runtime-item"><span class="adg-runtime-key">监听</span><span id="adg-runtime-listen" class="adg-runtime-value">读取中</span></div>
-					<div class="adg-runtime-item"><span class="adg-runtime-key">端口</span><span id="adg-runtime-port" class="adg-runtime-value">读取中</span></div>
 					<div class="adg-runtime-item"><span class="adg-runtime-key">核心</span><span id="adg-runtime-core" class="adg-runtime-value">读取中</span></div>
+					<div class="adg-runtime-item adg-runtime-listen-item"><span class="adg-runtime-key">监听</span><span id="adg-runtime-listen" class="adg-runtime-value">读取中</span></div>
+					<div class="adg-runtime-item"><span class="adg-runtime-key">端口</span><span id="adg-runtime-port" class="adg-runtime-value">读取中</span></div>
 				</div>
 			</div>
 		</div>
@@ -31051,29 +31758,32 @@ window.setTimeout(adgInstallUpdatePanelGuard, 1600);
 					<div class="adg-dashboard-label">DNS 查询</div>
 				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
 				</div>
-                <div id="adg-stats-total" class="adg-dashboard-number">--</div>
-				<div class="adg-chart-shell adg-chart-empty">
+                <div class="adg-stat-value-row"><div id="adg-stats-total" class="adg-dashboard-number">--</div></div>
+				<div class="adg-chart-shell adg-chart-empty" tabindex="0" role="group" aria-label="DNS 查询趋势">
+					<span class="adg-chart-guide" hidden></span>
 					<div class="adg-chart-grid"></div>
 					<svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
 						<path id="adg-chart-total-area"></path>
 						<path id="adg-chart-total-line"></path>
 					</svg>
 				</div>
+				<div class="adg-chart-footer"><span class="adg-chart-start">—</span><span class="adg-chart-end">—</span><span class="adg-chart-hint" aria-live="polite">等待统计数据</span></div>
 			</div>
             <div class="adg-dashboard-card adg-card-blocked">
                 <div class="adg-card-head">
                     <div class="adg-dashboard-label">已被过滤器拦截</div>
 				<!-- <div class="adg-dashboard-period">最近 24 小时</div> -->
                 </div>
-                <div id="adg-stats-blocked" class="adg-dashboard-number">--</div>
-                <div id="adg-stats-blocked-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div>
-                <div class="adg-chart-shell adg-chart-empty">
+                <div class="adg-stat-value-row"><div id="adg-stats-blocked" class="adg-dashboard-number">--</div><div id="adg-stats-blocked-percent" class="adg-dashboard-sub-ratio adg-percentage">等待</div></div>
+                <div class="adg-chart-shell adg-chart-empty" tabindex="0" role="group" aria-label="过滤器拦截趋势">
+					<span class="adg-chart-guide" hidden></span>
                     <div class="adg-chart-grid"></div>
                     <svg class="adg-chart" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
                         <path id="adg-chart-blocked-area"></path>
                         <path id="adg-chart-blocked-line"></path>
                     </svg>
                 </div>
+				<div class="adg-chart-footer"><span class="adg-chart-start">—</span><span class="adg-chart-end">—</span><span class="adg-chart-hint" aria-live="polite">等待统计数据</span></div>
             </div>
 		</div>
 	</div>
@@ -31416,8 +32126,12 @@ EOF_ADG_OVERVIEW
 .adg-manual-toolbar {display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
 .adg-manual-message {min-height:18px;margin:4px 0 0;color:#aebed3;font-size:12px;}
 .adg-manual-message.error {color:#ffc2a8;}
-.adg-manual-page .CodeMirror {width:100%;min-height:280px;border:1px solid #46566e;border-radius:10px;background:#202735;box-shadow:none;}
-.adg-manual-page .CodeMirror-gutters {border-right:1px solid #3b495d;background:#202735;}
+.adg-content-page .adg-manual-page .cbi-value {display:block!important;}
+.adg-content-page .adg-manual-page .cbi-value-title {float:none!important;width:auto!important;margin:0 0 8px!important;}
+.adg-content-page .adg-manual-page .cbi-value-field {display:block!important;width:100%!important;max-width:none!important;margin:0!important;}
+.adg-manual-page .CodeMirror {width:100%;min-height:280px;border:1px solid #405064;border-radius:10px;background:#202a36;box-shadow:none;font-size:13px;line-height:1.6;}
+.adg-manual-page .CodeMirror-gutters {border-right:1px solid #35475b;background:#202a36;}
+.adg-manual-page .CodeMirror-linenumber {color:#8fa5bb;}
 .adg-manual-page .CodeMirror-scroll {min-height:280px;}
 </style>
 <div class="adg-manual-note">编辑 YAML 后使用页面下方的保存/应用按钮。重新载入会丢弃未保存的修改。</div>
@@ -31487,7 +32201,9 @@ EOF_ADG_YAMLEDITOR
 <%+AdGuardHome/ui_skin%>
 <% local uci = require "luci.model.uci".cursor(); local logmode = uci:get("AdGuardHome", "AdGuardHome", "logfile") or "" %>
 <style>
-.adg-log-page .cbi-value-field {display:block!important;max-width:none!important;}
+.adg-content-page .adg-log-page .cbi-value {display:block!important;}
+.adg-content-page .adg-log-page .cbi-value-title {float:none!important;width:auto!important;margin:0 0 8px!important;}
+.adg-content-page .adg-log-page .cbi-value-field {display:block!important;width:100%!important;max-width:none!important;margin:0!important;}
 .adg-log-toolbar {display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:0 0 10px;}
 .adg-log-toolbar label {display:inline-flex;align-items:center;gap:6px;color:#c5d3e6;font-size:12px;white-space:nowrap;}
 .adg-log-toolbar label input {margin:0;}
@@ -31495,11 +32211,20 @@ EOF_ADG_YAMLEDITOR
 .adg-log-page .adg-log-actions .cbi-button {width:auto!important;min-height:36px!important;padding:0 12px!important;border-radius:8px!important;line-height:34px!important;}
 .adg-log-status {min-height:18px;margin:0 0 8px;color:#aebed3;font-size:12px;}
 .adg-log-status.error {color:#ffc2a8;}
-.adg-log-page textarea.cbi-input-textarea {display:block!important;width:100%!important;height:min(58vh,560px)!important;min-height:260px!important;max-height:560px!important;margin:0!important;padding:12px!important;border-radius:10px!important;resize:vertical!important;font-family:Consolas,"Courier New",monospace!important;font-size:12px!important;line-height:1.5!important;white-space:pre!important;overflow:auto!important;}
+.adg-log-page .adg-log-output {display:block;width:100%;height:min(58vh,560px);min-height:260px;max-height:560px;margin:0;padding:12px;border:1px solid #405064;border-radius:10px;box-sizing:border-box;background:#202a36;color:#d6e2ef;resize:vertical;font-family:Consolas,"Courier New",monospace;font-size:12px;line-height:1.65;white-space:pre;overflow:auto;tab-size:4;}
+.adg-log-page .adg-log-line {display:inline;}
+.adg-log-page .adg-log-time {color:#8fa5bb;}
+.adg-log-page .adg-log-warning {color:#f4cc85;}
+.adg-log-page .adg-log-error {color:#ffa59e;}
+.adg-log-page .adg-log-empty {display:flex;align-items:center;justify-content:center;height:100%;color:#9eb3c7;}
+.adg-log-page .adg-log-output:focus-visible {outline:2px solid #67d8fb;outline-offset:2px;}
+html.adg-content-page .adg-log-page .adg-log-actions .adg-log-clear {border-color:#895854!important;background:#483337!important;color:#ffc4bb!important;margin-left:8px;}
+html.adg-content-page .adg-log-page .adg-log-actions .adg-log-clear:disabled {opacity:.45;cursor:not-allowed;}
 @media(max-width:560px) {
     .adg-log-actions {width:100%;margin-left:0;}
     .adg-log-page .adg-log-actions .cbi-button {flex:1 1 auto;}
-    .adg-log-page textarea.cbi-input-textarea {height:45vh!important;min-height:220px!important;}
+    .adg-log-page .adg-log-output {height:45vh;min-height:220px;}
+    html.adg-content-page .adg-log-page .adg-log-actions .adg-log-clear {margin-left:0;}
 }
 </style>
 <div class="adg-log-toolbar">
@@ -31508,13 +32233,13 @@ EOF_ADG_YAMLEDITOR
     <label><input id="adg-log-localtime" type="checkbox" checked="checked" onchange="adgRenderLog()" />本地时间</label>
     <% end %>
     <div class="adg-log-actions">
-        <input type="button" class="cbi-button" value="刷新" onclick="return adgFetchLog()" />
+        <input type="button" class="cbi-button cbi-button-apply" value="刷新" onclick="return adgFetchLog()" />
         <input type="button" class="cbi-button" value="下载日志" onclick="return download_log()" />
-        <input type="button" class="cbi-button" value="清空日志" onclick="return apply_del_log()" <%= (not self.pollcheck or logmode == "syslog") and 'disabled="disabled"' or '' %> />
+        <input type="button" class="cbi-button adg-log-clear" value="清空日志" onclick="return apply_del_log()" <%= (not self.pollcheck or logmode == "syslog") and 'disabled="disabled"' or '' %> />
     </div>
 </div>
 <div id="adg-log-status" class="adg-log-status" role="status" aria-live="polite">正在读取运行日志…</div>
-<textarea id="cbid.logview.1.conf" class="cbi-input-textarea" rows="18" readonly="readonly" aria-label="AdGuardHome 运行日志"></textarea>
+<div id="cbid.logview.1.conf" class="adg-log-output" tabindex="0" role="region" aria-label="AdGuardHome 运行日志"></div>
 <script type="text/javascript">//<![CDATA[
 if (document.body) document.body.className += " adg-log-page";
 var adgLogRaw = "";
@@ -31535,6 +32260,22 @@ function adgLocalLogLine(line) {
         " " + adgLogPad(date.getHours()) + ":" + adgLogPad(date.getMinutes()) + ":" +
         adgLogPad(date.getSeconds()) + line.slice(match[0].length);
 }
+function adgLogLineNode(line) {
+    var row = document.createElement("span");
+    row.className = "adg-log-line";
+    if (/\[(?:error|err|fatal|panic)\]|\blevel=(?:error|err|fatal|panic)\b/i.test(line)) row.className += " adg-log-error";
+    else if (/\[(?:warn|warning)\]|\blevel=(?:warn|warning)\b/i.test(line)) row.className += " adg-log-warning";
+    var timestamp = line.match(/^\d{4}[-\/]\d{2}[-\/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\s*/);
+    if (timestamp) {
+        var time = document.createElement("span");
+        time.className = "adg-log-time";
+        time.textContent = timestamp[0];
+        row.appendChild(time);
+        line = line.slice(timestamp[0].length);
+    }
+    row.appendChild(document.createTextNode(line + "\n"));
+    return row;
+}
 function adgRenderLog() {
     var field = document.getElementById("cbid.logview.1.conf");
     if (!field) return;
@@ -31545,11 +32286,21 @@ function adgRenderLog() {
     var reverse = document.getElementById("adg-log-reverse");
     if (reverse && reverse.checked) lines.reverse();
     var display = lines.join("\n");
-    if (field.value === display) return;
+    if (field.adgDisplay === display) return;
     var nearTop = field.scrollTop < 24;
     var nearEnd = field.scrollTop + field.clientHeight >= field.scrollHeight - 24;
     var priorScroll = field.scrollTop;
-    field.value = display;
+    var content = document.createDocumentFragment();
+    lines.forEach(function(line) { content.appendChild(adgLogLineNode(line)); });
+    if (!display) {
+        var empty = document.createElement("span");
+        empty.className = "adg-log-empty";
+        empty.textContent = "暂无日志";
+        content.appendChild(empty);
+    }
+    field.textContent = "";
+    field.appendChild(content);
+    field.adgDisplay = display;
     if (reverse && reverse.checked && nearTop) field.scrollTop = 0;
     else if ((!reverse || !reverse.checked) && nearEnd) field.scrollTop = field.scrollHeight;
     else field.scrollTop = priorScroll;
@@ -32827,7 +33578,7 @@ set_init_start_order() {
 ensure_plugin_autostart_order() {
     set_init_start_order /etc/init.d/openvpn 90
     set_init_start_order /etc/init.d/openclash 98
-    set_init_start_order /etc/init.d/AdGuardHome 120
+    fix_adguard_start_order
 }
 
 get_swapfile_size_bytes() {
@@ -35747,7 +36498,7 @@ storage_expand_select_app_action() {
                 ;;
         esac
 
-        printf '\n%s:\n' "$action_name"
+        print_menu_header "存储扩展 > $action_name"
         if [ "$list_count" -eq 0 ]; then
             if [ "$action_name" = "迁移应用到扩展盘" ]; then
                 log "暂无可迁移应用：应用商店与本机运行文件中没有发现可迁移且源路径存在的应用"
@@ -35758,15 +36509,11 @@ storage_expand_select_app_action() {
             return 0
         fi
 
-        awk -F '\t' '{ printf "%d. %s (%s)\n", NR, $2, $3 }' "$list_file"
+        awk -F '\t' '{ printf "  %2d. %s\n      %s\n", NR, $2, $3 }' "$list_file"
         all_choice=$((list_count + 1))
-        printf '%s. 全部\n' "$all_choice"
-        printf '0. 返回\n'
-        if [ "$list_count" -eq 1 ]; then
-            printf '请选择 0、1 或 %s: ' "$all_choice"
-        else
-            printf '请选择 0、1-%s 或 %s: ' "$list_count" "$all_choice"
-        fi
+        print_menu_item "$all_choice" '全部'
+        print_menu_item 0 '返回上级'
+        print_menu_prompt "0-$all_choice"
         read_category_choice
         choice="$UI_READ_RESULT"
         case "$choice" in
@@ -35809,16 +36556,16 @@ storage_expand_select_app_action() {
 
 manage_rootfs_2nd_storage_expand() {
     while :; do
-        printf '\neMMC 存储扩展:\n'
-        printf '1. 查看当前扩展状态\n'
-        printf '2. 启用 rootfs_2nd 存储扩展\n'
-        printf '3. 关闭存储扩展并恢复第二系统烧录入口\n'
-        printf '4. 修复应用商店存储空间显示\n'
-        printf '5. 迁移应用到扩展盘\n'
-        printf '6. 还原应用到 overlay\n'
-        printf '7. 清空并重新初始化 rootfs_2nd 扩展盘（用于设备恢复出厂后使用）\n'
-        printf '0. 返回功能分类\n'
-        printf '请选择 0、1、2、3、4、5、6 或 7: '
+        print_menu_header '设备维护 > eMMC 存储扩展'
+        print_menu_item 1 '查看当前扩展状态'
+        print_menu_item 2 '启用 rootfs_2nd 存储扩展'
+        print_menu_item 3 '关闭存储扩展' '恢复第二系统烧录入口'
+        print_menu_item 4 '修复应用商店存储空间显示'
+        print_menu_item 5 '迁移应用到扩展盘'
+        print_menu_item 6 '还原应用到 overlay'
+        print_menu_item 7 '清空并重新初始化扩展盘' 'rootfs_2nd：用于设备恢复出厂后'
+        print_menu_item 0 '返回上级'
+        print_menu_prompt '0-7'
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 0 ;;
@@ -35891,7 +36638,45 @@ reduce_openclash_memory_pressure() {
 }
 
 fix_adguard_start_order() {
-    set_init_start_order /etc/init.d/AdGuardHome 120
+    local adg_init='/etc/init.d/AdGuardHome' adg_was_enabled='0'
+    [ -f "$adg_init" ] || return 0
+    "$adg_init" enabled >/dev/null 2>&1 && adg_was_enabled='1'
+
+    # rc.d 按文件名排序；S120 会排到网络服务之前，使用两位序号接在 OpenClash 后。
+    set_init_start_order "$adg_init" 99 || return 1
+    if [ "$adg_was_enabled" = '1' ] && ! "$adg_init" enabled >/dev/null 2>&1; then
+        enable_init_service_strict "$adg_init" 'AdGuardHome' || return 1
+    fi
+
+    # rc.common disable 只清理 S??，需单独迁移旧三位链接。
+    if [ -L /etc/rc.d/S120AdGuardHome ]; then
+        case "$(readlink /etc/rc.d/S120AdGuardHome)" in
+            ../init.d/AdGuardHome|/etc/init.d/AdGuardHome)
+                rm -f /etc/rc.d/S120AdGuardHome || return 1
+                ;;
+        esac
+    fi
+    return 0
+}
+
+ensure_adguard_autostart() {
+    local adg_binpath adg_configpath
+    adg_binpath="$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)"
+    [ -n "$adg_binpath" ] || adg_binpath='/usr/bin/AdGuardHome/AdGuardHome'
+    adg_configpath="$(get_adguard_configpath)"
+    [ -x /etc/init.d/AdGuardHome ] && [ -x "$adg_binpath" ] && [ -s "$adg_configpath" ] || {
+        log "错误: AdGuardHome 启动脚本、核心或配置未就绪"
+        return 1
+    }
+    fix_adguard_start_order || return 1
+    if [ "$(uci -q get AdGuardHome.AdGuardHome.enabled 2>/dev/null || true)" != '1' ]; then
+        backup_file /etc/config/AdGuardHome
+        uci set AdGuardHome.AdGuardHome.enabled='1' >/dev/null 2>&1 || return 1
+        uci commit AdGuardHome >/dev/null 2>&1 || return 1
+    fi
+    enable_init_service_strict /etc/init.d/AdGuardHome 'AdGuardHome' || return 1
+    /etc/init.d/AdGuardHome enabled >/dev/null 2>&1 || return 1
+    log "AdGuardHome 开机启动已启用（S99AdGuardHome）"
 }
 
 install_adguardhome() {
@@ -36006,6 +36791,12 @@ install_adguardhome() {
 
     # 安装内核后引导设置仪表盘账号密码（账号默认 admin，除非用户设置）
     guide_adguard_dashboard_account || die "AdGuardHome 已安装，但 3000 仪表盘账号密码未设置成功；请检查上方错误后重跑 1 > 4"
+
+    adg_installed_bin="$(uci -q get AdGuardHome.AdGuardHome.binpath 2>/dev/null || true)"
+    [ -n "$adg_installed_bin" ] || adg_installed_bin='/usr/bin/AdGuardHome/AdGuardHome'
+    if [ -x "$adg_installed_bin" ] && [ -s "$(get_adguard_configpath)" ]; then
+        ensure_adguard_autostart || die "AdGuardHome 开机启动设置失败"
+    fi
 
     log "安装完成"
     log "插件:   AdGuardHome"
@@ -36124,7 +36915,7 @@ db_file="$data_dir/data.db"
 bleve_dir="$data_dir/bleve"
 
 if [ -s "$config_json" ]; then
-    lua - "$config_json" <<'EOF_OPENLIST_MERGE'
+lua - "$config_json" <<'EOF_OPENLIST_MERGE'
 local fs = require "nixio.fs"
 local nixio = require "nixio"
 local json = require "luci.jsonc"
@@ -41414,6 +42205,138 @@ local function dump_has_rule(text, fragments)
     return false
 end
 
+
+-- Resolve the running instance from /proc; do not depend on a truncated ps line.
+local function profile_path(value, base)
+    if type(value) ~= "string" or value == "" or value:find("[\r\n%z]") then return nil end
+    for part in value:gmatch("[^/]+") do if part == ".." then return nil end end
+    if value:sub(1, 1) ~= "/" then value = (base or "/etc/openvpn") .. "/" .. value end
+    return value:gsub("/%./", "/")
+end
+
+local function read_profile(path)
+    if not path then return "" end
+    local st = fs.stat(path)
+    if not st or st.type ~= "reg" or tonumber(st.size or 0) > 102400 then return "" end
+    return read_text(path)
+end
+
+local function command_option(args, key)
+    for i = 2, #args do
+        if args[i] == "--" .. key then return args[i + 1] end
+        local value = args[i]:match("^%-%-" .. key .. "=(.*)$")
+        if value then return value end
+    end
+end
+
+local function same_path(a, b)
+    if not a or not b then return false end
+    return a == b or (fs.realpath(a) or a) == (fs.realpath(b) or b)
+end
+
+local function resolve_context(preferred_tun)
+    local sections, by_name = {}, {}
+    uci:foreach("openvpn", "openvpn", function(section)
+        local name = section[".name"] or ""
+        if name:match("^[%w_%-]+$") then
+            sections[#sections + 1] = section
+            by_name[name] = section
+        end
+    end)
+    local processes = {}
+    local paths = fs.glob("/proc/[0-9]*/cmdline")
+    if paths then
+        for path in paths do
+            local args = {}
+            for arg in (fs.readfile(path) or ""):gmatch("[^%z]+") do args[#args + 1] = arg end
+            local binary = (args[1] or ""):match("([^/]+)$") or ""
+            if binary == "openvpn" or binary:match("^openvpn%([%w_%-]+%)$") then
+                local pid = path:match("^/proc/(%d+)/cmdline$")
+                local base = command_option(args, "cd") or fs.readlink("/proc/" .. pid .. "/cwd") or "/etc/openvpn"
+                local config = profile_path(command_option(args, "config"), base)
+                local label = command_option(args, "syslog") or binary
+                local name = label:match("^openvpn%(([%w_%-]+)%)$")
+                local section = name and by_name[name] or nil
+                if not section and config then
+                    for _, item in ipairs(sections) do
+                        if same_path(config, profile_path(item.config)) then section = item; break end
+                    end
+                end
+                local content = read_profile(config)
+                local profile = parse_profile(content)
+                local dev = command_option(args, "dev") or first_argument(profile.dev)
+                if dev == "" and section then dev = section.dev or "" end
+                processes[#processes + 1] = {
+                    pid = pid, args = args, config = config, base = base,
+                    section = section, dev = dev, content = content
+                }
+            end
+        end
+    end
+    table.sort(processes, function(a, b)
+        if (a.dev == preferred_tun) ~= (b.dev == preferred_tun) then return a.dev == preferred_tun end
+        return tonumber(a.pid) < tonumber(b.pid)
+    end)
+    local process = processes[1]
+    local section = process and process.section or nil
+    if not process then
+        for _, item in ipairs(sections) do
+            if item.enabled == "1" then section = item; break end
+        end
+        section = section or by_name.custom_config or sections[1]
+    end
+    local base = process and process.base or "/etc/openvpn"
+    local config = process and process.config or (section and profile_path(section.config))
+    local source_config = section and profile_path(section.config) or config
+    if not config and not section then config = "/etc/openvpn/client.ovpn"; source_config = config end
+    local content = process and process.content or read_profile(config)
+    if content == "" and source_config and source_config ~= config then
+        config = source_config
+        content = read_profile(config)
+    end
+    local profile = parse_profile(content)
+    local uci_profile = false
+    if content == "" and section and not section.config then
+        local lines = {}
+        for key, value in pairs(section) do
+            if key:sub(1, 1) ~= "." and key ~= "enabled" and key ~= "config" then
+                if type(value) == "table" then value = value[1] end
+                if type(value) == "string" then
+                    local option = key:gsub("_", "-")
+                    profile[option] = value
+                    lines[#lines + 1] = option .. " " .. value
+                end
+            end
+        end
+        content = table.concat(lines, "\n")
+        uci_profile = true
+    end
+    local name = section and section[".name"] or ""
+    return {
+        section = section, instance = name, process = process,
+        running = process ~= nil, base = base, config = config,
+        source_config = source_config, content = content, profile = profile,
+        known = util.trim(content) ~= "", uci_profile = uci_profile,
+        label = name ~= "" and name or (process and "外部实例" or "默认客户端"),
+        copyable = content ~= "" and not uci_profile,
+        count = #processes
+    }
+end
+
+function current_profile()
+    local state = load_route_state()
+    return resolve_context(state.ROUTE_TUN_IF or "tun0")
+end
+
+local function material_ready(context, key, tag)
+    if has_inline_block(context.content, tag or key) then return true end
+    local value = first_argument(context.profile[key])
+    if value == "" or value == "[inline]" then return false end
+    local path = profile_path(value, context.base)
+    local st = path and fs.stat(path)
+    return st and st.type == "reg" and tonumber(st.size or 0) > 0 or false
+end
+
 local function collect_status(opts)
     opts = opts or {}
     local fast_probe = opts.fast_probe == true
@@ -41421,9 +42344,11 @@ local function collect_status(opts)
     local tun_if = route_state.ROUTE_TUN_IF or "tun0"
     local lan_if = route_state.ROUTE_LAN_IF or "br-lan"
     local svc = cmd("/etc/init.d/openvpn status 2>/dev/null || true")
-    local ps_std = cmd("ps | grep 'openvpn(custom_config)' | grep -v grep")
-    local ps_legacy = cmd("ps | grep 'openvpn --config' | grep -v grep")
-    local ps = ps_std ~= "" and ps_std or ps_legacy
+    local context = resolve_context(tun_if)
+    local profile = context.profile
+    local profile_dev = context.process and context.process.dev or first_argument(profile.dev)
+    if valid_interface(profile_dev) and profile_dev ~= "tun" and profile_dev ~= "tap" then tun_if = profile_dev end
+    local ps = context.process and ("PID " .. context.process.pid .. " · " .. context.label) or ""
     local tun = cmd("ip addr show " .. shell_quote(tun_if) .. " 2>/dev/null || echo " .. shell_quote(tun_if .. "-down"))
     local route_dump = cmd("ip -4 route show dev " .. shell_quote(tun_if) .. " 2>/dev/null")
     local peer_dump = cmd("ip neigh show proxy dev " .. shell_quote(lan_if) .. " 2>/dev/null")
@@ -41431,14 +42356,16 @@ local function collect_status(opts)
     local nat_dump = cmd("iptables -t nat -S 2>/dev/null")
     local filter_dump = cmd("iptables -S FORWARD 2>/dev/null")
     local lan_addr_dump = cmd("ip -4 addr show " .. shell_quote(lan_if) .. " 2>/dev/null")
-    local cfg = read_text("/etc/openvpn/client.ovpn")
-    local profile = parse_profile(cfg)
+    local cfg = context.content
     local configured_log = first_argument(profile["log-append"] or profile.log)
     local active_log_path = "/var/log/nradio-openvpn-client.log"
-    if configured_log == "/tmp/openvpn-client.log" or configured_log == "/var/log/nradio-openvpn-client.log" then
-        active_log_path = configured_log
-    elseif fs.access("/tmp/openvpn-client.log") then
+    local safe_log = profile_path(configured_log, context.base)
+    if safe_log and (safe_log:sub(1, 5) == "/tmp/" or safe_log:sub(1, 9) == "/var/log/") then
+        active_log_path = safe_log
+    elseif context.config == "/etc/openvpn/client.ovpn" and fs.access("/tmp/openvpn-client.log") then
         active_log_path = "/tmp/openvpn-client.log"
+    elseif context.config ~= "/etc/openvpn/client.ovpn" then
+        active_log_path = "/dev/null"
     end
     local log = nil
     local log_focus = nil
@@ -41455,20 +42382,26 @@ local function collect_status(opts)
     local cipher = first_argument(profile.cipher)
     local auth_digest = first_argument(profile.auth)
 
-    local has_ca = has_inline_block(cfg, "ca")
-    local has_cert = has_inline_block(cfg, "cert")
-    local has_tls_auth = has_inline_block(cfg, "tls%-auth")
-    local has_tls_crypt = has_inline_block(cfg, "tls%-crypt")
+    local has_ca = material_ready(context, "ca")
+    local has_cert = material_ready(context, "cert")
+    local has_tls_auth = material_ready(context, "tls-auth", "tls%-auth")
+    local has_tls_crypt = material_ready(context, "tls-crypt", "tls%-crypt")
+    local missing_material = false
+    for _, key in ipairs({ "ca", "cert", "key", "tls-auth", "tls-crypt" }) do
+        if profile[key] ~= nil and not material_ready(context, key, key:gsub("%-", "%%-")) then
+            missing_material = true
+        end
+    end
     local profile_ready = profile_file_ready(cfg, profile)
     local auth_required = profile["auth-user-pass"] ~= nil
-    local auth_path = profile_auth_path(profile)
+    local auth_value = first_argument(profile["auth-user-pass"])
+    local auth_path = auth_required and (auth_value ~= "" and profile_path(auth_value, context.base) or profile_auth_path(profile))
     local has_auth_file = auth_required and auth_file_ready(auth_path)
-    local activation_ready = profile_ready and ((not auth_required) or has_auth_file)
-    local managed_cfg = uci:get("openvpn", "custom_config", "config")
-    local managed_enabled = uci:get("openvpn", "custom_config", "enabled") == "1"
-    local uci_managed = managed_cfg == "/etc/openvpn/client.ovpn"
-    local connected = (((svc:match("running")) or ps ~= "") and tun:match("inet ")) and true or false
-    local mode = ps_std ~= "" and "UCI custom_config" or (ps_legacy ~= "" and "Legacy ovpn" or "Stopped")
+    local activation_ready = profile_ready and not missing_material and ((not auth_required) or has_auth_file)
+    local managed_enabled = context.section and context.section.enabled == "1" or false
+    local uci_managed = context.section ~= nil
+    local connected = context.running and tun_ip ~= "-"
+    local mode = context.running and (uci_managed and ("UCI " .. context.instance) or "External") or "Stopped"
 
     local expected_routes = load_expected_routes(hotplug, route_state.ROUTE_MAP_HOST)
     if #expected_routes == 0 and not route_state_loaded then
@@ -41596,7 +42529,7 @@ local function collect_status(opts)
         auth_mode = "证书"
     end
 
-    local tls_label = "无"
+    local tls_label = context.known and "未启用静态 TLS 密钥" or "配置未读取"
     if has_tls_crypt then
         tls_label = "tls-crypt"
     elseif has_tls_auth then
@@ -41675,7 +42608,7 @@ local function collect_status(opts)
     if dns_retry_recovered then
         log_notice_parts[#log_notice_parts + 1] = "启动阶段曾等待 DNS/WAN 就绪，后续已解析并连接成功。"
     end
-    if not server_verify_ready then
+    if context.known and not server_verify_ready then
         log_notice_parts[#log_notice_parts + 1] = "未启用服务端证书身份校验属于安全风险，与当前连通性分开处理。"
         if log_notice_tone == "good" then
             log_notice_label = "连接正常 · 安全警告"
@@ -41731,7 +42664,7 @@ local function collect_status(opts)
 
     local action_kind = "need_profile"
     local action_label = "先写入配置"
-    local action_hint = "尚未检测到可用的 client.ovpn，需先写入配置。"
+    local action_hint = "当前实例配置未就绪，请进入配置管理查看。"
     local runtime_note = "先完成配置写入，当前页面才会切换成启动或接管并启动。"
     local auth_note = "还没有可启动的配置文件。"
 
@@ -41754,7 +42687,7 @@ local function collect_status(opts)
     elseif activation_ready and uci_managed then
         action_kind = "start"
         action_label = "启动 OpenVPN"
-        action_hint = "配置已就绪，可直接从当前页面启动 OpenVPN。"
+        action_hint = "实例 " .. context.label .. " 配置已就绪，可直接启动。"
         runtime_note = "当前实例已在 LuCI 中登记，断开时可直接启动。"
         auth_note = "配置文件和所需认证材料已经齐全，可直接由当前页面启动。"
     elseif activation_ready then
@@ -41771,34 +42704,36 @@ local function collect_status(opts)
         auth_note = "配置文件已存在，但认证材料未齐全。"
     end
 
-    local managed_label = "未配置"
-    if uci_managed and managed_enabled then
-        managed_label = "已接管"
-    elseif uci_managed then
-        managed_label = "已接管未启用"
-    elseif profile_ready then
-        managed_label = "可接管"
+    if context.running and not context.known then
+        auth_note = "当前进程正在运行，但配置未读取，认证要求尚未确认。"
+    elseif context.running and not activation_ready then
+        auth_note = "当前进程已运行；磁盘上的配置或认证材料不完整，重启前需补齐。"
     end
 
-    local startup_label = activation_ready and "可启动" or (profile_ready and "待认证文件" or "待配置")
+    local managed_label = context.known and "外部配置" or "未读取配置"
+    if uci_managed and managed_enabled then
+        managed_label = "实例 " .. context.instance
+    elseif uci_managed then
+        managed_label = "实例 " .. context.instance .. " · 未启用"
+    elseif profile_ready then
+        managed_label = "外部配置"
+    end
+
+    local startup_label = activation_ready and (connected and "当前实例已运行" or "可启动")
+        or (not context.known and "配置未读取" or (not profile_ready and "配置不完整" or "认证材料不完整"))
     local map_ratio = map_enabled and ratio_text(local_map_online and 1 or 0, 1) or "-"
     local remote_online_ratio = fast_probe and "探测中" or ratio_text(remote_online_count, route_count)
     local online_breakdown = fast_probe and ("远端探测中 · 映射 " .. map_ratio) or ("远端 " .. remote_online_ratio .. " · 映射 " .. map_ratio)
     local online_device_ratio = fast_probe and "探测中" or remote_online_ratio
     local online_ratio = fast_probe and "探测中" or ratio_text(remote_online_count + (local_map_online and 1 or 0), route_count + (map_enabled and 1 or 0))
-    local mode_label = "未启动"
-    if ps_std ~= "" then
-        mode_label = "LuCI 管理实例"
-    elseif ps_legacy ~= "" then
-        mode_label = "外部配置直连"
-    elseif profile_ready then
-        mode_label = "待接管"
-    end
-    local service_label = connected and "运行中" or ((svc:match("enabled=yes") and profile_ready) and "已启用未连接" or "已停止")
-    local process_summary = ps ~= "" and ((ps_std ~= "" and "custom_config 正在运行") or "外部配置进程正在运行") or "未检测到进程"
-    local auth_badge_label = activation_ready and "可启动" or "缺认证文件"
+    local mode_label = context.running and (uci_managed and ("LuCI 实例 · " .. context.instance) or "外部配置直连") or "实例未启动"
+    local service_label = connected and "运行中" or (context.running and "进程运行 · 隧道未连接" or "已停止")
+    local process_summary = context.running and (context.label .. " · PID " .. context.process.pid) or "当前实例未运行"
+    local auth_badge_label = activation_ready and "材料齐全"
+        or (not context.known and "配置未读取" or (not profile_ready and "配置不完整"
+        or (auth_required and not has_auth_file and "缺账号文件" or "缺证书或密钥")))
     local route_badge_label = route_count == 0 and "未配置" or ((route_health_ok == route_health_total) and "完整" or "待检查")
-    local auth_requirement_label = "无需额外文件"
+    local auth_requirement_label = context.known and "无需账号文件" or "配置未读取"
     if auth_required and has_auth_file then
         auth_requirement_label = "需要账号文件 · 已就绪"
     elseif auth_required then
@@ -41806,17 +42741,21 @@ local function collect_status(opts)
     elseif has_cert then
         auth_requirement_label = "证书模式"
     end
-    local cert_material_label = "无需证书"
-    if has_ca and has_cert then
+    local cert_material_label = context.known and (missing_material and "证书或密钥缺失" or "未要求客户端证书") or "配置未读取"
+    if not missing_material and has_ca and has_cert then
         cert_material_label = "CA + 客户端证书"
-    elseif has_ca then
+    elseif not missing_material and has_ca then
         cert_material_label = "仅 CA 证书"
-    elseif has_cert then
+    elseif not missing_material and has_cert then
         cert_material_label = "仅客户端证书"
     end
 
     return {
         connected = connected,
+        instance = context.instance,
+        instance_label = context.label,
+        config_path = context.config or "",
+        config_label = context.uci_profile and ("UCI · " .. context.label) or (context.source_config or context.config or "配置未读取"),
         health_label = health_label,
         health_class = health_class,
         status_summary_label = connected and ((health_class == "ok") and "已连接 · 健康" or (log_state_ok and "已连接 · 目标待查" or "已连接 · 会话异常")) or "未连接",
@@ -41855,7 +42794,7 @@ local function collect_status(opts)
         auth_requirement_label = auth_requirement_label,
         cert_material_label = cert_material_label,
         route_badge_label = route_badge_label,
-        copy_ready = profile_ready,
+        copy_ready = context.copyable,
         uci_managed = uci_managed,
         uci_enabled = managed_enabled,
         process_line = ps ~= "" and ps or "no process",
@@ -41866,7 +42805,8 @@ local function collect_status(opts)
         log_notice_detail = log_notice_detail,
         server_verify_ready = server_verify_ready,
         mtu_warning = mtu_warning,
-        auth_ready = bool_text((not auth_required) or has_auth_file),
+        auth_ready = not context.known and "配置未读取" or (auth_required and (has_auth_file and "已就绪" or "缺少账号文件") or "无需账号认证"),
+        auth_badge_tone = activation_ready and "ok" or (context.known and "warn" or "neutral"),
         ca_ready = bool_text(has_ca),
         cert_ready = bool_text(has_cert),
         route_count = route_count,
@@ -41917,7 +42857,17 @@ function index()
 end
 
 function restart()
-    os.execute("( /etc/init.d/openvpn restart >/dev/null 2>&1 || /etc/init.d/openvpn_client restart >/dev/null 2>&1 ) &")
+    local context = current_profile()
+    local requested = http.formvalue("instance") or ""
+    if requested ~= "" and requested ~= context.instance then
+        http.redirect(dispatcher.build_url("nradioadv", "system", "openvpnfull"))
+        return
+    end
+    if context.section then
+        os.execute("( /etc/init.d/openvpn restart " .. shell_quote(context.instance) .. " >/dev/null 2>&1 ) &")
+    else
+        os.execute("( /etc/init.d/openvpn restart >/dev/null 2>&1 || /etc/init.d/openvpn_client restart >/dev/null 2>&1 ) &")
+    end
     http.redirect(dispatcher.build_url("nradioadv", "system", "openvpnfull"))
 end
 
@@ -41930,7 +42880,17 @@ function applycurrent()
 end
 
 function stop()
-    os.execute("( /etc/init.d/openvpn stop custom_config >/dev/null 2>&1 || /etc/init.d/openvpn stop >/dev/null 2>&1 ) &")
+    local context = current_profile()
+    local requested = http.formvalue("instance") or ""
+    if requested ~= "" and requested ~= context.instance then
+        http.redirect(dispatcher.build_url("nradioadv", "system", "openvpnfull"))
+        return
+    end
+    if context.section then
+        os.execute("( /etc/init.d/openvpn stop " .. shell_quote(context.instance) .. " >/dev/null 2>&1 ) &")
+    elseif context.process then
+        os.execute("kill -TERM " .. context.process.pid .. " >/dev/null 2>&1")
+    end
     http.redirect(dispatcher.build_url("nradioadv", "system", "openvpnfull"))
 end
 
@@ -41957,148 +42917,99 @@ function status()
 end
 EOF_OPENVPN_FULL_CONTROLLER
 
+    cat > /usr/lib/lua/luci/view/openvpn/navigation.htm <<'EOF_OPENVPN_NAVIGATION'
+<%
+local vpn_console_url = luci.dispatcher.build_url("nradioadv", "system", "openvpnfull")
+local vpn_config_url = luci.dispatcher.build_url("admin", "services", "openvpn")
+local vpn_is_console = (luci.http.getenv("PATH_INFO") or ""):find("/openvpnfull", 1, true) ~= nil
+%>
+<div class="vpn-navigation">
+  <div class="vpn-heading"><div class="vpn-title" role="heading" aria-level="2">OpenVPN</div><div class="vpn-subtitle">连接与配置</div></div>
+  <nav class="vpn-main-nav" aria-label="OpenVPN 功能导航">
+    <a data-vpn-nav="overview" href="<%=vpn_console_url%>#overview"<% if vpn_is_console then %> aria-current="page"<% end %>>概览</a>
+    <a data-vpn-nav="config" href="<%=vpn_config_url%>"<% if not vpn_is_console then %> aria-current="page"<% end %>>配置管理</a>
+    <a data-vpn-nav="routes" href="<%=vpn_console_url%>#routes">路由与映射</a>
+    <a data-vpn-nav="logs" href="<%=vpn_console_url%>#logs">日志</a>
+  </nav>
+</div>
+EOF_OPENVPN_NAVIGATION
+
     cat > /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm <<'EOF_OPENVPN_FULL_VIEW'
 <%+header%>
 <%
 local dispatcher = require "luci.dispatcher"
 local util = require "luci.util"
-local fs = require "nixio.fs"
 local function esc(s) return luci.util.pcdata(s or "") end
-local function read_cfg_limited(path, limit)
-  local st = fs.stat(path)
-  if not st or st.type ~= "reg" or tonumber(st.size or 0) > limit then return "" end
-  local f = io.open(path, "rb")
-  if not f then return "" end
-  local data = f:read(limit + 1) or ""
-  f:close()
-  return #data <= limit and data or ""
-end
-local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)
+local current = require("luci.controller.nradio_adv.openvpn_full").current_profile()
+local cfg = current.copyable and current.content or ""
+local cfg_path = current.config or ""
+local cfg_label = current.uci_profile and ("UCI · " .. current.label) or (current.source_config or current.config or "配置未读取")
 %>
 
 <%+openvpn/ovpn_css%>
 
+<%+openvpn/navigation%>
 <div class="vpn-shell vpn-shell-refined vpn-shell-mk5 is-loading">
-  <section class="vpn-hero vpn-hero-mk5 vpn-hero-console">
-    <div class="vpn-hero-main">
-      <div class="vpn-brand-block vpn-brand-console">
-        <h2>OpenVPN 控制台</h2>
-        <div class="vpn-toolbar">
-          <span class="vpn-pill">OpenVPN</span>
-          <span id="vpn-health-chip" class="vpn-health-chip bad">等待更新</span>
-          <span id="vpn-live-ts" class="vpn-inline-note">更新中</span>
-        </div>
-        <p class="vpn-sub">启动、停止、刷新、复制配置；下方查看运行、认证、路由和日志。</p>
-        <div class="vpn-hero-summary" aria-label="OpenVPN 摘要">
-          <div class="vpn-hero-summary-item vpn-summary-instance">
-            <span>实例</span>
-            <strong>custom_config</strong>
-          </div>
-          <div class="vpn-hero-summary-item vpn-summary-path">
-            <span>配置文件</span>
-            <strong><span class="vpn-summary-line">/etc/openvpn</span><span class="vpn-summary-line">/client.ovpn</span></strong>
-          </div>
-          <div class="vpn-hero-summary-item vpn-summary-entry">
-            <span>入口</span>
-            <strong>基础 / 高级 / 标准</strong>
-          </div>
-        </div>
-      </div>
-
-      <aside class="vpn-command-card vpn-command-card-live">
-        <div class="vpn-command-kicker">运行控制</div>
-        <div class="vpn-orb-wrap">
-          <div id="vpn-orb-ring" class="vpn-orb-ring bad">
-            <span id="vpn-orb-status">等待</span>
-          </div>
-          <div class="vpn-orb-copy">
-            <strong id="vpn-orb-subtitle">正在读取状态</strong>
-            <span id="vpn-orb-meta">连接、认证、路由状态会在这里显示。</span>
-          </div>
-        </div>
-        <div class="vpn-hero-actions">
+  <div class="vpn-statusbar">
+    <div class="vpn-toolbar">
+      <span id="vpn-health-chip" class="vpn-health-chip">读取状态中</span>
+      <span id="vpn-live-ts" class="vpn-inline-note">更新中</span>
+      <span id="vpn-instance-label" class="vpn-inline-note"><%=esc(current.label)%></span>
+    </div>
+    <div class="vpn-actions">
           <form id="vpn-primary-form" method="post" action="#">
+            <input id="vpn-primary-instance" type="hidden" name="instance" value="<%=esc(current.instance)%>" />
             <input type="hidden" name="token" value="<%=dispatcher.context.authtoken%>" />
             <input id="vpn-primary-button" class="cbi-button vpn-button-muted" type="submit" value="读取状态中" disabled="disabled" />
           </form>
           <form id="vpn-stop-form" method="post" action="<%=dispatcher.build_url('nradioadv','system','openvpnfull','stop')%>" style="display:none">
+            <input id="vpn-stop-instance" type="hidden" name="instance" value="<%=esc(current.instance)%>" />
             <input type="hidden" name="token" value="<%=dispatcher.context.authtoken%>" />
             <input id="vpn-stop-button" class="cbi-button vpn-button-muted" type="submit" value="停止 OpenVPN" />
           </form>
           <button id="vpn-refresh-button" class="cbi-button vpn-button-muted" type="button">刷新状态</button>
-          <button id="vpn-copy-button" class="cbi-button vpn-button-muted" type="button" aria-disabled="true">复制配置</button>
-          <span id="vpn-copy-feedback" class="vpn-copy-feedback" aria-live="polite"></span>
-        </div>
-        <div id="vpn-action-hint" class="vpn-hero-note">当前页会按配置状态自动切换主操作。</div>
-      </aside>
-    </div>
 
-    <div class="vpn-mini-grid vpn-mini-grid-mk5">
-      <div class="vpn-mini-card vpn-mini-card-accent vpn-mini-card-wide">
-        <span class="vpn-mini-label">当前动作</span>
-        <strong id="vpn-mini-action">等待更新</strong>
-        <span id="vpn-mini-action-note" class="vpn-mini-note">主按钮会按状态自动切换。</span>
-      </div>
-      <div class="vpn-mini-card vpn-mini-card-service">
-        <span class="vpn-mini-label">服务接管</span>
-        <strong id="vpn-mini-managed">等待更新</strong>
-        <span id="vpn-mini-managed-note" class="vpn-mini-note">显示服务和接管状态。</span>
-      </div>
-      <div class="vpn-mini-card vpn-mini-card-auth">
-        <span class="vpn-mini-label">认证准备</span>
-        <strong id="vpn-mini-auth">等待更新</strong>
-        <span id="vpn-mini-auth-note" class="vpn-mini-note">账号、证书和 TLS 密钥准备情况。</span>
-      </div>
-      <div class="vpn-mini-card vpn-mini-card-route">
-        <span class="vpn-mini-label">路由健康</span>
-        <strong id="vpn-mini-route">等待更新</strong>
-        <span id="vpn-mini-route-note" class="vpn-mini-note">远端目标和 DNAT 规则会一起汇总。</span>
-      </div>
     </div>
+  </div>
+  <p id="vpn-action-hint" class="vpn-note">正在读取连接与配置状态。</p>
 
+  <section data-vpn-view="overview" aria-label="连接概览">
     <div class="vpn-stat-grid">
-      <div class="vpn-stat-card vpn-stat-card-tunnel">
+      <div class="vpn-stat-card">
+        <span class="vpn-stat-label">服务状态</span>
+        <strong id="vpn-runtime-service" class="vpn-stat-value">-</strong>
+        <span id="vpn-runtime-managed" class="vpn-stat-meta">正在读取</span>
+      </div>
+      <div class="vpn-stat-card">
         <span class="vpn-stat-label">隧道 IP</span>
         <strong id="vpn-stat-tun-ip" class="vpn-stat-value">-</strong>
-        <span id="vpn-stat-tun-meta" class="vpn-stat-meta">tun0 当前地址</span>
+        <span id="vpn-stat-tun-meta" class="vpn-stat-meta">隧道地址</span>
       </div>
-
-      <div class="vpn-stat-card vpn-stat-card-remote">
+      <div class="vpn-stat-card">
         <span class="vpn-stat-label">配置远端</span>
         <strong id="vpn-stat-remote" class="vpn-stat-value">-</strong>
-        <span id="vpn-stat-remote-meta" class="vpn-stat-meta">协议: - · 当前写入的 remote</span>
-        <span id="vpn-stat-remote-note" class="vpn-stat-note">实际连接结果请查看下方日志。</span>
+        <span id="vpn-stat-remote-meta" class="vpn-stat-meta">协议与端口</span>
       </div>
-
-      <div class="vpn-stat-card vpn-stat-card-auth">
-        <span class="vpn-stat-label">认证方式</span>
-        <strong id="vpn-stat-auth-mode" class="vpn-stat-value">-</strong>
-        <span id="vpn-stat-auth-meta" class="vpn-stat-meta">TLS: - · Cipher: -</span>
-      </div>
-
-      <div class="vpn-stat-card vpn-stat-card-emphasis">
-        <span class="vpn-stat-label">在线设备</span>
+      <div class="vpn-stat-card">
+        <span class="vpn-stat-label">在线目标</span>
         <strong id="vpn-stat-health-ratio" class="vpn-stat-value">-</strong>
-        <span id="vpn-stat-health-meta" class="vpn-stat-meta">远端目标在线比例</span>
+        <span id="vpn-stat-health-meta" class="vpn-stat-meta">目标探测中</span>
       </div>
     </div>
-  </section>
-
-  <section class="vpn-overview-grid">
+    <details class="vpn-details">
+      <summary>运行与认证详情</summary>
+      <div class="vpn-overview-grid">
     <article id="vpn-runtime-card" class="vpn-card vpn-card-runtime">
       <div class="vpn-card-head">
         <div class="vpn-card-title">运行与启动</div>
         <span id="vpn-runtime-badge" class="vpn-card-badge vpn-badge-bad">等待更新</span>
       </div>
-      <div class="vpn-kv"><span>服务状态</span><strong id="vpn-runtime-service">-</strong></div>
-      <div class="vpn-kv"><span>接管状态</span><strong id="vpn-runtime-managed">-</strong></div>
       <div class="vpn-kv"><span>可用操作</span><strong id="vpn-runtime-action">-</strong></div>
       <div class="vpn-kv"><span>启动方式</span><strong id="vpn-runtime-mode">-</strong></div>
       <div class="vpn-kv"><span>连接日志</span><strong id="vpn-runtime-log-state" class="vpn-inline-badge vpn-badge-neutral">等待更新</strong></div>
       <div class="vpn-kv"><span>进程状态</span><strong id="vpn-runtime-process">-</strong></div>
       <div id="vpn-runtime-note" class="vpn-card-note">断开后如条件满足，可直接从当前页启动或接管启动。</div>
     </article>
-
     <article id="vpn-auth-card" class="vpn-card vpn-card-auth">
       <div class="vpn-card-head">
         <div class="vpn-card-title">认证与准备</div>
@@ -42111,7 +43022,23 @@ local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)
       <div class="vpn-kv"><span>TLS 密钥</span><strong id="vpn-auth-tls">-</strong></div>
       <div id="vpn-auth-note" class="vpn-card-note">配置文件和认证材料齐全后，当前页才能直接启动。</div>
     </article>
+      </div>
+    </details>
+    <details class="vpn-details">
+      <summary>当前客户端配置</summary>
+      <div class="vpn-panel-head">
+        <span id="vpn-config-path" data-profile-path="<%=esc(cfg_path)%>"><%=esc(cfg_label)%></span>
+        <div class="vpn-actions">
+          <button id="vpn-copy-button" class="cbi-button" type="button" aria-disabled="true">复制配置</button>
+          <span id="vpn-copy-feedback" class="vpn-copy-feedback" aria-live="polite"></span>
+        </div>
+      </div>
+      <textarea id="vpn-config-copy-source" class="vpn-copy-source" aria-label="待复制配置" tabindex="-1"><%=esc(cfg ~= "" and cfg or "no config")%></textarea>
+      <pre id="vpn-config-pre"><%=esc(cfg ~= "" and cfg or "暂无客户端配置")%></pre>
+    </details>
+  </section>
 
+  <section data-vpn-view="routes" aria-label="路由与映射" hidden>
     <article id="vpn-route-card" class="vpn-card vpn-card-route">
       <div class="vpn-card-head">
         <div class="vpn-card-title">路由与映射</div>
@@ -42122,65 +43049,9 @@ local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)
       <div class="vpn-kv"><span>规则状态</span><strong id="vpn-route-ratio">-</strong></div>
       <div class="vpn-kv"><span>本地映射目标</span><strong id="vpn-map-ip">-</strong></div>
       <div class="vpn-kv"><span>映射规则</span><strong id="vpn-dnat-status" class="vpn-inline-badge vpn-badge-neutral">等待更新</strong></div>
-      <div id="vpn-route-note" class="vpn-card-note">下方“目标检查”展示每个目标的详细结果。</div>
+      <div id="vpn-route-note" class="vpn-card-note">各目标的路由、转发与在线状态见下方。</div>
     </article>
-  </section>
-
-  <section class="vpn-quick-rail vpn-quick-rail-console">
-    <div class="vpn-quick-rail-head">
-      <div>
-        <div class="vpn-quick-rail-title">配置入口</div>
-        <p class="vpn-quick-rail-sub">配置入口集中在这里，首屏保留状态和操作，需要改项时再进入配置。</p>
-      </div>
-      <span class="vpn-card-badge vpn-badge-neutral">导航</span>
-    </div>
-    <div class="vpn-action-list vpn-action-list-compact">
-        <a class="vpn-action-tile vpn-action-tile-basic" href="<%=url('admin/services/openvpn/basic', 'custom_config')%>">
-          <strong>基础配置</strong>
-          <span>适合修改远端、协议、端口和证书。</span>
-        </a>
-        <a class="vpn-action-tile vpn-action-tile-advanced" href="<%=url('admin/services/openvpn/advanced', 'custom_config')%>">
-          <strong>高级配置</strong>
-          <span>适合调整更细粒度的 OpenVPN 指令。</span>
-        </a>
-        <a class="vpn-action-tile vpn-action-tile-native" href="<%=url('admin/services/openvpn')%>">
-          <strong>标准 OpenVPN</strong>
-          <span>进入原生实例管理页和兼容配置入口。</span>
-        </a>
-      </div>
-  </section>
-
-  <section class="vpn-panel-shell vpn-panel-shell-diagnostics">
-    <div class="vpn-panel-shell-head">
-      <div>
-        <span class="vpn-panel-shell-kicker">诊断</span>
-        <h3>日志与路由联动排查</h3>
-        <p>优先看关键日志和目标检查，异常时再查看完整运行日志、配置内容和隧道信息。</p>
-      </div>
-      <span id="vpn-panel-live-badge" class="vpn-panel-live-badge">等待更新</span>
-    </div>
-    <div class="vpn-tabbar vpn-tabbar-diagnostics" role="tablist" aria-label="OpenVPN 诊断面板">
-      <button class="vpn-tab-btn vpn-tab-btn-major is-active" type="button" data-target="vpn-focus-panel" role="tab" aria-selected="true" aria-controls="vpn-focus-panel">关键日志</button>
-      <button class="vpn-tab-btn vpn-tab-btn-major" type="button" data-target="vpn-route-panel" role="tab" aria-selected="false" aria-controls="vpn-route-panel">目标检查</button>
-      <button class="vpn-tab-btn" type="button" data-target="vpn-config-panel" role="tab" aria-selected="false" aria-controls="vpn-config-panel">客户端配置</button>
-      <button class="vpn-tab-btn" type="button" data-target="vpn-runtime-panel" role="tab" aria-selected="false" aria-controls="vpn-runtime-panel">运行日志</button>
-      <button class="vpn-tab-btn" type="button" data-target="vpn-tun-panel" role="tab" aria-selected="false" aria-controls="vpn-tun-panel">隧道信息</button>
-    </div>
-
-    <div id="vpn-focus-panel" class="vpn-panel vpn-panel-major vpn-panel-focus is-active" role="tabpanel" aria-hidden="false">
-      <div class="vpn-panel-head">
-        <h3>关键日志</h3>
-        <span id="vpn-focus-meta">优先展示连接、认证、路由相关行。</span>
-      </div>
-      <div class="vpn-focus-strip">
-        <span class="vpn-focus-pill">优先项: TLS / AUTH / tun0</span>
-        <span id="vpn-log-event" class="vpn-focus-pill">正在分类日志事件</span>
-        <span id="vpn-focus-ts" class="vpn-focus-pill vpn-focus-pill-muted">等待更新</span>
-      </div>
-      <pre id="vpn-focus-log">等待更新</pre>
-    </div>
-
-    <div id="vpn-route-panel" class="vpn-panel vpn-panel-major vpn-panel-route" role="tabpanel" aria-hidden="true">
+    <div id="vpn-route-panel" class="vpn-route-detail">
       <div class="vpn-panel-head">
         <h3>目标检查</h3>
         <span id="vpn-route-meta">基于当前内核状态与目标探测的实时结果。优先看离线和缺规则项。</span>
@@ -42206,25 +43077,9 @@ local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)
         </div>
       </div>
     </div>
-
-    <div id="vpn-config-panel" class="vpn-panel vpn-panel-config" role="tabpanel" aria-hidden="true">
-      <div class="vpn-panel-head">
-        <h3>客户端配置</h3>
-        <span>只读展示当前写入的 client.ovpn 内容。</span>
-      </div>
-      <textarea id="vpn-config-copy-source" class="vpn-copy-source"><%=esc(cfg ~= "" and cfg or "no config")%></textarea>
-      <pre id="vpn-config-pre"><%=esc(cfg ~= "" and cfg or "no config")%></pre>
-    </div>
-
-    <div id="vpn-runtime-panel" class="vpn-panel vpn-panel-runtime" role="tabpanel" aria-hidden="true">
-      <div class="vpn-panel-head">
-        <h3>运行日志</h3>
-        <span id="vpn-runtime-meta">完整日志更适合排查重连、认证和 TLS 问题。</span>
-      </div>
-      <pre id="vpn-runtime-log">等待更新</pre>
-    </div>
-
-    <div id="vpn-tun-panel" class="vpn-panel vpn-panel-tunnel" role="tabpanel" aria-hidden="true">
+    <details class="vpn-details">
+      <summary>隧道与 LAN 接口</summary>
+    <div id="vpn-tun-panel" class="vpn-tunnel-detail">
       <div class="vpn-panel-head">
         <h3>隧道信息</h3>
         <span id="vpn-tun-meta">展示 VPN 与 LAN 接口的当前地址信息。</span>
@@ -42240,22 +43095,69 @@ local cfg = read_cfg_limited("/etc/openvpn/client.ovpn", 102400)
         </div>
       </div>
     </div>
+    </details>
+  </section>
+
+  <section data-vpn-view="logs" aria-label="运行日志" hidden>
+    <div class="vpn-log-section">
+      <div class="vpn-tabbar" role="tablist" aria-label="日志类型">
+        <button class="vpn-tab-btn is-active" type="button" data-target="vpn-focus-panel" role="tab" aria-selected="true" aria-controls="vpn-focus-panel">关键日志</button>
+        <button class="vpn-tab-btn" type="button" data-target="vpn-runtime-panel" role="tab" aria-selected="false" aria-controls="vpn-runtime-panel">完整日志</button>
+      </div>
+    <div id="vpn-focus-panel" class="vpn-panel vpn-panel-major vpn-panel-focus is-active" role="tabpanel" aria-hidden="false">
+      <div class="vpn-panel-head">
+        <h3>关键日志</h3>
+        <span id="vpn-focus-meta">优先展示连接、认证、路由相关行。</span>
+      </div>
+      <div class="vpn-focus-strip">
+        <span class="vpn-focus-pill">优先项: TLS / AUTH / tun0</span>
+        <span id="vpn-log-event" class="vpn-focus-pill">正在分类日志事件</span>
+        <span id="vpn-focus-ts" class="vpn-focus-pill vpn-focus-pill-muted">等待更新</span>
+      </div>
+      <pre id="vpn-focus-log">等待更新</pre>
+    </div>
+    <div id="vpn-runtime-panel" class="vpn-panel vpn-panel-runtime" role="tabpanel" aria-hidden="true">
+      <div class="vpn-panel-head">
+        <h3>运行日志</h3>
+        <span id="vpn-runtime-meta">完整日志更适合排查重连、认证和 TLS 问题。</span>
+      </div>
+      <pre id="vpn-runtime-log">等待更新</pre>
+    </div>
+    </div>
   </section>
 </div>
 
 <script>
+(function() {
+  var views = document.querySelectorAll('[data-vpn-view]');
+  var links = document.querySelectorAll('[data-vpn-nav]');
+  function showView() {
+    var name = window.location.hash.slice(1);
+    if (name !== 'routes' && name !== 'logs') name = 'overview';
+    for (var i = 0; i < views.length; i++) {
+      views[i].hidden = views[i].getAttribute('data-vpn-view') !== name;
+    }
+    for (var j = 0; j < links.length; j++) {
+      if (links[j].getAttribute('data-vpn-nav') === name) links[j].setAttribute('aria-current', 'page');
+      else links[j].removeAttribute('aria-current');
+    }
+  }
+  window.addEventListener('hashchange', showView);
+  showView();
+})();
+
 function vpnCopyConfig() {
   var copyButton = document.getElementById('vpn-copy-button');
   if (copyButton && copyButton.getAttribute('aria-disabled') === 'true') {
     if (window.vpnShowCopyFeedback) {
-      window.vpnShowCopyFeedback('当前没有可复制的 client.ovpn', 'warn');
+      window.vpnShowCopyFeedback('当前没有可复制的配置，请刷新页面确认配置来源。', 'warn');
     }
     return false;
   }
   var source = document.getElementById('vpn-config-copy-source');
   if (!source || !source.value || source.value === 'no config') {
     if (window.vpnShowCopyFeedback) {
-      window.vpnShowCopyFeedback('当前没有可复制的 client.ovpn', 'warn');
+      window.vpnShowCopyFeedback('当前没有可复制的配置。', 'warn');
     }
     return false;
   }
@@ -42266,18 +43168,18 @@ function vpnCopyConfig() {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(source.value).then(function() {
         if (window.vpnShowCopyFeedback) {
-          window.vpnShowCopyFeedback('已复制 client.ovpn', 'ok');
+          window.vpnShowCopyFeedback('已复制当前实例配置', 'ok');
         }
       }).catch(function() {
         document.execCommand('copy');
         if (window.vpnShowCopyFeedback) {
-          window.vpnShowCopyFeedback('已复制 client.ovpn', 'ok');
+          window.vpnShowCopyFeedback('已复制当前实例配置', 'ok');
         }
       });
     } else {
       document.execCommand('copy');
       if (window.vpnShowCopyFeedback) {
-        window.vpnShowCopyFeedback('已复制 client.ovpn', 'ok');
+        window.vpnShowCopyFeedback('已复制当前实例配置', 'ok');
       }
     }
   } catch (e) {
@@ -42570,6 +43472,9 @@ function vpnCopyConfig() {
     if (!status) {
       return;
     }
+    setText('vpn-instance-label', status.instance_label || '当前实例');
+    document.getElementById('vpn-primary-instance').value = status.instance || '';
+    document.getElementById('vpn-stop-instance').value = status.instance || '';
 
     var shellState = 'is-empty';
     if (status.connected) {
@@ -42634,17 +43539,10 @@ function vpnCopyConfig() {
     setClass('vpn-health-chip', 'vpn-health-chip ' + esc(status.health_class || 'bad'));
     setText('vpn-health-chip', status.status_summary_label || status.health_label || '未连接');
     setText('vpn-live-ts', (status.ts ? ('更新 ' + status.ts) : '更新中'));
-    setClass('vpn-orb-ring', 'vpn-orb-ring ' + esc(status.health_class || 'bad'));
-    setText('vpn-orb-status', status.connected ? (status.health_label || '在线') : (status.activation_ready ? '可启动' : (status.profile_ready ? '缺认证文件' : '待配置')));
-    setText('vpn-orb-subtitle', status.action_label || '-');
-    setText('vpn-orb-meta', (status.mode_label || status.mode || '-') + ' · ' + (status.online_breakdown || '等待路由状态'));
     setText('vpn-stat-tun-ip', status.tun_ip || '-');
     setText('vpn-stat-tun-meta', (status.tun_if || 'tun0') + ' 当前地址');
     setHtml('vpn-stat-remote', renderRemoteValue(status.remote || '-'));
     setText('vpn-stat-remote-meta', '协议: ' + (status.proto || '-') + ' · 当前写入的 remote');
-    setText('vpn-stat-remote-note', status.connected ? '实际连接结果请查看下方日志。' : '当前显示配置文件中的 remote 地址。');
-    setText('vpn-stat-auth-mode', status.auth_mode || '未知');
-    setText('vpn-stat-auth-meta', 'TLS: ' + (status.tls_label || '-') + ' · Cipher: ' + (status.cipher || '-'));
     setText('vpn-stat-health-ratio', status.online_ratio || status.online_device_ratio || status.remote_online_ratio || '-');
     setText('vpn-stat-health-meta', status.online_breakdown || '远端目标在线比例');
 
@@ -42655,8 +43553,6 @@ function vpnCopyConfig() {
     setCardState('vpn-runtime-card', runtimeCardState);
     setCardState('vpn-auth-card', authCardState);
     setCardState('vpn-route-card', routeCardState);
-    setClass('vpn-panel-live-badge', 'vpn-panel-live-badge ' + runtimeCardState);
-    setText('vpn-panel-live-badge', status.connected ? (status.log_state_ok ? (status.health_class === 'ok' ? '在线诊断' : '隧道在线 · 目标待查') : '连接异常待处理') : (authReady ? '可直接启动' : (status.profile_ready ? '待补认证' : '待写配置')));
 
     setClass('vpn-runtime-badge', 'vpn-card-badge ' + (status.connected ? 'vpn-badge-ok' : 'vpn-badge-bad'));
     setText('vpn-runtime-badge', status.connected ? '在线' : '离线');
@@ -42668,7 +43564,7 @@ function vpnCopyConfig() {
     setText('vpn-runtime-log-state', status.log_state || '未确认');
     setText('vpn-runtime-process', status.process_summary || status.process_line || '-');
 
-    setClass('vpn-auth-badge', 'vpn-card-badge ' + (authReady ? 'vpn-badge-ok' : 'vpn-badge-bad'));
+    setClass('vpn-auth-badge', 'vpn-card-badge vpn-badge-' + (status.auth_badge_tone || (authReady ? 'ok' : 'warn')));
     setText('vpn-auth-badge', status.auth_badge_label || (authReady ? '可启动' : '缺认证文件'));
     setText('vpn-auth-userpass', status.auth_ready || '-');
     setText('vpn-auth-requirement', status.auth_requirement_label || '-');
@@ -42689,25 +43585,19 @@ function vpnCopyConfig() {
     setText('vpn-action-hint', status.action_hint || '当前页会按配置状态自动切换主操作。');
     setText('vpn-runtime-note', status.runtime_note || '断开后如条件满足，可直接从当前页启动或接管启动。');
     setText('vpn-auth-note', status.auth_note || '配置文件和认证材料齐全后，当前页才能直接启动。');
-    setText('vpn-mini-action', status.action_label || '-');
-    setText('vpn-mini-action-note', status.connected ? (status.action_kind === 'stable' ? (status.health_class === 'ok' ? '当前连接稳定，主按钮仅显示运行状态。' : '隧道正常，路由或远端目标告警请到目标检查处理。') : '当前会话日志存在错误，确认后可手动重连。') : (status.activation_ready ? '配置已齐，可直接从首屏启动。' : '首屏会提示还缺哪一类材料。'));
-    setText('vpn-mini-managed', status.managed_label || (status.uci_managed ? (status.uci_enabled ? '已接管' : '已接管未启用') : (status.profile_ready ? '可接管' : '未配置')));
-    setText('vpn-mini-managed-note', (status.service_label || status.service_status || 'stopped') + ' · ' + (status.mode_label || status.mode || '-'));
-    setText('vpn-mini-auth', status.auth_badge_label || (authReady ? '可启动' : '缺认证文件'));
-    setText('vpn-mini-auth-note', (status.auth_requirement_label || '-') + ' · ' + (status.cert_material_label || '-'));
-    setText('vpn-mini-route', status.route_badge_label || (status.route_badge_ok ? '完整' : '待检查'));
-    setText('vpn-mini-route-note', (status.route_rule_ratio || '-') + ' · ' + (status.online_breakdown || '远端目标在线比例'));
 
     var copyButton = document.getElementById('vpn-copy-button');
     if (copyButton) {
-      if (status.copy_ready) {
+      var configPath = document.getElementById('vpn-config-path');
+      var sameProfile = configPath && configPath.getAttribute('data-profile-path') === (status.config_path || '');
+      if (status.copy_ready && sameProfile) {
         copyButton.className = 'cbi-button vpn-button-muted';
         copyButton.setAttribute('aria-disabled', 'false');
-        copyButton.title = '复制当前 client.ovpn';
+        copyButton.title = '复制当前实例配置';
       } else {
         copyButton.className = 'cbi-button vpn-button-muted is-disabled';
         copyButton.setAttribute('aria-disabled', 'true');
-        copyButton.title = '当前没有可复制的 client.ovpn';
+        copyButton.title = sameProfile ? '当前没有可复制的文件配置' : '配置来源已变化，请刷新页面';
       }
     }
 
@@ -42749,19 +43639,7 @@ function vpnCopyConfig() {
     setClass('vpn-health-chip', 'vpn-health-chip warn');
     setText('vpn-health-chip', '状态未返回');
     setText('vpn-live-ts', lastGoodStatus && lastGoodStatus.ts ? ('更新 ' + lastGoodStatus.ts) : '等待重试');
-    setClass('vpn-orb-ring', 'vpn-orb-ring warn');
-    setText('vpn-orb-status', '待查');
-    setText('vpn-orb-subtitle', '状态接口未返回');
-    setText('vpn-orb-meta', message || '请刷新页面，或从应用商店重新打开 OpenVPN。');
     setText('vpn-action-hint', message || '状态读取失败，当前不改动 OpenVPN 运行状态。');
-    setText('vpn-mini-action', '等待状态接口');
-    setText('vpn-mini-action-note', '页面没有执行启动、停止或重连，只是状态读取未完成。');
-    setText('vpn-mini-managed', '未确认');
-    setText('vpn-mini-managed-note', '保留当前系统运行状态。');
-    setText('vpn-mini-auth', '未确认');
-    setText('vpn-mini-auth-note', '认证状态需要接口返回后确认。');
-    setText('vpn-mini-route', '未确认');
-    setText('vpn-mini-route-note', '路由状态需要接口返回后确认。');
     var primaryForm = document.getElementById('vpn-primary-form');
     var primaryButton = document.getElementById('vpn-primary-button');
     var copyButton = document.getElementById('vpn-copy-button');
@@ -46405,57 +47283,25 @@ elseif mode == "file" then
     mode_label = "文件编辑"
     mode_desc = "适合直接维护 ovpn 原始配置和 auth-user-pass 凭据文件。"
     primary_href = url("admin/services/openvpn")
-    primary_label = "返回标准 OpenVPN"
+    primary_label = "返回实例管理"
 end
 %>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary vpn-shell-config">
-  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary vpn-hero-config">
-    <div class="vpn-toolbar">
-      <span class="vpn-pill">OpenVPN</span>
-      <span class="vpn-status-chip vpn-mode-chip"><%=mode_label%></span>
-    </div>
-    <h2 class="vpn-page-title">
-      <a href="<%=url('admin/services/openvpn')%>">标准 OpenVPN</a> &#187;
-      实例 <%=pcdata(self.instance)%>
-    </h2>
-    <p class="vpn-sub">
-      <%=mode_desc%>
-    </p>
+<%+openvpn/navigation%>
+<div class="vpn-shell vpn-shell-secondary vpn-shell-config">
+  <div class="vpn-page-header">
+    <h3><%=mode_label%> <span class="vpn-inline-note">· <%=pcdata(instance)%></span></h3>
+    <p><%=mode_desc%></p>
     <div class="vpn-secondary-summary">
-      <span class="vpn-summary-instance">实例 <strong><%=pcdata(instance)%></strong></span>
-      <span class="vpn-summary-path">配置 <strong><%=pcdata(cfg_path)%></strong></span>
-      <span class="vpn-summary-route">路由 <strong><%=route_noexec%></strong></span>
+      <span>状态 <strong><%=enabled_label%></strong></span>
+      <span>配置 <strong><%=pcdata(cfg_path)%></strong></span>
+      <span>路由 <strong><%=route_noexec%></strong></span>
     </div>
-    <div class="vpn-hero-actions vpn-hero-actions-config">
-      <a class="cbi-button cbi-button-apply" href="<%=primary_href%>"><%=primary_label%></a>
-      <a class="cbi-button" href="<%=url('nradioadv/system/openvpnfull')%>">返回控制台</a>
-    </div>
-  </div>
-
-  <div class="vpn-mini-grid">
-    <div class="vpn-mini-card vpn-mini-card-accent vpn-mini-card-instance">
-      <span class="vpn-mini-label">当前实例</span>
-      <strong><%=pcdata(instance)%></strong>
-      <span class="vpn-mini-note">当前正在编辑的 OpenVPN UCI 节点</span>
-    </div>
-    <div class="vpn-mini-card vpn-mini-card-source">
-      <span class="vpn-mini-label">配置来源</span>
-      <strong><%=pcdata(cfg_path)%></strong>
-      <span class="vpn-mini-note">若使用外部 ovpn 文件，这里显示保存路径</span>
-    </div>
-    <div class="vpn-mini-card vpn-mini-card-status">
-      <span class="vpn-mini-label">实例状态</span>
-      <strong><%=enabled_label%></strong>
-      <span class="vpn-mini-note">协议：<%=pcdata(proto)%> · 端口：<%=pcdata(port)%></span>
-    </div>
-    <div class="vpn-mini-card vpn-mini-card-route">
-      <span class="vpn-mini-label">路由模式</span>
-      <strong><%=route_noexec%></strong>
-      <span class="vpn-mini-note">用于判断当前实例是否交给外部脚本接管</span>
+    <div class="vpn-actions">
+      <a class="cbi-button" href="<%=primary_href%>"><%=primary_label%></a>
+      <% if mode ~= "file" then %><a class="cbi-button" href="<%=url('admin/services/openvpn')%>">实例管理</a><% end %>
     </div>
   </div>
-
   <% if mode == "advanced" then %>
     <div class="vpn-card vpn-category-rail vpn-category-rail-mk5">
       <div class="vpn-card-title">高级分类</div>
@@ -46468,9 +47314,6 @@ end
           <% end %>
         <% end %>
       </div>
-      <% if category_title then %>
-        <div class="vpn-mini-note vpn-category-current">当前分类：<strong><%=category_title%></strong></div>
-      <% end %>
     </div>
   <% end %>
 </div>
@@ -46550,15 +47393,13 @@ EOF_OPENVPN_PAGESWITCH
 //]]>
 </script>
 
-<%+openvpn/ovpn_css%>
-
 <div class="vpn-entry-grid vpn-entry-grid-mk5 vpn-entry-grid-import">
 	<div class="vpn-entry-card vpn-entry-card-template" id="div_add">
 		<div class="vpn-entry-head">
 			<h4>模板创建</h4>
 			<span class="vpn-entry-badge vpn-entry-badge-template">模板</span>
 		</div>
-		<p class="vpn-entry-lead">适合快速生成一个标准 OpenVPN 实例，再进入基础配置或高级配置继续细化。</p>
+		<p class="vpn-entry-lead">选择模板创建实例，再填写服务器与认证参数。</p>
 		<label class="vpn-field-label" for="instance_name1">实例名称</label>
 		<input type="text" maxlength="20" placeholder="例如 custom_config" name="cbi.cts.<%=self.config%>.<%=self.sectiontype%>.text" id="instance_name1" />
 		<div class="vpn-field-help">仅允许字母、数字和下划线。创建后会出现在实例列表中。</div>
@@ -46580,13 +47421,13 @@ EOF_OPENVPN_PAGESWITCH
 			<h4>OVPN 文件上传</h4>
 			<span class="vpn-entry-badge vpn-badge-neutral vpn-entry-badge-upload">兼容</span>
 		</div>
-		<p class="vpn-entry-lead">导入现有客户端文件。上传后会创建实例，并将配置保存到 <code>/etc/openvpn/&lt;name&gt;.ovpn</code>。</p>
+		<p class="vpn-entry-lead">导入现有客户端文件。配置保存到 <code>/etc/openvpn/&lt;name&gt;.ovpn</code>。</p>
 		<label class="vpn-field-label" for="instance_name2">实例名称</label>
 		<input type="text" maxlength="20" placeholder="例如 custom_config" name="instance_name2" id="instance_name2" />
 		<div class="vpn-field-help">实例名称将用作文件名和列表名称。</div>
 		<label class="vpn-field-label" for="ovpn_file">配置文件</label>
 		<input type="file" name="ovpn_file" id="ovpn_file" accept="application/x-openvpn-profile,.ovpn" />
-		<div class="vpn-field-help">支持标准 `.ovpn` 客户端配置文件，上传后可回到控制台核对运行状态。</div>
+		<div class="vpn-field-help">支持标准 .ovpn 客户端文件，导入后可在概览查看连接状态。</div>
 		<div class="vpn-entry-actions vpn-entry-actions-upload">
 			<input class="btn cbi-button cbi-button-add" type="submit" onclick="vpn_upload(); return false;" value="上传导入" title="上传 ovpn 文件" />
 		</div>
@@ -46601,48 +47442,16 @@ EOF_OPENVPN_SELECT_INPUT_ADD
     cat > /usr/lib/lua/luci/view/openvpn/overview_intro.htm <<'EOF_OPENVPN_OVERVIEW_INTRO'
 <%+openvpn/ovpn_css%>
 
-<div class="vpn-shell vpn-shell-refined vpn-shell-mk5 vpn-shell-secondary vpn-shell-overview">
-  <div class="vpn-hero vpn-hero-mk5 vpn-hero-secondary vpn-hero-overview">
-    <div class="vpn-hero-top">
-      <div class="vpn-brand-block">
-        <div class="vpn-toolbar">
-          <span class="vpn-pill">OpenVPN</span>
-          <span class="vpn-status-chip">标准实例管理</span>
-        </div>
-        <h2>标准 OpenVPN</h2>
-        <p class="vpn-sub">新建模板实例、导入 ovpn 文件，或维护原生 OpenVPN 节点；运行状态回到控制台查看。</p>
-        <div class="vpn-secondary-summary">
-          <span class="vpn-summary-instance">实例 <strong><%=self.instance_count or 0%></strong></span>
-          <span class="vpn-summary-enabled">启用 <strong><%=self.enabled_count or 0%></strong></span>
-          <span class="vpn-summary-running">运行 <strong><%=self.running_count or 0%></strong></span>
-        </div>
-      </div>
-      <div class="vpn-hero-actions vpn-hero-actions-overview">
-        <a class="cbi-button cbi-button-apply" href="<%=url('nradioadv/system/openvpnfull')%>">返回控制台</a>
-      </div>
-    </div>
-
-    <div class="vpn-mini-grid">
-      <div class="vpn-mini-card vpn-mini-card-accent">
-        <span class="vpn-mini-label">实例总数</span>
-        <strong><%=self.instance_count or 0%></strong>
-        <span class="vpn-mini-note">当前 UCI 中已注册的 OpenVPN 实例数量</span>
-      </div>
-      <div class="vpn-mini-card vpn-mini-card-enabled">
-        <span class="vpn-mini-label">启用实例</span>
-        <strong><%=self.enabled_count or 0%></strong>
-        <span class="vpn-mini-note">已开启 `enabled` 的实例数量</span>
-      </div>
-      <div class="vpn-mini-card vpn-mini-card-status">
-        <span class="vpn-mini-label">运行实例</span>
-        <strong><%=self.running_count or 0%></strong>
-        <span class="vpn-mini-note">当前检测到仍在运行的进程数量</span>
-      </div>
-      <div class="vpn-mini-card vpn-mini-card-route">
-        <span class="vpn-mini-label">文件型实例</span>
-        <strong><%=self.file_cfg_count or 0%></strong>
-        <span class="vpn-mini-note">配置来源为外部 `.ovpn` 文件的实例数量</span>
-      </div>
+<%+openvpn/navigation%>
+<div class="vpn-shell vpn-shell-secondary vpn-shell-overview">
+  <div class="vpn-page-header">
+    <h3>实例管理</h3>
+    <p>管理已有连接，或通过模板、OVPN 文件添加实例。</p>
+    <div class="vpn-secondary-summary">
+      <span>全部 <strong><%=self.instance_count or 0%></strong></span>
+      <span>已启用 <strong><%=self.enabled_count or 0%></strong></span>
+      <span>运行中 <strong><%=self.running_count or 0%></strong></span>
+      <span>文件配置 <strong><%=self.file_cfg_count or 0%></strong></span>
     </div>
   </div>
 </div>
@@ -46681,6041 +47490,391 @@ EOF_OPENVPN_OVERVIEW_INTRO
 <% end %>
 EOF_OPENVPN_NSECTION
 
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK3_FINAL_POLISH'
+    cat > /usr/lib/lua/luci/view/openvpn/tblsection.htm <<'EOF_OPENVPN_TABLE'
+<%-
+local rowcnt = 1
+function rowstyle()
+	rowcnt = rowcnt + 1
+	return (rowcnt % 2) + 1
+end
+
+function width(o)
+	if o.width then
+		if type(o.width) == 'number' then
+			return ' style="width:%dpx"' % o.width
+		end
+		return ' style="width:%s"' % o.width
+	end
+	return ''
+end
+-%>
+
+<!-- tblsection -->
+<fieldset class="cbi-section" id="cbi-<%=self.config%>-<%=self.sectiontype%>">
+	<% if self.title and #self.title > 0 then -%>
+		<legend><%=self.title%></legend>
+	<%- end %>
+	<%- if self.sortable then -%>
+		<input type="hidden" id="cbi.sts.<%=self.config%>.<%=self.sectiontype%>" name="cbi.sts.<%=self.config%>.<%=self.sectiontype%>" value="" />
+	<%- end -%>
+	<% if self.description and #self.description > 0 then %>
+	<div class="cbi-section-descr"><%=self.description%></div>
+	<% end %>
+	<div class="vpn-instance-table">
+		<%- local count = 0 -%>
+		<table class="cbi-section-table">
+			<thead>
+			<tr class="cbi-section-table-titles">
+			<%- if not self.anonymous then -%>
+				<%- if self.sectionhead then -%>
+					<th class="cbi-section-table-cell"><%=self.sectionhead%></th>
+				<%- else -%>
+					<th>&#160;</th>
+				<%- end -%>
+			<%- end -%>
+			<%- for i, k in pairs(self.children) do if not k.optional then -%>
+				<th class="cbi-section-table-cell"<%=width(k)%>>
+				<%- if k.titleref then -%><a title="<%=self.titledesc or translate('Go to relevant configuration page')%>" class="cbi-title-ref" href="<%=k.titleref%>"><%- end -%>
+					<%-=k.title-%>
+				<%- if k.titleref then -%></a><%- end -%>
+				</th>
+			<%- count = count + 1; end; end; if self.sortable then -%>
+				<th class="cbi-section-table-cell"><%:Sort%></th>
+			<%- end; if self.extedit or self.addremove then -%>
+				<th class="cbi-section-table-cell">&#160;</th>
+			<%- count = count + 1; end -%>
+			</tr>
+			</thead>
+			<tbody>
+			<%- local isempty = true
+			    for i, k in ipairs(self:cfgsections()) do
+					section = k
+					isempty = false
+					scope = { valueheader = "cbi/cell_valueheader", valuefooter = "cbi/cell_valuefooter" }
+			-%>
+			<tr class="cbi-section-table-row<% if self.extedit or self.rowcolors then %> cbi-rowstyle-<%=rowstyle()%><% end %>" id="cbi-<%=self.config%>-<%=section%>">
+				<% if not self.anonymous then -%>
+					<th><h3><%=(type(self.sectiontitle) == "function") and self:sectiontitle(section) or k%></h3></th>
+				<%- end %>
+
+
+				<%-
+					for k, node in ipairs(self.children) do
+						if not node.optional then
+							node:render(section, scope or {})
+						end
+					end
+				-%>
+
+				<%- if self.sortable then -%>
+					<td class="cbi-section-table-cell">
+						<input class="cbi-button cbi-button-up" type="button" value=""  onclick="return cbi_row_swap(this, true, 'cbi.sts.<%=self.config%>.<%=self.sectiontype%>')" alt="<%:Move up%>" title="<%:Move up%>" />
+						<input class="cbi-button cbi-button-down" type="button" value=""  onclick="return cbi_row_swap(this, false, 'cbi.sts.<%=self.config%>.<%=self.sectiontype%>')" alt="<%:Move down%>" title="<%:Move down%>" />
+					</td>
+				<%- end -%>
+
+				<%- if self.extedit or self.addremove then -%>
+					<td class="cbi-section-table-cell">
+						<%- if self.extedit then -%>
+							<input class="cbi-button cbi-button-edit" type="button" value="<%:Edit%>"
+							<%- if type(self.extedit) == "string" then
+							%> onclick="location.href='<%=self.extedit:format(section)%>'"
+							<%- elseif type(self.extedit) == "function" then
+							%> onclick="location.href='<%=self:extedit(section)%>'"
+							<%- end
+							%> alt="<%:Edit%>" title="<%:Edit%>" />
+						<%- end; if self.addremove then %>
+							<input class="cbi-button cbi-button-remove" type="submit" value="<%:Delete%>"  onclick="this.form.cbi_state='del-section'; return true" name="cbi.rts.<%=self.config%>.<%=k%>" alt="<%:Delete%>" title="<%:Delete%>" />
+						<%- end -%>
+					</td>
+				<%- end -%>
+			</tr>
+			<%- end -%>
+
+			<%- if isempty then -%>
+			<tr class="cbi-section-table-row">
+				<td colspan="<%=count%>"><em><br /><%:This section contains no values yet%></em></td>
+			</tr>
+			<%- end -%>
+			</tbody>
+		</table>
+
+		<% if self.error then %>
+			<div class="cbi-section-error">
+				<ul><% for _, c in pairs(self.error) do for _, e in ipairs(c) do -%>
+					<li><%=pcdata(e):gsub("\n","<br />")%></li>
+				<%- end end %></ul>
+			</div>
+		<% end %>
+
+
+	</div>
+	<% if self.addremove and self.template_addremove then %>
+	<div class="vpn-instance-create">
+		<% include(self.template_addremove) %>
+	</div>
+	<% end %>
+</fieldset>
+<!-- /tblsection -->
+EOF_OPENVPN_TABLE
+
+    cat > /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_UNIFIED_CSS'
 <style type="text/css">
-    .vpn-shell-mk3 {
-        --vpn-state: #22d3ee;
-        --vpn-state-rgb: 34, 211, 238;
-        max-width: 1220px;
-        border-color: rgba(125, 211, 252, 0.24);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(9, 17, 30, 0.99), rgba(4, 9, 17, 0.99));
-    }
-    .vpn-shell-mk3.is-ok {
-        --vpn-state: #34d399;
-        --vpn-state-rgb: 52, 211, 153;
-    }
-    .vpn-shell-mk3.is-warn,
-    .vpn-shell-mk3.is-ready,
-    .vpn-shell-mk3.is-profile-ready {
-        --vpn-state: #fbbf24;
-        --vpn-state-rgb: 251, 191, 36;
-    }
-    .vpn-shell-mk3.is-bad,
-    .vpn-shell-mk3.is-empty {
-        --vpn-state: #fb7185;
-        --vpn-state-rgb: 251, 113, 133;
-    }
-    .vpn-shell-mk3 .vpn-hero-mk3,
-    .vpn-shell-secondary .vpn-hero-secondary,
-    .vpn-shell-secondary + .cbi-map,
-    .cbi-map {
-        border-radius: 8px !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.045),
-            inset 0 0 0 1px rgba(125, 211, 252, 0.045),
-            0 18px 36px rgba(0,0,0,0.22);
-    }
-    .vpn-shell-mk3 .vpn-hero-main {
-        grid-template-columns: minmax(500px, 0.92fr) minmax(410px, 0.78fr);
-        gap: 18px;
-        padding: 20px;
-    }
-    .vpn-shell-mk3 .vpn-brand-block {
-        display: flex;
-        min-height: 100%;
-        flex-direction: column;
-        justify-content: flex-start;
-        gap: 14px;
-        padding: 26px 28px;
-        border: 1px solid rgba(125, 211, 252, 0.13);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(15, 31, 52, 0.86), rgba(8, 16, 29, 0.72)),
-            rgba(7, 16, 29, 0.74);
-    }
-    .vpn-shell-mk3 .vpn-brand-block h2,
-    .vpn-shell-secondary .vpn-page-title {
-        position: relative;
-        width: fit-content;
-        max-width: 100%;
-        margin: 0 0 2px;
-        padding-bottom: 13px;
-        border: 0;
-        color: #22d3ee;
-        font-size: 32px;
-        line-height: 1.18;
-        font-weight: 900;
-        text-shadow: 0 0 18px rgba(34, 211, 238, 0.22);
-    }
-    .vpn-shell-mk3 .vpn-brand-block h2::after,
-    .vpn-shell-secondary .vpn-page-title::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        height: 3px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #22d3ee, #34d399);
-        box-shadow: 0 0 18px rgba(34, 211, 238, 0.34);
-    }
-    .vpn-shell-mk3 .vpn-toolbar,
-    .vpn-shell-secondary .vpn-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        margin: 4px 0 2px;
-    }
-    .vpn-shell-mk3 .vpn-sub,
-    .vpn-shell-secondary .vpn-sub {
-        max-width: 78ch;
-        padding-top: 12px;
-        border-top: 1px solid rgba(148, 163, 184, 0.14);
-        color: rgba(203, 213, 225, 0.92);
-        font-size: 14px;
-        line-height: 1.76;
-    }
-    .vpn-hero-summary,
-    .vpn-secondary-summary {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 10px;
-        padding: 10px;
-        border: 1px solid rgba(125, 211, 252, 0.12);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.22);
-    }
-    .vpn-hero-summary-item,
-    .vpn-secondary-summary span {
-        min-width: 0;
-        min-height: 78px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 12px 14px;
-        border: 1px solid rgba(125, 211, 252, 0.18);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.020)),
-            rgba(4, 10, 19, 0.70);
-        color: #9fb0c5;
-        font-size: 12px;
-        line-height: 1.35;
-    }
-    .vpn-hero-summary-item::before,
-    .vpn-secondary-summary span::before {
-        content: "";
-        display: block;
-        width: 28px;
-        height: 2px;
-        margin-bottom: 10px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #22d3ee, #34d399);
-        opacity: 0.72;
-    }
-    .vpn-hero-summary-item strong,
-    .vpn-secondary-summary strong {
-        display: block;
-        margin-top: 6px;
-        color: #e0f2fe;
-        font-size: 15px;
-        line-height: 1.32;
-        overflow-wrap: anywhere;
-        word-break: normal;
-    }
-    .vpn-summary-line {
-        display: block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .vpn-shell-mk3 .vpn-command-card {
-        display: flex;
-        min-height: 100%;
-        flex-direction: column;
-        justify-content: flex-start;
-        padding: 26px 28px;
-        border-color: rgba(var(--vpn-state-rgb), 0.28);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.16), rgba(255,255,255,0.030)),
-            rgba(8, 28, 30, 0.72);
-    }
-    .vpn-command-kicker {
-        display: inline-flex;
-        width: fit-content;
-        min-height: 32px;
-        align-items: center;
-        margin: 0 0 12px;
-        padding: 0 12px;
-        border: 1px solid rgba(125, 211, 252, 0.24);
-        border-radius: 999px;
-        color: #7dd3fc;
-        background: rgba(8, 145, 178, 0.16);
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .vpn-shell-mk3 .vpn-orb-wrap {
-        grid-template-columns: 118px minmax(0, 1fr);
-        gap: 20px;
-        justify-items: start;
-        overflow: visible;
-        margin-top: 12px;
-        padding: 20px;
-    }
-    .vpn-shell-mk3 .vpn-orb-ring {
-        width: 118px;
-        height: 118px;
-        min-width: 118px;
-        border-width: 12px;
-    }
-    .vpn-shell-mk3 .vpn-orb-copy {
-        width: 100%;
-        min-width: 0;
-    }
-    .vpn-shell-mk3 .vpn-orb-copy strong {
-        max-width: none;
-        font-size: clamp(22px, 2.1vw, 27px);
-        line-height: 1.22;
-        word-break: keep-all;
-        overflow-wrap: break-word;
-    }
-    .vpn-shell-mk3 .vpn-orb-copy span {
-        max-width: 100%;
-        font-size: 14px;
-        line-height: 1.72;
-        word-break: normal;
-        overflow-wrap: anywhere;
-    }
-    .vpn-shell-secondary .vpn-hero-secondary {
-        position: relative;
-        overflow: hidden;
-        padding: 22px 28px;
-        background:
-            linear-gradient(180deg, rgba(15, 31, 52, 0.90), rgba(8, 16, 29, 0.76)),
-            rgba(7, 16, 29, 0.78);
-    }
-    .vpn-shell-secondary .vpn-hero-secondary::after {
-        content: "";
-        position: absolute;
-        left: 28px;
-        right: 28px;
-        bottom: 0;
-        height: 1px;
-        background: linear-gradient(90deg, rgba(34,211,238,0.0), rgba(34,211,238,0.52), rgba(52,211,153,0.0));
-    }
-    .vpn-shell-secondary .vpn-page-title {
-        margin-top: 20px;
-        margin-bottom: 16px;
-        font-size: 26px;
-    }
-    .vpn-shell-secondary .vpn-page-title a {
-        color: #22d3ee !important;
-        text-decoration: none !important;
-    }
-    .vpn-shell-secondary .vpn-hero-actions {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 10px;
-        margin: 16px 0 0 auto;
-        padding: 12px;
-        border: 1px solid rgba(125, 211, 252, 0.16);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.018)),
-            rgba(4, 10, 19, 0.44);
-    }
-    .vpn-shell-secondary .vpn-hero-actions::before {
-        content: "操作";
-        display: inline-flex;
-        min-height: 32px;
-        align-items: center;
-        padding: 0 10px;
-        border: 1px solid rgba(125, 211, 252, 0.18);
-        border-radius: 999px;
-        color: #93c5fd;
-        background: rgba(15, 23, 42, 0.48);
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
-        width: auto;
-        min-width: 176px;
-        min-height: 42px;
-        display: inline-flex;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: center;
-        padding: 0 18px !important;
-        border-radius: 8px !important;
-    }
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button-apply {
-        min-width: 214px;
-        box-shadow: 0 10px 22px rgba(34, 211, 238, 0.14);
-    }
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button:not(.cbi-button-apply) {
-        color: #dbeafe !important;
-        background:
-            linear-gradient(180deg, rgba(148,163,184,0.14), rgba(148,163,184,0.055)) !important;
-    }
-    .vpn-shell-secondary .vpn-mini-grid {
-        gap: 16px;
-        margin-top: 18px;
-    }
-    .vpn-shell-secondary .vpn-mini-card {
-        position: relative;
-        min-height: 118px;
-        overflow: hidden;
-        padding: 18px 20px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.020)),
-            rgba(8, 16, 29, 0.72);
-    }
-    .vpn-shell-secondary .vpn-mini-card::after {
-        content: "";
-        position: absolute;
-        left: 18px;
-        right: 18px;
-        bottom: 0;
-        height: 1px;
-        background: linear-gradient(90deg, rgba(34,211,238,0.0), rgba(34,211,238,0.34), rgba(34,211,238,0.0));
-    }
-    .vpn-shell-secondary .vpn-mini-card strong {
-        font-size: 20px;
-        overflow-wrap: anywhere;
-    }
-    .vpn-entry-grid-mk3 {
-        gap: 16px;
-        margin: 14px 0 18px;
-    }
-    .vpn-entry-card {
-        min-height: 360px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        padding: 20px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.022)),
-            rgba(8, 16, 29, 0.72);
-    }
-    .vpn-entry-head h4 {
-        margin: 0;
-        color: #e0f2fe;
-        font-size: 18px;
-        line-height: 1.35;
-    }
-    .vpn-entry-lead,
-    .vpn-field-help {
-        color: #9fb0c5;
-        font-size: 12px;
-        line-height: 1.62;
-    }
-    .vpn-entry-lead {
-        min-height: 46px;
-        margin: 12px 0 16px;
-    }
-    .vpn-field-label {
-        display: block;
-        margin: 12px 0 7px;
-        color: #dbeafe;
-        font-size: 12px;
-        font-weight: 900;
-        line-height: 1.35;
-    }
-    .vpn-field-help {
-        margin-top: 7px;
-    }
-    .vpn-entry-actions {
-        margin-top: auto;
-        padding-top: 16px;
-    }
-    .vpn-entry-actions .cbi-button {
-        min-height: 44px;
-        font-size: 14px;
-    }
-    .vpn-output {
-        min-height: 46px;
-        display: flex;
-        align-items: center;
-        margin: 10px 0 18px;
-        padding: 0 14px;
-        border: 1px solid rgba(125, 211, 252, 0.14);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.42);
-    }
-    .vpn-output span,
-    .vpn-output em {
-        color: #a5f3fc;
-        font-style: normal;
-        font-size: 13px;
-        line-height: 1.45;
-    }
-    .cbi-map {
-        overflow: hidden;
-        border-color: rgba(125, 211, 252, 0.16) !important;
-    }
-    .cbi-map .cbi-section,
-    .cbi-map .cbi-section-node,
-    .cbi-map fieldset.cbi-section,
-    .cbi-map fieldset.cbi-section-table {
-        padding: 20px !important;
-        border-radius: 8px !important;
-    }
-    .cbi-map .cbi-section > h3,
-    .cbi-map .cbi-section-node > h3,
-    .cbi-map .cbi-section > h4,
-    .cbi-map .cbi-section-node > h4,
-    .cbi-map .cbi-section legend,
-    .cbi-map .cbi-section-table legend,
-    .vpn-cbi-section .vpn-section-title {
-        position: relative;
-        padding-left: 14px !important;
-    }
-    .cbi-map .cbi-section > h3::before,
-    .cbi-map .cbi-section-node > h3::before,
-    .cbi-map .cbi-section > h4::before,
-    .cbi-map .cbi-section-node > h4::before,
-    .cbi-map .cbi-section legend::before,
-    .cbi-map .cbi-section-table legend::before,
-    .vpn-cbi-section .vpn-section-title::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 3px;
-        bottom: 13px;
-        width: 3px;
-        border-radius: 999px;
-        background: linear-gradient(180deg, #22d3ee, #34d399);
-    }
-    .cbi-map .cbi-value {
-        min-height: 64px;
-        align-items: center;
-        padding: 16px 0 !important;
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select {
-        min-height: 44px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.018)),
-            rgba(3, 7, 18, 0.66) !important;
-    }
-    .cbi-map .cbi-button-row,
-    .cbi-map .cbi-page-actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 10px;
-        padding-top: 14px;
-    }
-    .cbi-map .cbi-button-row .cbi-button,
-    .cbi-map .cbi-page-actions .cbi-button {
-        width: auto;
-        min-width: 128px;
-        flex: 0 0 auto;
-    }
-    .cbi-map .cbi-button:hover,
-    .vpn-entry-actions .cbi-button:hover,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button:hover {
-        border-color: rgba(103, 232, 249, 0.56) !important;
-        transform: translateY(-1px);
-        box-shadow: 0 10px 22px rgba(0,0,0,0.22);
-    }
-    .vpn-shell-mk3 .vpn-panel-shell {
-        margin-top: 14px;
-    }
-    .vpn-shell-mk3 .vpn-panel-shell-head {
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.020)),
-            rgba(4, 10, 19, 0.46);
-    }
-    .vpn-shell-mk3 .vpn-tabbar {
-        gap: 10px;
-        padding: 12px;
-    }
-    .vpn-shell-mk3 .vpn-tab-btn {
-        min-height: 44px;
-    }
-    .vpn-shell-mk3 .vpn-panel-head {
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .vpn-shell-mk3 .vpn-panel pre,
-    .vpn-shell-mk3 .vpn-subcard pre {
-        min-height: 240px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.010)),
-            #050b14;
-    }
-    @media (max-width: 1100px) {
-        .vpn-shell-mk3 .vpn-hero-main {
-            grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
-        }
-    }
-    @media (max-width: 980px) {
-        .vpn-shell-mk3 .vpn-hero-main,
-        .vpn-split-grid,
-        .vpn-shell-secondary .vpn-hero-top,
-        .vpn-entry-grid-mk3 {
-            grid-template-columns: 1fr;
-        }
-        .vpn-shell-secondary .vpn-hero-actions {
-            justify-content: stretch;
-        }
-        .vpn-shell-secondary .vpn-hero-actions::before {
-            display: none;
-        }
-        .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-        .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
-            flex: 1 1 0;
-            min-width: 0;
-        }
-        .vpn-entry-card {
-            min-height: auto;
-        }
-        .cbi-map .cbi-value {
-            grid-template-columns: 1fr !important;
-        }
-    }
-    @media (max-width: 640px) {
-        .vpn-shell-mk3 .vpn-hero-main,
-        .vpn-hero-secondary {
-            padding: 14px;
-        }
-        .vpn-shell-mk3 .vpn-brand-block,
-        .vpn-shell-mk3 .vpn-command-card,
-        .vpn-shell-mk3 .vpn-quick-rail,
-        .vpn-shell-mk3 .vpn-panel,
-        .vpn-shell-secondary .vpn-hero-secondary {
-            padding: 16px;
-        }
-        .vpn-shell-mk3 .vpn-brand-block h2,
-        .vpn-shell-secondary .vpn-page-title {
-            font-size: 22px;
-        }
-        .vpn-hero-summary,
-        .vpn-secondary-summary,
-        .vpn-shell-mk3 .vpn-mini-grid-mk3,
-        .vpn-shell-secondary .vpn-mini-grid,
-        .vpn-stat-grid,
-        .vpn-overview-grid,
-        .vpn-action-list-compact,
-        .vpn-shell-mk3 .vpn-hero-actions,
-        .vpn-tabbar {
-            grid-template-columns: 1fr;
-        }
-        .vpn-shell-mk3 .vpn-orb-wrap {
-            grid-template-columns: 1fr;
-            justify-items: center;
-            text-align: center;
-        }
-        .vpn-shell-secondary .vpn-hero-actions {
-            flex-direction: column;
-        }
-        .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-        .vpn-shell-secondary .vpn-hero-actions a.cbi-button,
-        .cbi-map .cbi-button-row .cbi-button,
-        .cbi-map .cbi-page-actions .cbi-button {
-            width: 100%;
-        }
-    }
+/* OpenVPN appcenter UI: one scoped stylesheet for console and CBI pages. */
+.nradio-openvpn-ui {
+  --vpn-bg:#202833; --vpn-panel:#27323f; --vpn-inset:#1c2530;
+  --vpn-line:#3d4b5d; --vpn-text:#e6edf5; --vpn-muted:#a7b5c6;
+  --vpn-accent:#65d2df; --vpn-good:#76d4aa; --vpn-warn:#f0c477; --vpn-bad:#f28b93;
+  color-scheme:dark;
+}
+.nradio-openvpn-ui body { background:var(--vpn-bg)!important; color:var(--vpn-text); }
+.nradio-openvpn-ui .vpn-shell,
+.nradio-openvpn-ui .vpn-shell *,
+.nradio-openvpn-ui .vpn-navigation,
+.nradio-openvpn-ui .vpn-navigation *,
+.nradio-openvpn-ui .cbi-map,
+.nradio-openvpn-ui .cbi-map *,
+.nradio-openvpn-ui .cbi-page-actions { box-sizing:border-box; }
+.nradio-openvpn-ui .vpn-shell,
+.nradio-openvpn-ui .cbi-map,
+.nradio-openvpn-ui .vpn-navigation,
+.nradio-openvpn-ui .cbi-page-actions {
+  width:100%; max-width:1180px; min-width:0; margin:0 auto;
+  color:var(--vpn-text); font:14px/1.6 "Microsoft YaHei","Segoe UI",sans-serif;
+}
+.nradio-openvpn-ui .vpn-shell { padding:0 16px 20px; }
+.nradio-openvpn-ui .cbi-map { padding:0 16px 20px!important; background:transparent!important; border:0!important; box-shadow:none!important; }
+.nradio-openvpn-ui #cbi-openvpn > h2,
+.nradio-openvpn-ui #cbi-openvpn > .cbi-map-descr,
+.nradio-openvpn-ui #cbi-cfg > h2 { display:none; }
+.nradio-openvpn-ui .cbi-map .vpn-shell { padding:0; }
+.nradio-openvpn-ui .vpn-navigation { padding:16px 16px 0; margin-bottom:18px; }
+.nradio-openvpn-ui .cbi-map .vpn-navigation { padding-left:0; padding-right:0; }
+.nradio-openvpn-ui .vpn-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; margin:0 0 12px; min-height:32px; }
+.nradio-openvpn-ui .vpn-heading .vpn-title { display:block; position:static; flex:0 0 auto; float:none; width:auto; height:auto; margin:0; padding:0; border:0; background:none; color:var(--vpn-text); font-size:22px; font-weight:650; line-height:1.4; }
+.nradio-openvpn-ui .vpn-heading .vpn-subtitle { display:block; position:static; float:none; width:auto; height:auto; margin:0; padding:0; border:0; background:none; color:var(--vpn-muted); font-size:12px; line-height:1.5; }
+.nradio-openvpn-ui .vpn-main-nav { display:flex; gap:22px; overflow-x:auto; flex-wrap:nowrap; border-bottom:1px solid var(--vpn-line); scrollbar-width:thin; }
+.nradio-openvpn-ui .vpn-main-nav a { flex:0 0 auto; display:block; padding:10px 2px; min-height:44px; color:var(--vpn-muted); text-decoration:none; white-space:nowrap; border-bottom:2px solid transparent; }
+.nradio-openvpn-ui .vpn-main-nav a[aria-current="page"] { color:var(--vpn-accent); border-bottom-color:var(--vpn-accent); font-weight:650; }
+.nradio-openvpn-ui .vpn-main-nav a:hover { color:var(--vpn-text); }
+.nradio-openvpn-ui [data-vpn-view][hidden] { display:none!important; }
+.nradio-openvpn-ui .vpn-statusbar,
+.nradio-openvpn-ui .vpn-card-head,
+.nradio-openvpn-ui .vpn-panel-head,
+.nradio-openvpn-ui .vpn-entry-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.nradio-openvpn-ui .vpn-statusbar { padding:0 0 16px; }
+.nradio-openvpn-ui .vpn-toolbar,
+.nradio-openvpn-ui .vpn-actions,
+.nradio-openvpn-ui .vpn-entry-actions,
+.nradio-openvpn-ui .vpn-focus-strip,
+.nradio-openvpn-ui .vpn-check-badges { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.nradio-openvpn-ui .vpn-actions form { margin:0; }
+.nradio-openvpn-ui .vpn-inline-note,
+.nradio-openvpn-ui .vpn-note,
+.nradio-openvpn-ui .vpn-stat-meta,
+.nradio-openvpn-ui .vpn-field-help,
+.nradio-openvpn-ui .vpn-card-note,
+.nradio-openvpn-ui .vpn-panel-head > span { color:var(--vpn-muted); font-size:12px; overflow-wrap:anywhere; }
+.nradio-openvpn-ui .vpn-note { margin:0 0 16px; }
+.nradio-openvpn-ui .vpn-stat-grid,
+.nradio-openvpn-ui .vpn-overview-grid,
+.nradio-openvpn-ui .vpn-entry-grid,
+.nradio-openvpn-ui .vpn-split-grid { display:grid; gap:14px; }
+.nradio-openvpn-ui .vpn-stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); margin-bottom:16px; }
+.nradio-openvpn-ui .vpn-overview-grid,
+.nradio-openvpn-ui .vpn-entry-grid,
+.nradio-openvpn-ui .vpn-split-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.nradio-openvpn-ui .vpn-stat-card,
+.nradio-openvpn-ui .vpn-card,
+.nradio-openvpn-ui .vpn-subcard,
+.nradio-openvpn-ui .vpn-entry-card,
+.nradio-openvpn-ui .vpn-details,
+.nradio-openvpn-ui .vpn-log-section,
+.nradio-openvpn-ui .cbi-section {
+  min-width:0; padding:18px; margin:0 0 16px; background:var(--vpn-panel)!important;
+  border:1px solid var(--vpn-line)!important; border-radius:12px; box-shadow:none!important;
+}
+.nradio-openvpn-ui .vpn-stat-card,
+.nradio-openvpn-ui .vpn-entry-card,
+.nradio-openvpn-ui .vpn-overview-grid > .vpn-card,
+.nradio-openvpn-ui .vpn-split-grid > .vpn-subcard { margin-bottom:0; }
+.nradio-openvpn-ui .vpn-stat-label { display:block; color:var(--vpn-muted); font-size:12px; margin-bottom:8px; }
+.nradio-openvpn-ui .vpn-stat-value { display:block; font-size:21px; font-weight:650; line-height:1.4; overflow-wrap:anywhere; }
+.nradio-openvpn-ui .vpn-stat-meta { display:block; margin-top:6px; }
+.nradio-openvpn-ui .vpn-remote-host { display:block; font-size:16px; }
+.nradio-openvpn-ui .vpn-remote-port { font-size:13px; color:var(--vpn-muted); }
+.nradio-openvpn-ui .vpn-remote-port::before { content:"端口 "; }
+.nradio-openvpn-ui .vpn-card-title,
+.nradio-openvpn-ui .vpn-subcard-title,
+.nradio-openvpn-ui .vpn-section-title,
+.nradio-openvpn-ui .vpn-panel-head h3 { font-size:15px; font-weight:650; color:var(--vpn-text); margin:0; }
+.nradio-openvpn-ui .vpn-card-head,
+.nradio-openvpn-ui .vpn-panel-head,
+.nradio-openvpn-ui .vpn-subcard-title { margin-bottom:12px; }
+.nradio-openvpn-ui .vpn-kv { display:grid; grid-template-columns:110px minmax(0,1fr); gap:12px; padding:8px 0; border-bottom:1px solid rgba(167,181,198,.12); }
+.nradio-openvpn-ui .vpn-kv > span { color:var(--vpn-muted); }
+.nradio-openvpn-ui .vpn-kv strong { font-size:13px; font-weight:500; overflow-wrap:anywhere; }
+.nradio-openvpn-ui .vpn-card-note { margin-top:12px; }
+.nradio-openvpn-ui .vpn-health-chip,
+.nradio-openvpn-ui .vpn-card-badge,
+.nradio-openvpn-ui .vpn-inline-badge,
+.nradio-openvpn-ui .vpn-focus-pill,
+.nradio-openvpn-ui .vpn-micro-badge,
+.nradio-openvpn-ui .vpn-entry-badge,
+.nradio-openvpn-ui .vpn-status-chip {
+  display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:3px 9px;
+  border:1px solid var(--vpn-line); border-radius:6px; background:var(--vpn-inset); color:var(--vpn-muted); font-size:12px;
+}
+.nradio-openvpn-ui .vpn-health-chip { font-size:14px; font-weight:650; padding:6px 12px; }
+.nradio-openvpn-ui .vpn-health-chip::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+.nradio-openvpn-ui .ok,
+.nradio-openvpn-ui .vpn-badge-ok,
+.nradio-openvpn-ui .vpn-log-good { color:var(--vpn-good); }
+.nradio-openvpn-ui .warn,
+.nradio-openvpn-ui .vpn-badge-warn,
+.nradio-openvpn-ui .vpn-log-warn { color:var(--vpn-warn); }
+.nradio-openvpn-ui .bad,
+.nradio-openvpn-ui .vpn-badge-bad,
+.nradio-openvpn-ui .vpn-log-bad { color:var(--vpn-bad); }
+.nradio-openvpn-ui .vpn-log-info { color:var(--vpn-accent); }
+.nradio-openvpn-ui .vpn-details > summary { cursor:pointer; font-size:14px; font-weight:650; min-height:24px; }
+.nradio-openvpn-ui .vpn-details[open] > summary { margin-bottom:16px; }
+.nradio-openvpn-ui .vpn-details .vpn-card { background:var(--vpn-inset)!important; }
+.nradio-openvpn-ui .vpn-tabbar { display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; border-bottom:1px solid var(--vpn-line); padding:0 0 10px; margin-bottom:16px; }
+.nradio-openvpn-ui .vpn-tab-btn { flex:0 0 auto; white-space:nowrap; }
+.nradio-openvpn-ui .vpn-panel { display:none; }
+.nradio-openvpn-ui .vpn-panel.is-active { display:block; }
+.nradio-openvpn-ui .vpn-focus-strip { margin-bottom:12px; }
+.nradio-openvpn-ui pre,
+.nradio-openvpn-ui code { font-family:Consolas,"Liberation Mono",monospace; }
+.nradio-openvpn-ui pre { margin:0; padding:14px; border:1px solid var(--vpn-line); border-radius:8px; background:var(--vpn-inset)!important; color:var(--vpn-text); font-size:12px; line-height:1.75; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; max-height:460px; }
+.nradio-openvpn-ui .vpn-log-section pre { min-height:260px; }
+.nradio-openvpn-ui .vpn-copy-source { display:none; position:fixed; left:-10000px; top:0; }
+.nradio-openvpn-ui .vpn-copy-feedback { display:none; font-size:12px; }
+.nradio-openvpn-ui .vpn-copy-feedback.is-visible { display:inline; }
+.nradio-openvpn-ui .vpn-check-row { padding:12px 0; border-bottom:1px solid var(--vpn-line); }
+.nradio-openvpn-ui .vpn-check-row:last-child { border-bottom:0; }
+.nradio-openvpn-ui .vpn-check-main strong { display:block; font-size:14px; overflow-wrap:anywhere; }
+.nradio-openvpn-ui .vpn-check-main > span { display:block; color:var(--vpn-muted); font-size:12px; overflow-wrap:anywhere; margin:4px 0 8px; }
+.nradio-openvpn-ui .vpn-check-section-title { margin-top:12px; color:var(--vpn-muted); font-size:12px; font-weight:650; }
+.nradio-openvpn-ui .vpn-check-empty { padding:20px 0; color:var(--vpn-muted); font-size:13px; }
+.nradio-openvpn-ui .vpn-route-detail { margin-bottom:16px; }
+.nradio-openvpn-ui .vpn-page-header { margin-bottom:18px; }
+.nradio-openvpn-ui .vpn-page-header h3 { color:var(--vpn-text); font-size:18px; margin:0 0 8px; }
+.nradio-openvpn-ui .vpn-page-header p { color:var(--vpn-muted); margin:0 0 12px; font-size:13px; }
+.nradio-openvpn-ui .vpn-secondary-summary { display:flex; flex-wrap:wrap; gap:8px 18px; color:var(--vpn-muted); font-size:12px; margin:10px 0; }
+.nradio-openvpn-ui .vpn-secondary-summary strong { font-weight:500; color:var(--vpn-text); overflow-wrap:anywhere; }
+.nradio-openvpn-ui .vpn-category-rail { margin:14px 0; }
+.nradio-openvpn-ui .vpn-category-rail .vpn-toolbar { gap:6px; }
+.nradio-openvpn-ui .vpn-category-rail .vpn-status-chip { color:var(--vpn-accent); border-color:#467581; }
+.nradio-openvpn-ui .vpn-pill { display:inline-block; padding:5px 10px; color:var(--vpn-muted); text-decoration:none; border:1px solid var(--vpn-line); border-radius:6px; font-size:12px; }
+.nradio-openvpn-ui .vpn-entry-grid { margin:18px 0 0; }
+.nradio-openvpn-ui .vpn-instance-table { width:100%; min-width:0; overflow-x:auto; margin:0; }
+.nradio-openvpn-ui .vpn-instance-create { width:100%; clear:both; margin-top:18px; text-align:left; }
+.nradio-openvpn-ui .vpn-instance-create .vpn-entry-grid { margin-top:0; }
+.nradio-openvpn-ui .vpn-instance-create .vpn-entry-card { text-align:left; }
+.nradio-openvpn-ui .vpn-instance-create label { float:none; width:auto; text-align:left; }
+.nradio-openvpn-ui .vpn-entry-card { display:flex; flex-direction:column; }
+.nradio-openvpn-ui .vpn-entry-card h4 { margin:0; color:var(--vpn-text); font-size:15px; }
+.nradio-openvpn-ui .vpn-entry-lead { color:var(--vpn-muted); font-size:13px; margin:12px 0; }
+.nradio-openvpn-ui .vpn-entry-actions { margin-top:auto; padding-top:16px; }
+.nradio-openvpn-ui .vpn-field-label { display:block; margin:10px 0 6px; color:var(--vpn-text); font-size:13px; }
+.nradio-openvpn-ui .vpn-field-help { margin-top:5px; }
+.nradio-openvpn-ui .vpn-output { min-height:24px; margin:8px 0; color:var(--vpn-muted); }
+.nradio-openvpn-ui .cbi-section > legend,
+.nradio-openvpn-ui .cbi-section h3 { color:var(--vpn-text); font-size:15px; padding:0; margin:0 0 12px; border:0; }
+.nradio-openvpn-ui .cbi-section-descr { color:var(--vpn-muted); font-size:12px; margin-bottom:14px; }
+.nradio-openvpn-ui .cbi-value { display:grid; grid-template-columns:minmax(160px,220px) minmax(0,1fr); gap:8px 18px; padding:12px 0; border-bottom:1px solid rgba(167,181,198,.12); }
+.nradio-openvpn-ui .cbi-value:last-child { border-bottom:0; }
+.nradio-openvpn-ui .cbi-value-title,
+.nradio-openvpn-ui .cbi-value-field { float:none!important; width:auto!important; min-width:0; margin:0!important; padding:0!important; text-align:left; }
+.nradio-openvpn-ui .cbi-value-title { color:var(--vpn-text); font-size:13px; font-weight:500; }
+.nradio-openvpn-ui .cbi-value-description { color:var(--vpn-muted); font-size:12px; margin-top:6px; }
+.nradio-openvpn-ui .cbi-value-field > .cbi-value-description { display:block; }
+.nradio-openvpn-ui input[type="text"],
+.nradio-openvpn-ui input[type="password"],
+.nradio-openvpn-ui input[type="number"],
+.nradio-openvpn-ui input[type="file"],
+.nradio-openvpn-ui select,
+.nradio-openvpn-ui textarea { min-height:40px; max-width:100%; padding:8px 10px; border:1px solid var(--vpn-line)!important; border-radius:7px; background:var(--vpn-inset)!important; color:var(--vpn-text)!important; font-size:13px; box-shadow:none!important; box-sizing:border-box; }
+.nradio-openvpn-ui textarea { width:100%!important; min-height:150px; font-family:Consolas,monospace; line-height:1.6; }
+.nradio-openvpn-ui .vpn-entry-card input,
+.nradio-openvpn-ui .vpn-entry-card select { width:100%; }
+.nradio-openvpn-ui .vpn-entry-card input[type="submit"] { width:auto; }
+.nradio-openvpn-ui input[type="checkbox"],
+.nradio-openvpn-ui input[type="radio"] { accent-color:var(--vpn-accent); }
+.nradio-openvpn-ui .cbi-button,
+.nradio-openvpn-ui .vpn-tab-btn { display:inline-flex; align-items:center; justify-content:center; width:auto; min-height:40px; padding:8px 14px; border:1px solid var(--vpn-line)!important; border-radius:7px; background:var(--vpn-inset)!important; color:var(--vpn-text)!important; text-decoration:none; font:500 13px/1.4 "Microsoft YaHei","Segoe UI",sans-serif; cursor:pointer; box-shadow:none!important; text-shadow:none; }
+.nradio-openvpn-ui .cbi-button:hover,
+.nradio-openvpn-ui .vpn-tab-btn:hover { border-color:var(--vpn-accent)!important; }
+.nradio-openvpn-ui .cbi-button-apply,
+.nradio-openvpn-ui .cbi-button-save,
+.nradio-openvpn-ui .cbi-button-add,
+.nradio-openvpn-ui .vpn-tab-btn.is-active { background:#204650!important; color:#a8edf2!important; border-color:#467581!important; }
+.nradio-openvpn-ui #vpn-stop-button,
+.nradio-openvpn-ui .cbi-button-remove,
+.nradio-openvpn-ui .cbi-button-negative { color:var(--vpn-bad)!important; }
+.nradio-openvpn-ui .cbi-button[disabled],
+.nradio-openvpn-ui .cbi-button.is-disabled { opacity:.55; cursor:default; }
+.nradio-openvpn-ui .vpn-button-passive[disabled] { color:var(--vpn-good)!important; opacity:1; }
+.nradio-openvpn-ui a:focus-visible,
+.nradio-openvpn-ui button:focus-visible,
+.nradio-openvpn-ui input:focus-visible,
+.nradio-openvpn-ui select:focus-visible,
+.nradio-openvpn-ui textarea:focus-visible,
+.nradio-openvpn-ui summary:focus-visible { outline:2px solid var(--vpn-accent); outline-offset:2px; }
+.nradio-openvpn-ui .cbi-input-invalid { border-color:var(--vpn-bad)!important; }
+.nradio-openvpn-ui .cbi-section-table { width:100%; border-collapse:collapse; color:var(--vpn-text); font-size:13px; }
+.nradio-openvpn-ui .cbi-section-table th,
+.nradio-openvpn-ui .cbi-section-table td { padding:10px 8px; border-bottom:1px solid var(--vpn-line); background:transparent!important; color:var(--vpn-text); vertical-align:middle; overflow-wrap:anywhere; }
+.nradio-openvpn-ui .cbi-section-table th { color:var(--vpn-muted); font-size:12px; font-weight:500; }
+.nradio-openvpn-ui .cbi-section-table .cbi-button { margin:3px; }
+.nradio-openvpn-ui .cbi-section { overflow-x:auto; }
+.nradio-openvpn-ui .cbi-section-create { margin-top:16px; }
+.nradio-openvpn-ui .cbi-page-actions { position:sticky; bottom:0; z-index:5; display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; padding:12px 16px!important; border-top:1px solid var(--vpn-line); background:var(--vpn-bg)!important; }
+.nradio-openvpn-ui .cbi-page-actions > div { float:none!important; margin-right:auto; }
+.nradio-openvpn-ui .cbi-page-actions .cbi-button { margin:0!important; }
+.nradio-openvpn-ui .cbi-tabmenu { display:flex; flex-wrap:wrap; gap:6px; border:0; padding:0; }
+.nradio-openvpn-ui .cbi-tabmenu li { list-style:none; margin:0; padding:0; border:0; background:transparent; }
+.nradio-openvpn-ui .cbi-tabmenu a { display:block; padding:7px 12px; color:var(--vpn-muted); }
+.nradio-openvpn-ui .cbi-tabmenu .cbi-tab a { color:var(--vpn-accent); border-bottom:2px solid var(--vpn-accent); }
+@media (max-width:900px) {
+  .nradio-openvpn-ui .vpn-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .nradio-openvpn-ui .vpn-overview-grid,
+  .nradio-openvpn-ui .vpn-split-grid { grid-template-columns:minmax(0,1fr); }
+}
+@media (max-width:600px) {
+  .nradio-openvpn-ui .vpn-navigation { padding:12px 10px 0; margin-bottom:14px; }
+  .nradio-openvpn-ui .vpn-main-nav { gap:18px; }
+  .nradio-openvpn-ui .vpn-shell,
+  .nradio-openvpn-ui .cbi-map { padding:0 10px 16px!important; }
+  .nradio-openvpn-ui .cbi-map .vpn-shell { padding:0!important; }
+  .nradio-openvpn-ui .vpn-heading .vpn-title { font-size:20px; }
+  .nradio-openvpn-ui .vpn-stat-grid { gap:10px; }
+  .nradio-openvpn-ui .vpn-stat-card,
+  .nradio-openvpn-ui .vpn-card,
+  .nradio-openvpn-ui .vpn-subcard,
+  .nradio-openvpn-ui .vpn-entry-card,
+  .nradio-openvpn-ui .vpn-details,
+  .nradio-openvpn-ui .vpn-log-section,
+  .nradio-openvpn-ui .cbi-section { padding:12px; border-radius:10px; }
+  .nradio-openvpn-ui .vpn-stat-value { font-size:18px; }
+  .nradio-openvpn-ui .vpn-entry-grid { grid-template-columns:minmax(0,1fr); }
+  .nradio-openvpn-ui .cbi-value { grid-template-columns:minmax(0,1fr); }
+  .nradio-openvpn-ui .cbi-value-field input[type="text"],
+  .nradio-openvpn-ui .cbi-value-field input[type="password"],
+  .nradio-openvpn-ui .cbi-value-field select { width:100%; }
+  .nradio-openvpn-ui .cbi-button,
+  .nradio-openvpn-ui .vpn-tab-btn { min-height:44px; padding:9px 12px; }
+  .nradio-openvpn-ui .vpn-log-section pre { min-height:220px; max-height:55vh; }
+  .nradio-openvpn-ui .vpn-kv { grid-template-columns:86px minmax(0,1fr); gap:8px; font-size:12px; }
+  .nradio-openvpn-ui .cbi-section-table { min-width:650px; }
+}
 </style>
-EOF_OPENVPN_MK3_FINAL_POLISH
-
-    cat > /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_OVPN_CSS_MK3_EXACT'
-<style type="text/css">
-    :root {
-        --vpn-bg: #070b12;
-        --vpn-panel: #101827;
-        --vpn-panel-2: #0b1320;
-        --vpn-line: rgba(148, 163, 184, 0.20);
-        --vpn-line-strong: rgba(125, 211, 252, 0.34);
-        --vpn-text: #e5edf7;
-        --vpn-muted: #9fb0c5;
-        --vpn-soft: rgba(255, 255, 255, 0.055);
-        --vpn-state: #22d3ee;
-        --vpn-state-rgb: 34, 211, 238;
-        --vpn-good: #34d399;
-        --vpn-warn: #fbbf24;
-        --vpn-bad: #fb7185;
-    }
-    .vpn-shell,
-    .vpn-shell *,
-    .cbi-map,
-    .cbi-map * {
-        box-sizing: border-box;
-        letter-spacing: 0;
-    }
-    .vpn-shell {
-        max-width: 1220px;
-        margin: 0 auto;
-        padding: 0 8px 18px;
-        color: var(--vpn-text);
-        font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-    }
-    .vpn-shell a {
-        color: inherit;
-    }
-    .vpn-shell-mk3 {
-        --vpn-state: #22d3ee;
-        --vpn-state-rgb: 34, 211, 238;
-        border: 1px solid rgba(125, 211, 252, 0.18);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(9, 17, 30, 0.98), rgba(5, 10, 18, 0.99));
-        box-shadow: 0 20px 42px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    .vpn-shell-mk3.is-ok {
-        --vpn-state: #34d399;
-        --vpn-state-rgb: 52, 211, 153;
-    }
-    .vpn-shell-mk3.is-warn,
-    .vpn-shell-mk3.is-ready,
-    .vpn-shell-mk3.is-profile-ready {
-        --vpn-state: #fbbf24;
-        --vpn-state-rgb: 251, 191, 36;
-    }
-    .vpn-shell-mk3.is-bad,
-    .vpn-shell-mk3.is-empty {
-        --vpn-state: #fb7185;
-        --vpn-state-rgb: 251, 113, 133;
-    }
-    .vpn-hero {
-        position: relative;
-        margin: 0 0 12px;
-        overflow: hidden;
-    }
-    .vpn-hero-mk3,
-    .vpn-hero-secondary {
-        border: 1px solid rgba(125, 211, 252, 0.20);
-        border-radius: 8px;
-        background:
-            linear-gradient(135deg, rgba(13, 25, 42, 0.98) 0%, rgba(7, 14, 24, 0.99) 62%, rgba(12, 31, 32, 0.96) 100%);
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.025);
-    }
-    .vpn-hero-mk3::before,
-    .vpn-hero-secondary::before {
-        content: "";
-        position: absolute;
-        inset: 12px;
-        pointer-events: none;
-        border: 1px solid rgba(125, 211, 252, 0.22);
-        border-radius: 8px;
-    }
-    .vpn-hero-main {
-        position: relative;
-        z-index: 1;
-        display: grid;
-        grid-template-columns: minmax(500px, 0.92fr) minmax(410px, 0.78fr);
-        gap: 18px;
-        align-items: stretch;
-        padding: 20px;
-    }
-    .vpn-brand-block {
-        display: flex;
-        min-height: 100%;
-        flex-direction: column;
-        justify-content: center;
-        padding: 18px;
-        border: 1px solid rgba(125, 211, 252, 0.13);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
-    }
-    .vpn-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        margin: 0 0 14px;
-    }
-    .vpn-pill,
-    .vpn-health-chip,
-    .vpn-inline-note,
-    .vpn-status-chip,
-    .vpn-card-badge,
-    .vpn-inline-badge,
-    .vpn-panel-live-badge,
-    .vpn-focus-pill,
-    .vpn-micro-badge {
-        display: inline-flex;
-        min-height: 34px;
-        align-items: center;
-        justify-content: center;
-        gap: 7px;
-        padding: 0 14px;
-        border: 1px solid rgba(125, 211, 252, 0.22);
-        border-radius: 999px;
-        color: #dbeafe;
-        background: rgba(15, 23, 42, 0.62);
-        font-size: 12px;
-        font-weight: 800;
-        line-height: 1.25;
-        white-space: nowrap;
-    }
-    .vpn-pill {
-        color: #a5f3fc;
-        background: rgba(8, 145, 178, 0.20);
-        border-color: rgba(34, 211, 238, 0.36);
-    }
-    .vpn-status-chip,
-    .vpn-health-chip.ok,
-    .vpn-badge-ok,
-    .vpn-micro-badge.ok {
-        color: #bbf7d0;
-        background: rgba(34, 197, 94, 0.18);
-        border-color: rgba(74, 222, 128, 0.38);
-    }
-    .vpn-health-chip.warn,
-    .vpn-badge-warn,
-    .vpn-micro-badge.warn {
-        color: #fde68a;
-        background: rgba(245, 158, 11, 0.18);
-        border-color: rgba(251, 191, 36, 0.38);
-    }
-    .vpn-health-chip.bad,
-    .vpn-badge-bad,
-    .vpn-micro-badge.bad {
-        color: #fecdd3;
-        background: rgba(225, 29, 72, 0.18);
-        border-color: rgba(251, 113, 133, 0.38);
-    }
-    .vpn-badge-neutral,
-    .vpn-micro-badge.neutral,
-    .vpn-focus-pill-muted {
-        color: #cbd5e1;
-        background: rgba(148, 163, 184, 0.14);
-        border-color: rgba(148, 163, 184, 0.24);
-    }
-    .vpn-brand-block h2,
-    .vpn-page-title {
-        margin: 0 0 14px;
-        padding: 0;
-        color: #f8fafc;
-        font-size: 30px;
-        line-height: 1.16;
-        font-weight: 900;
-        text-decoration: none;
-        text-shadow: 0 0 22px rgba(34, 211, 238, 0.18);
-    }
-    .vpn-page-title a {
-        color: #a5f3fc !important;
-        text-decoration: none !important;
-    }
-    .vpn-sub {
-        max-width: 66ch;
-        margin: 0;
-        color: rgba(203, 213, 225, 0.92);
-        font-size: 14px;
-        line-height: 1.78;
-    }
-    .vpn-hero-summary,
-    .vpn-secondary-summary {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 22px;
-    }
-    .vpn-hero-summary-item,
-    .vpn-secondary-summary span {
-        min-width: 0;
-        padding: 13px 14px;
-        border: 1px solid rgba(125, 211, 252, 0.16);
-        border-radius: 8px;
-        background: rgba(7, 16, 29, 0.58);
-    }
-    .vpn-hero-summary-item span,
-    .vpn-secondary-summary span {
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.35;
-    }
-    .vpn-hero-summary-item strong,
-    .vpn-secondary-summary strong {
-        display: block;
-        margin-top: 6px;
-        color: #e0f2fe;
-        font-size: 13px;
-        line-height: 1.32;
-        overflow-wrap: normal;
-        word-break: keep-all;
-    }
-    .vpn-summary-line {
-        display: block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .vpn-command-card {
-        min-width: 0;
-        padding: 20px;
-        border: 1px solid rgba(var(--vpn-state-rgb), 0.24);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.10), rgba(255,255,255,0.028)),
-            rgba(7, 16, 29, 0.70);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
-    }
-    .vpn-command-kicker {
-        margin: 0 0 12px;
-        color: #7dd3fc;
-        font-size: 12px;
-        font-weight: 900;
-        line-height: 1.3;
-    }
-    .vpn-orb-wrap {
-        display: grid;
-        grid-template-columns: 132px minmax(0, 1fr);
-        gap: 18px;
-        align-items: center;
-        padding: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.12);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.24);
-    }
-    .vpn-orb-ring {
-        display: grid;
-        width: 132px;
-        height: 132px;
-        min-width: 132px;
-        place-items: center;
-        border: 14px solid rgba(var(--vpn-state-rgb), 0.34);
-        border-radius: 999px;
-        color: #dcfce7;
-        background: #07111f;
-        box-shadow: 0 0 34px rgba(var(--vpn-state-rgb), 0.28), inset 0 0 0 1px rgba(255,255,255,0.05);
-        font-size: 22px;
-        font-weight: 900;
-    }
-    .vpn-orb-ring.warn,
-    .vpn-orb-ring.ready,
-    .vpn-orb-ring.profile-ready {
-        color: #fde68a;
-    }
-    .vpn-orb-ring.bad,
-    .vpn-orb-ring.empty {
-        color: #fecdd3;
-    }
-    .vpn-orb-copy {
-        min-width: 0;
-    }
-    .vpn-orb-copy strong {
-        display: block;
-        color: #f8fafc;
-        font-size: 24px;
-        line-height: 1.22;
-        overflow-wrap: anywhere;
-    }
-    .vpn-orb-copy span {
-        display: block;
-        margin-top: 8px;
-        color: var(--vpn-muted);
-        font-size: 13px;
-        line-height: 1.65;
-    }
-    .vpn-hero-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 18px;
-    }
-    .vpn-hero-actions form {
-        min-width: 0;
-        margin: 0;
-    }
-    .vpn-hero-actions .cbi-button,
-    .vpn-hero-actions a.cbi-button,
-    .vpn-hero-actions button.cbi-button,
-    .cbi-map .cbi-button,
-    .cbi-map .btn.cbi-button,
-    .cbi-map .cbi-button-add,
-    .cbi-map .cbi-button-reset {
-        width: 100%;
-        min-height: 44px;
-        padding: 0 14px !important;
-        border: 1px solid rgba(125, 211, 252, 0.22) !important;
-        border-radius: 8px !important;
-        color: #e5edf7 !important;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04)) !important;
-        font-size: 14px;
-        font-weight: 850;
-        text-align: center;
-        text-decoration: none !important;
-        cursor: pointer;
-    }
-    .vpn-hero-actions .cbi-button-apply,
-    .cbi-map .cbi-button-apply {
-        color: #04111f !important;
-        border-color: rgba(103, 232, 249, 0.65) !important;
-        background: linear-gradient(135deg, #67e8f9 0%, #34d399 100%) !important;
-    }
-    .vpn-button-muted[disabled],
-    .vpn-button-muted[aria-disabled="true"],
-    .vpn-hero-actions .is-disabled {
-        opacity: 0.56;
-        cursor: not-allowed;
-    }
-    .vpn-copy-feedback {
-        min-height: 18px;
-        grid-column: 1 / -1;
-        color: #a7f3d0;
-        font-size: 12px;
-        line-height: 1.4;
-    }
-    .vpn-hero-note {
-        margin-top: 16px;
-        padding: 12px 14px;
-        border: 1px solid rgba(var(--vpn-state-rgb), 0.30);
-        border-radius: 8px;
-        color: #dbeafe;
-        background: rgba(var(--vpn-state-rgb), 0.10);
-        font-size: 13px;
-        line-height: 1.6;
-    }
-    .vpn-mini-grid,
-    .vpn-stat-grid,
-    .vpn-overview-grid,
-    .vpn-split-grid,
-    .vpn-entry-grid {
-        display: grid;
-        gap: 12px;
-    }
-    .vpn-mini-grid-mk3 {
-        grid-template-columns: minmax(240px, 1.18fr) repeat(3, minmax(160px, 1fr));
-        padding: 0 20px 18px;
-    }
-    .vpn-stat-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        padding: 0 20px 20px;
-    }
-    .vpn-overview-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        margin: 12px 0;
-    }
-    .vpn-split-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .vpn-mini-card,
-    .vpn-stat-card,
-    .vpn-card,
-    .vpn-quick-rail,
-    .vpn-panel-shell,
-    .vpn-subcard,
-    .vpn-entry-card {
-        min-width: 0;
-        border: 1px solid rgba(125, 211, 252, 0.14);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022)),
-            rgba(7, 16, 29, 0.68);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-    }
-    .vpn-mini-card,
-    .vpn-stat-card,
-    .vpn-card {
-        padding: 16px;
-    }
-    .vpn-mini-card-accent,
-    .vpn-stat-card-emphasis {
-        border-color: rgba(var(--vpn-state-rgb), 0.28);
-        background:
-            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.12), rgba(255,255,255,0.025)),
-            rgba(7, 16, 29, 0.72);
-    }
-    .vpn-mini-label,
-    .vpn-stat-label {
-        display: block;
-        margin-bottom: 8px;
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.35;
-    }
-    .vpn-mini-card strong,
-    .vpn-stat-value,
-    .vpn-card-title,
-    .vpn-quick-rail-title,
-    .vpn-subcard-title {
-        color: #f8fafc;
-        font-size: 17px;
-        font-weight: 900;
-        line-height: 1.35;
-        overflow-wrap: anywhere;
-    }
-    .vpn-mini-note,
-    .vpn-stat-meta,
-    .vpn-stat-note,
-    .vpn-card-note,
-    .vpn-quick-rail-sub {
-        display: block;
-        margin-top: 8px;
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.62;
-    }
-    .vpn-card-head,
-    .vpn-quick-rail-head,
-    .vpn-panel-shell-head,
-    .vpn-panel-head,
-    .vpn-entry-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 14px;
-    }
-    .vpn-kv {
-        display: grid;
-        grid-template-columns: minmax(110px, 0.46fr) minmax(0, 1fr);
-        gap: 12px;
-        padding: 11px 0;
-        border-top: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .vpn-kv span:first-child {
-        color: var(--vpn-muted);
-        font-size: 12px;
-    }
-    .vpn-kv strong {
-        color: #e0f2fe;
-        font-size: 13px;
-        line-height: 1.45;
-        overflow-wrap: anywhere;
-    }
-    .vpn-quick-rail {
-        margin: 12px 0;
-        padding: 16px;
-    }
-    .vpn-action-list-compact {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 14px;
-    }
-    .vpn-action-tile {
-        display: block;
-        min-height: 84px;
-        padding: 14px;
-        border: 1px solid rgba(125, 211, 252, 0.16);
-        border-radius: 8px;
-        color: #dbeafe !important;
-        background: rgba(15, 23, 42, 0.54);
-        text-decoration: none !important;
-    }
-    .vpn-action-tile strong {
-        display: block;
-        color: #e0f2fe;
-        font-size: 15px;
-        line-height: 1.35;
-    }
-    .vpn-action-tile span {
-        display: block;
-        margin-top: 8px;
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.55;
-    }
-    .vpn-panel-shell {
-        overflow: hidden;
-    }
-    .vpn-panel-shell-head {
-        padding: 16px 18px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-        background: rgba(255,255,255,0.035);
-    }
-    .vpn-panel-shell-kicker {
-        display: block;
-        margin-bottom: 7px;
-        color: #7dd3fc;
-        font-size: 12px;
-        font-weight: 900;
-        line-height: 1.3;
-    }
-    .vpn-panel-shell-head h3,
-    .vpn-panel-head h3 {
-        margin: 0;
-        color: #f8fafc;
-        font-size: 18px;
-        line-height: 1.35;
-    }
-    .vpn-panel-shell-head p,
-    .vpn-panel-head span {
-        margin: 7px 0 0;
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.65;
-    }
-    .vpn-tabbar {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 8px;
-        padding: 10px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-        background: rgba(5, 10, 18, 0.70);
-    }
-    .vpn-tab-btn {
-        min-height: 42px;
-        padding: 0 12px;
-        border: 1px solid rgba(125, 211, 252, 0.18);
-        border-radius: 8px;
-        color: #cbd5e1;
-        background: rgba(255,255,255,0.045);
-        font-size: 13px;
-        font-weight: 850;
-        cursor: pointer;
-    }
-    .vpn-tab-btn.is-active {
-        color: #04111f;
-        border-color: rgba(103, 232, 249, 0.72);
-        background: linear-gradient(135deg, #67e8f9 0%, #34d399 100%);
-        box-shadow: 0 10px 22px rgba(34, 211, 238, 0.16);
-    }
-    .vpn-panel {
-        display: none;
-        padding: 18px;
-    }
-    .vpn-panel.is-active {
-        display: block;
-        background: rgba(255,255,255,0.018);
-    }
-    .vpn-panel-major.is-active {
-        min-height: 300px;
-    }
-    .vpn-focus-strip {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 14px 0;
-    }
-    .vpn-panel pre,
-    .vpn-subcard pre,
-    .vpn-output {
-        width: 100%;
-        min-height: 220px;
-        margin: 12px 0 0;
-        padding: 14px;
-        overflow: auto;
-        border: 1px solid rgba(125, 211, 252, 0.16);
-        border-radius: 8px;
-        color: #dbeafe;
-        background: #06101c;
-        font-family: Consolas, "Cascadia Mono", monospace;
-        font-size: 12px;
-        line-height: 1.58;
-        white-space: pre-wrap;
-    }
-    .vpn-copy-source {
-        position: absolute;
-        left: -9999px;
-        width: 1px;
-        height: 1px;
-        opacity: 0;
-    }
-    .vpn-check-list {
-        display: grid;
-        gap: 10px;
-        margin-top: 12px;
-    }
-    .vpn-check-row,
-    .vpn-check-empty {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.15);
-        border-radius: 8px;
-        background: rgba(255,255,255,0.035);
-    }
-    .vpn-check-main {
-        min-width: 0;
-    }
-    .vpn-check-main strong {
-        display: block;
-        color: #f8fafc;
-        font-size: 13px;
-        line-height: 1.4;
-        overflow-wrap: anywhere;
-    }
-    .vpn-check-main span {
-        display: block;
-        margin-top: 5px;
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.5;
-    }
-    .vpn-check-badges {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 6px;
-    }
-    .vpn-shell-secondary {
-        max-width: 1220px;
-        margin: 0 auto 12px;
-        padding: 8px;
-    }
-    .vpn-shell-secondary .vpn-hero-secondary {
-        padding: 20px;
-    }
-    .vpn-shell-secondary .vpn-hero-top {
-        position: relative;
-        z-index: 1;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 18px;
-        align-items: start;
-    }
-    .vpn-shell-secondary .vpn-mini-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        margin-top: 16px;
-    }
-    .vpn-shell-secondary .vpn-category-rail {
-        margin-top: 12px;
-        padding: 16px;
-    }
-    .vpn-shell-secondary .vpn-category-rail .vpn-toolbar {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-        margin-top: 12px;
-    }
-    .vpn-entry-grid-mk3 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .vpn-entry-card {
-        position: relative;
-        padding: 18px;
-    }
-    .vpn-entry-badge {
-        display: inline-flex;
-        align-items: center;
-        min-height: 28px;
-        padding: 0 10px;
-        border: 1px solid rgba(74, 222, 128, 0.34);
-        border-radius: 999px;
-        color: #bbf7d0;
-        background: rgba(34, 197, 94, 0.16);
-        font-size: 12px;
-        font-weight: 800;
-    }
-    .vpn-shell-secondary + .cbi-map,
-    .cbi-map {
-        max-width: 1220px;
-        margin: 0 auto 18px;
-        padding: 10px !important;
-        border: 1px solid rgba(125, 211, 252, 0.13) !important;
-        border-radius: 8px !important;
-        color: #e5edf7;
-        background:
-            linear-gradient(180deg, rgba(11, 19, 33, 0.98), rgba(8, 14, 27, 0.99)) !important;
-    }
-    .cbi-map .cbi-section,
-    .cbi-map .cbi-section-node,
-    .cbi-map fieldset.cbi-section,
-    .cbi-map fieldset.cbi-section-table {
-        margin-bottom: 14px !important;
-        padding: 18px !important;
-        border: 1px solid rgba(125, 211, 252, 0.14) !important;
-        border-radius: 8px !important;
-        background: rgba(255,255,255,0.04) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035) !important;
-    }
-    .cbi-map .cbi-section > h3,
-    .cbi-map .cbi-section-node > h3,
-    .cbi-map .cbi-section > h4,
-    .cbi-map .cbi-section-node > h4,
-    .cbi-map .cbi-section legend,
-    .cbi-map .cbi-section-table legend,
-    .vpn-cbi-section .vpn-section-title {
-        margin: 0 0 14px !important;
-        padding: 0 0 10px !important;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
-        color: #f8fafc !important;
-        background: transparent !important;
-        font-size: 17px !important;
-        font-weight: 900 !important;
-        line-height: 1.35 !important;
-    }
-    .cbi-map .cbi-section-descr,
-    .cbi-map .cbi-value-description,
-    .cbi-map .cbi-section-table-descr {
-        color: var(--vpn-muted) !important;
-        font-size: 12px !important;
-        line-height: 1.62 !important;
-    }
-    .cbi-map .cbi-value {
-        display: grid !important;
-        grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
-        gap: 14px;
-        align-items: start;
-        padding: 14px 0 !important;
-        border-top: 1px solid rgba(148, 163, 184, 0.12);
-    }
-    .cbi-map .cbi-value-title,
-    .cbi-map label {
-        color: #f8fafc !important;
-        font-size: 13px !important;
-        font-weight: 850 !important;
-        line-height: 1.45 !important;
-    }
-    .cbi-map .cbi-value-field {
-        min-width: 0;
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select,
-    .vpn-entry-card input[type="text"],
-    .vpn-entry-card input[type="file"],
-    .vpn-entry-card select {
-        width: 100%;
-        max-width: 100%;
-        min-height: 42px;
-        padding: 9px 12px !important;
-        border: 1px solid rgba(125, 211, 252, 0.22) !important;
-        border-radius: 8px !important;
-        color: #e5edf7 !important;
-        background: rgba(3, 7, 18, 0.60) !important;
-        outline: none;
-    }
-    .cbi-map textarea {
-        min-height: 170px;
-        resize: vertical;
-        font-family: Consolas, "Cascadia Mono", monospace;
-        line-height: 1.55;
-    }
-    .cbi-map input:focus,
-    .cbi-map textarea:focus,
-    .cbi-map select:focus {
-        border-color: rgba(103, 232, 249, 0.70) !important;
-        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12) !important;
-    }
-    .cbi-map .cbi-section-table-titles,
-    .cbi-map .tr.table-titles,
-    .cbi-map tr.cbi-section-table-titles {
-        color: #e0f2fe !important;
-        background: rgba(15, 23, 42, 0.72) !important;
-    }
-    .cbi-map .cbi-section-table-cell,
-    .cbi-map td,
-    .cbi-map th {
-        border-color: rgba(148, 163, 184, 0.14) !important;
-        color: #dbeafe !important;
-    }
-    .cbi-map code {
-        padding: 2px 6px;
-        border-radius: 6px;
-        color: #a5f3fc !important;
-        background: rgba(255,255,255,0.08) !important;
-    }
-    .vpn-shell-mk3 .vpn-hero-summary-item,
-    .vpn-shell-mk3 .vpn-command-card,
-    .vpn-shell-mk3 .vpn-mini-card,
-    .vpn-shell-mk3 .vpn-stat-card,
-    .vpn-shell-mk3 .vpn-panel-shell,
-    .vpn-shell-mk3 .vpn-action-tile,
-    .vpn-shell-secondary .vpn-mini-card,
-    .vpn-shell-secondary + .cbi-map .cbi-section {
-        transition: border-color .18s ease, background-color .18s ease, transform .18s ease, box-shadow .18s ease;
-    }
-    .vpn-shell-mk3 .vpn-hero-summary-item:hover,
-    .vpn-shell-mk3 .vpn-action-tile:hover,
-    .vpn-shell-secondary .vpn-mini-card:hover {
-        transform: translateY(-1px);
-        border-color: rgba(103, 232, 249, 0.36);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-mk3 .vpn-tab-btn:focus,
-    .vpn-shell-mk3 .vpn-tab-btn:focus-visible,
-    .vpn-shell-mk3 .vpn-hero-actions .cbi-button:focus,
-    .vpn-shell-mk3 .vpn-hero-actions .cbi-button:focus-visible,
-    .vpn-shell-mk3 .vpn-action-tile:focus-visible {
-        outline: 2px solid rgba(103, 232, 249, 0.72);
-        outline-offset: 2px;
-    }
-    .vpn-shell-mk3.is-loading .vpn-mini-card strong,
-    .vpn-shell-mk3.is-loading .vpn-stat-value,
-    .vpn-shell-mk3.is-loading .vpn-card strong {
-        color: #cbd5e1;
-    }
-    /* Mk3 viewport polish: keep the control card in the first row */
-    .vpn-shell-mk3 .vpn-brand-block {
-        justify-content: flex-start;
-        gap: 14px;
-        padding: 26px 28px;
-        background:
-            linear-gradient(180deg, rgba(15, 31, 52, 0.86), rgba(8, 16, 29, 0.72)),
-            rgba(7, 16, 29, 0.74);
-    }
-    .vpn-shell-mk3 .vpn-brand-block h2 {
-        position: relative;
-        width: fit-content;
-        margin-bottom: 2px;
-        padding-bottom: 13px;
-        border-bottom: 0;
-        font-size: 32px;
-    }
-    .vpn-shell-mk3 .vpn-brand-block h2::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        height: 3px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #22d3ee, #34d399);
-        box-shadow: 0 0 18px rgba(34, 211, 238, 0.34);
-    }
-    .vpn-shell-mk3 .vpn-brand-block .vpn-toolbar {
-        margin: 4px 0 2px;
-        order: 2;
-    }
-    .vpn-shell-mk3 .vpn-sub {
-        max-width: 58ch;
-        order: 3;
-        padding-top: 8px;
-        border-top: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .vpn-shell-mk3 .vpn-hero-summary {
-        order: 4;
-        margin-top: 8px;
-        padding: 10px;
-        border: 1px solid rgba(125, 211, 252, 0.11);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.24);
-    }
-    .vpn-shell-mk3 .vpn-hero-summary-item {
-        min-height: 86px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 12px 14px;
-    }
-    .vpn-shell-mk3 .vpn-command-card {
-        display: flex;
-        min-height: 100%;
-        flex-direction: column;
-        justify-content: flex-start;
-        padding: 26px 28px;
-        background:
-            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.16), rgba(255,255,255,0.030)),
-            rgba(8, 28, 30, 0.72);
-    }
-    .vpn-shell-mk3 .vpn-command-kicker {
-        display: inline-flex;
-        width: fit-content;
-        min-height: 32px;
-        align-items: center;
-        padding: 0 12px;
-        border: 1px solid rgba(125, 211, 252, 0.24);
-        border-radius: 999px;
-        background: rgba(8, 145, 178, 0.16);
-    }
-    .vpn-shell-mk3 .vpn-orb-wrap {
-        flex: 0 0 auto;
-        margin-top: 12px;
-        padding: 20px;
-        grid-template-columns: 118px minmax(0, 1fr);
-        gap: 20px;
-        justify-items: start;
-        overflow: visible;
-    }
-    .vpn-shell-mk3 .vpn-orb-ring {
-        width: 118px;
-        height: 118px;
-        min-width: 118px;
-        border-width: 12px;
-    }
-    .vpn-shell-mk3 .vpn-orb-copy strong {
-        max-width: none;
-        font-size: clamp(22px, 2.1vw, 27px);
-        line-height: 1.22;
-        word-break: keep-all;
-        overflow-wrap: break-word;
-    }
-    .vpn-shell-mk3 .vpn-orb-copy span {
-        max-width: 100%;
-        font-size: 14px;
-        line-height: 1.72;
-        word-break: normal;
-        overflow-wrap: anywhere;
-    }
-    .vpn-shell-mk3 .vpn-orb-copy {
-        width: 100%;
-        min-width: 0;
-    }
-    .vpn-shell-mk3 .vpn-hero-actions {
-        margin-top: 18px;
-        gap: 14px;
-    }
-    .vpn-shell-mk3 .vpn-hero-note {
-        margin-top: 14px;
-        padding: 13px 15px;
-        border-color: rgba(var(--vpn-state-rgb), 0.36);
-        background: rgba(var(--vpn-state-rgb), 0.12);
-    }
-    .vpn-shell-mk3 .vpn-hero-actions .cbi-button,
-    .vpn-shell-mk3 .vpn-hero-actions a.cbi-button,
-    .vpn-shell-mk3 .vpn-hero-actions button.cbi-button {
-        min-height: 48px;
-        font-size: 15px;
-    }
-    /* Mk3 closure polish: secondary pages, forms and action surfaces */
-    .vpn-shell-secondary .vpn-hero-secondary {
-        padding: 22px 28px;
-        background:
-            linear-gradient(180deg, rgba(15, 31, 52, 0.90), rgba(8, 16, 29, 0.76)),
-            rgba(7, 16, 29, 0.78);
-    }
-    .vpn-shell-secondary .vpn-page-title {
-        width: fit-content;
-        max-width: 100%;
-        margin-top: 20px;
-        margin-bottom: 16px;
-        padding-bottom: 13px;
-        font-size: 26px;
-        line-height: 1.22;
-        border-bottom: 3px solid #22d3ee;
-        text-shadow: 0 0 18px rgba(34, 211, 238, 0.22);
-    }
-    .vpn-shell-secondary .vpn-sub {
-        max-width: 78ch;
-        padding-top: 14px;
-        border-top: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .vpn-shell-secondary .vpn-secondary-summary {
-        margin-top: 18px;
-        gap: 14px;
-        padding: 10px;
-        border: 1px solid rgba(125, 211, 252, 0.12);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.22);
-    }
-    .vpn-shell-secondary .vpn-secondary-summary span {
-        min-height: 78px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 12px 14px;
-    }
-    .vpn-shell-secondary .vpn-secondary-summary strong {
-        font-size: 15px;
-        overflow-wrap: anywhere;
-        word-break: normal;
-    }
-    .vpn-shell-secondary .vpn-hero-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 16px;
-        padding: 12px;
-        border: 1px solid rgba(125, 211, 252, 0.12);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.20);
-    }
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
-        width: auto;
-        min-width: 176px;
-        min-height: 42px;
-        padding: 0 18px !important;
-        flex: 0 0 auto;
-        border-color: rgba(125, 211, 252, 0.28) !important;
-    }
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button-apply {
-        min-width: 214px;
-        box-shadow: 0 10px 22px rgba(34, 211, 238, 0.14);
-    }
-    .vpn-shell-secondary .vpn-mini-grid {
-        gap: 16px;
-        margin-top: 18px;
-    }
-    .vpn-shell-secondary .vpn-mini-card {
-        min-height: 118px;
-        padding: 18px 20px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.020)),
-            rgba(8, 16, 29, 0.72);
-    }
-    .vpn-shell-secondary .vpn-mini-card strong {
-        font-size: 20px;
-        overflow-wrap: anywhere;
-    }
-    .vpn-shell-secondary .vpn-category-rail {
-        padding: 18px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.022)),
-            rgba(8, 16, 29, 0.72);
-    }
-    .vpn-shell-secondary .vpn-category-rail .vpn-toolbar {
-        gap: 10px;
-    }
-    .vpn-entry-grid-mk3 {
-        gap: 16px;
-    }
-    .vpn-entry-card {
-        padding: 20px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.022)),
-            rgba(8, 16, 29, 0.72);
-    }
-    .vpn-entry-card .vpn-hero-actions {
-        margin-top: 14px;
-    }
-    .cbi-map {
-        overflow: hidden;
-    }
-    .cbi-map .cbi-section,
-    .cbi-map .cbi-section-node,
-    .cbi-map fieldset.cbi-section,
-    .cbi-map fieldset.cbi-section-table {
-        padding: 20px !important;
-    }
-    .cbi-map .cbi-value {
-        min-height: 64px;
-        align-items: center;
-        padding: 16px 0 !important;
-    }
-    .cbi-map .cbi-value-title {
-        padding-top: 4px;
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select {
-        min-height: 44px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.018)),
-            rgba(3, 7, 18, 0.66) !important;
-    }
-    .cbi-map .cbi-button-row,
-    .cbi-map .cbi-page-actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 10px;
-        padding-top: 14px;
-    }
-    .cbi-map .cbi-button-row .cbi-button,
-    .cbi-map .cbi-page-actions .cbi-button {
-        width: auto;
-        min-width: 128px;
-        flex: 0 0 auto;
-    }
-    .vpn-shell-mk3 .vpn-panel-shell {
-        margin-top: 14px;
-    }
-    .vpn-shell-mk3 .vpn-tabbar {
-        gap: 10px;
-        padding: 12px;
-    }
-    .vpn-shell-mk3 .vpn-panel pre,
-    .vpn-shell-mk3 .vpn-subcard pre {
-        min-height: 240px;
-    }
-    @media (max-width: 1100px) {
-        .vpn-hero-main {
-            grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
-        }
-        .vpn-overview-grid,
-        .vpn-stat-grid {
-            grid-template-columns: 1fr 1fr;
-        }
-        .vpn-command-card {
-            grid-column: auto;
-        }
-        .vpn-mini-grid-mk3 {
-            grid-template-columns: 1fr 1fr;
-        }
-    }
-    @media (max-width: 980px) {
-        .vpn-hero-main,
-        .vpn-split-grid,
-        .vpn-shell-secondary .vpn-hero-top,
-        .vpn-entry-grid-mk3 {
-            grid-template-columns: 1fr;
-        }
-        .vpn-tabbar {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        .vpn-shell-secondary .vpn-mini-grid,
-        .vpn-stat-grid,
-        .vpn-overview-grid {
-            grid-template-columns: 1fr 1fr;
-        }
-        .vpn-command-card {
-            grid-column: auto;
-        }
-        .vpn-cbi-section,
-        .cbi-map .cbi-value {
-            grid-template-columns: 1fr !important;
-        }
-        .vpn-shell-secondary .vpn-hero-actions {
-            justify-content: stretch;
-        }
-        .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-        .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
-            flex: 1 1 0;
-            min-width: 0;
-        }
-    }
-    @media (max-width: 640px) {
-        .vpn-shell {
-            padding: 0 4px 14px;
-        }
-        .vpn-hero-main,
-        .vpn-hero-secondary {
-            padding: 14px;
-        }
-        .vpn-brand-block,
-        .vpn-command-card,
-        .vpn-quick-rail,
-        .vpn-panel {
-            padding: 14px;
-        }
-        .vpn-brand-block h2,
-        .vpn-page-title {
-            font-size: 24px;
-            line-height: 1.2;
-        }
-        .vpn-hero-summary,
-        .vpn-secondary-summary,
-        .vpn-mini-grid-mk3,
-        .vpn-shell-secondary .vpn-mini-grid,
-        .vpn-stat-grid,
-        .vpn-overview-grid,
-        .vpn-action-list-compact,
-        .vpn-hero-actions,
-        .vpn-tabbar {
-            grid-template-columns: 1fr;
-        }
-        .vpn-orb-wrap {
-            grid-template-columns: 1fr;
-            justify-items: center;
-            text-align: center;
-        }
-        .vpn-orb-ring {
-            width: 112px;
-            height: 112px;
-            min-width: 112px;
-            font-size: 20px;
-        }
-        .vpn-card-head,
-        .vpn-quick-rail-head,
-        .vpn-panel-shell-head,
-        .vpn-panel-head,
-        .vpn-entry-head,
-        .vpn-check-row {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        .vpn-kv {
-            grid-template-columns: 1fr;
-            gap: 5px;
-        }
-        .vpn-shell-secondary .vpn-hero-secondary {
-            padding: 16px;
-        }
-        .vpn-shell-secondary .vpn-hero-actions {
-            flex-direction: column;
-        }
-        .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-        .vpn-shell-secondary .vpn-hero-actions a.cbi-button,
-        .cbi-map .cbi-button-row .cbi-button,
-        .cbi-map .cbi-page-actions .cbi-button {
-            width: 100%;
-        }
-    }
-    /* Mk3 final pass: close the remaining OpenVPN surfaces */
-    .vpn-shell-mk3 {
-        border-color: rgba(125, 211, 252, 0.24);
-        background:
-            linear-gradient(180deg, rgba(9, 17, 30, 0.99), rgba(4, 9, 17, 0.99));
-    }
-    .vpn-shell-mk3 .vpn-hero-mk3,
-    .vpn-shell-secondary .vpn-hero-secondary,
-    .vpn-shell-secondary + .cbi-map,
-    .cbi-map {
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.045),
-            inset 0 0 0 1px rgba(125, 211, 252, 0.045),
-            0 18px 36px rgba(0,0,0,0.22);
-    }
-    .vpn-shell-secondary .vpn-hero-secondary {
-        position: relative;
-        overflow: hidden;
-    }
-    .vpn-shell-secondary .vpn-hero-secondary::after {
-        content: "";
-        position: absolute;
-        left: 28px;
-        right: 28px;
-        bottom: 0;
-        height: 1px;
-        background: linear-gradient(90deg, rgba(34,211,238,0.0), rgba(34,211,238,0.52), rgba(52,211,153,0.0));
-    }
-    .vpn-shell-secondary .vpn-toolbar {
-        gap: 10px;
-    }
-    .vpn-shell-secondary .vpn-page-title {
-        color: #22d3ee;
-    }
-    .vpn-shell-secondary .vpn-page-title a {
-        color: #22d3ee !important;
-    }
-    .vpn-shell-secondary .vpn-secondary-summary span,
-    .vpn-shell-mk3 .vpn-hero-summary-item {
-        border-color: rgba(125, 211, 252, 0.18);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.020)),
-            rgba(4, 10, 19, 0.70);
-    }
-    .vpn-shell-secondary .vpn-secondary-summary span::before,
-    .vpn-shell-mk3 .vpn-hero-summary-item::before {
-        content: "";
-        display: block;
-        width: 28px;
-        height: 2px;
-        margin-bottom: 10px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #22d3ee, #34d399);
-        opacity: 0.72;
-    }
-    .vpn-shell-secondary .vpn-hero-actions {
-        align-items: center;
-        justify-content: flex-end;
-        margin-left: auto;
-        border-color: rgba(125, 211, 252, 0.16);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.018)),
-            rgba(4, 10, 19, 0.44);
-    }
-    .vpn-shell-secondary .vpn-hero-actions::before {
-        content: "操作";
-        display: inline-flex;
-        min-height: 32px;
-        align-items: center;
-        padding: 0 10px;
-        border: 1px solid rgba(125, 211, 252, 0.18);
-        border-radius: 999px;
-        color: #93c5fd;
-        background: rgba(15, 23, 42, 0.48);
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px !important;
-    }
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button:not(.cbi-button-apply) {
-        color: #dbeafe !important;
-        background:
-            linear-gradient(180deg, rgba(148,163,184,0.14), rgba(148,163,184,0.055)) !important;
-    }
-    .vpn-shell-secondary .vpn-mini-card {
-        position: relative;
-        overflow: hidden;
-    }
-    .vpn-shell-secondary .vpn-mini-card::after {
-        content: "";
-        position: absolute;
-        left: 18px;
-        right: 18px;
-        bottom: 0;
-        height: 1px;
-        background: linear-gradient(90deg, rgba(34,211,238,0.0), rgba(34,211,238,0.34), rgba(34,211,238,0.0));
-    }
-    .vpn-entry-grid-mk3 {
-        margin: 14px 0 18px;
-    }
-    .vpn-entry-card {
-        min-height: 360px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-    }
-    .vpn-entry-head h4 {
-        margin: 0;
-        color: #e0f2fe;
-        font-size: 18px;
-        line-height: 1.35;
-    }
-    .vpn-entry-lead,
-    .vpn-field-help {
-        color: var(--vpn-muted);
-        font-size: 12px;
-        line-height: 1.62;
-    }
-    .vpn-entry-lead {
-        min-height: 46px;
-        margin: 12px 0 16px;
-    }
-    .vpn-field-label {
-        display: block;
-        margin: 12px 0 7px;
-        color: #dbeafe;
-        font-size: 12px;
-        font-weight: 900;
-        line-height: 1.35;
-    }
-    .vpn-field-help {
-        margin-top: 7px;
-    }
-    .vpn-entry-actions {
-        margin-top: auto;
-        padding-top: 16px;
-    }
-    .vpn-entry-actions .cbi-button {
-        min-height: 44px;
-        font-size: 14px;
-    }
-    .vpn-output {
-        min-height: 46px;
-        display: flex;
-        align-items: center;
-        margin: 10px 0 18px;
-        padding: 0 14px;
-        border: 1px solid rgba(125, 211, 252, 0.14);
-        border-radius: 8px;
-        background: rgba(3, 7, 18, 0.42);
-    }
-    .vpn-output span,
-    .vpn-output em {
-        color: #a5f3fc;
-        font-style: normal;
-        font-size: 13px;
-        line-height: 1.45;
-    }
-    .cbi-map .cbi-section > h3,
-    .cbi-map .cbi-section-node > h3,
-    .cbi-map .cbi-section > h4,
-    .cbi-map .cbi-section-node > h4,
-    .cbi-map .cbi-section legend,
-    .cbi-map .cbi-section-table legend,
-    .vpn-cbi-section .vpn-section-title {
-        position: relative;
-        padding-left: 14px !important;
-    }
-    .cbi-map .cbi-section > h3::before,
-    .cbi-map .cbi-section-node > h3::before,
-    .cbi-map .cbi-section > h4::before,
-    .cbi-map .cbi-section-node > h4::before,
-    .cbi-map .cbi-section legend::before,
-    .cbi-map .cbi-section-table legend::before,
-    .vpn-cbi-section .vpn-section-title::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 3px;
-        bottom: 13px;
-        width: 3px;
-        border-radius: 999px;
-        background: linear-gradient(180deg, #22d3ee, #34d399);
-    }
-    .cbi-map .cbi-section-table,
-    .cbi-map table {
-        border-collapse: separate !important;
-        border-spacing: 0 8px !important;
-    }
-    .cbi-map .cbi-section-table-row,
-    .cbi-map tr {
-        background: rgba(255,255,255,0.022);
-    }
-    .cbi-map .cbi-button:hover,
-    .vpn-entry-actions .cbi-button:hover,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button:hover {
-        border-color: rgba(103, 232, 249, 0.56) !important;
-        transform: translateY(-1px);
-        box-shadow: 0 10px 22px rgba(0,0,0,0.22);
-    }
-    .vpn-shell-mk3 .vpn-panel-shell-head {
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.020)),
-            rgba(4, 10, 19, 0.46);
-    }
-    .vpn-shell-mk3 .vpn-tab-btn {
-        min-height: 44px;
-    }
-    .vpn-shell-mk3 .vpn-panel-head {
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .vpn-shell-mk3 .vpn-panel pre,
-    .vpn-shell-mk3 .vpn-subcard pre {
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.010)),
-            #050b14;
-    }
-    @media (max-width: 980px) {
-        .vpn-shell-secondary .vpn-hero-actions::before {
-            display: none;
-        }
-        .vpn-entry-card {
-            min-height: auto;
-        }
-    }
-    @media (max-width: 640px) {
-        .vpn-shell-secondary .vpn-page-title {
-            font-size: 22px;
-        }
-        .vpn-shell-secondary .vpn-secondary-summary span {
-            min-height: 70px;
-        }
-        .vpn-entry-grid-mk3 {
-            margin-top: 10px;
-        }
-    }
-</style>
-EOF_OPENVPN_OVPN_CSS_MK3_EXACT
-
-    for openvpn_mk5_file in \
-        /usr/lib/lua/luci/view/openvpn/ovpn_css.htm \
-        /usr/lib/lua/luci/view/nradio_adv/openvpn_full.htm \
-        /usr/lib/lua/luci/view/openvpn/pageswitch.htm \
-        /usr/lib/lua/luci/view/openvpn/cbi-select-input-add.htm \
-        /usr/lib/lua/luci/view/openvpn/overview_intro.htm \
-        /usr/lib/lua/luci/view/openvpn/nsection.htm; do
-        [ -f "$openvpn_mk5_file" ] || continue
-        sed -i \
-            -e 's/Mk3/Mk5/g' \
-            -e 's/mk3/mk5/g' \
-            "$openvpn_mk5_file"
-    done
-
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_DEPTH_POLISH'
-<style type="text/css">
-    :root {
-        --vpn-bg: #2e2e38;
-        --vpn-panel: #151b27;
-        --vpn-panel-2: #101622;
-        --vpn-glass: rgba(12, 16, 24, 0.56);
-        --vpn-glass-strong: rgba(18, 24, 36, 0.82);
-        --vpn-line: rgba(92, 110, 146, 0.34);
-        --vpn-line-strong: rgba(108, 162, 255, 0.40);
-        --vpn-text: #edf4ff;
-        --vpn-muted: #9fb1cd;
-        --vpn-soft: rgba(255, 255, 255, 0.052);
-        --vpn-state: #23c8e4;
-        --vpn-state-rgb: 35, 200, 228;
-        --vpn-good: #3ddc97;
-        --vpn-warn: #f7c667;
-        --vpn-bad: #ff7676;
-    }
-    .vpn-shell {
-        position: relative;
-        isolation: isolate;
-        padding: 8px 8px 18px;
-    }
-    .vpn-shell-mk5 {
-        --vpn-state: #23c8e4;
-        --vpn-state-rgb: 35, 200, 228;
-        border-color: rgba(92, 110, 146, 0.42);
-        background:
-            radial-gradient(circle at 0% 0%, rgba(var(--vpn-state-rgb), 0.10), transparent 28%),
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.12), transparent 30%),
-            linear-gradient(180deg, rgba(35, 41, 57, 0.98), rgba(20, 25, 37, 0.98)),
-            var(--vpn-bg);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 24px 56px rgba(0,0,0,0.26);
-    }
-    .vpn-shell-mk5::before {
-        content: "";
-        position: absolute;
-        left: 18px;
-        right: 18px;
-        top: 0;
-        height: 1px;
-        border-radius: 999px;
-        pointer-events: none;
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.58), rgba(47,211,238,0.62), rgba(47,211,238,0));
-        opacity: 0.88;
-    }
-    .vpn-shell-mk5.is-ok {
-        --vpn-state: #3ddc97;
-        --vpn-state-rgb: 61, 220, 151;
-    }
-    .vpn-shell-mk5.is-warn,
-    .vpn-shell-mk5.is-ready,
-    .vpn-shell-mk5.is-profile-ready {
-        --vpn-state: #f7c667;
-        --vpn-state-rgb: 247, 198, 103;
-    }
-    .vpn-shell-mk5.is-bad,
-    .vpn-shell-mk5.is-empty {
-        --vpn-state: #ff7676;
-        --vpn-state-rgb: 255, 118, 118;
-    }
-    .vpn-hero-mk5,
-    .vpn-hero-secondary {
-        border-color: rgba(92, 110, 146, 0.42);
-        background:
-            radial-gradient(circle at 0% 0%, rgba(var(--vpn-state-rgb), 0.12), transparent 28%),
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.14), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(12, 16, 24, 0.58);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.042), 0 14px 30px rgba(0,0,0,0.16);
-        -webkit-backdrop-filter: blur(12px) saturate(116%);
-        backdrop-filter: blur(12px) saturate(116%);
-    }
-    .vpn-hero-mk5::before,
-    .vpn-hero-secondary::before {
-        inset: 0;
-        border: 0;
-        border-radius: inherit;
-        background: linear-gradient(135deg, rgba(255,255,255,0.055), transparent 45%);
-        opacity: 0.72;
-    }
-    .vpn-brand-block,
-    .vpn-command-card,
-    .vpn-mini-card,
-    .vpn-stat-card,
-    .vpn-card,
-    .vpn-quick-rail,
-    .vpn-panel-shell,
-    .vpn-subcard,
-    .vpn-entry-card,
-    .vpn-shell-secondary .vpn-category-rail {
-        position: relative;
-        overflow: hidden;
-        border-color: rgba(78, 96, 131, 0.72);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.085), transparent 30%),
-            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.065), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 30px rgba(0,0,0,0.16);
-        -webkit-backdrop-filter: blur(10px) saturate(112%);
-        backdrop-filter: blur(10px) saturate(112%);
-    }
-    .vpn-brand-block > *,
-    .vpn-command-card > *,
-    .vpn-mini-card > *,
-    .vpn-stat-card > *,
-    .vpn-card > *,
-    .vpn-quick-rail > *,
-    .vpn-panel-shell > *,
-    .vpn-subcard > *,
-    .vpn-entry-card > * {
-        position: relative;
-        z-index: 1;
-    }
-    .vpn-mini-card::before,
-    .vpn-stat-card::before,
-    .vpn-card::before,
-    .vpn-quick-rail::before,
-    .vpn-panel-shell::before,
-    .vpn-subcard::before,
-    .vpn-entry-card::before,
-    .vpn-command-card::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        background: linear-gradient(135deg, rgba(255,255,255,0.052), transparent 46%);
-        opacity: 0.66;
-    }
-    .vpn-mini-card::after,
-    .vpn-stat-card::after,
-    .vpn-card::after,
-    .vpn-quick-rail::after,
-    .vpn-panel-shell::after,
-    .vpn-subcard::after,
-    .vpn-entry-card::after {
-        content: "";
-        position: absolute;
-        left: 16px;
-        right: 16px;
-        bottom: 0;
-        height: 2px;
-        border-radius: 999px;
-        pointer-events: none;
-        background: linear-gradient(90deg, rgba(108, 162, 255, 0), rgba(var(--vpn-state-rgb), 0.66), rgba(47, 211, 238, 0));
-        opacity: 0.58;
-    }
-    .vpn-shell-mk5 .vpn-command-card {
-        border-color: rgba(var(--vpn-state-rgb), 0.36);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.18), transparent 34%),
-            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.08), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
-            rgba(14, 20, 28, 0.72);
-    }
-    .vpn-shell-mk5 .vpn-brand-block {
-        background:
-            radial-gradient(circle at 0% 0%, rgba(var(--vpn-state-rgb), 0.12), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.016)),
-            rgba(12, 16, 24, 0.54);
-    }
-    .vpn-shell-mk5 .vpn-brand-block h2::after {
-        background: linear-gradient(90deg, #6ca2ff, #2fd3ee);
-        box-shadow: 0 0 18px rgba(47, 211, 238, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-orb-copy strong {
-        font-size: 24px;
-    }
-    .vpn-mini-card-status {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.14), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-mini-card-route {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.13), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-shell-mk5 .vpn-stat-card-emphasis,
-    .vpn-shell-mk5 .vpn-mini-card-accent {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.20), transparent 36%),
-            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.13), rgba(255,255,255,0.018)),
-            rgba(14, 18, 28, 0.70);
-    }
-    .vpn-entry-card-template {
-        border-color: rgba(61, 220, 151, 0.22);
-        background:
-            radial-gradient(circle at 96% 0%, rgba(61, 220, 151, 0.13), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-entry-card-upload {
-        border-color: rgba(108, 162, 255, 0.22);
-        background:
-            radial-gradient(circle at 96% 0%, rgba(108, 162, 255, 0.13), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-entry-card-template .vpn-entry-badge {
-        border-color: rgba(61, 220, 151, 0.34);
-        color: #bbf7d0;
-        background: rgba(61, 220, 151, 0.12);
-    }
-    .vpn-entry-card-upload .vpn-entry-badge {
-        border-color: rgba(108, 162, 255, 0.34);
-        color: #bfdbfe;
-        background: rgba(108, 162, 255, 0.12);
-    }
-    .vpn-hero-actions .cbi-button-apply,
-    .cbi-map .cbi-button-apply,
-    .vpn-tab-btn.is-active {
-        color: #f4f8ff !important;
-        border-color: rgba(47, 211, 238, 0.50) !important;
-        background: linear-gradient(180deg, #2a9cff, #1177de) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 22px rgba(17,119,222,0.20);
-    }
-    .vpn-tabbar {
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
-            rgba(7, 10, 17, 0.72);
-    }
-    .vpn-tab-btn {
-        border-color: rgba(84, 100, 134, 0.74);
-        background:
-            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-        transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
-    }
-    .vpn-tab-btn:hover {
-        border-color: rgba(47, 211, 238, 0.36);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.09), transparent 32%),
-            linear-gradient(180deg, rgba(50, 58, 76, 0.94), rgba(31, 37, 51, 0.94));
-        transform: translateY(-1px);
-    }
-    .vpn-panel-shell-head {
-        border-bottom-color: rgba(255,255,255,0.065);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.014)),
-            rgba(10, 14, 22, 0.50);
-    }
-    .vpn-panel pre,
-    .vpn-subcard pre,
-    .vpn-output {
-        border-color: rgba(47, 211, 238, 0.30);
-        background:
-            linear-gradient(to top, rgba(108,162,255,0.052) 1px, transparent 1px),
-            linear-gradient(to right, rgba(108,162,255,0.020) 1px, transparent 1px),
-            radial-gradient(circle at 96% 0%, rgba(47, 211, 238, 0.08), transparent 32%),
-            linear-gradient(180deg, rgba(22, 27, 39, 0.98), rgba(11, 15, 24, 0.98)),
-            #050b14;
-        background-size: 100% 24px, 32px 100%, auto, auto, auto;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 0 0 1px rgba(47,211,238,0.10), 0 10px 24px rgba(0,0,0,0.20);
-        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
-    }
-    .vpn-log-good,
-    .vpn-log-bad,
-    .vpn-log-warn,
-    .vpn-log-info {
-        font-weight: 800;
-    }
-    .vpn-log-good {
-        color: #8ef0bd;
-    }
-    .vpn-log-bad {
-        color: #ff9aa4;
-    }
-    .vpn-log-warn {
-        color: #ffd982;
-    }
-    .vpn-log-info {
-        color: #7dd3fc;
-    }
-    .vpn-check-section {
-        display: grid;
-        gap: 8px;
-    }
-    .vpn-check-section + .vpn-check-section {
-        margin-top: 14px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255,255,255,0.055);
-    }
-    .vpn-check-section-title {
-        display: inline-flex;
-        width: fit-content;
-        min-height: 28px;
-        align-items: center;
-        padding: 0 10px;
-        border: 1px solid rgba(84, 100, 134, 0.74);
-        border-radius: 999px;
-        color: #afc4e4;
-        background: rgba(15, 21, 33, 0.62);
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .vpn-check-row,
-    .vpn-check-empty,
-    .vpn-action-tile {
-        border-color: rgba(255,255,255,0.07);
-        background:
-            linear-gradient(90deg, rgba(255,255,255,0.028), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.018)),
-            rgba(12, 16, 24, 0.48);
-        transition: border-color .14s ease, background .14s ease, box-shadow .14s ease, transform .14s ease;
-    }
-    .vpn-check-row:hover,
-    .vpn-action-tile:hover {
-        border-color: rgba(108, 162, 255, 0.24);
-        background:
-            radial-gradient(circle at 94% 18%, rgba(47, 211, 238, 0.08), transparent 38%),
-            linear-gradient(90deg, rgba(108, 162, 255, 0.055), rgba(255,255,255,0.016) 54%, rgba(255,255,255,0.028));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 10px 20px rgba(0,0,0,0.11);
-        transform: translateY(-1px);
-    }
-    .vpn-remote-host {
-        display: block;
-        min-width: 0;
-        overflow: hidden;
-        color: #f4f8ff;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .vpn-remote-port {
-        display: inline-flex;
-        width: fit-content;
-        min-height: 24px;
-        align-items: center;
-        margin-top: 8px;
-        padding: 0 8px;
-        border: 1px solid rgba(47, 211, 238, 0.24);
-        border-radius: 999px;
-        color: #9beafe;
-        background: rgba(47, 211, 238, 0.10);
-        font-size: 12px;
-    }
-    .vpn-copy-feedback.is-visible {
-        display: inline-flex;
-        min-height: 28px;
-        align-items: center;
-        width: fit-content;
-        padding: 0 10px;
-        border: 1px solid rgba(47, 211, 238, 0.28);
-        border-radius: 999px;
-        background: rgba(47, 211, 238, 0.09);
-    }
-    .vpn-copy-feedback.warn {
-        color: #ffd982;
-        border-color: rgba(247, 198, 103, 0.30);
-        background: rgba(247, 198, 103, 0.10);
-    }
-    .vpn-copy-feedback.ok {
-        color: #8ef0bd;
-        border-color: rgba(61, 220, 151, 0.30);
-        background: rgba(61, 220, 151, 0.10);
-    }
-    .vpn-orb-ring.ok {
-        color: #bbf7d0;
-        border-color: rgba(61, 220, 151, 0.42);
-        background:
-            radial-gradient(circle, rgba(61, 220, 151, 0.16), transparent 58%),
-            #07111f;
-        box-shadow: 0 0 0 8px rgba(61, 220, 151, 0.055), 0 0 34px rgba(61, 220, 151, 0.24), inset 0 0 0 1px rgba(255,255,255,0.05);
-    }
-    .vpn-orb-ring.warn,
-    .vpn-orb-ring.ready,
-    .vpn-orb-ring.profile-ready {
-        border-color: rgba(247, 198, 103, 0.42);
-        background:
-            radial-gradient(circle, rgba(247, 198, 103, 0.14), transparent 58%),
-            #07111f;
-        box-shadow: 0 0 0 8px rgba(247, 198, 103, 0.050), 0 0 34px rgba(247, 198, 103, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
-    }
-    .vpn-orb-ring.bad,
-    .vpn-orb-ring.empty {
-        border-color: rgba(255, 118, 118, 0.42);
-        background:
-            radial-gradient(circle, rgba(255, 118, 118, 0.14), transparent 58%),
-            #07111f;
-        box-shadow: 0 0 0 8px rgba(255, 118, 118, 0.050), 0 0 34px rgba(255, 118, 118, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
-    }
-    .vpn-card.is-ok {
-        border-color: rgba(61, 220, 151, 0.26);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.12), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-card.is-warn,
-    .vpn-card.is-ready,
-    .vpn-card.is-profile-ready {
-        border-color: rgba(247, 198, 103, 0.26);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-card.is-bad,
-    .vpn-card.is-empty {
-        border-color: rgba(255, 118, 118, 0.24);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(255, 118, 118, 0.11), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .cbi-map ul.cbi-tabmenu,
-    .cbi-map .cbi-tabmenu {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 0 0 14px !important;
-        padding: 8px !important;
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
-            rgba(7, 10, 17, 0.48);
-    }
-    .cbi-map ul.cbi-tabmenu > li,
-    .cbi-map .cbi-tabmenu > li {
-        margin: 0 !important;
-    }
-    .cbi-map ul.cbi-tabmenu > li > a,
-    .cbi-map ul.cbi-tabmenu > li > span,
-    .cbi-map .cbi-tabmenu > li > a,
-    .cbi-map .cbi-tabmenu > li > span {
-        display: inline-flex !important;
-        min-height: 34px;
-        align-items: center;
-        padding: 0 12px !important;
-        border: 1px solid rgba(84, 100, 134, 0.74) !important;
-        border-radius: 8px !important;
-        color: #cbd5e1 !important;
-        background:
-            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92)) !important;
-        text-decoration: none !important;
-    }
-    .cbi-map ul.cbi-tabmenu > li.cbi-tab > a,
-    .cbi-map ul.cbi-tabmenu > li.cbi-tab > span,
-    .cbi-map .cbi-tabmenu > li.cbi-tab > a,
-    .cbi-map .cbi-tabmenu > li.cbi-tab > span {
-        color: #f4f8ff !important;
-        border-color: rgba(47, 211, 238, 0.50) !important;
-        background: linear-gradient(180deg, #2a9cff, #1177de) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px rgba(17,119,222,0.18);
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select,
-    .vpn-entry-card input[type="text"],
-    .vpn-entry-card input[type="file"],
-    .vpn-entry-card select {
-        border-color: rgba(84, 100, 134, 0.90) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 30%),
-            linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985)) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-    }
-    .cbi-map input[type="text"]:hover,
-    .cbi-map input[type="password"]:hover,
-    .cbi-map input[type="file"]:hover,
-    .cbi-map textarea:hover,
-    .cbi-map select:hover,
-    .vpn-entry-card input[type="text"]:hover,
-    .vpn-entry-card input[type="file"]:hover,
-    .vpn-entry-card select:hover {
-        border-color: rgba(47, 211, 238, 0.34) !important;
-    }
-    .cbi-map input[type="checkbox"],
-    .cbi-map input[type="radio"] {
-        accent-color: #2a9cff;
-    }
-    .vpn-cbi-section-mk5 {
-        isolation: isolate;
-    }
-    .vpn-cbi-section-mk5 .vpn-section-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .vpn-cbi-section-mk5 .vpn-section-title::after {
-        content: "";
-        height: 1px;
-        min-width: 48px;
-        flex: 1 1 auto;
-        background: linear-gradient(90deg, rgba(108,162,255,0.48), rgba(47,211,238,0));
-        opacity: 0.72;
-    }
-</style>
-EOF_OPENVPN_MK5_DEPTH_POLISH
-
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_LOCAL_DEPTH_POLISH'
-<style type="text/css">
-    /* OpenVPN Mk5 depth polish: glass controls, diagnostics, and form surfaces */
-    .vpn-shell-mk5::before {
-        content: "";
-        position: absolute;
-        left: 18px;
-        right: 18px;
-        top: 0;
-        height: 1px;
-        border-radius: 999px;
-        pointer-events: none;
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.58), rgba(47,211,238,0.62), rgba(47,211,238,0));
-        opacity: 0.88;
-    }
-    .vpn-brand-block > *,
-    .vpn-command-card > *,
-    .vpn-mini-card > *,
-    .vpn-stat-card > *,
-    .vpn-card > *,
-    .vpn-quick-rail > *,
-    .vpn-panel-shell > *,
-    .vpn-subcard > *,
-    .vpn-entry-card > * {
-        position: relative;
-        z-index: 1;
-    }
-    .vpn-shell-mk5 .vpn-brand-block,
-    .vpn-shell-mk5 .vpn-command-card,
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-card,
-    .vpn-shell-mk5 .vpn-quick-rail,
-    .vpn-shell-mk5 .vpn-panel-shell,
-    .vpn-shell-mk5 .vpn-subcard,
-    .vpn-entry-card,
-    .vpn-shell-secondary .vpn-mini-card,
-    .vpn-shell-secondary .vpn-category-rail {
-        border-color: rgba(78, 96, 131, 0.72);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.085), transparent 30%),
-            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.065), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 30px rgba(0,0,0,0.16);
-    }
-    .vpn-shell-mk5 .vpn-command-card {
-        border-color: rgba(var(--vpn-state-rgb), 0.36);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.18), transparent 34%),
-            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.08), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.018)),
-            rgba(14, 20, 28, 0.72);
-    }
-    .vpn-shell-mk5 .vpn-stat-card:nth-child(2),
-    .vpn-shell-mk5 .vpn-mini-card:nth-child(3),
-    .vpn-shell-secondary .vpn-mini-card:nth-child(2) {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.12), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-shell-mk5 .vpn-stat-card:nth-child(3),
-    .vpn-shell-mk5 .vpn-mini-card:nth-child(4),
-    .vpn-shell-secondary .vpn-mini-card:nth-child(3) {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(134, 122, 255, 0.12), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-shell-mk5 .vpn-stat-card-emphasis,
-    .vpn-shell-mk5 .vpn-mini-card-accent {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.20), transparent 36%),
-            linear-gradient(180deg, rgba(var(--vpn-state-rgb), 0.13), rgba(255,255,255,0.018)),
-            rgba(14, 18, 28, 0.70);
-    }
-    .vpn-mini-card-status {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.14), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-mini-card-route {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.13), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-kv {
-        border-top-color: rgba(255,255,255,0.06);
-    }
-    .vpn-kv:first-of-type {
-        border-top-color: transparent;
-    }
-    .vpn-action-tile {
-        position: relative;
-        overflow: hidden;
-        border-color: rgba(255,255,255,0.07);
-        background:
-            radial-gradient(circle at 96% 0%, rgba(47, 211, 238, 0.08), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.038), rgba(255,255,255,0.012)),
-            rgba(15, 21, 33, 0.64);
-    }
-    .vpn-action-tile::after {
-        content: "";
-        position: absolute;
-        left: 14px;
-        right: 14px;
-        bottom: 0;
-        height: 2px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.62), rgba(47,211,238,0));
-        opacity: 0.62;
-    }
-    .vpn-entry-card-template {
-        border-color: rgba(61, 220, 151, 0.22);
-        background:
-            radial-gradient(circle at 96% 0%, rgba(61, 220, 151, 0.13), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-entry-card-upload {
-        border-color: rgba(108, 162, 255, 0.22);
-        background:
-            radial-gradient(circle at 96% 0%, rgba(108, 162, 255, 0.13), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-entry-card-template .vpn-entry-badge {
-        border-color: rgba(61, 220, 151, 0.34);
-        color: #bbf7d0;
-        background: rgba(61, 220, 151, 0.12);
-    }
-    .vpn-entry-card-upload .vpn-entry-badge {
-        border-color: rgba(108, 162, 255, 0.34);
-        color: #bfdbfe;
-        background: rgba(108, 162, 255, 0.12);
-    }
-    .vpn-panel-shell-head,
-    .vpn-tabbar {
-        position: relative;
-        z-index: 1;
-    }
-    .vpn-panel-shell-head {
-        border-bottom-color: rgba(255,255,255,0.065);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.014)),
-            rgba(10, 14, 22, 0.50);
-    }
-    .vpn-tabbar {
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
-            rgba(7, 10, 17, 0.72);
-    }
-    .vpn-tab-btn {
-        border-color: rgba(84, 100, 134, 0.74);
-        background:
-            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-        transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
-    }
-    .vpn-tab-btn:hover {
-        border-color: rgba(47, 211, 238, 0.36);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.09), transparent 32%),
-            linear-gradient(180deg, rgba(50, 58, 76, 0.94), rgba(31, 37, 51, 0.94));
-        transform: translateY(-1px);
-    }
-    .vpn-panel {
-        position: relative;
-        z-index: 1;
-    }
-    .vpn-panel.is-active {
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.016), rgba(255,255,255,0.006)),
-            rgba(255,255,255,0.006);
-    }
-    .vpn-panel pre,
-    .vpn-subcard pre,
-    .vpn-output {
-        border-color: rgba(47, 211, 238, 0.30);
-        background:
-            linear-gradient(to top, rgba(108,162,255,0.052) 1px, transparent 1px),
-            linear-gradient(to right, rgba(108,162,255,0.020) 1px, transparent 1px),
-            radial-gradient(circle at 96% 0%, rgba(47, 211, 238, 0.08), transparent 32%),
-            linear-gradient(180deg, rgba(22, 27, 39, 0.98), rgba(11, 15, 24, 0.98)),
-            #050b14;
-        background-size: 100% 24px, 32px 100%, auto, auto, auto;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 0 0 1px rgba(47,211,238,0.10), 0 10px 24px rgba(0,0,0,0.20);
-        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
-    }
-    .vpn-panel pre::-webkit-scrollbar,
-    .vpn-subcard pre::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-    .vpn-panel pre::-webkit-scrollbar-track,
-    .vpn-subcard pre::-webkit-scrollbar-track {
-        background: rgba(18, 23, 34, 0.72);
-    }
-    .vpn-panel pre::-webkit-scrollbar-thumb,
-    .vpn-subcard pre::-webkit-scrollbar-thumb {
-        border: 2px solid rgba(18, 23, 34, 0.72);
-        border-radius: 999px;
-        background: rgba(92, 128, 178, 0.72);
-    }
-    .vpn-log-good {
-        color: #8ef0bd;
-        font-weight: 800;
-    }
-    .vpn-log-bad {
-        color: #ff9aa4;
-        font-weight: 800;
-    }
-    .vpn-log-warn {
-        color: #ffd982;
-        font-weight: 800;
-    }
-    .vpn-log-info {
-        color: #7dd3fc;
-        font-weight: 800;
-    }
-    .vpn-check-section {
-        display: grid;
-        gap: 8px;
-    }
-    .vpn-check-section + .vpn-check-section {
-        margin-top: 14px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255,255,255,0.055);
-    }
-    .vpn-check-section-title {
-        display: inline-flex;
-        width: fit-content;
-        min-height: 28px;
-        align-items: center;
-        padding: 0 10px;
-        border: 1px solid rgba(84, 100, 134, 0.74);
-        border-radius: 999px;
-        color: #afc4e4;
-        background: rgba(15, 21, 33, 0.62);
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .vpn-check-row,
-    .vpn-check-empty {
-        border-color: rgba(255,255,255,0.07);
-        background:
-            linear-gradient(90deg, rgba(255,255,255,0.028), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.018)),
-            rgba(12, 16, 24, 0.48);
-        transition: border-color .14s ease, background .14s ease, box-shadow .14s ease, transform .14s ease;
-    }
-    .vpn-check-row:hover {
-        border-color: rgba(108, 162, 255, 0.24);
-        background:
-            radial-gradient(circle at 94% 18%, rgba(47, 211, 238, 0.08), transparent 38%),
-            linear-gradient(90deg, rgba(108, 162, 255, 0.055), rgba(255,255,255,0.016) 54%, rgba(255,255,255,0.028));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 10px 20px rgba(0,0,0,0.11);
-        transform: translateY(-1px);
-    }
-    .vpn-remote-host {
-        display: block;
-        min-width: 0;
-        overflow: hidden;
-        color: #f4f8ff;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .vpn-remote-port {
-        display: inline-flex;
-        width: fit-content;
-        min-height: 24px;
-        align-items: center;
-        margin-top: 8px;
-        padding: 0 8px;
-        border: 1px solid rgba(47, 211, 238, 0.24);
-        border-radius: 999px;
-        color: #9beafe;
-        background: rgba(47, 211, 238, 0.10);
-        font-size: 12px;
-    }
-    .vpn-copy-feedback.is-visible {
-        display: inline-flex;
-        min-height: 28px;
-        align-items: center;
-        width: fit-content;
-        padding: 0 10px;
-        border: 1px solid rgba(47, 211, 238, 0.28);
-        border-radius: 999px;
-        background: rgba(47, 211, 238, 0.09);
-    }
-    .vpn-copy-feedback.warn {
-        color: #ffd982;
-        border-color: rgba(247, 198, 103, 0.30);
-        background: rgba(247, 198, 103, 0.10);
-    }
-    .vpn-copy-feedback.ok {
-        color: #8ef0bd;
-        border-color: rgba(61, 220, 151, 0.30);
-        background: rgba(61, 220, 151, 0.10);
-    }
-    .vpn-orb-ring.ok {
-        color: #bbf7d0;
-        border-color: rgba(61, 220, 151, 0.42);
-        background:
-            radial-gradient(circle, rgba(61, 220, 151, 0.16), transparent 58%),
-            #07111f;
-        box-shadow: 0 0 0 8px rgba(61, 220, 151, 0.055), 0 0 34px rgba(61, 220, 151, 0.24), inset 0 0 0 1px rgba(255,255,255,0.05);
-    }
-    .vpn-orb-ring.warn,
-    .vpn-orb-ring.ready,
-    .vpn-orb-ring.profile-ready {
-        border-color: rgba(247, 198, 103, 0.42);
-        background:
-            radial-gradient(circle, rgba(247, 198, 103, 0.14), transparent 58%),
-            #07111f;
-        box-shadow: 0 0 0 8px rgba(247, 198, 103, 0.050), 0 0 34px rgba(247, 198, 103, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
-    }
-    .vpn-orb-ring.bad,
-    .vpn-orb-ring.empty {
-        border-color: rgba(255, 118, 118, 0.42);
-        background:
-            radial-gradient(circle, rgba(255, 118, 118, 0.14), transparent 58%),
-            #07111f;
-        box-shadow: 0 0 0 8px rgba(255, 118, 118, 0.050), 0 0 34px rgba(255, 118, 118, 0.20), inset 0 0 0 1px rgba(255,255,255,0.05);
-    }
-    .vpn-card.is-ok {
-        border-color: rgba(61, 220, 151, 0.26);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.12), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-card.is-warn,
-    .vpn-card.is-ready,
-    .vpn-card.is-profile-ready {
-        border-color: rgba(247, 198, 103, 0.26);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .vpn-card.is-bad,
-    .vpn-card.is-empty {
-        border-color: rgba(255, 118, 118, 0.24);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(255, 118, 118, 0.11), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(14, 18, 28, 0.64);
-    }
-    .cbi-map ul.cbi-tabmenu,
-    .cbi-map .cbi-tabmenu {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 0 0 14px !important;
-        padding: 8px !important;
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 8px;
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.026), rgba(255,255,255,0.008)),
-            rgba(7, 10, 17, 0.48);
-    }
-    .cbi-map ul.cbi-tabmenu > li,
-    .cbi-map .cbi-tabmenu > li {
-        margin: 0 !important;
-    }
-    .cbi-map ul.cbi-tabmenu > li > a,
-    .cbi-map ul.cbi-tabmenu > li > span,
-    .cbi-map .cbi-tabmenu > li > a,
-    .cbi-map .cbi-tabmenu > li > span {
-        display: inline-flex !important;
-        min-height: 34px;
-        align-items: center;
-        padding: 0 12px !important;
-        border: 1px solid rgba(84, 100, 134, 0.74) !important;
-        border-radius: 8px !important;
-        color: #cbd5e1 !important;
-        background:
-            linear-gradient(180deg, rgba(44, 51, 67, 0.92), rgba(28, 33, 46, 0.92)) !important;
-        text-decoration: none !important;
-    }
-    .cbi-map ul.cbi-tabmenu > li.cbi-tab > a,
-    .cbi-map ul.cbi-tabmenu > li.cbi-tab > span,
-    .cbi-map .cbi-tabmenu > li.cbi-tab > a,
-    .cbi-map .cbi-tabmenu > li.cbi-tab > span {
-        color: #f4f8ff !important;
-        border-color: rgba(47, 211, 238, 0.50) !important;
-        background: linear-gradient(180deg, #2a9cff, #1177de) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px rgba(17,119,222,0.18);
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select,
-    .vpn-entry-card input[type="text"],
-    .vpn-entry-card input[type="file"],
-    .vpn-entry-card select {
-        border-color: rgba(84, 100, 134, 0.90) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 30%),
-            linear-gradient(180deg, rgba(37, 43, 59, 0.985), rgba(24, 29, 41, 0.985)) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-    }
-    .cbi-map input[type="text"]:hover,
-    .cbi-map input[type="password"]:hover,
-    .cbi-map input[type="file"]:hover,
-    .cbi-map textarea:hover,
-    .cbi-map select:hover,
-    .vpn-entry-card input[type="text"]:hover,
-    .vpn-entry-card input[type="file"]:hover,
-    .vpn-entry-card select:hover {
-        border-color: rgba(47, 211, 238, 0.34) !important;
-    }
-    .cbi-map input[type="checkbox"],
-    .cbi-map input[type="radio"] {
-        accent-color: #2a9cff;
-    }
-    .vpn-cbi-section-mk5 {
-        isolation: isolate;
-    }
-    .vpn-cbi-section-mk5 .vpn-section-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .vpn-cbi-section-mk5 .vpn-section-title::after {
-        content: "";
-        height: 1px;
-        min-width: 48px;
-        flex: 1 1 auto;
-        background: linear-gradient(90deg, rgba(108,162,255,0.48), rgba(47,211,238,0));
-        opacity: 0.72;
-    }
-    .cbi-map .cbi-section-table-row,
-    .cbi-map tr {
-        background:
-            linear-gradient(90deg, rgba(255,255,255,0.024), rgba(255,255,255,0.006) 52%, rgba(255,255,255,0.014));
-    }
-    .cbi-map .cbi-section-table-row:hover,
-    .cbi-map tr:hover {
-        background:
-            radial-gradient(circle at 96% 20%, rgba(47, 211, 238, 0.07), transparent 36%),
-            linear-gradient(90deg, rgba(108, 162, 255, 0.050), rgba(255,255,255,0.010) 52%, rgba(255,255,255,0.020));
-    }
-    @media (max-width: 980px) {
-        .vpn-shell-secondary .vpn-hero-actions::before {
-            display: none;
-        }
-        .vpn-entry-card {
-            min-height: auto;
-        }
-    }
-    @media (max-width: 640px) {
-        .vpn-shell-secondary .vpn-page-title {
-            font-size: 22px;
-        }
-        .vpn-shell-secondary .vpn-secondary-summary span {
-            min-height: 70px;
-        }
-        .vpn-entry-grid-mk5 {
-            margin-top: 10px;
-        }
-    }
-</style>
-EOF_OPENVPN_MK5_LOCAL_DEPTH_POLISH
-
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_ROUND_FINISH_POLISH'
-<style type="text/css">
-    /* OpenVPN Mk5 live polish: AdGuard-style glass depth, applied only to local page files. */
-    .vpn-shell-mk5 {
-        position: relative;
-        isolation: isolate;
-        overflow: hidden;
-        border-color: rgba(78, 96, 131, 0.82);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(35, 200, 228, 0.16), transparent 28%),
-            radial-gradient(circle at 0% 0%, rgba(100, 153, 255, 0.12), transparent 30%),
-            linear-gradient(180deg, rgba(33, 38, 52, 0.985), rgba(18, 22, 33, 0.992));
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.050),
-            inset 0 0 0 1px rgba(255,255,255,0.018),
-            0 26px 62px rgba(0,0,0,0.30);
-    }
-    .vpn-shell-mk5::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-        background:
-            linear-gradient(135deg, rgba(255,255,255,0.055), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.026), transparent 22%);
-        pointer-events: none;
-    }
-    .vpn-shell-mk5 > * {
-        position: relative;
-        z-index: 1;
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5,
-    .vpn-shell-secondary .vpn-hero-secondary {
-        border-color: rgba(83, 103, 139, 0.70);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.18), transparent 26%),
-            radial-gradient(circle at 0% 0%, rgba(108, 162, 255, 0.095), transparent 30%),
-            linear-gradient(180deg, rgba(34, 40, 55, 0.965), rgba(21, 26, 38, 0.975)),
-            rgba(16, 20, 29, 0.58);
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.052),
-            0 22px 52px rgba(0,0,0,0.24);
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5::before,
-    .vpn-shell-secondary .vpn-hero-secondary::before {
-        inset: 1px;
-        border-color: rgba(255,255,255,0.035);
-        background:
-            linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.30), rgba(47,211,238,0.26), rgba(47,211,238,0));
-        height: 1px;
-        border-width: 0;
-    }
-    .vpn-shell-mk5 .vpn-brand-block,
-    .vpn-shell-mk5 .vpn-command-card,
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-card,
-    .vpn-shell-mk5 .vpn-quick-rail,
-    .vpn-shell-mk5 .vpn-panel-shell,
-    .vpn-shell-mk5 .vpn-subcard,
-    .vpn-entry-card,
-    .vpn-shell-secondary + .cbi-map,
-    .cbi-map .cbi-section,
-    .cbi-map .cbi-section-node,
-    .cbi-map fieldset.cbi-section,
-    .cbi-map fieldset.cbi-section-table {
-        border-color: rgba(78, 96, 131, 0.70) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.078), transparent 28%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(16, 20, 29, 0.60) !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.044),
-            0 14px 30px rgba(0,0,0,0.16) !important;
-    }
-    .vpn-shell-mk5 .vpn-brand-block,
-    .vpn-shell-mk5 .vpn-command-card {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.13), transparent 30%),
-            linear-gradient(180deg, rgba(37, 43, 59, 0.955), rgba(24, 29, 41, 0.965)),
-            rgba(16, 20, 29, 0.68) !important;
-    }
-    .vpn-shell-mk5 .vpn-brand-block h2,
-    .vpn-shell-secondary .vpn-page-title {
-        color: #f4f8ff;
-        text-shadow: 0 0 18px rgba(47, 211, 238, 0.18), 0 12px 26px rgba(0,0,0,0.24);
-    }
-    .vpn-shell-mk5 .vpn-sub,
-    .vpn-shell-secondary .vpn-sub,
-    .vpn-panel-shell-head p,
-    .vpn-panel-head span,
-    .vpn-quick-rail-sub,
-    .vpn-action-tile span,
-    .vpn-card-note,
-    .vpn-mini-note,
-    .vpn-stat-meta,
-    .vpn-stat-note {
-        color: #a7b8d3;
-    }
-    .vpn-shell-mk5 .vpn-pill,
-    .vpn-shell-mk5 .vpn-health-chip,
-    .vpn-shell-mk5 .vpn-inline-note,
-    .vpn-shell-mk5 .vpn-status-chip,
-    .vpn-shell-mk5 .vpn-card-badge,
-    .vpn-shell-mk5 .vpn-inline-badge,
-    .vpn-shell-mk5 .vpn-panel-live-badge,
-    .vpn-shell-mk5 .vpn-focus-pill,
-    .vpn-shell-mk5 .vpn-micro-badge,
-    .vpn-entry-badge {
-        border-color: rgba(143, 164, 199, 0.22);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.014)),
-            rgba(15, 21, 33, 0.58);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.040);
-    }
-    .vpn-shell-mk5 .vpn-pill,
-    .vpn-shell-mk5 .vpn-focus-pill:not(.vpn-focus-pill-muted) {
-        color: #b2fbff;
-        border-color: rgba(47, 211, 238, 0.32);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.13), transparent 42%),
-            linear-gradient(180deg, rgba(47, 211, 238, 0.16), rgba(47, 211, 238, 0.055));
-    }
-    .vpn-shell-mk5 .vpn-hero-summary,
-    .vpn-shell-secondary .vpn-secondary-summary,
-    .vpn-tabbar,
-    .vpn-focus-strip,
-    .vpn-shell-secondary .vpn-hero-actions {
-        border-color: rgba(255,255,255,0.07);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)),
-            rgba(7, 10, 17, 0.46);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.026);
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item,
-    .vpn-shell-secondary .vpn-secondary-summary span {
-        border-color: rgba(84, 100, 134, 0.66);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.065), transparent 34%),
-            linear-gradient(180deg, rgba(34, 39, 54, 0.80), rgba(22, 27, 38, 0.82));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item:hover,
-    .vpn-shell-mk5 .vpn-mini-card:hover,
-    .vpn-shell-mk5 .vpn-stat-card:hover,
-    .vpn-shell-mk5 .vpn-action-tile:hover,
-    .vpn-entry-card:hover,
-    .cbi-map .cbi-section:hover {
-        border-color: rgba(108, 162, 255, 0.38) !important;
-        background:
-            radial-gradient(circle at 96% 0%, rgba(63, 132, 255, 0.14), transparent 40%),
-            linear-gradient(180deg, rgba(255,255,255,0.056), rgba(255,255,255,0.020)),
-            rgba(18, 23, 34, 0.66) !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.055),
-            0 18px 34px rgba(0,0,0,0.20) !important;
-        transform: translateY(-1px);
-    }
-    .vpn-shell-mk5 .vpn-command-kicker,
-    .vpn-panel-shell-kicker,
-    .vpn-section-title {
-        color: #b2fbff;
-    }
-    .vpn-shell-mk5 .vpn-orb-wrap {
-        border-color: rgba(84, 100, 134, 0.74);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.10), transparent 30%),
-            linear-gradient(180deg, rgba(12, 16, 24, 0.58), rgba(9, 12, 19, 0.72));
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring {
-        border: 0;
-        background:
-            radial-gradient(circle, rgba(7,17,31,0.92) 0 53%, transparent 54%),
-            conic-gradient(from 220deg, rgba(var(--vpn-state-rgb), 0.20), rgba(var(--vpn-state-rgb), 0.98), rgba(var(--vpn-state-rgb), 0.18));
-        box-shadow:
-            0 0 0 8px rgba(var(--vpn-state-rgb), 0.055),
-            0 0 36px rgba(var(--vpn-state-rgb), 0.26),
-            inset 0 0 0 1px rgba(255,255,255,0.060);
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
-    .cbi-map input[type="submit"],
-    .cbi-map input[type="button"],
-    .cbi-map .cbi-button,
-    .vpn-entry-actions .cbi-button {
-        border-color: rgba(57, 160, 255, 0.70) !important;
-        background:
-            linear-gradient(180deg, rgba(42, 156, 255, 0.92), rgba(17, 119, 222, 0.88)) !important;
-        color: #f0f7ff !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.16),
-            0 10px 20px rgba(26, 124, 215, 0.18) !important;
-    }
-    .vpn-shell-mk5 .vpn-button-muted,
-    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-muted,
-    .cbi-map .cbi-button-reset,
-    .cbi-map .cbi-button-remove {
-        border-color: rgba(106, 115, 140, 0.88) !important;
-        background:
-            linear-gradient(180deg, rgba(63, 69, 88, 0.96), rgba(52, 57, 73, 0.96)) !important;
-        color: #e7eefc !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.08),
-            0 8px 16px rgba(0,0,0,0.14) !important;
-    }
-    .vpn-shell-mk5 .vpn-button-muted:not([disabled]):not(.is-disabled):hover,
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button:not([disabled]):not(.is-disabled):hover,
-    .cbi-map input[type="submit"]:hover,
-    .cbi-map input[type="button"]:hover,
-    .cbi-map .cbi-button:hover {
-        border-color: rgba(47, 211, 238, 0.52) !important;
-        background:
-            linear-gradient(180deg, rgba(59, 176, 255, 0.94), rgba(26, 143, 224, 0.90)) !important;
-        transform: translateY(-1px);
-    }
-    .vpn-shell-mk5 .vpn-panel-shell-head {
-        border-bottom-color: rgba(255,255,255,0.07);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.07), transparent 28%),
-            linear-gradient(180deg, rgba(255,255,255,0.040), rgba(255,255,255,0.012)),
-            rgba(12, 16, 24, 0.54);
-    }
-    .vpn-shell-mk5 .vpn-tabbar {
-        position: sticky;
-        top: 0;
-        z-index: 6;
-        -webkit-backdrop-filter: blur(12px) saturate(112%);
-        backdrop-filter: blur(12px) saturate(112%);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn {
-        border-color: rgba(84, 100, 134, 0.74);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.036), rgba(255,255,255,0.012)),
-            rgba(15, 21, 33, 0.56);
-        color: #a8bcdb;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.028);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn:hover {
-        color: #e8f2ff;
-        border-color: rgba(108, 162, 255, 0.32);
-        background:
-            radial-gradient(circle at top right, rgba(108, 162, 255, 0.13), transparent 42%),
-            linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.018)),
-            rgba(255,255,255,0.026);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn.is-active {
-        border-color: rgba(54, 163, 255, 0.48);
-        background:
-            linear-gradient(180deg, rgba(42, 156, 255, 0.92), rgba(17, 119, 222, 0.88)) !important;
-        color: #f7fbff;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 12px 24px rgba(17, 119, 222, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-panel.is-active {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.045), transparent 30%),
-            linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.008));
-    }
-    .vpn-shell-mk5 .vpn-panel pre,
-    .vpn-shell-mk5 .vpn-subcard pre,
-    .vpn-shell-mk5 #vpn-config-pre {
-        border-color: rgba(47, 211, 238, 0.30);
-        background:
-            linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px),
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 30%),
-            linear-gradient(180deg, rgba(8, 13, 22, 0.98), rgba(5, 9, 16, 0.99));
-        background-size: 100% 28px, 28px 100%, 100% 100%, 100% 100%;
-        color: #dce9ff;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.035),
-            0 0 0 1px rgba(47, 211, 238, 0.10),
-            0 10px 24px rgba(0,0,0,0.20);
-        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.72);
-    }
-    .vpn-shell-mk5 .vpn-check-row,
-    .vpn-shell-mk5 .vpn-check-empty {
-        border-color: rgba(84, 100, 134, 0.62);
-        background:
-            linear-gradient(90deg, rgba(255,255,255,0.032), rgba(255,255,255,0.008) 52%, rgba(255,255,255,0.018)),
-            rgba(12, 16, 24, 0.56);
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select,
-    .vpn-entry-card input[type="text"],
-    .vpn-entry-card input[type="file"],
-    .vpn-entry-card select {
-        min-height: 48px;
-        border-color: rgba(84, 100, 134, 0.92) !important;
-        border-radius: 10px !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.062), transparent 28%),
-            linear-gradient(180deg, rgba(34, 39, 54, 0.985), rgba(22, 27, 38, 0.985)) !important;
-        color: #eef4ff !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.040),
-            0 8px 18px rgba(0,0,0,0.12) !important;
-    }
-    .cbi-map input[type="text"]:focus,
-    .cbi-map input[type="password"]:focus,
-    .cbi-map input[type="file"]:focus,
-    .cbi-map textarea:focus,
-    .cbi-map select:focus,
-    .vpn-entry-card input[type="text"]:focus,
-    .vpn-entry-card input[type="file"]:focus,
-    .vpn-entry-card select:focus {
-        border-color: #2fd3ee !important;
-        box-shadow:
-            0 0 0 3px rgba(47, 211, 238, 0.14),
-            0 10px 22px rgba(0,0,0,0.18) !important;
-        outline: 0;
-    }
-    .cbi-map select {
-        appearance: none;
-        -webkit-appearance: none;
-        padding-right: 42px !important;
-        background-image:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.062), transparent 28%),
-            linear-gradient(180deg, rgba(34, 39, 54, 0.985), rgba(22, 27, 38, 0.985)),
-            linear-gradient(45deg, transparent 50%, #8fbaff 50%),
-            linear-gradient(135deg, #8fbaff 50%, transparent 50%) !important;
-        background-repeat: no-repeat !important;
-        background-size: 100% 100%, 100% 100%, 6px 6px, 6px 6px !important;
-        background-position: 0 0, 0 0, calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px) !important;
-    }
-    .vpn-entry-card-template {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.10), transparent 30%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(16, 20, 29, 0.62) !important;
-    }
-    .vpn-entry-card-upload {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.11), transparent 30%),
-            linear-gradient(180deg, rgba(255,255,255,0.046), rgba(255,255,255,0.014)),
-            rgba(16, 20, 29, 0.62) !important;
-    }
-    .vpn-output {
-        border-color: rgba(47, 211, 238, 0.22);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 28%),
-            linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)),
-            rgba(12, 16, 24, 0.56);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.032);
-    }
-    /* OpenVPN Mk5 tactile glass pass: local page files only. */
-    .vpn-shell-mk5 .vpn-hero-mk5,
-    .vpn-shell-mk5 .vpn-brand-block,
-    .vpn-shell-mk5 .vpn-command-card,
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-card,
-    .vpn-shell-mk5 .vpn-quick-rail,
-    .vpn-shell-mk5 .vpn-panel-shell,
-    .vpn-shell-mk5 .vpn-subcard,
-    .vpn-entry-card,
-    .cbi-map .cbi-section,
-    .cbi-map .cbi-section-node,
-    .cbi-map fieldset.cbi-section,
-    .cbi-map fieldset.cbi-section-table {
-        background-blend-mode: screen, screen, normal, normal;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.070),
-            inset 0 0 0 1px rgba(255,255,255,0.022),
-            0 18px 38px rgba(0,0,0,0.22) !important;
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5 {
-        border-color: rgba(92, 128, 178, 0.72);
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.085),
-            inset 0 0 0 1px rgba(255,255,255,0.026),
-            0 22px 48px rgba(0,0,0,0.26) !important;
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5::after {
-        content: "";
-        position: absolute;
-        left: 22px;
-        right: 22px;
-        bottom: 0;
-        height: 1px;
-        border-radius: 999px;
-        pointer-events: none;
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(108,162,255,0.54), rgba(47,211,238,0.56), rgba(108,162,255,0));
-        opacity: 0.72;
-    }
-    .vpn-shell-mk5 .vpn-brand-block::before,
-    .vpn-shell-mk5 .vpn-command-card::before,
-    .vpn-shell-mk5 .vpn-mini-card::before,
-    .vpn-shell-mk5 .vpn-stat-card::before,
-    .vpn-shell-mk5 .vpn-card::before,
-    .vpn-shell-mk5 .vpn-quick-rail::before,
-    .vpn-shell-mk5 .vpn-panel-shell::before,
-    .vpn-shell-mk5 .vpn-subcard::before,
-    .vpn-entry-card::before {
-        background:
-            linear-gradient(135deg, rgba(255,255,255,0.090), rgba(255,255,255,0.028) 34%, transparent 62%),
-            radial-gradient(circle at 12% 0%, rgba(255,255,255,0.040), transparent 38%);
-        opacity: 0.80;
-    }
-    .vpn-shell-mk5 .vpn-mini-card::after,
-    .vpn-shell-mk5 .vpn-stat-card::after,
-    .vpn-shell-mk5 .vpn-card::after,
-    .vpn-shell-mk5 .vpn-quick-rail::after,
-    .vpn-shell-mk5 .vpn-panel-shell::after,
-    .vpn-shell-mk5 .vpn-subcard::after,
-    .vpn-entry-card::after {
-        left: 12px;
-        right: 12px;
-        height: 1px;
-        background: linear-gradient(90deg, rgba(108,162,255,0), rgba(var(--vpn-state-rgb), 0.78), rgba(47,211,238,0));
-        opacity: 0.70;
-    }
-    .vpn-shell-mk5 .vpn-card-head,
-    .vpn-shell-mk5 .vpn-quick-rail-head,
-    .vpn-shell-mk5 .vpn-panel-head,
-    .vpn-entry-head {
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(255,255,255,0.065);
-    }
-    .vpn-shell-mk5 .vpn-kv {
-        margin-top: 8px;
-        padding: 10px 12px;
-        border: 1px solid rgba(84, 100, 134, 0.42);
-        border-radius: 8px;
-        background:
-            linear-gradient(90deg, rgba(255,255,255,0.034), rgba(255,255,255,0.010) 58%, rgba(47,211,238,0.024)),
-            rgba(8, 12, 20, 0.34);
-    }
-    .vpn-shell-mk5 .vpn-kv:first-of-type {
-        margin-top: 12px;
-        border-top-color: rgba(84, 100, 134, 0.42);
-    }
-    .vpn-shell-mk5 .vpn-kv strong,
-    .vpn-shell-mk5 .vpn-mini-card strong,
-    .vpn-shell-mk5 .vpn-stat-value {
-        color: #f3f8ff;
-        text-shadow: 0 1px 10px rgba(47, 211, 238, 0.10);
-    }
-    .vpn-shell-mk5 .vpn-mini-note,
-    .vpn-shell-mk5 .vpn-stat-meta,
-    .vpn-shell-mk5 .vpn-card-note,
-    .vpn-field-help {
-        color: #a9bad6;
-    }
-    .vpn-shell-mk5 .vpn-orb-wrap {
-        min-height: 148px;
-        align-items: center;
-        border-color: rgba(var(--vpn-state-rgb), 0.30);
-        background:
-            radial-gradient(circle at 50% 22%, rgba(var(--vpn-state-rgb), 0.18), transparent 42%),
-            linear-gradient(180deg, rgba(255,255,255,0.040), rgba(255,255,255,0.012)),
-            rgba(8, 12, 20, 0.54);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring {
-        box-shadow:
-            0 0 0 8px rgba(var(--vpn-state-rgb), 0.060),
-            0 0 42px rgba(var(--vpn-state-rgb), 0.30),
-            inset 0 0 0 1px rgba(255,255,255,0.078),
-            inset 0 8px 18px rgba(255,255,255,0.026);
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
-    .cbi-map .cbi-button,
-    .vpn-entry-actions .cbi-button {
-        min-height: 46px;
-        letter-spacing: 0;
-        text-shadow: 0 1px 10px rgba(0,0,0,0.22);
-    }
-    .vpn-shell-mk5 .vpn-button-muted,
-    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-muted,
-    .cbi-map .cbi-button-reset,
-    .cbi-map .cbi-button-remove {
-        background:
-            linear-gradient(180deg, rgba(77, 86, 110, 0.98), rgba(45, 52, 69, 0.98)) !important;
-    }
-    .vpn-shell-mk5 .vpn-tabbar {
-        top: 6px;
-        border-radius: 8px;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.045),
-            0 12px 24px rgba(0,0,0,0.18);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn {
-        min-height: 40px;
-        border-radius: 8px;
-    }
-    .vpn-shell-mk5 .vpn-panel pre,
-    .vpn-shell-mk5 .vpn-subcard pre,
-    .vpn-shell-mk5 #vpn-config-pre,
-    .vpn-output {
-        border-radius: 8px;
-        background-size: 100% 26px, 30px 100%, 100% 100%, 100% 100% !important;
-    }
-    .vpn-shell-mk5 .vpn-check-row,
-    .vpn-shell-mk5 .vpn-check-empty {
-        border-radius: 8px;
-    }
-    .vpn-entry-card input[type="file"]::file-selector-button,
-    .cbi-map input[type="file"]::file-selector-button {
-        min-height: 34px;
-        margin-right: 10px;
-        padding: 0 12px;
-        border: 1px solid rgba(47, 211, 238, 0.32);
-        border-radius: 8px;
-        color: #edf7ff;
-        background: linear-gradient(180deg, rgba(42, 156, 255, 0.86), rgba(17, 119, 222, 0.82));
-        font-weight: 850;
-    }
-    .cbi-map select option {
-        color: #eef4ff;
-        background: #151b27;
-    }
-    .cbi-map .cbi-value {
-        border-top-color: rgba(255,255,255,0.070);
-    }
-    .cbi-map .cbi-value:hover {
-        background:
-            radial-gradient(circle at 96% 20%, rgba(47, 211, 238, 0.055), transparent 36%),
-            linear-gradient(90deg, rgba(108, 162, 255, 0.038), rgba(255,255,255,0.008) 54%, rgba(255,255,255,0.018));
-    }
-    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-        .vpn-shell-mk5 .vpn-hero-mk5,
-        .vpn-shell-mk5 .vpn-brand-block,
-        .vpn-shell-mk5 .vpn-command-card,
-        .vpn-shell-mk5 .vpn-mini-card,
-        .vpn-shell-mk5 .vpn-stat-card,
-        .vpn-shell-mk5 .vpn-card,
-        .vpn-shell-mk5 .vpn-quick-rail,
-        .vpn-shell-mk5 .vpn-panel-shell,
-        .vpn-shell-mk5 .vpn-subcard,
-        .vpn-entry-card,
-        .cbi-map .cbi-section,
-        .cbi-map .cbi-section-node,
-        .cbi-map fieldset.cbi-section,
-        .cbi-map fieldset.cbi-section-table {
-            -webkit-backdrop-filter: blur(14px) saturate(118%);
-            backdrop-filter: blur(14px) saturate(118%);
-        }
-    }
-    /* OpenVPN Mk5 closure polish: overflow-safe glass refinements. */
-    .vpn-shell-mk5,
-    .vpn-shell-mk5 *,
-    .vpn-entry-grid-mk5,
-    .vpn-entry-grid-mk5 *,
-    .vpn-shell-secondary + .cbi-map,
-    .vpn-shell-secondary + .cbi-map * {
-        min-width: 0;
-    }
-    .vpn-shell-mk5 .vpn-brand-block h2,
-    .vpn-shell-secondary .vpn-page-title,
-    .vpn-shell-mk5 .vpn-card-title,
-    .vpn-shell-mk5 .vpn-quick-rail-title,
-    .vpn-shell-mk5 .vpn-panel-shell-head h3,
-    .vpn-shell-mk5 .vpn-panel-head h3,
-    .vpn-shell-mk5 .vpn-stat-value,
-    .vpn-shell-mk5 .vpn-hero-summary-item strong,
-    .vpn-shell-mk5 .vpn-mini-card strong,
-    .vpn-entry-card h4 {
-        overflow-wrap: anywhere;
-        text-wrap: balance;
-    }
-    .vpn-shell-mk5 .vpn-sub,
-    .vpn-shell-mk5 .vpn-mini-note,
-    .vpn-shell-mk5 .vpn-stat-meta,
-    .vpn-shell-mk5 .vpn-stat-note,
-    .vpn-shell-mk5 .vpn-card-note,
-    .vpn-shell-mk5 .vpn-action-tile span,
-    .vpn-shell-mk5 .vpn-panel-shell-head p,
-    .vpn-shell-mk5 .vpn-panel-head span,
-    .vpn-entry-card .vpn-entry-lead,
-    .vpn-entry-card .vpn-field-help {
-        overflow-wrap: anywhere;
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button,
-    .cbi-map .cbi-button,
-    .vpn-entry-actions .cbi-button {
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        white-space: normal !important;
-        line-height: 1.18 !important;
-        word-break: keep-all;
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button[disabled],
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button.is-disabled,
-    .vpn-shell-mk5 .vpn-button-muted[aria-disabled="true"] {
-        filter: saturate(0.78);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.055) !important;
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button:not([disabled]):not(.is-disabled):active,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button:not([disabled]):active,
-    .cbi-map .cbi-button:not([disabled]):active,
-    .vpn-entry-actions .cbi-button:not([disabled]):active {
-        transform: translateY(0);
-        box-shadow:
-            inset 0 2px 8px rgba(0,0,0,0.18),
-            0 6px 14px rgba(0,0,0,0.18) !important;
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item,
-    .vpn-shell-secondary .vpn-secondary-summary span {
-        min-width: 0;
-        overflow: hidden;
-    }
-    .vpn-shell-mk5 .vpn-summary-line,
-    .vpn-shell-secondary .vpn-secondary-summary strong {
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .vpn-shell-mk5 .vpn-action-tile {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 7px;
-    }
-    .vpn-shell-mk5 .vpn-action-tile strong {
-        color: #f4f8ff;
-    }
-    .vpn-shell-mk5 .vpn-action-tile:hover::after {
-        opacity: 0.92;
-    }
-    .vpn-shell-mk5 .vpn-check-row {
-        grid-template-columns: minmax(0, 1fr) auto;
-    }
-    .vpn-shell-mk5 .vpn-check-badges {
-        align-items: center;
-    }
-    .vpn-shell-mk5 .vpn-check-main span,
-    .vpn-shell-mk5 .vpn-remote-host {
-        overflow-wrap: anywhere;
-    }
-    .vpn-shell-mk5 .vpn-panel pre,
-    .vpn-shell-mk5 .vpn-subcard pre,
-    .vpn-shell-mk5 #vpn-config-pre {
-        max-width: 100%;
-        overflow: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-    }
-    .vpn-shell-secondary + .cbi-map {
-        max-width: 1220px;
-        margin: 0 auto 18px;
-        padding: 0 8px;
-        color: var(--vpn-text);
-    }
-    .cbi-map .cbi-section-table,
-    .cbi-map table {
-        width: 100% !important;
-        max-width: 100%;
-        border-collapse: separate !important;
-        border-spacing: 0 6px !important;
-    }
-    .cbi-map .cbi-section-table-cell,
-    .cbi-map td,
-    .cbi-map th {
-        vertical-align: middle;
-        overflow-wrap: anywhere;
-    }
-    .cbi-map .cbi-section-table-row,
-    .cbi-map tr {
-        border-radius: 8px;
-    }
-    .cbi-map input[type="text"],
-    .cbi-map input[type="password"],
-    .cbi-map input[type="file"],
-    .cbi-map textarea,
-    .cbi-map select,
-    .vpn-entry-card input[type="text"],
-    .vpn-entry-card input[type="file"],
-    .vpn-entry-card select {
-        max-width: 100%;
-        caret-color: #2fd3ee;
-    }
-    .vpn-entry-card input[type="file"],
-    .cbi-map input[type="file"] {
-        line-height: 1.25;
-    }
-    .vpn-output {
-        min-height: 42px;
-        display: flex;
-        align-items: center;
-        padding: 10px 12px;
-    }
-    .vpn-output span,
-    .vpn-output em {
-        overflow-wrap: anywhere;
-    }
-    .vpn-cbi-section-mk5 {
-        border-color: rgba(78, 96, 131, 0.72) !important;
-    }
-    .vpn-cbi-section-mk5 .vpn-section-title {
-        min-width: 0;
-    }
-    /* OpenVPN Mk5 title repair: prevent the hero title from collapsing to one glyph. */
-    .vpn-shell-mk5 .vpn-brand-block h2,
-    .vpn-shell-secondary .vpn-page-title {
-        display: inline-block;
-        width: auto;
-        max-width: 100%;
-        min-width: 0;
-        white-space: nowrap;
-        overflow: visible;
-        text-overflow: clip;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        text-wrap: nowrap;
-    }
-    .vpn-shell-mk5 .vpn-brand-block h2::after {
-        width: min(100%, 188px);
-        max-width: 100%;
-    }
-    .vpn-shell-mk5 .vpn-toolbar,
-    .vpn-shell-mk5 .vpn-pill,
-    .vpn-shell-mk5 .vpn-health-chip,
-    .vpn-shell-mk5 .vpn-inline-note {
-        min-width: 0;
-    }
-    .vpn-shell-mk5 .vpn-health-chip,
-    .vpn-shell-mk5 .vpn-inline-note {
-        white-space: nowrap;
-    }
-    /* OpenVPN Mk5 summary repair: keep the three cards visible and identifiers readable. */
-    .vpn-shell-mk5 .vpn-hero-summary-item strong {
-        display: block;
-        max-width: 100%;
-        overflow: visible;
-        text-overflow: clip;
-        white-space: nowrap;
-        word-break: keep-all;
-        overflow-wrap: normal;
-        text-wrap: nowrap;
-        font-size: 12px;
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item strong .vpn-summary-line {
-        display: block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    @media (max-width: 760px) {
-        .vpn-shell-mk5 .vpn-check-row {
-            grid-template-columns: minmax(0, 1fr);
-        }
-        .vpn-shell-mk5 .vpn-check-badges {
-            justify-content: flex-start;
-        }
-        .vpn-shell-secondary .vpn-hero-actions,
-        .vpn-entry-actions {
-            grid-template-columns: minmax(0, 1fr);
-        }
-        .cbi-map .cbi-value {
-            grid-template-columns: minmax(0, 1fr) !important;
-        }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .vpn-shell-mk5 *,
-        .vpn-shell-secondary *,
-        .cbi-map * {
-            animation: none !important;
-            transition: none !important;
-            transform: none !important;
-        }
-    }
-</style>
-EOF_OPENVPN_MK5_ROUND_FINISH_POLISH
-
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_PASS7_TO_PASS9_POLISH'
-<style type="text/css">
-    /* OpenVPN Mk5 pass 7 precision finish: local six-file polish. */
-    .vpn-shell-mk5 {
-        --vpn-pass7-line: rgba(101, 124, 162, 0.74);
-        --vpn-pass7-panel: rgba(13, 18, 28, 0.72);
-        --vpn-pass7-panel-strong: rgba(18, 24, 36, 0.86);
-    }
-    .vpn-shell-mk5 .vpn-hero-console .vpn-hero-main {
-        gap: 16px;
-    }
-    .vpn-shell-mk5 .vpn-brand-console,
-    .vpn-shell-mk5 .vpn-command-card-live {
-        border-color: rgba(var(--vpn-state-rgb), 0.24) !important;
-    }
-    .vpn-shell-mk5 .vpn-command-card-live {
-        display: flex;
-        min-height: 100%;
-        flex-direction: column;
-    }
-    .vpn-shell-mk5 .vpn-command-card-live .vpn-hero-actions {
-        margin-top: auto;
-    }
-    .vpn-shell-mk5 .vpn-summary-instance,
-    .vpn-shell-mk5 .vpn-summary-entry,
-    .vpn-shell-mk5 .vpn-summary-enabled,
-    .vpn-shell-mk5 .vpn-summary-running,
-    .vpn-shell-mk5 .vpn-summary-route {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.085), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.040), rgba(255,255,255,0.012)),
-            rgba(8, 13, 22, 0.58) !important;
-    }
-    .vpn-shell-mk5 .vpn-summary-path {
-        border-color: rgba(108, 162, 255, 0.30) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.11), transparent 36%),
-            linear-gradient(180deg, rgba(255,255,255,0.042), rgba(255,255,255,0.014)),
-            rgba(8, 13, 22, 0.62) !important;
-    }
-    .vpn-shell-mk5 .vpn-mini-card-wide,
-    .vpn-shell-mk5 .vpn-mini-card-instance {
-        border-color: rgba(var(--vpn-state-rgb), 0.38) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.20), transparent 38%),
-            linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.016)),
-            rgba(13, 18, 28, 0.78) !important;
-    }
-    .vpn-shell-mk5 .vpn-mini-card-service,
-    .vpn-shell-mk5 .vpn-mini-card-enabled,
-    .vpn-shell-mk5 .vpn-mini-card-source {
-        border-color: rgba(108, 162, 255, 0.24) !important;
-    }
-    .vpn-shell-mk5 .vpn-mini-card-auth {
-        border-color: rgba(247, 198, 103, 0.28) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 38%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(13, 18, 28, 0.66) !important;
-    }
-    .vpn-shell-mk5 .vpn-mini-card-route,
-    .vpn-shell-mk5 .vpn-stat-card-remote,
-    .vpn-shell-mk5 .vpn-card-route {
-        border-color: rgba(47, 211, 238, 0.28) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.13), transparent 38%),
-            linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.014)),
-            rgba(13, 18, 28, 0.68) !important;
-    }
-    .vpn-shell-mk5 .vpn-stat-card-tunnel,
-    .vpn-shell-mk5 .vpn-card-runtime {
-        border-color: rgba(61, 220, 151, 0.26) !important;
-    }
-    .vpn-shell-mk5 .vpn-stat-card-auth,
-    .vpn-shell-mk5 .vpn-card-auth {
-        border-color: rgba(247, 198, 103, 0.24) !important;
-    }
-    .vpn-shell-mk5 .vpn-stat-card-remote .vpn-stat-value {
-        display: block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .vpn-shell-mk5 .vpn-button-passive,
-    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-passive {
-        opacity: 1 !important;
-        cursor: default !important;
-        border-color: rgba(61, 220, 151, 0.42) !important;
-        color: #d8ffe9 !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.22), transparent 40%),
-            linear-gradient(180deg, rgba(36, 121, 85, 0.96), rgba(22, 86, 66, 0.96)) !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.14),
-            0 10px 22px rgba(30, 126, 87, 0.18) !important;
-    }
-    .vpn-shell-mk5 .vpn-button-passive[disabled] {
-        filter: none !important;
-    }
-    .vpn-shell-mk5 .vpn-quick-rail-console .vpn-action-tile,
-    .vpn-shell-mk5 .vpn-category-rail-mk5 .vpn-pill {
-        border-color: rgba(108, 162, 255, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-quick-rail-console .vpn-action-tile:focus-visible,
-    .vpn-shell-mk5 .vpn-category-rail-mk5 .vpn-pill:focus-visible {
-        outline: 0;
-        box-shadow:
-            0 0 0 3px rgba(47, 211, 238, 0.14),
-            0 16px 30px rgba(0,0,0,0.18) !important;
-    }
-    .vpn-shell-mk5 .vpn-panel-shell-diagnostics {
-        border-color: rgba(92, 128, 178, 0.64) !important;
-    }
-    .vpn-shell-mk5 .vpn-panel-shell-diagnostics .vpn-panel-shell-head {
-        align-items: center;
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics {
-        overflow-x: auto;
-        overflow-y: hidden;
-        scrollbar-color: rgba(92, 128, 178, 0.72) rgba(18, 23, 34, 0.50);
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn {
-        position: relative;
-        overflow: hidden;
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn::after {
-        content: "";
-        position: absolute;
-        left: 14px;
-        right: 14px;
-        bottom: 0;
-        height: 1px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, transparent, rgba(47,211,238,0.72), transparent);
-        opacity: 0;
-        transition: opacity .16s ease;
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn:hover::after,
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn.is-active::after {
-        opacity: 0.86;
-    }
-    .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log,
-    .vpn-shell-mk5 .vpn-panel-runtime #vpn-runtime-log,
-    .vpn-shell-mk5 .vpn-panel-config #vpn-config-pre,
-    .vpn-shell-mk5 .vpn-panel-tunnel pre {
-        min-height: 240px;
-        border-color: rgba(47, 211, 238, 0.32);
-    }
-    .vpn-shell-mk5 .vpn-panel-route .vpn-split-grid {
-        align-items: stretch;
-    }
-    .vpn-shell-mk5 .vpn-check-row {
-        padding: 11px 12px;
-    }
-    .vpn-shell-mk5 .vpn-check-main strong {
-        color: #f2f8ff;
-    }
-    .vpn-shell-mk5 .vpn-check-badges .vpn-micro-badge {
-        min-height: 26px;
-    }
-    .vpn-entry-grid-import .vpn-entry-card {
-        border-color: rgba(92, 128, 178, 0.68) !important;
-    }
-    .vpn-entry-grid-import .vpn-entry-card-template {
-        border-color: rgba(61, 220, 151, 0.30) !important;
-    }
-    .vpn-entry-grid-import .vpn-entry-card-upload {
-        border-color: rgba(108, 162, 255, 0.32) !important;
-    }
-    .vpn-entry-grid-import .vpn-entry-badge-template {
-        color: #c8ffe3;
-        border-color: rgba(61, 220, 151, 0.34);
-        background: rgba(61, 220, 151, 0.12);
-    }
-    .vpn-entry-grid-import .vpn-entry-badge-upload {
-        color: #d7e7ff;
-        border-color: rgba(108, 162, 255, 0.34);
-        background: rgba(108, 162, 255, 0.12);
-    }
-    .vpn-output-entry {
-        margin-top: 12px;
-        border-color: rgba(47, 211, 238, 0.24) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.08), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.034), rgba(255,255,255,0.010)),
-            rgba(9, 13, 22, 0.62) !important;
-    }
-    .vpn-cbi-section-mk5.vpn-cbi-section-active,
-    .vpn-cbi-section-mk5.vpn-cbi-section-empty {
-        position: relative;
-        overflow: hidden;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(47, 211, 238, 0.06), transparent 32%),
-            linear-gradient(180deg, rgba(255,255,255,0.036), rgba(255,255,255,0.010)),
-            var(--vpn-pass7-panel) !important;
-    }
-    .vpn-cbi-section-mk5.vpn-cbi-section-empty {
-        border-style: dashed !important;
-        border-color: rgba(108, 162, 255, 0.42) !important;
-    }
-    .vpn-cbi-section-mk5 .cbi-section-descr {
-        color: #a9bad6;
-        line-height: 1.62;
-    }
-    .vpn-cbi-section-mk5 .cbi-section-remove .cbi-button {
-        min-width: 88px;
-    }
-    @media (max-width: 980px) {
-        .vpn-shell-mk5 .vpn-panel-shell-diagnostics .vpn-panel-shell-head {
-            align-items: flex-start;
-        }
-        .vpn-shell-mk5 .vpn-tabbar-diagnostics {
-            display: flex;
-            gap: 8px;
-            padding-bottom: 12px;
-        }
-        .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn {
-            flex: 0 0 auto;
-            min-width: 126px;
-            white-space: nowrap !important;
-        }
-    }
-    @media (max-width: 760px) {
-        .vpn-shell-mk5 .vpn-command-card-live .vpn-hero-actions {
-            margin-top: 16px;
-        }
-        .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log,
-        .vpn-shell-mk5 .vpn-panel-runtime #vpn-runtime-log,
-        .vpn-shell-mk5 .vpn-panel-config #vpn-config-pre,
-        .vpn-shell-mk5 .vpn-panel-tunnel pre {
-            min-height: 190px;
-        }
-    }
-    /* OpenVPN Mk5 pass 8 precision finish: diagnostics, entry actions and CBI polish. */
-    .vpn-shell-mk5 .vpn-action-tile-basic {
-        border-color: rgba(61, 220, 151, 0.24) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(61, 220, 151, 0.12), transparent 38%),
-            linear-gradient(180deg, rgba(255,255,255,0.044), rgba(255,255,255,0.012)),
-            rgba(12, 17, 27, 0.66) !important;
-    }
-    .vpn-shell-mk5 .vpn-action-tile-advanced {
-        border-color: rgba(247, 198, 103, 0.24) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(247, 198, 103, 0.12), transparent 38%),
-            linear-gradient(180deg, rgba(255,255,255,0.044), rgba(255,255,255,0.012)),
-            rgba(12, 17, 27, 0.66) !important;
-    }
-    .vpn-shell-mk5 .vpn-action-tile-native {
-        border-color: rgba(108, 162, 255, 0.26) !important;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.13), transparent 38%),
-            linear-gradient(180deg, rgba(255,255,255,0.044), rgba(255,255,255,0.012)),
-            rgba(12, 17, 27, 0.66) !important;
-    }
-    .vpn-shell-mk5 .vpn-action-tile-basic:hover,
-    .vpn-shell-mk5 .vpn-action-tile-advanced:hover,
-    .vpn-shell-mk5 .vpn-action-tile-native:hover {
-        transform: translateY(-2px);
-    }
-    .vpn-shell-mk5 .vpn-subcard-route-targets,
-    .vpn-shell-mk5 .vpn-subcard-route-map,
-    .vpn-shell-mk5 .vpn-subcard-tun,
-    .vpn-shell-mk5 .vpn-subcard-lan {
-        min-height: 100%;
-    }
-    .vpn-shell-mk5 .vpn-subcard-route-targets {
-        border-color: rgba(47, 211, 238, 0.28) !important;
-    }
-    .vpn-shell-mk5 .vpn-subcard-route-map {
-        border-color: rgba(108, 162, 255, 0.28) !important;
-    }
-    .vpn-shell-mk5 .vpn-subcard-tun {
-        border-color: rgba(61, 220, 151, 0.26) !important;
-    }
-    .vpn-shell-mk5 .vpn-subcard-lan {
-        border-color: rgba(247, 198, 103, 0.24) !important;
-    }
-    .vpn-shell-mk5 .vpn-check-empty {
-        min-height: 52px;
-        justify-content: center;
-        color: #9fb1cd;
-        text-align: center;
-    }
-    .vpn-shell-mk5 .vpn-check-section-title,
-    .vpn-shell-mk5 .vpn-subcard-title,
-    .vpn-shell-mk5 .vpn-card-title,
-    .vpn-shell-mk5 .vpn-quick-rail-title {
-        letter-spacing: 0;
-    }
-    .vpn-shell-config .vpn-mode-chip,
-    .vpn-shell-overview .vpn-status-chip {
-        border-color: rgba(var(--vpn-state-rgb), 0.32);
-        color: #baf7ff;
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.14), transparent 42%),
-            rgba(15, 21, 33, 0.66);
-    }
-    .vpn-shell-config .vpn-hero-actions-config,
-    .vpn-shell-overview .vpn-hero-actions-overview {
-        align-content: start;
-    }
-    .vpn-shell-config .vpn-category-current {
-        margin-top: 12px;
-        padding: 10px 12px;
-        border: 1px solid rgba(108, 162, 255, 0.18);
-        border-radius: 8px;
-        background: rgba(8, 13, 22, 0.46);
-    }
-    .vpn-entry-grid-import .vpn-entry-actions-template .cbi-button,
-    .vpn-entry-grid-import .vpn-entry-actions-upload .cbi-button {
-        min-height: 48px;
-    }
-    .vpn-entry-grid-import .vpn-entry-actions-template .cbi-button {
-        border-color: rgba(61, 220, 151, 0.42) !important;
-        background:
-            linear-gradient(180deg, rgba(54, 190, 132, 0.92), rgba(24, 132, 92, 0.88)) !important;
-    }
-    .vpn-entry-grid-import .vpn-entry-actions-upload .cbi-button {
-        border-color: rgba(108, 162, 255, 0.48) !important;
-        background:
-            linear-gradient(180deg, rgba(67, 151, 255, 0.94), rgba(28, 108, 218, 0.90)) !important;
-    }
-    .vpn-entry-grid-import .vpn-field-label {
-        color: #d7e7ff;
-        font-weight: 850;
-    }
-    .vpn-entry-grid-import code {
-        color: #baf7ff;
-        background: rgba(47, 211, 238, 0.08);
-        border: 1px solid rgba(47, 211, 238, 0.16);
-        border-radius: 6px;
-        padding: 1px 5px;
-    }
-    .vpn-cbi-section-mk5 .vpn-cbi-descr {
-        margin: 8px 0 12px;
-        padding: 10px 12px;
-        border: 1px solid rgba(108, 162, 255, 0.16);
-        border-radius: 8px;
-        background: rgba(8, 13, 22, 0.42);
-    }
-    .vpn-cbi-section-mk5 .cbi-tabmenu {
-        border-color: rgba(92, 128, 178, 0.24);
-    }
-    .vpn-cbi-section-mk5 .cbi-tab,
-    .vpn-cbi-section-mk5 .cbi-tab-disabled {
-        border-radius: 8px 8px 0 0;
-    }
-    .vpn-cbi-section-mk5 .cbi-value-title {
-        color: #c8d8f2;
-        font-weight: 820;
-    }
-    .vpn-cbi-section-mk5 .cbi-value-description {
-        color: #96aac8;
-        line-height: 1.56;
-    }
-    .vpn-cbi-section-mk5 .cbi-section-table-row:hover td,
-    .vpn-cbi-section-mk5 tr:hover td {
-        background: rgba(47, 211, 238, 0.035);
-    }
-    .vpn-shell-mk5 .vpn-copy-feedback.is-visible {
-        white-space: normal;
-        max-width: 100%;
-    }
-    @media (max-width: 640px) {
-        .vpn-shell-mk5 .vpn-action-list-compact {
-            grid-template-columns: minmax(0, 1fr);
-        }
-        .vpn-shell-mk5 .vpn-action-tile {
-            min-height: 76px;
-        }
-        .vpn-entry-grid-import .vpn-entry-card {
-            padding: 16px;
-        }
-        .vpn-cbi-section-mk5 .cbi-section-remove.right {
-            float: none;
-            margin: 0 0 12px;
-            text-align: left;
-        }
-    }
-    /* OpenVPN Mk5 pass 9: 250-line webpage precision layer. */
-    .vpn-shell-mk5 {
-        --vpn-pass9-surface: rgba(11, 16, 25, 0.78);
-        --vpn-pass9-surface-soft: rgba(17, 23, 35, 0.66);
-        --vpn-pass9-ring: rgba(122, 147, 188, 0.28);
-        --vpn-pass9-hi: rgba(255,255,255,0.072);
-    }
-    .vpn-shell-mk5::before {
-        background:
-            radial-gradient(circle at 12% 0%, rgba(var(--vpn-state-rgb), 0.105), transparent 28%),
-            radial-gradient(circle at 88% 0%, rgba(108, 162, 255, 0.090), transparent 30%),
-            linear-gradient(180deg, rgba(255,255,255,0.030), transparent 26%);
-        opacity: 0.94;
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5 {
-        background:
-            radial-gradient(circle at 50% 0%, rgba(var(--vpn-state-rgb), 0.100), transparent 30%),
-            radial-gradient(circle at 100% 12%, rgba(108, 162, 255, 0.105), transparent 32%),
-            linear-gradient(180deg, rgba(34, 41, 58, 0.980), rgba(17, 23, 35, 0.988)),
-            var(--vpn-pass9-surface) !important;
-    }
-    .vpn-shell-mk5 .vpn-brand-console,
-    .vpn-shell-mk5 .vpn-command-card-live,
-    .vpn-shell-mk5 .vpn-quick-rail-console,
-    .vpn-shell-mk5 .vpn-panel-shell-diagnostics {
-        box-shadow:
-            inset 0 1px 0 var(--vpn-pass9-hi),
-            inset 0 0 0 1px rgba(255,255,255,0.018),
-            0 20px 42px rgba(0,0,0,0.24) !important;
-    }
-    .vpn-shell-mk5 .vpn-brand-console::after,
-    .vpn-shell-mk5 .vpn-command-card-live::after {
-        content: "";
-        position: absolute;
-        left: 16px;
-        right: 16px;
-        bottom: 0;
-        height: 1px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, transparent, rgba(var(--vpn-state-rgb), 0.70), rgba(108,162,255,0.42), transparent);
-        opacity: 0.78;
-        pointer-events: none;
-    }
-    .vpn-shell-mk5 .vpn-toolbar {
-        gap: 7px;
-    }
-    .vpn-shell-mk5 .vpn-pill,
-    .vpn-shell-mk5 .vpn-health-chip,
-    .vpn-shell-mk5 .vpn-inline-note,
-    .vpn-shell-mk5 .vpn-status-chip,
-    .vpn-shell-mk5 .vpn-card-badge,
-    .vpn-shell-mk5 .vpn-inline-badge,
-    .vpn-shell-mk5 .vpn-panel-live-badge,
-    .vpn-shell-mk5 .vpn-focus-pill,
-    .vpn-shell-mk5 .vpn-micro-badge,
-    .vpn-entry-badge {
-        min-height: 32px;
-        border-color: rgba(137, 159, 198, 0.24);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.014)),
-            rgba(12, 18, 29, 0.68);
-    }
-    .vpn-shell-mk5 .vpn-hero-summary {
-        gap: 9px;
-        padding: 8px;
-        border: 1px solid rgba(255,255,255,0.055);
-        border-radius: 8px;
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item {
-        min-height: 72px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item span:first-child,
-    .vpn-shell-secondary .vpn-secondary-summary span {
-        color: #9fb4d2;
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item strong,
-    .vpn-shell-secondary .vpn-secondary-summary strong {
-        color: #eef7ff;
-    }
-    .vpn-shell-mk5 .vpn-orb-wrap {
-        grid-template-columns: 120px minmax(0, 1fr);
-        min-height: 138px;
-        gap: 16px;
-    }
-    .vpn-shell-mk5 .vpn-orb-ring {
-        width: 120px;
-        height: 120px;
-        min-width: 120px;
-        font-size: 20px;
-    }
-    .vpn-shell-mk5 .vpn-orb-copy strong {
-        font-size: 22px;
-        line-height: 1.24;
-    }
-    .vpn-shell-mk5 .vpn-orb-copy span {
-        color: #a8bbd8;
-    }
-    .vpn-shell-mk5 .vpn-hero-note {
-        border-color: rgba(var(--vpn-state-rgb), 0.28);
-        background:
-            radial-gradient(circle at 100% 0%, rgba(var(--vpn-state-rgb), 0.10), transparent 36%),
-            rgba(8, 13, 22, 0.54);
-    }
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-card {
-        transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
-    }
-    .vpn-shell-mk5 .vpn-mini-card:hover,
-    .vpn-shell-mk5 .vpn-stat-card:hover,
-    .vpn-shell-mk5 .vpn-card:hover {
-        transform: translateY(-1px);
-    }
-    .vpn-shell-mk5 .vpn-mini-label,
-    .vpn-shell-mk5 .vpn-stat-label {
-        color: #9fb4d2;
-        font-weight: 760;
-    }
-    .vpn-shell-mk5 .vpn-mini-card strong,
-    .vpn-shell-mk5 .vpn-stat-value {
-        font-size: 18px;
-    }
-    .vpn-shell-mk5 .vpn-kv {
-        grid-template-columns: minmax(92px, 0.36fr) minmax(0, 1fr);
-        gap: 10px;
-    }
-    .vpn-shell-mk5 .vpn-kv span:first-child {
-        color: #9fb4d2;
-        font-weight: 760;
-    }
-    .vpn-shell-mk5 .vpn-kv strong {
-        color: #eef7ff;
-    }
-    .vpn-shell-mk5 .vpn-action-tile {
-        isolation: isolate;
-    }
-    .vpn-shell-mk5 .vpn-action-tile::before {
-        content: "";
-        position: absolute;
-        inset: 1px;
-        border-radius: 7px;
-        background: linear-gradient(135deg, rgba(255,255,255,0.055), transparent 45%);
-        opacity: 0.65;
-        pointer-events: none;
-        z-index: -1;
-    }
-    .vpn-shell-mk5 .vpn-panel-shell-head {
-        gap: 18px;
-    }
-    .vpn-shell-mk5 .vpn-panel-live-badge {
-        flex: 0 0 auto;
-        margin-top: 2px;
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics {
-        border-bottom-color: rgba(92, 128, 178, 0.24);
-        background:
-            linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)),
-            rgba(8, 13, 22, 0.74);
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn {
-        min-height: 42px;
-        font-size: 12px;
-    }
-    .vpn-shell-mk5 .vpn-tabbar-diagnostics .vpn-tab-btn.is-active {
-        color: #f7fbff;
-    }
-    .vpn-shell-mk5 .vpn-focus-strip {
-        margin: 12px 0;
-    }
-    .vpn-shell-mk5 .vpn-panel pre,
-    .vpn-shell-mk5 .vpn-subcard pre,
-    .vpn-shell-mk5 #vpn-config-pre {
-        font-size: 12px;
-        line-height: 1.62;
-        tab-size: 2;
-    }
-    .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log {
-        color: #e4f0ff;
-    }
-    .vpn-shell-mk5 .vpn-subcard-title {
-        display: inline-flex;
-        align-items: center;
-        min-height: 30px;
-        padding: 0 10px;
-        border: 1px solid rgba(108, 162, 255, 0.16);
-        border-radius: 999px;
-        background: rgba(8, 13, 22, 0.42);
-        font-size: 12px;
-    }
-    .vpn-shell-mk5 .vpn-check-row {
-        border-color: rgba(101, 124, 162, 0.46);
-    }
-    .vpn-shell-mk5 .vpn-check-row:hover {
-        border-color: rgba(47, 211, 238, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-micro-badge {
-        padding: 0 9px;
-    }
-    .vpn-entry-grid-import {
-        gap: 14px;
-    }
-    .vpn-entry-grid-import .vpn-entry-card {
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.064),
-            0 18px 36px rgba(0,0,0,0.22) !important;
-    }
-    .vpn-entry-grid-import .vpn-entry-head {
-        align-items: center;
-    }
-    .vpn-entry-grid-import .vpn-entry-lead {
-        color: #a9bad6;
-    }
-    .vpn-cbi-section-mk5 {
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.060),
-            0 14px 30px rgba(0,0,0,0.18) !important;
-    }
-    .vpn-cbi-section-mk5 .vpn-section-title {
-        color: #f2f8ff;
-        font-size: 17px;
-    }
-    .vpn-cbi-section-mk5 .cbi-value {
-        padding-top: 12px;
-        padding-bottom: 12px;
-    }
-    @media (max-width: 760px) {
-        .vpn-shell-mk5 .vpn-hero-summary {
-            padding: 7px;
-        }
-        .vpn-shell-mk5 .vpn-hero-summary-item {
-            min-height: 64px;
-        }
-        .vpn-shell-mk5 .vpn-orb-wrap {
-            grid-template-columns: minmax(0, 1fr);
-            text-align: center;
-        }
-        .vpn-shell-mk5 .vpn-orb-ring {
-            margin: 0 auto;
-        }
-        .vpn-shell-mk5 .vpn-panel-shell-head {
-            flex-direction: column;
-        }
-        .vpn-shell-mk5 .vpn-panel-live-badge {
-            align-self: flex-start;
-        }
-        .vpn-shell-mk5 .vpn-kv {
-            grid-template-columns: minmax(0, 1fr);
-        }
-    }
-</style>
-EOF_OPENVPN_MK5_PASS7_TO_PASS9_POLISH
-
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_PASS10_POLISH'
-<style type="text/css">
-    /* OpenVPN Mk5 pass 10 precision shell polish: modal-safe visual layer */
-    .vpn-shell-mk5 {
-        --vpn-pass10-ink-strong: #f4f9ff;
-        --vpn-pass10-ink-main: #d9e8fb;
-        --vpn-pass10-ink-soft: #b8c8dd;
-        --vpn-pass10-ink-muted: #8ea1bb;
-        --vpn-pass10-ink-dim: #6f8198;
-        --vpn-pass10-panel-0: rgba(9, 14, 24, 0.78);
-        --vpn-pass10-panel-1: rgba(14, 21, 34, 0.80);
-        --vpn-pass10-panel-2: rgba(21, 31, 48, 0.78);
-        --vpn-pass10-panel-3: rgba(28, 39, 58, 0.72);
-        --vpn-pass10-line-cold: rgba(111, 149, 198, 0.28);
-        --vpn-pass10-line-soft: rgba(137, 165, 207, 0.18);
-        --vpn-pass10-line-hot: rgba(47, 211, 238, 0.34);
-        --vpn-pass10-line-good: rgba(67, 219, 148, 0.34);
-        --vpn-pass10-line-warn: rgba(255, 205, 112, 0.34);
-        --vpn-pass10-line-bad: rgba(255, 111, 126, 0.34);
-        --vpn-pass10-glow-cyan: rgba(47, 211, 238, 0.20);
-        --vpn-pass10-glow-blue: rgba(66, 145, 255, 0.20);
-        --vpn-pass10-glow-green: rgba(67, 219, 148, 0.20);
-        --vpn-pass10-glow-warn: rgba(255, 205, 112, 0.20);
-        --vpn-pass10-shadow-deep: 0 22px 48px rgba(0, 0, 0, 0.28);
-        --vpn-pass10-shadow-soft: 0 14px 32px rgba(0, 0, 0, 0.20);
-        --vpn-pass10-shadow-flat: 0 8px 18px rgba(0, 0, 0, 0.16);
-        --vpn-pass10-radius-sm: 6px;
-        --vpn-pass10-radius-md: 8px;
-        --vpn-pass10-focus: 0 0 0 2px rgba(47, 211, 238, 0.24), 0 0 0 5px rgba(47, 211, 238, 0.08);
-        --vpn-pass10-gradient-panel: linear-gradient(145deg, rgba(23, 36, 55, 0.84), rgba(12, 18, 30, 0.86));
-        --vpn-pass10-gradient-panel-alt: linear-gradient(145deg, rgba(20, 34, 51, 0.76), rgba(13, 19, 31, 0.82));
-        --vpn-pass10-gradient-control: linear-gradient(180deg, rgba(57, 79, 116, 0.74), rgba(38, 52, 78, 0.78));
-        --vpn-pass10-gradient-good: linear-gradient(180deg, rgba(37, 145, 99, 0.90), rgba(23, 117, 79, 0.90));
-        --vpn-pass10-gradient-blue: linear-gradient(180deg, rgba(44, 148, 230, 0.92), rgba(28, 125, 213, 0.92));
-        --vpn-pass10-gradient-quiet: linear-gradient(180deg, rgba(55, 68, 98, 0.86), rgba(41, 51, 75, 0.90));
-        color: var(--vpn-pass10-ink-main);
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-        font-kerning: normal;
-        letter-spacing: 0;
-        border-color: rgba(66, 145, 255, 0.24);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.06),
-            inset 0 0 0 1px rgba(47, 211, 238, 0.08),
-            var(--vpn-pass10-shadow-deep);
-    }
-    .vpn-shell-mk5::selection,
-    .vpn-shell-mk5 *::selection {
-        color: #07111c;
-        background: rgba(124, 232, 255, 0.78);
-        text-shadow: none;
-    }
-    .vpn-shell-mk5::-webkit-scrollbar,
-    .vpn-shell-mk5 *::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-    .vpn-shell-mk5::-webkit-scrollbar-track,
-    .vpn-shell-mk5 *::-webkit-scrollbar-track {
-        background: rgba(9, 13, 22, 0.70);
-        border: 1px solid rgba(112, 145, 190, 0.12);
-    }
-    .vpn-shell-mk5::-webkit-scrollbar-thumb,
-    .vpn-shell-mk5 *::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, rgba(71, 104, 151, 0.86), rgba(45, 64, 94, 0.88));
-        border: 2px solid rgba(9, 13, 22, 0.70);
-        border-radius: 999px;
-    }
-    .vpn-shell-mk5::-webkit-scrollbar-thumb:hover,
-    .vpn-shell-mk5 *::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, rgba(62, 184, 220, 0.84), rgba(53, 117, 181, 0.88));
-    }
-    .vpn-shell-mk5 a,
-    .vpn-shell-mk5 button,
-    .vpn-shell-mk5 input,
-    .vpn-shell-mk5 select,
-    .vpn-shell-mk5 textarea {
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 a {
-        color: #8fdcff;
-        text-decoration-color: rgba(143, 220, 255, 0.34);
-        text-underline-offset: 3px;
-    }
-    .vpn-shell-mk5 a:hover {
-        color: #c7f3ff;
-        text-decoration-color: rgba(199, 243, 255, 0.64);
-    }
-    .vpn-shell-mk5 a:focus-visible,
-    .vpn-shell-mk5 button:focus-visible,
-    .vpn-shell-mk5 input:focus-visible,
-    .vpn-shell-mk5 select:focus-visible,
-    .vpn-shell-mk5 textarea:focus-visible,
-    .vpn-shell-mk5 [tabindex]:focus-visible {
-        outline: 0;
-        box-shadow: var(--vpn-pass10-focus);
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5,
-    .vpn-shell-secondary .vpn-hero-secondary,
-    .vpn-shell-secondary + .cbi-map {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
-            var(--vpn-pass10-gradient-panel);
-        border-color: rgba(112, 145, 190, 0.22);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.065),
-            inset 0 0 0 1px rgba(47, 211, 238, 0.035),
-            0 18px 42px rgba(0, 0, 0, 0.26);
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5::before,
-    .vpn-shell-secondary .vpn-hero-secondary::before {
-        opacity: 0.62;
-        background:
-            radial-gradient(circle at 20% 18%, rgba(47, 211, 238, 0.14), transparent 34%),
-            radial-gradient(circle at 88% 14%, rgba(67, 219, 148, 0.10), transparent 32%),
-            linear-gradient(120deg, rgba(255, 255, 255, 0.055), transparent 38%, rgba(255, 255, 255, 0.028));
-        pointer-events: none;
-    }
-    .vpn-shell-mk5 .vpn-hero-mk5::after,
-    .vpn-shell-secondary .vpn-hero-secondary::after {
-        opacity: 0.42;
-        background:
-            linear-gradient(90deg, rgba(47, 211, 238, 0.0), rgba(47, 211, 238, 0.12), rgba(47, 211, 238, 0.0)),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
-        pointer-events: none;
-    }
-    .vpn-shell-mk5 .vpn-brand-block,
-    .vpn-shell-mk5 .vpn-command-card,
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-card,
-    .vpn-shell-mk5 .vpn-quick-rail,
-    .vpn-shell-mk5 .vpn-panel-shell,
-    .vpn-shell-mk5 .vpn-subcard,
-    .vpn-shell-mk5 .vpn-action-tile,
-    .vpn-shell-secondary .vpn-mini-card,
-    .vpn-shell-secondary .vpn-category-rail,
-    .vpn-shell-secondary + .cbi-map .cbi-section {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012)),
-            var(--vpn-pass10-gradient-panel-alt);
-        border-color: rgba(119, 151, 196, 0.24);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-            var(--vpn-pass10-shadow-soft);
-    }
-    .vpn-shell-mk5 .vpn-brand-block:hover,
-    .vpn-shell-mk5 .vpn-command-card:hover,
-    .vpn-shell-mk5 .vpn-mini-card:hover,
-    .vpn-shell-mk5 .vpn-stat-card:hover,
-    .vpn-shell-mk5 .vpn-card:hover,
-    .vpn-shell-mk5 .vpn-quick-rail:hover,
-    .vpn-shell-mk5 .vpn-panel-shell:hover,
-    .vpn-shell-mk5 .vpn-subcard:hover,
-    .vpn-shell-mk5 .vpn-action-tile:hover,
-    .vpn-shell-secondary .vpn-mini-card:hover,
-    .vpn-shell-secondary .vpn-category-rail:hover {
-        border-color: rgba(47, 211, 238, 0.32);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.080),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-            0 18px 38px rgba(0, 0, 0, 0.24),
-            0 0 0 1px rgba(47, 211, 238, 0.035);
-    }
-    .vpn-shell-mk5 .vpn-brand-block::before,
-    .vpn-shell-mk5 .vpn-command-card::before,
-    .vpn-shell-mk5 .vpn-mini-card::before,
-    .vpn-shell-mk5 .vpn-stat-card::before,
-    .vpn-shell-mk5 .vpn-card::before,
-    .vpn-shell-mk5 .vpn-quick-rail::before,
-    .vpn-shell-mk5 .vpn-panel-shell::before,
-    .vpn-shell-mk5 .vpn-subcard::before {
-        opacity: 0.48;
-        background:
-            linear-gradient(90deg, rgba(47, 211, 238, 0.0), rgba(47, 211, 238, 0.12), rgba(47, 211, 238, 0.0)),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0));
-    }
-    .vpn-shell-mk5 .vpn-brand-block::after,
-    .vpn-shell-mk5 .vpn-command-card::after,
-    .vpn-shell-mk5 .vpn-mini-card::after,
-    .vpn-shell-mk5 .vpn-stat-card::after,
-    .vpn-shell-mk5 .vpn-card::after,
-    .vpn-shell-mk5 .vpn-quick-rail::after,
-    .vpn-shell-mk5 .vpn-panel-shell::after,
-    .vpn-shell-mk5 .vpn-subcard::after {
-        opacity: 0.30;
-        background:
-            linear-gradient(120deg, rgba(255, 255, 255, 0.050), transparent 34%),
-            radial-gradient(circle at 94% 14%, rgba(67, 219, 148, 0.08), transparent 30%);
-    }
-    .vpn-shell-mk5 .vpn-brand-block h2,
-    .vpn-shell-secondary .vpn-page-title {
-        color: var(--vpn-pass10-ink-strong);
-        text-shadow: 0 1px 18px rgba(47, 211, 238, 0.18);
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 .vpn-brand-block h2::after,
-    .vpn-shell-secondary .vpn-page-title::after {
-        background: linear-gradient(90deg, rgba(47, 211, 238, 0.94), rgba(96, 225, 194, 0.74), rgba(47, 211, 238, 0.16));
-        box-shadow: 0 0 18px rgba(47, 211, 238, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-sub,
-    .vpn-shell-secondary .vpn-sub,
-    .vpn-shell-mk5 .vpn-mini-note,
-    .vpn-shell-mk5 .vpn-card-sub,
-    .vpn-shell-mk5 .vpn-panel-sub,
-    .vpn-shell-mk5 .vpn-action-desc,
-    .vpn-shell-mk5 .vpn-entry-lead,
-    .vpn-shell-mk5 .vpn-help-text {
-        color: var(--vpn-pass10-ink-soft);
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.16);
-    }
-    .vpn-shell-mk5 .vpn-pill,
-    .vpn-shell-mk5 .vpn-health-chip,
-    .vpn-shell-mk5 .vpn-status-chip,
-    .vpn-shell-mk5 .vpn-inline-note,
-    .vpn-shell-mk5 .vpn-card-badge,
-    .vpn-shell-mk5 .vpn-inline-badge,
-    .vpn-shell-mk5 .vpn-panel-live-badge,
-    .vpn-shell-mk5 .vpn-focus-pill,
-    .vpn-shell-mk5 .vpn-micro-badge,
-    .vpn-shell-secondary .vpn-secondary-summary span {
-        color: #cdeeff;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0.016)),
-            rgba(16, 24, 38, 0.66);
-        border-color: rgba(111, 149, 198, 0.30);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.065),
-            0 8px 18px rgba(0, 0, 0, 0.16);
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-health-chip.good,
-    .vpn-shell-mk5 .vpn-status-chip.good,
-    .vpn-shell-mk5 .vpn-inline-badge.good,
-    .vpn-shell-mk5 .vpn-panel-live-badge.good,
-    .vpn-shell-mk5 .vpn-focus-pill.good,
-    .vpn-shell-mk5 .vpn-micro-badge.good {
-        color: #d7ffe9;
-        background:
-            linear-gradient(180deg, rgba(67, 219, 148, 0.24), rgba(23, 117, 79, 0.20)),
-            rgba(8, 31, 23, 0.72);
-        border-color: rgba(67, 219, 148, 0.42);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.070),
-            0 0 0 1px rgba(67, 219, 148, 0.040),
-            0 10px 22px rgba(0, 0, 0, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-health-chip.warn,
-    .vpn-shell-mk5 .vpn-status-chip.warn,
-    .vpn-shell-mk5 .vpn-inline-badge.warn,
-    .vpn-shell-mk5 .vpn-panel-live-badge.warn,
-    .vpn-shell-mk5 .vpn-focus-pill.warn,
-    .vpn-shell-mk5 .vpn-micro-badge.warn {
-        color: #fff3c9;
-        background:
-            linear-gradient(180deg, rgba(255, 205, 112, 0.24), rgba(139, 92, 34, 0.20)),
-            rgba(36, 25, 13, 0.72);
-        border-color: rgba(255, 205, 112, 0.42);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.070),
-            0 0 0 1px rgba(255, 205, 112, 0.040),
-            0 10px 22px rgba(0, 0, 0, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-health-chip.bad,
-    .vpn-shell-mk5 .vpn-status-chip.bad,
-    .vpn-shell-mk5 .vpn-inline-badge.bad,
-    .vpn-shell-mk5 .vpn-panel-live-badge.bad,
-    .vpn-shell-mk5 .vpn-focus-pill.bad,
-    .vpn-shell-mk5 .vpn-micro-badge.bad {
-        color: #ffe0e5;
-        background:
-            linear-gradient(180deg, rgba(255, 111, 126, 0.24), rgba(132, 43, 58, 0.20)),
-            rgba(39, 17, 24, 0.72);
-        border-color: rgba(255, 111, 126, 0.42);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.070),
-            0 0 0 1px rgba(255, 111, 126, 0.040),
-            0 10px 22px rgba(0, 0, 0, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-hero-summary,
-    .vpn-shell-secondary .vpn-secondary-summary,
-    .vpn-shell-mk5 .vpn-entry-grid,
-    .vpn-shell-mk5 .vpn-stat-grid,
-    .vpn-shell-mk5 .vpn-card-grid,
-    .vpn-shell-mk5 .vpn-quick-grid,
-    .vpn-shell-mk5 .vpn-action-list {
-        background:
-            linear-gradient(180deg, rgba(4, 9, 16, 0.35), rgba(4, 9, 16, 0.18)),
-            rgba(6, 10, 18, 0.18);
-        border-color: rgba(119, 151, 196, 0.14);
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item,
-    .vpn-shell-secondary .vpn-secondary-summary span {
-        color: var(--vpn-pass10-ink-soft);
-        border-color: rgba(111, 149, 198, 0.28);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
-            rgba(12, 19, 31, 0.66);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.050),
-            0 8px 16px rgba(0, 0, 0, 0.14);
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item strong,
-    .vpn-shell-secondary .vpn-secondary-summary strong,
-    .vpn-shell-mk5 .vpn-mini-card strong,
-    .vpn-shell-mk5 .vpn-stat-value,
-    .vpn-shell-mk5 .vpn-kv strong,
-    .vpn-shell-mk5 .vpn-card strong,
-    .vpn-shell-mk5 .vpn-action-title,
-    .vpn-shell-mk5 .vpn-entry-title {
-        color: var(--vpn-pass10-ink-strong);
-        text-shadow: 0 1px 12px rgba(47, 211, 238, 0.10);
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 .vpn-hero-summary-item span,
-    .vpn-shell-mk5 .vpn-mini-label,
-    .vpn-shell-mk5 .vpn-stat-label,
-    .vpn-shell-mk5 .vpn-kv span,
-    .vpn-shell-mk5 .vpn-card-label,
-    .vpn-shell-mk5 .vpn-action-kicker,
-    .vpn-shell-mk5 .vpn-entry-meta {
-        color: var(--vpn-pass10-ink-muted);
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 .vpn-summary-path strong,
-    .vpn-shell-mk5 .vpn-summary-line,
-    .vpn-shell-mk5 code,
-    .vpn-shell-mk5 pre,
-    .vpn-shell-mk5 kbd {
-        color: #dcecff;
-        text-shadow: none;
-    }
-    .vpn-shell-mk5 .vpn-command-card-live {
-        border-color: rgba(70, 229, 170, 0.22);
-        background:
-            radial-gradient(circle at 16% 24%, rgba(67, 219, 148, 0.10), transparent 32%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012)),
-            rgba(13, 20, 33, 0.82);
-    }
-    .vpn-shell-mk5 .vpn-command-kicker {
-        color: #c9f7ec;
-        background:
-            linear-gradient(180deg, rgba(67, 219, 148, 0.20), rgba(28, 111, 82, 0.16)),
-            rgba(9, 27, 23, 0.68);
-        border-color: rgba(67, 219, 148, 0.36);
-    }
-    .vpn-shell-mk5 .vpn-orb-wrap {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.030), rgba(255, 255, 255, 0.010)),
-            rgba(9, 15, 25, 0.70);
-        border-color: rgba(92, 216, 189, 0.22);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.050),
-            0 14px 30px rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring {
-        color: #e8fff6;
-        text-shadow: 0 1px 12px rgba(67, 219, 148, 0.22);
-        box-shadow:
-            inset 0 0 0 10px rgba(6, 15, 23, 0.70),
-            inset 0 0 24px rgba(67, 219, 148, 0.10),
-            0 0 0 1px rgba(67, 219, 148, 0.22),
-            0 18px 36px rgba(0, 0, 0, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring.good {
-        background:
-            radial-gradient(circle, rgba(67, 219, 148, 0.12), rgba(6, 22, 18, 0.82) 58%),
-            conic-gradient(from 0turn, rgba(67, 219, 148, 0.94), rgba(56, 188, 223, 0.70), rgba(67, 219, 148, 0.94));
-        border-color: rgba(67, 219, 148, 0.44);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring.warn {
-        background:
-            radial-gradient(circle, rgba(255, 205, 112, 0.12), rgba(32, 25, 12, 0.82) 58%),
-            conic-gradient(from 0turn, rgba(255, 205, 112, 0.94), rgba(255, 145, 92, 0.72), rgba(255, 205, 112, 0.94));
-        border-color: rgba(255, 205, 112, 0.44);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring.bad {
-        background:
-            radial-gradient(circle, rgba(255, 111, 126, 0.12), rgba(32, 14, 20, 0.82) 58%),
-            conic-gradient(from 0turn, rgba(255, 111, 126, 0.94), rgba(255, 162, 110, 0.70), rgba(255, 111, 126, 0.94));
-        border-color: rgba(255, 111, 126, 0.44);
-    }
-    .vpn-shell-mk5 .vpn-orb-ring span {
-        color: inherit;
-        text-shadow: inherit;
-    }
-    .vpn-shell-mk5 .vpn-orb-copy strong {
-        color: var(--vpn-pass10-ink-strong);
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 .vpn-orb-copy span {
-        color: var(--vpn-pass10-ink-soft);
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button,
-    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button,
-    .vpn-shell-mk5 input.cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button,
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button {
-        color: #f2f8ff;
-        background: var(--vpn-pass10-gradient-control);
-        border-color: rgba(129, 159, 205, 0.34);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.12),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.22),
-            0 10px 20px rgba(0, 0, 0, 0.20);
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
-        letter-spacing: 0;
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button:hover,
-    .vpn-shell-mk5 .vpn-hero-actions button.cbi-button:hover,
-    .vpn-shell-mk5 .vpn-hero-actions a.cbi-button:hover,
-    .vpn-shell-mk5 input.cbi-button:hover,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button:hover,
-    .vpn-shell-secondary .vpn-hero-actions a.cbi-button:hover {
-        border-color: rgba(47, 211, 238, 0.46);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.15),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-            0 12px 24px rgba(0, 0, 0, 0.22),
-            0 0 0 1px rgba(47, 211, 238, 0.060);
-        filter: saturate(1.04);
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button-apply,
-    .vpn-shell-mk5 .vpn-hero-actions input.cbi-button-apply,
-    .vpn-shell-secondary .vpn-hero-actions .cbi-button-apply {
-        color: #eefcff;
-        background: var(--vpn-pass10-gradient-blue);
-        border-color: rgba(87, 190, 255, 0.46);
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-primary,
-    .vpn-shell-mk5 .vpn-hero-actions .vpn-primary,
-    .vpn-shell-mk5 .vpn-hero-actions #vpn-primary-button:not([disabled]) {
-        color: #eafff4;
-        background: var(--vpn-pass10-gradient-good);
-        border-color: rgba(67, 219, 148, 0.48);
-    }
-    .vpn-shell-mk5 .vpn-hero-actions .vpn-button-muted,
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button[disabled],
-    .vpn-shell-mk5 .vpn-hero-actions .cbi-button.is-disabled {
-        color: #c7d3e3;
-        background: var(--vpn-pass10-gradient-quiet);
-        border-color: rgba(129, 159, 205, 0.26);
-        opacity: 0.92;
-    }
-    .vpn-shell-mk5 .vpn-copy-feedback {
-        color: #bcebdc;
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-hero-note {
-        color: #dcecff;
-        background:
-            linear-gradient(180deg, rgba(67, 219, 148, 0.10), rgba(47, 211, 238, 0.055)),
-            rgba(9, 17, 27, 0.70);
-        border-color: rgba(67, 219, 148, 0.28);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.05),
-            0 10px 22px rgba(0, 0, 0, 0.15);
-    }
-    .vpn-shell-mk5 .vpn-mini-card-accent,
-    .vpn-shell-mk5 .vpn-stat-card-emphasis {
-        border-color: rgba(67, 219, 148, 0.26);
-        background:
-            radial-gradient(circle at 88% 18%, rgba(67, 219, 148, 0.10), transparent 32%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012)),
-            rgba(13, 22, 34, 0.80);
-    }
-    .vpn-shell-mk5 .vpn-mini-card-service {
-        border-color: rgba(67, 219, 148, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-mini-card-auth {
-        border-color: rgba(97, 187, 255, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-mini-card-route {
-        border-color: rgba(255, 205, 112, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-mini-card-wide {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.012)),
-            rgba(14, 23, 36, 0.82);
-    }
-    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(1) {
-        border-color: rgba(47, 211, 238, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(2) {
-        border-color: rgba(67, 219, 148, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(3) {
-        border-color: rgba(255, 205, 112, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-stat-card:nth-of-type(4) {
-        border-color: rgba(156, 178, 255, 0.22);
-    }
-    .vpn-shell-mk5 .vpn-kv {
-        border-color: rgba(111, 149, 198, 0.20);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.006)),
-            rgba(8, 13, 22, 0.52);
-    }
-    .vpn-shell-mk5 .vpn-kv:hover {
-        border-color: rgba(47, 211, 238, 0.28);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
-            rgba(10, 17, 28, 0.62);
-    }
-    .vpn-shell-mk5 .vpn-card-head,
-    .vpn-shell-mk5 .vpn-quick-rail-head,
-    .vpn-shell-mk5 .vpn-panel-shell-head,
-    .vpn-shell-mk5 .vpn-panel-head,
-    .vpn-shell-mk5 .vpn-subcard-head {
-        color: var(--vpn-pass10-ink-strong);
-        border-color: rgba(111, 149, 198, 0.16);
-    }
-    .vpn-shell-mk5 .vpn-panel-shell-head {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
-            rgba(6, 11, 20, 0.34);
-    }
-    .vpn-shell-mk5 .vpn-tabbar {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
-            rgba(8, 14, 24, 0.62);
-        border-color: rgba(111, 149, 198, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn {
-        color: #bcd0e9;
-        background: rgba(12, 19, 31, 0.58);
-        border-color: rgba(111, 149, 198, 0.18);
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn:hover {
-        color: #edf8ff;
-        background: rgba(22, 33, 50, 0.72);
-        border-color: rgba(47, 211, 238, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-tab-btn.is-active {
-        color: #eaffff;
-        background:
-            linear-gradient(180deg, rgba(47, 211, 238, 0.22), rgba(46, 110, 161, 0.18)),
-            rgba(11, 21, 33, 0.78);
-        border-color: rgba(47, 211, 238, 0.44);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.08),
-            0 8px 18px rgba(0, 0, 0, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-panel {
-        background: rgba(7, 12, 20, 0.34);
-        border-color: rgba(111, 149, 198, 0.14);
-    }
-    .vpn-shell-mk5 .vpn-panel.is-active {
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.028),
-            0 8px 18px rgba(0, 0, 0, 0.12);
-    }
-    .vpn-shell-mk5 .vpn-panel pre,
-    .vpn-shell-mk5 .vpn-subcard pre,
-    .vpn-shell-mk5 #vpn-config-pre,
-    .vpn-shell-mk5 #vpn-log-pre,
-    .vpn-shell-mk5 #vpn-route-pre,
-    .vpn-shell-mk5 #vpn-diag-pre {
-        color: #d8e8fb;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.004)),
-            rgba(3, 8, 14, 0.74);
-        border-color: rgba(105, 139, 187, 0.22);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.030),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.26);
-    }
-    .vpn-shell-mk5 .vpn-panel pre:empty::before,
-    .vpn-shell-mk5 .vpn-subcard pre:empty::before {
-        color: var(--vpn-pass10-ink-dim);
-    }
-    .vpn-shell-mk5 .vpn-check-row,
-    .vpn-shell-mk5 .vpn-check-empty,
-    .vpn-shell-mk5 .vpn-log-row,
-    .vpn-shell-mk5 .vpn-route-row {
-        color: var(--vpn-pass10-ink-main);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.006)),
-            rgba(7, 13, 22, 0.58);
-        border-color: rgba(111, 149, 198, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-check-row:hover,
-    .vpn-shell-mk5 .vpn-log-row:hover,
-    .vpn-shell-mk5 .vpn-route-row:hover {
-        border-color: rgba(47, 211, 238, 0.30);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(255, 255, 255, 0.008)),
-            rgba(10, 17, 28, 0.68);
-    }
-    .vpn-shell-mk5 .vpn-check-row.good {
-        border-color: rgba(67, 219, 148, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-check-row.warn {
-        border-color: rgba(255, 205, 112, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-check-row.bad {
-        border-color: rgba(255, 111, 126, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-check-icon,
-    .vpn-shell-mk5 .vpn-log-icon,
-    .vpn-shell-mk5 .vpn-route-icon {
-        color: #9adfff;
-        background: rgba(47, 211, 238, 0.10);
-        border-color: rgba(47, 211, 238, 0.24);
-    }
-    .vpn-shell-mk5 .good .vpn-check-icon,
-    .vpn-shell-mk5 .good .vpn-log-icon,
-    .vpn-shell-mk5 .good .vpn-route-icon {
-        color: #c9ffe4;
-        background: rgba(67, 219, 148, 0.12);
-        border-color: rgba(67, 219, 148, 0.26);
-    }
-    .vpn-shell-mk5 .warn .vpn-check-icon,
-    .vpn-shell-mk5 .warn .vpn-log-icon,
-    .vpn-shell-mk5 .warn .vpn-route-icon {
-        color: #fff1bf;
-        background: rgba(255, 205, 112, 0.12);
-        border-color: rgba(255, 205, 112, 0.26);
-    }
-    .vpn-shell-mk5 .bad .vpn-check-icon,
-    .vpn-shell-mk5 .bad .vpn-log-icon,
-    .vpn-shell-mk5 .bad .vpn-route-icon {
-        color: #ffd8df;
-        background: rgba(255, 111, 126, 0.12);
-        border-color: rgba(255, 111, 126, 0.26);
-    }
-    .vpn-shell-mk5 .vpn-action-tile {
-        color: var(--vpn-pass10-ink-main);
-        text-decoration: none;
-    }
-    .vpn-shell-mk5 .vpn-action-tile:hover {
-        color: var(--vpn-pass10-ink-strong);
-        text-decoration: none;
-    }
-    .vpn-shell-mk5 .vpn-action-tile .vpn-action-icon {
-        color: #a9e7ff;
-        background:
-            linear-gradient(180deg, rgba(47, 211, 238, 0.18), rgba(47, 211, 238, 0.06)),
-            rgba(7, 15, 24, 0.70);
-        border-color: rgba(47, 211, 238, 0.28);
-    }
-    .vpn-shell-mk5 .vpn-action-tile:hover .vpn-action-icon {
-        color: #eaffff;
-        border-color: rgba(47, 211, 238, 0.40);
-        box-shadow: 0 0 0 1px rgba(47, 211, 238, 0.060);
-    }
-    .vpn-shell-mk5 .vpn-entry-card,
-    .vpn-shell-mk5 .vpn-entry-card.cbi-button,
-    .vpn-entry-grid-import .vpn-entry-card {
-        color: var(--vpn-pass10-ink-main);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
-            rgba(12, 19, 31, 0.76);
-        border-color: rgba(111, 149, 198, 0.24);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.054),
-            0 12px 26px rgba(0, 0, 0, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-entry-card:hover,
-    .vpn-shell-mk5 .vpn-entry-card.cbi-button:hover,
-    .vpn-entry-grid-import .vpn-entry-card:hover {
-        color: var(--vpn-pass10-ink-strong);
-        border-color: rgba(47, 211, 238, 0.32);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.014)),
-            rgba(15, 24, 38, 0.80);
-    }
-    .vpn-shell-mk5 .vpn-entry-card .vpn-entry-icon,
-    .vpn-entry-grid-import .vpn-entry-icon {
-        color: #a8e7ff;
-        background:
-            linear-gradient(180deg, rgba(47, 211, 238, 0.16), rgba(47, 211, 238, 0.055)),
-            rgba(7, 15, 24, 0.72);
-        border-color: rgba(47, 211, 238, 0.24);
-    }
-    .vpn-shell-mk5 .vpn-entry-card:hover .vpn-entry-icon,
-    .vpn-entry-grid-import .vpn-entry-card:hover .vpn-entry-icon {
-        color: #eaffff;
-        border-color: rgba(47, 211, 238, 0.38);
-    }
-    .vpn-shell-secondary .vpn-hero-actions {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
-            rgba(7, 13, 22, 0.40);
-        border-color: rgba(111, 149, 198, 0.16);
-    }
-    .vpn-shell-secondary .vpn-category-rail {
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
-            rgba(12, 19, 31, 0.74);
-    }
-    .vpn-shell-secondary .vpn-category-rail a,
-    .vpn-shell-secondary .vpn-category-rail .cbi-button {
-        color: #dff4ff;
-        background:
-            linear-gradient(180deg, rgba(48, 72, 105, 0.78), rgba(33, 47, 72, 0.82));
-        border-color: rgba(111, 149, 198, 0.28);
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-secondary .vpn-category-rail a:hover,
-    .vpn-shell-secondary .vpn-category-rail .cbi-button:hover {
-        color: #f4fbff;
-        border-color: rgba(47, 211, 238, 0.40);
-        background:
-            linear-gradient(180deg, rgba(52, 92, 128, 0.82), rgba(34, 61, 92, 0.86));
-    }
-    .vpn-shell-secondary + .cbi-map {
-        color: var(--vpn-pass10-ink-main);
-    }
-    .vpn-shell-secondary + .cbi-map .cbi-section,
-    .vpn-cbi-section-mk5 {
-        color: var(--vpn-pass10-ink-main);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.010)),
-            rgba(12, 19, 31, 0.76);
-        border-color: rgba(111, 149, 198, 0.22);
-    }
-    .vpn-shell-secondary + .cbi-map .cbi-section legend,
-    .vpn-cbi-section-mk5 .vpn-section-title,
-    .vpn-cbi-section-mk5 legend {
-        color: var(--vpn-pass10-ink-strong);
-        text-shadow: 0 1px 12px rgba(47, 211, 238, 0.10);
-    }
-    .vpn-shell-secondary + .cbi-map .cbi-value,
-    .vpn-cbi-section-mk5 .cbi-value {
-        border-color: rgba(111, 149, 198, 0.12);
-    }
-    .vpn-shell-secondary + .cbi-map .cbi-value-title,
-    .vpn-cbi-section-mk5 .cbi-value-title {
-        color: #dbeaff;
-        letter-spacing: 0;
-    }
-    .vpn-shell-secondary + .cbi-map .cbi-value-description,
-    .vpn-cbi-section-mk5 .cbi-value-description,
-    .vpn-shell-secondary + .cbi-map .cbi-value-field .description,
-    .vpn-cbi-section-mk5 .cbi-value-field .description {
-        color: var(--vpn-pass10-ink-soft);
-    }
-    .vpn-shell-secondary + .cbi-map input[type="text"],
-    .vpn-shell-secondary + .cbi-map input[type="password"],
-    .vpn-shell-secondary + .cbi-map input[type="number"],
-    .vpn-shell-secondary + .cbi-map textarea,
-    .vpn-shell-secondary + .cbi-map select,
-    .vpn-cbi-section-mk5 input[type="text"],
-    .vpn-cbi-section-mk5 input[type="password"],
-    .vpn-cbi-section-mk5 input[type="number"],
-    .vpn-cbi-section-mk5 textarea,
-    .vpn-cbi-section-mk5 select,
-    .vpn-shell-mk5 input[type="text"],
-    .vpn-shell-mk5 input[type="password"],
-    .vpn-shell-mk5 input[type="number"],
-    .vpn-shell-mk5 textarea,
-    .vpn-shell-mk5 select {
-        color: #e8f4ff;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.006)),
-            rgba(5, 10, 18, 0.76);
-        border-color: rgba(111, 149, 198, 0.26);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.040),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.20);
-    }
-    .vpn-shell-secondary + .cbi-map input[type="text"]:focus,
-    .vpn-shell-secondary + .cbi-map input[type="password"]:focus,
-    .vpn-shell-secondary + .cbi-map input[type="number"]:focus,
-    .vpn-shell-secondary + .cbi-map textarea:focus,
-    .vpn-shell-secondary + .cbi-map select:focus,
-    .vpn-cbi-section-mk5 input[type="text"]:focus,
-    .vpn-cbi-section-mk5 input[type="password"]:focus,
-    .vpn-cbi-section-mk5 input[type="number"]:focus,
-    .vpn-cbi-section-mk5 textarea:focus,
-    .vpn-cbi-section-mk5 select:focus,
-    .vpn-shell-mk5 input[type="text"]:focus,
-    .vpn-shell-mk5 input[type="password"]:focus,
-    .vpn-shell-mk5 input[type="number"]:focus,
-    .vpn-shell-mk5 textarea:focus,
-    .vpn-shell-mk5 select:focus {
-        border-color: rgba(47, 211, 238, 0.46);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.050),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-            var(--vpn-pass10-focus);
-    }
-    .vpn-shell-secondary + .cbi-map input::placeholder,
-    .vpn-cbi-section-mk5 input::placeholder,
-    .vpn-shell-mk5 input::placeholder,
-    .vpn-shell-secondary + .cbi-map textarea::placeholder,
-    .vpn-cbi-section-mk5 textarea::placeholder,
-    .vpn-shell-mk5 textarea::placeholder {
-        color: rgba(184, 200, 221, 0.62);
-    }
-    .vpn-shell-secondary + .cbi-map option,
-    .vpn-cbi-section-mk5 option,
-    .vpn-shell-mk5 option {
-        color: #e8f4ff;
-        background: #111a2a;
-    }
-    /* OpenVPN Mk5 pass 10 detail layer: states, forms, tables, and resilient viewing */
-    .vpn-shell-mk5 .cbi-input-checkbox,
-    .vpn-shell-secondary + .cbi-map .cbi-input-checkbox,
-    .vpn-cbi-section-mk5 .cbi-input-checkbox {
-        accent-color: #2fd3ee;
-    }
-    .vpn-shell-mk5 .cbi-input-radio,
-    .vpn-shell-secondary + .cbi-map .cbi-input-radio,
-    .vpn-cbi-section-mk5 .cbi-input-radio {
-        accent-color: #43db94;
-    }
-    .vpn-shell-mk5 label,
-    .vpn-shell-secondary + .cbi-map label,
-    .vpn-cbi-section-mk5 label {
-        color: #d9e8fb;
-    }
-    .vpn-shell-mk5 .cbi-value-field label,
-    .vpn-shell-secondary + .cbi-map .cbi-value-field label,
-    .vpn-cbi-section-mk5 .cbi-value-field label {
-        color: #c3d2e7;
-    }
-    .vpn-shell-mk5 .cbi-value-field label:hover,
-    .vpn-shell-secondary + .cbi-map .cbi-value-field label:hover,
-    .vpn-cbi-section-mk5 .cbi-value-field label:hover {
-        color: #edf8ff;
-    }
-    .vpn-shell-mk5 table,
-    .vpn-shell-secondary + .cbi-map table,
-    .vpn-cbi-section-mk5 table {
-        color: #d9e8fb;
-        border-color: rgba(111, 149, 198, 0.18);
-        background: rgba(5, 10, 18, 0.28);
-    }
-    .vpn-shell-mk5 table th,
-    .vpn-shell-secondary + .cbi-map table th,
-    .vpn-cbi-section-mk5 table th {
-        color: #f0f7ff;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.010)),
-            rgba(16, 24, 38, 0.78);
-        border-color: rgba(111, 149, 198, 0.18);
-        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
-    }
-    .vpn-shell-mk5 table td,
-    .vpn-shell-secondary + .cbi-map table td,
-    .vpn-cbi-section-mk5 table td {
-        color: #d6e5f8;
-        border-color: rgba(111, 149, 198, 0.12);
-    }
-    .vpn-shell-mk5 table tr:nth-child(even) td,
-    .vpn-shell-secondary + .cbi-map table tr:nth-child(even) td,
-    .vpn-cbi-section-mk5 table tr:nth-child(even) td {
-        background: rgba(255, 255, 255, 0.018);
-    }
-    .vpn-shell-mk5 table tr:hover td,
-    .vpn-shell-secondary + .cbi-map table tr:hover td,
-    .vpn-cbi-section-mk5 table tr:hover td {
-        background: rgba(47, 211, 238, 0.045);
-        color: #eff9ff;
-    }
-    .vpn-shell-mk5 .cbi-section-node,
-    .vpn-shell-secondary + .cbi-map .cbi-section-node,
-    .vpn-cbi-section-mk5 .cbi-section-node {
-        border-color: rgba(111, 149, 198, 0.15);
-        background: rgba(4, 9, 16, 0.20);
-    }
-    .vpn-shell-mk5 .cbi-section-remove,
-    .vpn-shell-secondary + .cbi-map .cbi-section-remove,
-    .vpn-cbi-section-mk5 .cbi-section-remove {
-        color: #ffd8df;
-        background: rgba(255, 111, 126, 0.08);
-        border-color: rgba(255, 111, 126, 0.22);
-    }
-    .vpn-shell-mk5 .cbi-section-create,
-    .vpn-shell-secondary + .cbi-map .cbi-section-create,
-    .vpn-cbi-section-mk5 .cbi-section-create {
-        color: #d7ffe9;
-        background: rgba(67, 219, 148, 0.08);
-        border-color: rgba(67, 219, 148, 0.22);
-    }
-    .vpn-shell-mk5 .cbi-button-add,
-    .vpn-shell-secondary + .cbi-map .cbi-button-add,
-    .vpn-cbi-section-mk5 .cbi-button-add {
-        color: #eafff4;
-        background:
-            linear-gradient(180deg, rgba(67, 219, 148, 0.80), rgba(24, 119, 79, 0.86));
-        border-color: rgba(67, 219, 148, 0.42);
-    }
-    .vpn-shell-mk5 .cbi-button-remove,
-    .vpn-shell-secondary + .cbi-map .cbi-button-remove,
-    .vpn-cbi-section-mk5 .cbi-button-remove {
-        color: #fff1f3;
-        background:
-            linear-gradient(180deg, rgba(210, 79, 94, 0.82), rgba(142, 49, 63, 0.88));
-        border-color: rgba(255, 111, 126, 0.42);
-    }
-    .vpn-shell-mk5 .cbi-button-reset,
-    .vpn-shell-secondary + .cbi-map .cbi-button-reset,
-    .vpn-cbi-section-mk5 .cbi-button-reset {
-        color: #e5edfa;
-        background:
-            linear-gradient(180deg, rgba(75, 91, 124, 0.84), rgba(48, 59, 85, 0.88));
-        border-color: rgba(129, 159, 205, 0.30);
-    }
-    .vpn-shell-mk5 .cbi-button-save,
-    .vpn-shell-mk5 .cbi-button-apply,
-    .vpn-shell-secondary + .cbi-map .cbi-button-save,
-    .vpn-shell-secondary + .cbi-map .cbi-button-apply,
-    .vpn-cbi-section-mk5 .cbi-button-save,
-    .vpn-cbi-section-mk5 .cbi-button-apply {
-        color: #eefcff;
-        background:
-            linear-gradient(180deg, rgba(44, 148, 230, 0.92), rgba(28, 125, 213, 0.92));
-        border-color: rgba(87, 190, 255, 0.44);
-    }
-    .vpn-shell-mk5 .cbi-button-positive,
-    .vpn-shell-secondary + .cbi-map .cbi-button-positive,
-    .vpn-cbi-section-mk5 .cbi-button-positive {
-        color: #eafff4;
-        background:
-            linear-gradient(180deg, rgba(51, 171, 118, 0.90), rgba(29, 127, 88, 0.92));
-        border-color: rgba(67, 219, 148, 0.44);
-    }
-    .vpn-shell-mk5 .cbi-button-negative,
-    .vpn-shell-secondary + .cbi-map .cbi-button-negative,
-    .vpn-cbi-section-mk5 .cbi-button-negative {
-        color: #fff1f3;
-        background:
-            linear-gradient(180deg, rgba(214, 76, 91, 0.88), rgba(145, 47, 61, 0.92));
-        border-color: rgba(255, 111, 126, 0.44);
-    }
-    .vpn-shell-mk5 .cbi-input-invalid,
-    .vpn-shell-secondary + .cbi-map .cbi-input-invalid,
-    .vpn-cbi-section-mk5 .cbi-input-invalid {
-        border-color: rgba(255, 111, 126, 0.52) !important;
-        background:
-            linear-gradient(180deg, rgba(255, 111, 126, 0.08), rgba(255, 111, 126, 0.025)),
-            rgba(9, 14, 22, 0.78) !important;
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.040),
-            0 0 0 1px rgba(255, 111, 126, 0.080) !important;
-    }
-    .vpn-shell-mk5 .cbi-input-invalid + .cbi-tooltip,
-    .vpn-shell-secondary + .cbi-map .cbi-input-invalid + .cbi-tooltip,
-    .vpn-cbi-section-mk5 .cbi-input-invalid + .cbi-tooltip {
-        color: #ffd8df;
-        background: rgba(45, 15, 23, 0.92);
-        border-color: rgba(255, 111, 126, 0.28);
-    }
-    .vpn-shell-mk5 .alert-message,
-    .vpn-shell-mk5 .alert,
-    .vpn-shell-secondary + .cbi-map .alert-message,
-    .vpn-shell-secondary + .cbi-map .alert,
-    .vpn-cbi-section-mk5 .alert-message,
-    .vpn-cbi-section-mk5 .alert {
-        color: #dbeaff;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.010)),
-            rgba(12, 19, 31, 0.78);
-        border-color: rgba(111, 149, 198, 0.22);
-    }
-    .vpn-shell-mk5 .alert-message.warning,
-    .vpn-shell-mk5 .alert-warning,
-    .vpn-shell-secondary + .cbi-map .alert-message.warning,
-    .vpn-shell-secondary + .cbi-map .alert-warning,
-    .vpn-cbi-section-mk5 .alert-message.warning,
-    .vpn-cbi-section-mk5 .alert-warning {
-        color: #fff3c9;
-        background:
-            linear-gradient(180deg, rgba(255, 205, 112, 0.12), rgba(255, 205, 112, 0.035)),
-            rgba(36, 25, 13, 0.72);
-        border-color: rgba(255, 205, 112, 0.30);
-    }
-    .vpn-shell-mk5 .alert-message.error,
-    .vpn-shell-mk5 .alert-error,
-    .vpn-shell-secondary + .cbi-map .alert-message.error,
-    .vpn-shell-secondary + .cbi-map .alert-error,
-    .vpn-cbi-section-mk5 .alert-message.error,
-    .vpn-cbi-section-mk5 .alert-error {
-        color: #ffe0e5;
-        background:
-            linear-gradient(180deg, rgba(255, 111, 126, 0.12), rgba(255, 111, 126, 0.035)),
-            rgba(39, 17, 24, 0.72);
-        border-color: rgba(255, 111, 126, 0.30);
-    }
-    .vpn-shell-mk5 .alert-message.success,
-    .vpn-shell-mk5 .alert-success,
-    .vpn-shell-secondary + .cbi-map .alert-message.success,
-    .vpn-shell-secondary + .cbi-map .alert-success,
-    .vpn-cbi-section-mk5 .alert-message.success,
-    .vpn-cbi-section-mk5 .alert-success {
-        color: #d7ffe9;
-        background:
-            linear-gradient(180deg, rgba(67, 219, 148, 0.12), rgba(67, 219, 148, 0.035)),
-            rgba(8, 31, 23, 0.72);
-        border-color: rgba(67, 219, 148, 0.30);
-    }
-    .vpn-shell-mk5.is-loading .vpn-brand-block,
-    .vpn-shell-mk5.is-loading .vpn-command-card,
-    .vpn-shell-mk5.is-loading .vpn-mini-card,
-    .vpn-shell-mk5.is-loading .vpn-stat-card,
-    .vpn-shell-mk5.is-loading .vpn-panel-shell {
-        border-color: rgba(111, 149, 198, 0.18);
-    }
-    .vpn-shell-mk5.is-loading .vpn-mini-card strong,
-    .vpn-shell-mk5.is-loading .vpn-stat-value,
-    .vpn-shell-mk5.is-loading .vpn-card strong,
-    .vpn-shell-mk5.is-loading .vpn-kv strong {
-        color: #aebed5;
-    }
-    .vpn-shell-mk5.is-ok .vpn-hero-mk5 {
-        border-color: rgba(67, 219, 148, 0.28);
-    }
-    .vpn-shell-mk5.is-warn .vpn-hero-mk5,
-    .vpn-shell-mk5.is-ready .vpn-hero-mk5,
-    .vpn-shell-mk5.is-profile-ready .vpn-hero-mk5 {
-        border-color: rgba(255, 205, 112, 0.26);
-    }
-    .vpn-shell-mk5.is-bad .vpn-hero-mk5,
-    .vpn-shell-mk5.is-empty .vpn-hero-mk5 {
-        border-color: rgba(255, 111, 126, 0.26);
-    }
-    .vpn-shell-mk5.is-ok .vpn-brand-block {
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            inset 0 0 0 1px rgba(67, 219, 148, 0.045),
-            var(--vpn-pass10-shadow-soft);
-    }
-    .vpn-shell-mk5.is-warn .vpn-brand-block,
-    .vpn-shell-mk5.is-ready .vpn-brand-block,
-    .vpn-shell-mk5.is-profile-ready .vpn-brand-block {
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            inset 0 0 0 1px rgba(255, 205, 112, 0.045),
-            var(--vpn-pass10-shadow-soft);
-    }
-    .vpn-shell-mk5.is-bad .vpn-brand-block,
-    .vpn-shell-mk5.is-empty .vpn-brand-block {
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            inset 0 0 0 1px rgba(255, 111, 126, 0.045),
-            var(--vpn-pass10-shadow-soft);
-    }
-    .vpn-shell-mk5 .vpn-status-good,
-    .vpn-shell-mk5 .vpn-text-good,
-    .vpn-shell-mk5 .text-success {
-        color: #aaf8cf;
-    }
-    .vpn-shell-mk5 .vpn-status-warn,
-    .vpn-shell-mk5 .vpn-text-warn,
-    .vpn-shell-mk5 .text-warning {
-        color: #ffe0a1;
-    }
-    .vpn-shell-mk5 .vpn-status-bad,
-    .vpn-shell-mk5 .vpn-text-bad,
-    .vpn-shell-mk5 .text-error {
-        color: #ffb8c2;
-    }
-    .vpn-shell-mk5 .vpn-status-muted,
-    .vpn-shell-mk5 .vpn-text-muted,
-    .vpn-shell-mk5 .muted {
-        color: #90a2bb;
-    }
-    .vpn-shell-mk5 .vpn-divider,
-    .vpn-shell-secondary + .cbi-map .vpn-divider,
-    .vpn-cbi-section-mk5 .vpn-divider {
-        border-color: rgba(111, 149, 198, 0.16);
-        background: linear-gradient(90deg, transparent, rgba(111, 149, 198, 0.18), transparent);
-    }
-    .vpn-shell-mk5 hr,
-    .vpn-shell-secondary + .cbi-map hr,
-    .vpn-cbi-section-mk5 hr {
-        border-color: rgba(111, 149, 198, 0.16);
-    }
-    .vpn-shell-mk5 .vpn-panel-focus,
-    .vpn-shell-mk5 .vpn-card-focus,
-    .vpn-shell-mk5 .vpn-subcard-focus {
-        border-color: rgba(47, 211, 238, 0.28);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            0 0 0 1px rgba(47, 211, 238, 0.040),
-            var(--vpn-pass10-shadow-soft);
-    }
-    .vpn-shell-mk5 .vpn-panel-focus #vpn-focus-log {
-        color: #eff9ff;
-        background:
-            linear-gradient(180deg, rgba(47, 211, 238, 0.045), rgba(47, 211, 238, 0.012)),
-            rgba(3, 8, 14, 0.76);
-    }
-    .vpn-shell-mk5 .vpn-inline-code,
-    .vpn-shell-mk5 .vpn-path,
-    .vpn-shell-mk5 .vpn-mono,
-    .vpn-shell-secondary + .cbi-map code,
-    .vpn-cbi-section-mk5 code {
-        color: #dcecff;
-        background: rgba(3, 8, 14, 0.58);
-        border-color: rgba(111, 149, 198, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-inline-code:hover,
-    .vpn-shell-mk5 .vpn-path:hover,
-    .vpn-shell-mk5 .vpn-mono:hover {
-        color: #f0f9ff;
-        border-color: rgba(47, 211, 238, 0.26);
-    }
-    .vpn-shell-mk5 .vpn-copy-target {
-        background: rgba(3, 8, 14, 0.52);
-        border-color: rgba(111, 149, 198, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-copy-target:hover {
-        border-color: rgba(47, 211, 238, 0.28);
-    }
-    .vpn-shell-mk5 .vpn-progress,
-    .vpn-shell-mk5 progress {
-        background: rgba(3, 8, 14, 0.66);
-        border-color: rgba(111, 149, 198, 0.18);
-        color: #2fd3ee;
-    }
-    .vpn-shell-mk5 .vpn-progress-bar {
-        background:
-            linear-gradient(90deg, rgba(47, 211, 238, 0.88), rgba(67, 219, 148, 0.82));
-        box-shadow: 0 0 18px rgba(47, 211, 238, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-progress.warn .vpn-progress-bar {
-        background:
-            linear-gradient(90deg, rgba(255, 205, 112, 0.90), rgba(255, 145, 92, 0.82));
-        box-shadow: 0 0 18px rgba(255, 205, 112, 0.16);
-    }
-    .vpn-shell-mk5 .vpn-progress.bad .vpn-progress-bar {
-        background:
-            linear-gradient(90deg, rgba(255, 111, 126, 0.90), rgba(255, 162, 110, 0.80));
-        box-shadow: 0 0 18px rgba(255, 111, 126, 0.16);
-    }
-    .vpn-shell-mk5 details,
-    .vpn-shell-secondary + .cbi-map details,
-    .vpn-cbi-section-mk5 details {
-        color: #d9e8fb;
-        background: rgba(7, 13, 22, 0.50);
-        border-color: rgba(111, 149, 198, 0.18);
-    }
-    .vpn-shell-mk5 summary,
-    .vpn-shell-secondary + .cbi-map summary,
-    .vpn-cbi-section-mk5 summary {
-        color: #edf8ff;
-    }
-    .vpn-shell-mk5 details[open],
-    .vpn-shell-secondary + .cbi-map details[open],
-    .vpn-cbi-section-mk5 details[open] {
-        border-color: rgba(47, 211, 238, 0.24);
-        background: rgba(10, 17, 28, 0.58);
-    }
-    .vpn-shell-mk5 .vpn-toast,
-    .vpn-shell-mk5 .vpn-floating-note,
-    .vpn-shell-mk5 .vpn-popover {
-        color: #dcecff;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
-            rgba(11, 17, 28, 0.94);
-        border-color: rgba(111, 149, 198, 0.24);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            0 20px 42px rgba(0, 0, 0, 0.28);
-    }
-    .vpn-shell-mk5 .vpn-toast.good,
-    .vpn-shell-mk5 .vpn-floating-note.good,
-    .vpn-shell-mk5 .vpn-popover.good {
-        color: #d7ffe9;
-        border-color: rgba(67, 219, 148, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-toast.warn,
-    .vpn-shell-mk5 .vpn-floating-note.warn,
-    .vpn-shell-mk5 .vpn-popover.warn {
-        color: #fff3c9;
-        border-color: rgba(255, 205, 112, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-toast.bad,
-    .vpn-shell-mk5 .vpn-floating-note.bad,
-    .vpn-shell-mk5 .vpn-popover.bad {
-        color: #ffe0e5;
-        border-color: rgba(255, 111, 126, 0.30);
-    }
-    .vpn-shell-mk5 .vpn-empty-state,
-    .vpn-shell-mk5 .vpn-loading-state,
-    .vpn-shell-mk5 .vpn-error-state {
-        color: #d6e5f8;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
-            rgba(7, 13, 22, 0.56);
-        border-color: rgba(111, 149, 198, 0.18);
-    }
-    .vpn-shell-mk5 .vpn-empty-state strong,
-    .vpn-shell-mk5 .vpn-loading-state strong,
-    .vpn-shell-mk5 .vpn-error-state strong {
-        color: #f0f8ff;
-    }
-    .vpn-shell-mk5 .vpn-empty-state span,
-    .vpn-shell-mk5 .vpn-loading-state span,
-    .vpn-shell-mk5 .vpn-error-state span {
-        color: #adc0d8;
-    }
-    .vpn-shell-mk5 .vpn-error-state {
-        border-color: rgba(255, 111, 126, 0.28);
-    }
-    .vpn-shell-mk5 .vpn-loading-state {
-        border-color: rgba(47, 211, 238, 0.24);
-    }
-    .vpn-shell-mk5 .vpn-empty-state {
-        border-color: rgba(111, 149, 198, 0.20);
-    }
-    .vpn-shell-mk5 [aria-busy="true"],
-    .vpn-shell-mk5 .is-pending,
-    .vpn-shell-mk5 .is-refreshing {
-        cursor: progress;
-    }
-    .vpn-shell-mk5 [aria-disabled="true"],
-    .vpn-shell-mk5 .is-disabled,
-    .vpn-shell-mk5 :disabled {
-        cursor: not-allowed;
-        filter: saturate(0.84);
-    }
-    .vpn-shell-mk5 .is-hidden {
-        pointer-events: none;
-    }
-    .vpn-shell-mk5 .is-active {
-        border-color: rgba(47, 211, 238, 0.30);
-    }
-    .vpn-shell-mk5 .is-selected {
-        color: #f4fbff;
-        background:
-            linear-gradient(180deg, rgba(47, 211, 238, 0.14), rgba(47, 211, 238, 0.040)),
-            rgba(7, 13, 22, 0.62);
-        border-color: rgba(47, 211, 238, 0.34);
-    }
-    .vpn-shell-mk5 .is-stale {
-        color: #ffe0a1;
-        border-color: rgba(255, 205, 112, 0.24);
-    }
-    .vpn-shell-mk5 .is-fresh {
-        color: #b9f8d8;
-        border-color: rgba(67, 219, 148, 0.24);
-    }
-    .vpn-shell-mk5 .is-offline {
-        color: #ffb8c2;
-        border-color: rgba(255, 111, 126, 0.24);
-    }
-    .vpn-shell-mk5 .is-online {
-        color: #b9f8d8;
-        border-color: rgba(67, 219, 148, 0.24);
-    }
-    .vpn-shell-mk5 .is-neutral {
-        color: #c5d4e8;
-        border-color: rgba(111, 149, 198, 0.20);
-    }
-    .vpn-shell-mk5 .vpn-surface-cyan {
-        background:
-            linear-gradient(180deg, rgba(47, 211, 238, 0.10), rgba(47, 211, 238, 0.026)),
-            rgba(7, 13, 22, 0.64);
-        border-color: rgba(47, 211, 238, 0.24);
-    }
-    .vpn-shell-mk5 .vpn-surface-green {
-        background:
-            linear-gradient(180deg, rgba(67, 219, 148, 0.10), rgba(67, 219, 148, 0.026)),
-            rgba(7, 13, 22, 0.64);
-        border-color: rgba(67, 219, 148, 0.24);
-    }
-    .vpn-shell-mk5 .vpn-surface-amber {
-        background:
-            linear-gradient(180deg, rgba(255, 205, 112, 0.10), rgba(255, 205, 112, 0.026)),
-            rgba(7, 13, 22, 0.64);
-        border-color: rgba(255, 205, 112, 0.24);
-    }
-    .vpn-shell-mk5 .vpn-surface-red {
-        background:
-            linear-gradient(180deg, rgba(255, 111, 126, 0.10), rgba(255, 111, 126, 0.026)),
-            rgba(7, 13, 22, 0.64);
-        border-color: rgba(255, 111, 126, 0.24);
-    }
-    @media (hover: none) {
-        .vpn-shell-mk5 .vpn-brand-block:hover,
-        .vpn-shell-mk5 .vpn-command-card:hover,
-        .vpn-shell-mk5 .vpn-mini-card:hover,
-        .vpn-shell-mk5 .vpn-stat-card:hover,
-        .vpn-shell-mk5 .vpn-card:hover,
-        .vpn-shell-mk5 .vpn-quick-rail:hover,
-        .vpn-shell-mk5 .vpn-panel-shell:hover,
-        .vpn-shell-mk5 .vpn-subcard:hover,
-        .vpn-shell-mk5 .vpn-action-tile:hover {
-            box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.060),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-                var(--vpn-pass10-shadow-soft);
-        }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .vpn-shell-mk5,
-        .vpn-shell-mk5 *,
-        .vpn-shell-mk5 *::before,
-        .vpn-shell-mk5 *::after {
-            animation-duration: 0.001ms !important;
-            animation-iteration-count: 1 !important;
-            scroll-behavior: auto !important;
-            transition-duration: 0.001ms !important;
-        }
-    }
-    @media (forced-colors: active) {
-        .vpn-shell-mk5,
-        .vpn-shell-mk5 .vpn-hero-mk5,
-        .vpn-shell-mk5 .vpn-brand-block,
-        .vpn-shell-mk5 .vpn-command-card,
-        .vpn-shell-mk5 .vpn-mini-card,
-        .vpn-shell-mk5 .vpn-stat-card,
-        .vpn-shell-mk5 .vpn-card,
-        .vpn-shell-mk5 .vpn-quick-rail,
-        .vpn-shell-mk5 .vpn-panel-shell,
-        .vpn-shell-mk5 .vpn-subcard,
-        .vpn-shell-secondary + .cbi-map,
-        .vpn-shell-secondary + .cbi-map .cbi-section {
-            background: Canvas;
-            border-color: CanvasText;
-            color: CanvasText;
-            box-shadow: none;
-        }
-        .vpn-shell-mk5 a,
-        .vpn-shell-mk5 button,
-        .vpn-shell-mk5 input,
-        .vpn-shell-mk5 select,
-        .vpn-shell-mk5 textarea {
-            forced-color-adjust: auto;
-        }
-    }
-    @media print {
-        .vpn-shell-mk5,
-        .vpn-shell-secondary + .cbi-map {
-            color: #182233;
-            background: #f4f7fb;
-            box-shadow: none;
-        }
-        .vpn-shell-mk5 .vpn-hero-actions,
-        .vpn-shell-mk5 .vpn-tabbar,
-        .vpn-shell-mk5 .vpn-copy-feedback {
-            display: none;
-        }
-        .vpn-shell-mk5 pre,
-        .vpn-shell-mk5 code {
-            color: #182233;
-            background: #eef3f8;
-            border-color: #c8d4e2;
-        }
-    }
-</style>
-EOF_OPENVPN_MK5_PASS10_POLISH
-
-    cat >> /usr/lib/lua/luci/view/openvpn/ovpn_css.htm <<'EOF_OPENVPN_MK5_PASS11_WEBPAGE_POLISH'
-<style type="text/css">
-    /* OpenVPN Mk5 pass 11 precision webpage polish: compact responsive forms, stronger focus states, and cleaner console blocks. */
-    .vpn-shell-mk5 {
-        --vpn-pass11-cyan: #39d9f5;
-        --vpn-pass11-blue: #6ca2ff;
-        --vpn-pass11-green: #43db94;
-        --vpn-pass11-amber: #ffcd70;
-        --vpn-pass11-red: #ff6f7e;
-        --vpn-pass11-panel: rgba(8, 14, 24, 0.70);
-        --vpn-pass11-line: rgba(118, 151, 197, 0.20);
-        --vpn-pass11-glow: 0 22px 54px rgba(0, 0, 0, 0.24);
-    }
-
-    .vpn-shell-mk5 .vpn-hero-mk5,
-    .vpn-shell-mk5 .vpn-brand-block,
-    .vpn-shell-mk5 .vpn-command-card,
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-card,
-    .vpn-shell-mk5 .vpn-quick-rail,
-    .vpn-shell-mk5 .vpn-panel-shell,
-    .vpn-shell-mk5 .vpn-subcard,
-    .vpn-shell-mk5 .vpn-action-tile,
-    .vpn-shell-secondary + .cbi-map,
-    .vpn-shell-secondary + .cbi-map .cbi-section {
-        border-radius: 18px;
-        border-color: var(--vpn-pass11-line);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.060),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-            var(--vpn-pass11-glow);
-    }
-
-    .vpn-shell-mk5 .vpn-hero-mk5 {
-        padding: clamp(18px, 2.5vw, 26px);
-        background:
-            radial-gradient(circle at 0% 0%, rgba(57, 217, 245, 0.15), transparent 30%),
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.16), transparent 34%),
-            linear-gradient(180deg, rgba(15, 22, 34, 0.93), rgba(7, 12, 21, 0.94));
-    }
-
-    .vpn-shell-mk5 .vpn-hero-mk5::after,
-    .vpn-shell-mk5 .vpn-brand-block::after,
-    .vpn-shell-mk5 .vpn-command-card::after,
-    .vpn-shell-mk5 .vpn-panel-shell::after,
-    .vpn-shell-secondary + .cbi-map .cbi-section::after {
-        content: "";
-        position: absolute;
-        left: 18px;
-        right: 18px;
-        top: 0;
-        height: 2px;
-        border-radius: 0 0 999px 999px;
-        background: linear-gradient(90deg, transparent, rgba(57, 217, 245, 0.70), rgba(108, 162, 255, 0.70), transparent);
-        opacity: 0.86;
-        pointer-events: none;
-    }
-
-    .vpn-shell-mk5 .vpn-hero-title,
-    .vpn-shell-mk5 .vpn-panel-title,
-    .vpn-shell-mk5 .vpn-card-title,
-    .vpn-shell-secondary + .cbi-map h2 {
-        letter-spacing: -0.035em;
-    }
-
-    .vpn-shell-mk5 .vpn-hero-copy,
-    .vpn-shell-mk5 .vpn-panel-desc,
-    .vpn-shell-mk5 .vpn-card-desc,
-    .vpn-shell-secondary + .cbi-map .cbi-map-descr {
-        max-width: 72ch;
-    }
-
-    .vpn-shell-mk5 .vpn-hero-actions,
-    .vpn-shell-mk5 .vpn-action-row,
-    .vpn-shell-mk5 .vpn-toolbar,
-    .vpn-shell-secondary + .cbi-map .cbi-page-actions {
-        gap: 8px;
-    }
-
-    .vpn-shell-mk5 .vpn-hero-actions a,
-    .vpn-shell-mk5 .vpn-hero-actions button,
-    .vpn-shell-mk5 .vpn-action-row a,
-    .vpn-shell-mk5 .vpn-action-row button,
-    .vpn-shell-mk5 .vpn-tabbar a,
-    .vpn-shell-mk5 .vpn-tabbar button,
-    .vpn-shell-secondary + .cbi-map .cbi-button {
-        min-height: 40px;
-        border-radius: 13px;
-        font-weight: 800;
-    }
-
-    .vpn-shell-mk5 .vpn-tabbar {
-        padding: 5px;
-        border-radius: 999px;
-        background: rgba(5, 10, 18, 0.42);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.040);
-    }
-
-    .vpn-shell-mk5 .vpn-tabbar a,
-    .vpn-shell-mk5 .vpn-tabbar button {
-        padding-inline: 14px;
-    }
-
-    .vpn-shell-mk5 .vpn-stat-grid,
-    .vpn-shell-mk5 .vpn-mini-grid,
-    .vpn-shell-mk5 .vpn-action-grid {
-        gap: 10px;
-    }
-
-    .vpn-shell-mk5 .vpn-mini-card,
-    .vpn-shell-mk5 .vpn-stat-card,
-    .vpn-shell-mk5 .vpn-action-tile {
-        min-width: 0;
-        padding: 14px;
-    }
-
-    .vpn-shell-mk5 .vpn-status-dot,
-    .vpn-shell-mk5 .vpn-live-dot,
-    .vpn-shell-mk5 .vpn-health-dot {
-        animation: vpnPass11SoftPulse 2.6s ease-in-out infinite;
-    }
-
-    .vpn-shell-mk5 pre,
-    .vpn-shell-mk5 code,
-    .vpn-shell-secondary + .cbi-map textarea,
-    .vpn-shell-secondary + .cbi-map input[type="text"],
-    .vpn-shell-secondary + .cbi-map input[type="password"],
-    .vpn-shell-secondary + .cbi-map select {
-        border-radius: 13px;
-    }
-
-    .vpn-shell-mk5 pre,
-    .vpn-shell-mk5 .vpn-console,
-    .vpn-shell-mk5 .vpn-log-box,
-    .vpn-shell-secondary + .cbi-map textarea {
-        background:
-            radial-gradient(circle at 100% 0%, rgba(57, 217, 245, 0.08), transparent 34%),
-            linear-gradient(180deg, rgba(7, 13, 22, 0.98), rgba(4, 9, 17, 0.98)) !important;
-        border-color: rgba(118, 151, 197, 0.22) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.040), 0 14px 32px rgba(0, 0, 0, 0.22);
-    }
-
-    .vpn-shell-secondary + .cbi-map {
-        max-width: 1180px;
-        margin: 16px auto 28px !important;
-        padding: 18px !important;
-        background:
-            radial-gradient(circle at 0% 0%, rgba(57, 217, 245, 0.10), transparent 30%),
-            radial-gradient(circle at 100% 0%, rgba(108, 162, 255, 0.10), transparent 34%),
-            linear-gradient(180deg, rgba(15, 22, 34, 0.96), rgba(7, 12, 21, 0.96)) !important;
-        color: #eef7ff;
-    }
-
-    .vpn-shell-secondary + .cbi-map .cbi-section {
-        position: relative;
-        overflow: hidden;
-        padding: 16px 18px !important;
-        background: var(--vpn-pass11-panel) !important;
-    }
-
-    .vpn-shell-secondary + .cbi-map .cbi-value {
-        display: grid !important;
-        grid-template-columns: minmax(170px, 240px) minmax(0, 1fr) !important;
-        gap: 8px 16px !important;
-        align-items: start !important;
-        padding: 12px 0 !important;
-        border-bottom: 1px solid rgba(118, 151, 197, 0.14) !important;
-    }
-
-    .vpn-shell-secondary + .cbi-map .cbi-value:last-child {
-        border-bottom: 0 !important;
-    }
-
-    .vpn-shell-secondary + .cbi-map .cbi-value-title,
-    .vpn-shell-secondary + .cbi-map .cbi-value-field {
-        float: none !important;
-        width: auto !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    .vpn-shell-secondary + .cbi-map .cbi-value-title {
-        color: #e7f3ff !important;
-        font-size: 13px !important;
-        font-weight: 850 !important;
-        line-height: 1.45 !important;
-    }
-
-    .vpn-shell-secondary + .cbi-map .cbi-value-description {
-        margin-top: 4px !important;
-        color: #a8bdd8 !important;
-        font-size: 12px !important;
-        line-height: 1.62 !important;
-    }
-
-    .vpn-shell-secondary + .cbi-map input[type="text"],
-    .vpn-shell-secondary + .cbi-map input[type="password"],
-    .vpn-shell-secondary + .cbi-map select,
-    .vpn-shell-secondary + .cbi-map textarea {
-        min-height: 41px !important;
-        border-color: rgba(118, 151, 197, 0.34) !important;
-        background: rgba(5, 10, 18, 0.72) !important;
-        color: #eef7ff !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.040) !important;
-    }
-
-    .vpn-shell-mk5 a:focus-visible,
-    .vpn-shell-mk5 button:focus-visible,
-    .vpn-shell-mk5 input:focus-visible,
-    .vpn-shell-mk5 select:focus-visible,
-    .vpn-shell-mk5 textarea:focus-visible,
-    .vpn-shell-secondary + .cbi-map a:focus-visible,
-    .vpn-shell-secondary + .cbi-map button:focus-visible,
-    .vpn-shell-secondary + .cbi-map input:focus-visible,
-    .vpn-shell-secondary + .cbi-map select:focus-visible,
-    .vpn-shell-secondary + .cbi-map textarea:focus-visible {
-        outline: 2px solid rgba(57, 217, 245, 0.82) !important;
-        outline-offset: 3px !important;
-        border-color: rgba(57, 217, 245, 0.56) !important;
-    }
-
-    @keyframes vpnPass11SoftPulse {
-        0%, 100% {
-            filter: saturate(0.96);
-            box-shadow: 0 0 0 5px rgba(57, 217, 245, 0.08);
-        }
-        50% {
-            filter: saturate(1.10);
-            box-shadow: 0 0 0 9px rgba(57, 217, 245, 0.035);
-        }
-    }
-
-    @media (min-width: 1320px) {
-        .vpn-shell-secondary + .cbi-map {
-            max-width: 1240px;
-        }
-    }
-
-    @media (max-width: 980px) {
-        .vpn-shell-mk5 .vpn-hero-mk5,
-        .vpn-shell-mk5 .vpn-brand-block,
-        .vpn-shell-mk5 .vpn-command-card,
-        .vpn-shell-mk5 .vpn-panel-shell,
-        .vpn-shell-secondary + .cbi-map {
-            border-radius: 16px;
-        }
-
-        .vpn-shell-secondary + .cbi-map .cbi-value {
-            grid-template-columns: 1fr !important;
-        }
-    }
-
-    @media (max-width: 560px) {
-        .vpn-shell-mk5 .vpn-hero-mk5,
-        .vpn-shell-mk5 .vpn-panel-shell,
-        .vpn-shell-secondary + .cbi-map {
-            margin-inline: 6px !important;
-            padding: 12px !important;
-            border-radius: 14px;
-        }
-
-        .vpn-shell-mk5 .vpn-tabbar {
-            border-radius: 16px;
-        }
-
-        .vpn-shell-mk5 .vpn-tabbar a,
-        .vpn-shell-mk5 .vpn-tabbar button,
-        .vpn-shell-mk5 .vpn-hero-actions a,
-        .vpn-shell-mk5 .vpn-hero-actions button,
-        .vpn-shell-secondary + .cbi-map .cbi-button {
-            width: 100%;
-        }
-
-        .vpn-shell-secondary + .cbi-map .cbi-section {
-            padding: 12px !important;
-            border-radius: 14px;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .vpn-shell-mk5 .vpn-status-dot,
-        .vpn-shell-mk5 .vpn-live-dot,
-        .vpn-shell-mk5 .vpn-health-dot {
-            animation: none !important;
-        }
-    }
-</style>
-EOF_OPENVPN_MK5_PASS11_WEBPAGE_POLISH
+<script>
+document.documentElement.classList.add('nradio-openvpn-ui');
+</script>
+EOF_OPENVPN_UNIFIED_CSS
 
     cat > /usr/lib/lua/luci/model/cbi/openvpn.lua <<'EOF_OPENVPN_STANDARD_MODEL'
 -- Copyright 2008 Steven Barth <steven@midlink.org>
@@ -52755,7 +47914,7 @@ uci:foreach("openvpn", "openvpn", function(section)
 	end
 end)
 
-local m = Map("openvpn", translate("标准 OpenVPN"), translate("原生实例管理入口。适合新建模板实例、导入 ovpn 文件，或直接维护现有 OpenVPN 节点。"))
+local m = Map("openvpn", translate("实例管理"), translate("管理已有连接，或通过模板、OVPN 文件添加实例。"))
 local intro = m:section(SimpleSection)
 intro.template = "openvpn/overview_intro"
 intro.instance_count = instance_count
@@ -52763,7 +47922,7 @@ intro.enabled_count = enabled_count
 intro.running_count = running_count
 intro.file_cfg_count = file_cfg_count
 local s = m:section( TypedSection, "openvpn", translate("实例列表"), translate("这里展示当前已配置的 OpenVPN 实例及其运行状态。"))
-s.template = "cbi/tblsection"
+s.template = "openvpn/tblsection"
 s.template_addremove = "openvpn/cbi-select-input-add"
 s.addremove = true
 s.add_select_options = { }
@@ -53033,8 +48192,7 @@ end
 
 local cfg_ok, cfg_error = regular_file_within_limit(cfg_file, CFG_LIMIT, false)
 if not instance or not cfg_ok then
-	local f = makeForm("error", "文件编辑不可用", translatef("未找到当前实例绑定的 OVPN 配置文件（%s），请先检查实例配置或返回标准 OpenVPN 重新导入。", cfg_file or "n/a"))
-	f:append(Template("openvpn/ovpn_css"))
+	local f = makeForm("error", "文件编辑不可用", translatef("未找到当前实例绑定的 OVPN 配置文件（%s），请检查实例配置或返回实例管理重新导入。", cfg_file or "n/a"))
 	f.reset = false
 	f.submit = false
 	return f
@@ -53043,7 +48201,6 @@ end
 local auth_file = resolve_auth_path()
 if not auth_file then
 	local f = makeForm("error", "凭据编辑不可用", "无法从当前实例安全解析 auth-user-pass 文件路径，请检查 UCI 或 OVPN 配置。")
-	f:append(Template("openvpn/ovpn_css"))
 	f.reset = false
 	f.submit = false
 	return f
@@ -53053,14 +48210,12 @@ local auth_ok, auth_error = regular_file_within_limit(auth_file, AUTH_LIMIT, tru
 if not auth_ok then
 	local f = makeForm("error", "凭据编辑不可用",
 		translatef("auth-user-pass 文件（%s）不安全或超过 16 KB：%s。", auth_file, auth_error or "校验失败"))
-	f:append(Template("openvpn/ovpn_css"))
 	f.reset = false
 	f.submit = false
 	return f
 end
 
 f = makeForm("cfg", "文件编辑")
-f:append(Template("openvpn/ovpn_css"))
 f.submit = translate("保存修改")
 f.reset = false
 
@@ -57947,26 +53102,71 @@ __TTYD_HELPER__
 
 }
 
+menu_color_enabled() {
+    [ -t 1 ] && [ "${TERM:-dumb}" != 'dumb' ] && [ -z "${NO_COLOR+x}" ]
+}
+
+print_menu_title() {
+    if menu_color_enabled; then
+        printf '  \033[1;36m%s\033[0m\n' "$1"
+    else
+        printf '  %s\n' "$1"
+    fi
+}
+
 print_menu_header() {
-    printf '\n%s\n' '--------------------------------'
-    printf '  %s\n' "$1"
-    printf '%s\n\n' '--------------------------------'
+    printf '\n'
+    print_menu_title "$1"
+    printf '  %s\n' '----------------------------------------'
+}
+
+print_menu_note() {
+    if menu_color_enabled; then
+        printf '      \033[90m%s\033[0m\n' "$1"
+    else
+        printf '      %s\n' "$1"
+    fi
 }
 
 print_menu_item() {
-    printf '  %2s. %s\n' "$1" "$2"
+    [ "$1" != '0' ] || printf '\n'
+    if menu_color_enabled; then
+        printf '  \033[36m%2s.\033[0m %s\n' "$1" "$2"
+    else
+        printf '  %2s. %s\n' "$1" "$2"
+    fi
+    if [ -n "${3:-}" ]; then
+        print_menu_note "$3"
+    fi
 }
 
 print_menu_prompt() {
-    printf '\n选择 [%s]: ' "$1"
+    printf '  %s\n' '----------------------------------------'
+    printf '  选择 [%s]: ' "$1"
 }
 
 print_main_menu_header() {
-    print_menu_header 'NRadio 官方系统插件安装助手'
-    printf '  版本  %s  /  %s\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+    local storage_mount storage_gb
+
+    printf '\n'
+    print_menu_title "NRadio 插件助手 · $SCRIPT_VERSION"
+    printf '  日期  %s  |  作者 maye\n' "$SCRIPT_RELEASE_DATE"
     printf '  设备  %s\n' "${CURRENT_DETECTED_MODEL:-识别中}"
     printf '  系统  NROS %s\n' "${CURRENT_DETECTED_NROS_REVISION:-识别中}"
-    printf '  作者  maye\n'
+
+    if c2000_storage_swap_model_supported "${CURRENT_DETECTED_MODEL:-}"; then
+        storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+        if [ -z "$storage_mount" ]; then
+            printf '  存储  未检测到存储卡\n'
+        else
+            storage_gb="$(get_mount_total_gb "$storage_mount" 2>/dev/null || true)"
+            if [ -n "$storage_gb" ]; then
+                printf '  存储  已检测到存储卡（总容量约 %s GB）\n' "$storage_gb"
+            else
+                printf '  存储  已检测到存储卡（容量未知）\n'
+            fi
+        fi
+    fi
 }
 
 die_menu_input_issue() {
@@ -57987,65 +53187,113 @@ print_support_page_hint() {
 
 print_startup_disclaimer_text() {
     disclaimer_model="${CURRENT_DETECTED_MODEL:-当前识别机型}"
-    print_menu_header '首次运行 / 使用须知'
-    printf '版本：%s  /  %s\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
-    printf '设备：%s\n' "$disclaimer_model"
-    printf '\n%s\n' "$SCRIPT_DISCLAIMER"
-    printf '请完整阅读以下条款；输入 y 同意，回车退出。\n'
+    printf '\n  %s\n' 'NRadio / 首次使用须知'
+    printf '  版本  %s / %s\n' "$SCRIPT_VERSION" "$SCRIPT_RELEASE_DATE"
+    printf '  设备  %s\n' "$disclaimer_model"
+    printf '%s\n' '----------------------------------------'
+    case "$SCRIPT_DISCLAIMER" in
+        *，*) printf '%s\n' "${SCRIPT_DISCLAIMER%%，*}，" "${SCRIPT_DISCLAIMER#*，}" ;;
+        *) printf '%s\n' "$SCRIPT_DISCLAIMER" ;;
+    esac
     cat <<EOF
 
 免责声明书
 
-深圳鲲鹏无线科技有限公司当前检测到的设备机型（${disclaimer_model}，以下简称“本设备”）系基于Linux技术开发的5G CPE产品。本设备支持开源，为了使您正确并合法地使用本设备，请您在开源使用前务必阅读清楚下面的协议条款（如您对以下任一条款持反对意见或未能完全理解，请勿勾选本免责声明书）：
+深圳鲲鹏无线科技有限公司当前检测到的设备机型
+（${disclaimer_model}，以下简称“本设备”）
+系基于Linux技术开发的5G CPE产品。
+本设备支持开源，为了使您正确并合法地使用本设备，
+请您在开源使用前务必阅读清楚下面的协议条款
+（如您对以下任一条款持反对意见或未能完全理解，
+请勿勾选本免责声明书）：
 
-一、本免责声明书适用于当前检测到的设备机型（${disclaimer_model}）
+一、本免责声明书适用于当前检测到的设备机型
+（${disclaimer_model}）
 
 二、许可的权利
 
-1. 您可以在完全遵守本声明书的基础上，将本设备应用于非商业用途；
-
-2. 您可以在《中华人民共和国网络安全法》及相关法律法规允许的范围内修改源代码以适应您的使用要求/需求；
-
-3. 您在获取本设备密钥后拥有使用本设备构建源代码等全部内容所有权，并独立承担与这些内容的相关法律义务；
-
-4. 获得商业授权之后，您可以将本设备应用于商业用途，同时依据所购买的授权类型中确定的技术支持内容，自购买时刻起，在技术支持期限内拥有通过指定的方式获得指定范围内的技术支持服务。商业授权用户享有反映和提出意见的权力，相关意见将被作为首要考虑，但没有一定被采纳的承诺或保证。
+1. 您可以在完全遵守本声明书的基础上，
+   将本设备应用于非商业用途；
+2. 您可以在《中华人民共和国网络安全法》
+   及相关法律法规允许的范围内修改源代码
+   以适应您的使用要求/需求；
+3. 您在获取本设备密钥后拥有使用本设备
+   构建源代码等全部内容所有权，
+   并独立承担与这些内容的相关法律义务；
+4. 获得商业授权之后，您可以将本设备
+   应用于商业用途，同时依据所购买的授权类型中
+   确定的技术支持内容，自购买时刻起，
+   在技术支持期限内拥有通过指定的方式
+   获得指定范围内的技术支持服务。
+   商业授权用户享有反映和提出意见的权力，
+   相关意见将被作为首要考虑，
+   但没有一定被采纳的承诺或保证。
 
 三、约束和限制
 
-1. 未获商业授权之前，不得将本设备用于商业用途（包括但不限于以营利为目的或实现盈利）。购买商业授权请与我司了解最新说明；
-
-2. 未经官方许可，不得对本设备或与之关联的商业授权进行出租、出售、抵押或发放子许可证；
-
-3. 不管您是否整体使用，还是部分使用，在本设备的整体或任何部分基础上以发展任何派生版本、修改版本或第三方版本不得用于重新分发；
-
-4. 本设备开源后您可根据自身需求对本设备进行使用，故本公司也不对开源后您的任何行为承担任何类型的责任担保，开源后您在使用过程中产生的一切风险全部由您自行承担；
-
-5. 您不得删除或更改受保护的源代码形式中包含的任何许可声明（包括版权、专利、免责声明或责任限制）的实质内容，除非是纠正已知的事实错误所需；
-
-6. 请您在开源使用过程中严格遵守国内外法律法规，不得将本设备用于任何非法用途；
-
-7. 如果您未能遵守本协议的条款，您的授权将被终止，所被许可的权利将被收回，并承担相应法律责任。
+1. 未获商业授权之前，不得将本设备用于商业用途
+   （包括但不限于以营利为目的或实现盈利）。
+   购买商业授权请与我司了解最新说明；
+2. 未经官方许可，不得对本设备或与之关联的
+   商业授权进行出租、出售、抵押或发放子许可证；
+3. 不管您是否整体使用，还是部分使用，
+   在本设备的整体或任何部分基础上以发展任何
+   派生版本、修改版本或第三方版本
+   不得用于重新分发；
+4. 本设备开源后您可根据自身需求对本设备进行使用，
+   故本公司也不对开源后您的任何行为承担任何类型的
+   责任担保，开源后您在使用过程中产生的一切风险
+   全部由您自行承担；
+5. 您不得删除或更改受保护的源代码形式中包含的
+   任何许可声明（包括版权、专利、
+   免责声明或责任限制）的实质内容，
+   除非是纠正已知的事实错误所需；
+6. 请您在开源使用过程中严格遵守国内外法律法规，
+   不得将本设备用于任何非法用途；
+7. 如果您未能遵守本协议的条款，您的授权将被终止，
+   所被许可的权利将被收回，并承担相应法律责任。
 
 四、有限担保和免责声明
 
-1. 本设备及所附带的文件是作为不提供任何明确的或隐含的赔偿或担保的形式提供的；
-
-2. 用户出于自愿而使用本设备，您必须了解开源使用本设备的风险，在尚未购买产品技术服务之前，我们不承诺对免费用户提供任何形式的技术支持、使用担保，也不承担任何因使用本设备而产生问题的相关责任；
-
-3. 电子文本形式的授权协议如同双方书面签署的协议一样，具有完全的和等同的法律效力。您一旦开始确认本协议并使用开源相关功能，即被视为完全理解并接受本协议的各项条款，在享有上述条款授予的权力的同时，受到相关的约束和限制。协议许可范围以外的行为，将直接违反本授权协议并构成侵权，我们有权随时终止授权，责令停止损害，并保留追究相关责任的权力；
-
-4. 如果本设备带有其它软件的整合示范例子包，这些文件版权不属于本软件官方，并且这些文件是没经过授权发布的，请参考相关软件的使用许可合法的使用。
+1. 本设备及所附带的文件是作为不提供任何明确的
+   或隐含的赔偿或担保的形式提供的；
+2. 用户出于自愿而使用本设备，您必须了解开源使用
+   本设备的风险，在尚未购买产品技术服务之前，
+   我们不承诺对免费用户提供任何形式的技术支持、
+   使用担保，也不承担任何因使用本设备而产生问题的
+   相关责任；
+3. 电子文本形式的授权协议如同双方书面签署的协议
+   一样，具有完全的和等同的法律效力。
+   您一旦开始确认本协议并使用开源相关功能，
+   即被视为完全理解并接受本协议的各项条款，
+   在享有上述条款授予的权力的同时，
+   受到相关的约束和限制。协议许可范围以外的行为，
+   将直接违反本授权协议并构成侵权，
+   我们有权随时终止授权，责令停止损害，
+   并保留追究相关责任的权力；
+4. 如果本设备带有其它软件的整合示范例子包，
+   这些文件版权不属于本软件官方，
+   并且这些文件是没经过授权发布的，
+   请参考相关软件的使用许可合法的使用。
 EOF
     if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000Pro' ]; then
         cat <<'EOF'
 
 五、C2000Pro 专属风险提示
 
-1. 当前识别机型为 NRadio_C2000Pro。该机型内存、存储空间和运行余量较小，安装或运行第三方插件、兼容应用商店层、代理服务、Web 终端、下载解压任务、swap 或其它扩展功能时，可能出现卡死、重启、服务异常、配置损坏、overlay 写满、系统无法正常启动等风险。
-
-2. 用户确认已理解上述硬件资源限制，并自愿承担因内存不足、存储不足、写入失败、插件冲突或系统资源耗尽造成的一切后果。
-
-3. 因上述原因导致的系统崩溃、数据丢失、配置损坏、无法启动、需要恢复出厂或重新刷机等问题，脚本作者和相关分享方概不负责。
+1. 当前识别机型为 NRadio_C2000Pro。
+   该机型内存、存储空间和运行余量较小，
+   安装或运行第三方插件、兼容应用商店层、
+   代理服务、Web 终端、下载解压任务、
+   swap 或其它扩展功能时，
+   可能出现卡死、重启、服务异常、配置损坏、
+   overlay 写满、系统无法正常启动等风险。
+2. 用户确认已理解上述硬件资源限制，
+   并自愿承担因内存不足、存储不足、写入失败、
+   插件冲突或系统资源耗尽造成的一切后果。
+3. 因上述原因导致的系统崩溃、数据丢失、配置损坏、
+   无法启动、需要恢复出厂或重新刷机等问题，
+   脚本作者和相关分享方概不负责。
 EOF
         disclaimer_user_responsibility_title="六、用户责任声明"
     else
@@ -58054,12 +53302,17 @@ EOF
     cat <<EOF
 ${disclaimer_user_responsibility_title}
 
-1. 用户已认真阅读并理解上述内容，同意上述条款，并承诺遵守以上约定；
-
-2. 用户知悉本设备生产商/提供方在开源后不对本设备存在任何管理责任，因此用户承诺开源使用本设备过程中发生的一切法律、经济责任均由用户本人承担，与本设备生产商/提供方无关；
-
-3. 用户开源使用本设备视为对本免责声明书以上全部内容的理解和认可。
+1. 用户已认真阅读并理解上述内容，同意上述条款，
+   并承诺遵守以上约定；
+2. 用户知悉本设备生产商/提供方在开源后
+   不对本设备存在任何管理责任，
+   因此用户承诺开源使用本设备过程中发生的
+   一切法律、经济责任均由用户本人承担，
+   与本设备生产商/提供方无关；
+3. 用户开源使用本设备视为对本免责声明书
+   以上全部内容的理解和认可。
 EOF
+    printf '\n%s\n' '----------------------------------------'
 }
 
 write_nradio_sim_name_map_js() {
@@ -58632,13 +53885,13 @@ configure_nradio_sim_name_mappings() {
         else
             printf '当前本地覆盖卡名: 未配置\n'
         fi
-        printf '0. 保留当前配置\n'
-        printf '1. 鲲鹏寂寞卡\n'
-        printf '2. 鲲鹏天火卡\n'
-        printf '3. 鲲鹏神卡\n'
-        printf '4. 自定义卡名\n'
-        printf '5. 清除本地覆盖卡名\n'
-        printf '请选择 0、1、2、3、4 或 5: '
+        print_menu_item 1 '鲲鹏寂寞卡'
+        print_menu_item 2 '鲲鹏天火卡'
+        print_menu_item 3 '鲲鹏神卡'
+        print_menu_item 4 '自定义卡名'
+        print_menu_item 5 '清除本地覆盖卡名'
+        print_menu_item 0 '保留当前配置'
+        print_menu_prompt '0-5'
         ui_read_line || die "input cancelled"
         case "$UI_READ_RESULT" in
             0)
@@ -58745,13 +53998,13 @@ run_nradio_operator_display_selfcheck() {
 
 manage_nradio_operator_display_fix() {
     while :; do
-        printf '\nNRadio LuCI 运营商与卡名显示修复:\n'
-        printf '1. 安装或更新修复\n'
-        printf '2. 查看修复状态\n'
-        printf '3. 移除修复\n'
-        printf '4. 配置当前 SIM 卡名\n'
-        printf '0. 返回设备维护与检测\n'
-        printf '请选择 0、1、2、3 或 4: '
+        print_menu_header '设备维护 > 运营商与卡名显示'
+        print_menu_item 1 '安装或更新修复'
+        print_menu_item 2 '查看修复状态'
+        print_menu_item 3 '移除修复'
+        print_menu_item 4 '配置当前 SIM 卡名'
+        print_menu_item 0 '返回上级'
+        print_menu_prompt '0-4'
         read_category_choice
         case "$UI_READ_RESULT" in
             0)
@@ -59746,14 +54999,14 @@ run_nradio_home_temperature_selfcheck() {
 manage_nradio_home_temperature_switch() {
     home_temperature_menu_path="${CURRENT_HOME_TEMP_MENU_PATH:-首页温度}"
     while :; do
-        print_menu_header "$home_temperature_menu_path / 首页温度显示"
+        print_menu_header "$home_temperature_menu_path > 首页温度显示"
         printf '  状态  %s\n' "$(nradio_home_temperature_install_state)"
         printf '  温源  CPU / 5G，选择自动记忆\n'
         printf '  双路  主线路可切换，副 5G 显示模组温度\n\n'
         print_menu_item 1 '安装或更新'
         print_menu_item 2 '查看安装详情'
         print_menu_item 3 '移除温度切换'
-        print_menu_item 0 '返回设备维护'
+        print_menu_item 0 '返回上级'
         print_menu_prompt '0-3'
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -68219,15 +63472,16 @@ manage_nradio_cpe_connection_monitoring() {
     require_nradio_cpe_monitoring_supported_model
 
     while :; do
+        print_menu_header '设备维护 > 5G 连接监听'
         if nradio_smart_band_model_supported; then
-            printf '\n5G 连接监听（C5800-688，已集成智能频段）:\n'
+            print_menu_note 'C5800-688 · 已集成智能频段'
         else
-            printf '\n5G 连接监听（C5800-650 / C2000MAX）:\n'
+            print_menu_note 'C5800-650 / C2000MAX'
         fi
-        printf '1. 安装或更新 5G 连接监听\n'
-        printf '2. 卸载 5G 连接监听\n'
-        printf '3. 返回设备维护与检测\n'
-        printf '请选择 1、2 或 3: '
+        print_menu_item 1 '安装或更新'
+        print_menu_item 2 '卸载'
+        print_menu_item 0 '返回上级'
+        print_menu_prompt '0-2'
         read_category_choice
         case "$UI_READ_RESULT" in
             0|3)
@@ -69967,6 +65221,512 @@ prepare_openwrt_luci_8080_adguard() {
     touch "$adg_stage/ready"
 }
 
+prepare_openwrt_luci_8080_system() {
+    local system_model block_arch block_payload_arch block_target block_file block_stage block_dep block_ipk
+    for system_model in admin_system/admin admin_system/fstab admin_system/fstab/mount admin_system/fstab/swap; do
+        [ -s "/usr/lib/lua/luci/model/cbi/$system_model.lua" ] || die "缺少原生系统页面: $system_model"
+    done
+
+    if [ ! -x /sbin/block ] || [ ! -x /etc/init.d/fstab ]; then
+        block_arch="$(get_primary_arch)"
+        case "$block_arch" in
+            aarch64_cortex-a53|aarch64_cortex-a55)
+                block_payload_arch=aarch64_cortex-a53
+                block_target=mediatek/mt7622
+                ;;
+            mipsel_24kc)
+                block_payload_arch=mipsel_24kc
+                block_target=ramips/mt7621
+                ;;
+            *) die "缺少挂载工具，暂无对应架构安装包: $block_arch" ;;
+        esac
+        # Match the NROS userspace ABI without replacing system libraries.
+        for block_dep in libc ubox libubox20210516 libuci20130104 libblobmsg-json20210516 libjson-c5; do
+            opkg status "$block_dep" 2>/dev/null | grep -q '^Status: .* installed$' ||
+                die "挂载工具缺少现有系统依赖: $block_dep"
+        done
+        block_stage="$WORKDIR/block-mount-8080"
+        block_file="block-mount_2021-01-04-c53b1882-1_${block_payload_arch}.ipk"
+        fetch_openwrt_luci_8080_package "$block_file" "$block_stage/$block_file" \
+            "https://mirrors.aliyun.com/openwrt/releases/21.02.7/targets/$block_target/packages/$block_file" \
+            "https://downloads.openwrt.org/releases/21.02.7/targets/$block_target/packages/$block_file"
+        block_ipk="$block_stage/$block_file"
+        if [ "$block_arch" != "$block_payload_arch" ]; then
+            # Cortex-A55 runs the ARMv8-A payload; retain all package dependencies.
+            repack_ipk_control "$block_ipk" "$block_stage/block-mount-native.ipk" "$block_arch" ""
+            block_ipk="$block_stage/block-mount-native.ipk"
+        fi
+        # Skip postinst's block detect: existing NROS storage is already mounted.
+        IPKG_NO_SCRIPT=1 install_ipk_file "$block_ipk" "原生挂载点工具"
+    fi
+    /sbin/block info >/dev/null || die "挂载工具无法读取块设备"
+    if [ ! -e /etc/config/fstab ]; then
+        cat > "$WORKDIR/luci8080-fstab" <<'EOF_OPENWRT_LUCI_8080_FSTAB'
+config global
+    option anon_swap '0'
+    option anon_mount '0'
+    option auto_swap '0'
+    option auto_mount '0'
+    option delay_root '5'
+    option check_fs '0'
+EOF_OPENWRT_LUCI_8080_FSTAB
+        cp "$WORKDIR/luci8080-fstab" /etc/config/fstab || die "创建挂载点配置失败"
+        chmod 600 /etc/config/fstab || die "设置挂载点配置权限失败"
+    fi
+    /etc/init.d/fstab enable || die "启用挂载点配置服务失败"
+    log "原生系统页面: 管理权 / 挂载点依赖已就绪"
+}
+
+prepare_openwrt_luci_8080_firewall() {
+    local firewall_stage firewall_package
+    firewall_stage="$WORKDIR/firewall-8080"
+    [ ! -f "$firewall_stage/ready" ] || return 0
+    mkdir -p "$firewall_stage/data" || die "创建防火墙原生页面准备目录失败"
+    for firewall_package in luci-app-firewall luci-i18n-firewall-zh-cn; do
+        fetch_openwrt_luci_8080_package "${firewall_package}_${OPENWRT_LUCI_8080_THEME_VERSION}_all.ipk" \
+            "$firewall_stage/$firewall_package.ipk" \
+            "$OPENWRT_LUCI_8080_FIREWALL_FEED/${firewall_package}_${OPENWRT_LUCI_8080_THEME_VERSION}_all.ipk"
+        extract_ipk_archive "$firewall_stage/$firewall_package.ipk" "$firewall_stage/$firewall_package"
+        tar -xzf "$firewall_stage/$firewall_package/data.tar.gz" -C "$firewall_stage/data" ./usr/lib/lua/luci || die "解包防火墙原生页面失败"
+    done
+    touch "$firewall_stage/ready"
+}
+
+sync_openwrt_luci_8080_firewall_i18n() {
+    local firewall_catalog firewall_i18n
+    firewall_i18n="$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/i18n"
+    [ -s "$firewall_i18n/firewall.zh-cn.lmo" ] || return 0
+    for firewall_catalog in /usr/lib/lua/luci/i18n/*.lmo; do
+        [ -f "$firewall_catalog" ] || continue
+        [ "${firewall_catalog##*/}" != firewall.zh-cn.lmo ] || continue
+        cp -L "$firewall_catalog" "$firewall_i18n/" || die "同步 8080 中文资源失败"
+    done
+}
+
+write_openwrt_luci_8080_firewall() {
+    local firewall_source firewall_target firewall_part
+    prepare_openwrt_luci_8080_firewall
+    firewall_source="$WORKDIR/firewall-8080/data/usr/lib/lua/luci"
+    firewall_target="$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci"
+    # NROS already supplies the fw3 model and the shared CBI widgets.
+    for firewall_part in model/firewall.lua view/cbi/firewall_zonelist.htm view/cbi/firewall_zoneforwards.htm; do
+        [ -s "/usr/lib/lua/luci/$firewall_part" ] || die "缺少防火墙页面基础依赖: $firewall_part"
+    done
+    for firewall_part in controller/firewall.lua tools/firewall.lua i18n/firewall.zh-cn.lmo; do
+        mkdir -p "$firewall_target/${firewall_part%/*}" || die "创建防火墙私有目录失败"
+        cp "$firewall_source/$firewall_part" "$firewall_target/$firewall_part" || die "写入防火墙原生组件失败"
+    done
+    for firewall_part in model/cbi/firewall view/firewall; do
+        mkdir -p "$firewall_target/$firewall_part" || die "创建防火墙表单目录失败"
+        cp -R "$firewall_source/$firewall_part/." "$firewall_target/$firewall_part/" || die "写入防火墙原生页面失败"
+    done
+    sync_openwrt_luci_8080_firewall_i18n
+}
+
+write_openwrt_luci_8080_dhcp() {
+    local dhcp_model
+    dhcp_model="$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci/model/cbi/admin_network/dhcp.lua"
+    mkdir -p "$(dirname "$dhcp_model")" || die "创建 DHCP/DNS 私有表单目录失败"
+    cat > "$dhcp_model" <<'EOF_OPENWRT_LUCI_8080_DHCP'
+-- Copyright 2008 Steven Barth <steven@midlink.org>
+-- Licensed to the public under the Apache License 2.0.
+
+local ipc = require "luci.ip"
+local sys = require "luci.sys"
+local o
+require "luci.util"
+
+m = Map("dhcp", translate("DHCP and DNS"),
+	translate("Dnsmasq is a combined <abbr title=\"Dynamic Host Configuration Protocol" ..
+		"\">DHCP</abbr>-Server and <abbr title=\"Domain Name System\">DNS</abbr>-" ..
+		"Forwarder for <abbr title=\"Network Address Translation\">NAT</abbr> " ..
+		"firewalls"))
+
+s = m:section(TypedSection, "dnsmasq", translate("Server Settings"))
+s.anonymous = true
+s.addremove = false
+
+s:tab("general", translate("General Settings"))
+s:tab("files", translate("Resolv and Hosts Files"))
+s:tab("tftp", translate("TFTP Settings"))
+s:tab("advanced", translate("Advanced Settings"))
+
+s:taboption("general", Flag, "domainneeded",
+	translate("Domain required"),
+	translate("Don't forward <abbr title=\"Domain Name System\">DNS</abbr>-Requests without " ..
+		"<abbr title=\"Domain Name System\">DNS</abbr>-Name"))
+
+s:taboption("general", Flag, "authoritative",
+	translate("Authoritative"),
+	translate("This is the only <abbr title=\"Dynamic Host Configuration Protocol\">DHCP</" ..
+		"abbr> in the local network"))
+
+
+s:taboption("files", Flag, "readethers",
+	translate("Use <code>/etc/ethers</code>"),
+	translate("Read <code>/etc/ethers</code> to configure the <abbr title=\"Dynamic Host " ..
+		"Configuration Protocol\">DHCP</abbr>-Server"))
+
+s:taboption("files", Value, "leasefile",
+	translate("Leasefile"),
+	translate("file where given <abbr title=\"Dynamic Host Configuration Protocol\">DHCP</" ..
+		"abbr>-leases will be stored"))
+
+s:taboption("files", Flag, "noresolv",
+	translate("Ignore resolve file")).optional = true
+
+rf = s:taboption("files", Value, "resolvfile",
+	translate("Resolve file"),
+	translate("local <abbr title=\"Domain Name System\">DNS</abbr> file"))
+
+rf:depends("noresolv", "")
+rf.optional = true
+
+
+s:taboption("files", Flag, "nohosts",
+	translate("Ignore <code>/etc/hosts</code>")).optional = true
+
+s:taboption("files", DynamicList, "addnhosts",
+	translate("Additional Hosts files")).optional = true
+
+qu = s:taboption("advanced", Flag, "quietdhcp",
+	translate("Suppress logging"),
+	translate("Suppress logging of the routine operation of these protocols"))
+qu.optional = true
+
+se = s:taboption("advanced", Flag, "sequential_ip",
+	translate("Allocate IP sequentially"),
+	translate("Allocate IP addresses sequentially, starting from the lowest available address"))
+se.optional = true
+
+bp = s:taboption("advanced", Flag, "boguspriv",
+	translate("Filter private"),
+	translate("Do not forward reverse lookups for local networks"))
+bp.default = bp.enabled
+
+s:taboption("advanced", Flag, "filterwin2k",
+	translate("Filter useless"),
+	translate("Do not forward requests that cannot be answered by public name servers"))
+
+
+s:taboption("advanced", Flag, "localise_queries",
+	translate("Localise queries"),
+	translate("Localise hostname depending on the requesting subnet if multiple IPs are available"))
+
+local have_dnssec_support = luci.util.checklib("/usr/sbin/dnsmasq", "libhogweed.so")
+
+if have_dnssec_support then
+	o = s:taboption("advanced", Flag, "dnssec",
+		translate("DNSSEC"))
+	o.optional = true
+
+	o = s:taboption("advanced", Flag, "dnsseccheckunsigned",
+		translate("DNSSEC check unsigned"),
+		translate("Requires upstream supports DNSSEC; verify unsigned domain responses really come from unsigned domains"))
+	o.optional = true
+end
+
+s:taboption("general", Value, "local",
+	translate("Local server"),
+	translate("Local domain specification. Names matching this domain are never forwarded and are resolved from DHCP or hosts files only"))
+
+s:taboption("general", Value, "domain",
+	translate("Local domain"),
+	translate("Local domain suffix appended to DHCP names and hosts file entries"))
+
+s:taboption("advanced", Flag, "expandhosts",
+	translate("Expand hosts"),
+	translate("Add local domain suffix to names served from hosts files"))
+
+s:taboption("advanced", Flag, "nonegcache",
+	translate("No negative cache"),
+	translate("Do not cache negative replies, e.g. for not existing domains"))
+
+s:taboption("advanced", Value, "serversfile",
+	translate("Additional servers file"),
+	translate("This file may contain lines like 'server=/domain/1.2.3.4' or 'server=1.2.3.4' for"..
+		"domain-specific or full upstream <abbr title=\"Domain Name System\">DNS</abbr> servers."))
+
+s:taboption("advanced", Flag, "strictorder",
+	translate("Strict order"),
+	translate("<abbr title=\"Domain Name System\">DNS</abbr> servers will be queried in the " ..
+		"order of the resolvfile")).optional = true
+
+s:taboption("advanced", Flag, "allservers",
+	translate("All Servers"),
+	translate("Query all available upstream <abbr title=\"Domain Name System\">DNS</abbr> servers")).optional = true
+
+bn = s:taboption("advanced", DynamicList, "bogusnxdomain", translate("Bogus NX Domain Override"),
+	translate("List of hosts that supply bogus NX domain results"))
+
+bn.optional = true
+bn.placeholder = "67.215.65.132"
+
+
+s:taboption("general", Flag, "logqueries",
+	translate("Log queries"),
+	translate("Write received DNS requests to syslog")).optional = true
+
+df = s:taboption("general", DynamicList, "server", translate("DNS forwardings"),
+	translate("List of <abbr title=\"Domain Name System\">DNS</abbr> " ..
+			"servers to forward requests to"))
+
+df.optional = true
+df.placeholder = "/example.org/10.1.2.3"
+
+
+rp = s:taboption("general", Flag, "rebind_protection",
+	translate("Rebind protection"),
+	translate("Discard upstream RFC1918 responses"))
+
+rp.rmempty = false
+
+
+rl = s:taboption("general", Flag, "rebind_localhost",
+	translate("Allow localhost"),
+	translate("Allow upstream responses in the 127.0.0.0/8 range, e.g. for RBL services"))
+
+rl:depends("rebind_protection", "1")
+
+
+rd = s:taboption("general", DynamicList, "rebind_domain",
+	translate("Domain whitelist"),
+	translate("List of domains to allow RFC1918 responses for"))
+rd.optional = true
+
+rd:depends("rebind_protection", "1")
+rd.datatype = "host(1)"
+rd.placeholder = "ihost.netflix.com"
+
+
+pt = s:taboption("advanced", Value, "port",
+	translate("<abbr title=\"Domain Name System\">DNS</abbr> server port"),
+	translate("Listening port for inbound DNS queries"))
+
+pt.optional = true
+pt.datatype = "port"
+pt.placeholder = 53
+
+
+qp = s:taboption("advanced", Value, "queryport",
+	translate("<abbr title=\"Domain Name System\">DNS</abbr> query port"),
+	translate("Fixed source port for outbound DNS queries"))
+
+qp.optional = true
+qp.datatype = "port"
+qp.placeholder = translate("any")
+
+
+lm = s:taboption("advanced", Value, "dhcpleasemax",
+	translate("<abbr title=\"maximal\">Max.</abbr> <abbr title=\"Dynamic Host Configuration " ..
+		"Protocol\">DHCP</abbr> leases"),
+	translate("Maximum allowed number of active DHCP leases"))
+
+lm.optional = true
+lm.datatype = "uinteger"
+lm.placeholder = translate("unlimited")
+
+
+em = s:taboption("advanced", Value, "ednspacket_max",
+	translate("<abbr title=\"maximal\">Max.</abbr> <abbr title=\"Extension Mechanisms for " ..
+		"Domain Name System\">EDNS0</abbr> packet size"),
+	translate("Maximum allowed size of EDNS.0 UDP packets"))
+
+em.optional = true
+em.datatype = "uinteger"
+em.placeholder = 1280
+
+
+cq = s:taboption("advanced", Value, "dnsforwardmax",
+	translate("<abbr title=\"maximal\">Max.</abbr> concurrent queries"),
+	translate("Maximum allowed number of concurrent DNS queries"))
+
+cq.optional = true
+cq.datatype = "uinteger"
+cq.placeholder = 150
+
+cs = s:taboption("advanced", Value, "cachesize",
+	translate("Size of DNS query cache"),
+	translate("Number of cached DNS entries (max is 10000, 0 is no caching)"))
+cs.optional = true
+cs.datatype = "range(0,10000)"
+cs.placeholder = 150
+
+s:taboption("tftp", Flag, "enable_tftp",
+	translate("Enable TFTP server")).optional = true
+
+tr = s:taboption("tftp", Value, "tftp_root",
+	translate("TFTP server root"),
+	translate("Root directory for files served via TFTP"))
+
+tr.optional = true
+tr:depends("enable_tftp", "1")
+tr.placeholder = "/"
+
+
+db = s:taboption("tftp", Value, "dhcp_boot",
+	translate("Network boot image"),
+	translate("Filename of the boot image advertised to clients"))
+
+db.optional = true
+db:depends("enable_tftp", "1")
+db.placeholder = "pxelinux.0"
+
+o = s:taboption("general", Flag, "localservice",
+	translate("Local Service Only"),
+	translate("Limit DNS service to subnets interfaces on which we are serving DNS."))
+o.optional = false
+o.rmempty = false
+
+o = s:taboption("general", Flag, "nonwildcard",
+	translate("Non-wildcard"),
+	translate("Bind only to specific interfaces rather than wildcard address."))
+o.optional = false
+o.rmempty = false
+
+o = s:taboption("general", DynamicList, "interface",
+	translate("Listen Interfaces"),
+	translate("Limit listening to these interfaces, and loopback."))
+o.optional = true
+o:depends("nonwildcard", true)
+
+o = s:taboption("general", DynamicList, "notinterface",
+	translate("Exclude interfaces"),
+	translate("Prevent listening on these interfaces."))
+o.optional = true
+o:depends("nonwildcard", true)
+
+m:section(SimpleSection).template = "admin_network/lease_status"
+
+s = m:section(TypedSection, "host", translate("Static Leases"),
+	translate("Static leases are used to assign fixed IP addresses and symbolic hostnames to " ..
+		"DHCP clients. They are also required for non-dynamic interface configurations where " ..
+		"only hosts with a corresponding lease are served.") .. "<br />" ..
+	translate("Use the <em>Add</em> Button to add a new lease entry. The <em>MAC-Address</em> " ..
+		"identifies the host, the <em>IPv4-Address</em> specifies the fixed address to " ..
+		"use, and the <em>Hostname</em> is assigned as a symbolic name to the requesting host. " ..
+		"The optional <em>Lease time</em> can be used to set non-standard host-specific " ..
+		"lease time, e.g. 12h, 3d or infinite."))
+
+s.addremove = true
+s.anonymous = true
+s.template = "cbi/tblsection"
+
+name = s:option(Value, "name", translate("Hostname"))
+name.datatype = "hostname('strict')"
+name.rmempty  = true
+
+function name.write(self, section, value)
+	Value.write(self, section, value)
+	m:set(section, "dns", "1")
+end
+
+function name.remove(self, section)
+	Value.remove(self, section)
+	m:del(section, "dns")
+end
+
+mac = s:option(Value, "mac", translate("<abbr title=\"Media Access Control\">MAC</abbr>-Address"))
+mac.datatype = "list(macaddr)"
+mac.rmempty  = true
+
+function mac.cfgvalue(self, section)
+	local val = Value.cfgvalue(self, section)
+	return ipc.checkmac(val) or val
+end
+
+ip = s:option(Value, "ip", translate("<abbr title=\"Internet Protocol Version 4\">IPv4</abbr>-Address"))
+ip.datatype = "or(ip4addr,'ignore')"
+
+time = s:option(Value, "leasetime", translate("Lease time"))
+time.rmempty = true
+
+duid = s:option(Value, "duid", translate("<abbr title=\"The DHCP Unique Identifier\">DUID</abbr>"))
+duid.datatype = "and(rangelength(20,36),hexstring)"
+fp = io.open("/var/hosts/odhcpd")
+if fp then
+	for line in fp:lines() do
+		local net_val, duid_val = string.match(line, "# (%S+)%s+(%S+)")
+		if duid_val then
+			duid:value(duid_val, duid_val)
+		end
+	end
+	fp:close()
+end
+
+hostid = s:option(Value, "hostid", translate("<abbr title=\"Internet Protocol Version 6\">IPv6</abbr>-Suffix (hex)"))
+
+sys.net.host_hints(function(m, v4, v6, name)
+	if m and v4 then
+		ip:value(v4)
+		mac:value(m, "%s (%s)" %{ m, name or v4 })
+	end
+end)
+
+function ip.validate(self, value, section)
+	local m = mac:formvalue(section) or ""
+	local n = name:formvalue(section) or ""
+	if value and #n == 0 and #m == 0 then
+		return nil, translate("One of hostname or mac address must be specified!")
+	end
+	return Value.validate(self, value, section)
+end
+
+
+return m
+EOF_OPENWRT_LUCI_8080_DHCP
+}
+
+
+write_openwrt_luci_8080_apply() {
+    # Official LuCI lede-17.01 template matches NROS servicectl/CBI apply API.
+    mkdir -p "$OPENWRT_LUCI_8080_VIEWDIR/cbi" || die "创建 8080 原版应用模板目录失败"
+    cat > "$OPENWRT_LUCI_8080_VIEWDIR/cbi/apply_xhr.htm" <<'EOF_OPENWRT_LUCI_8080_APPLY'
+<% export("cbi_apply_xhr", function(id, configs, redirect) -%>
+<fieldset class="cbi-section" id="cbi-apply-<%=id%>">
+	<legend><%:Applying changes%></legend>
+	<script type="text/javascript">//<![CDATA[
+		var apply_xhr = new XHR();
+		apply_xhr.post('<%=url('servicectl/restart', table.concat(configs, ","))%>', { token: '<%=token%>' },
+			function() {
+				var checkfinish = function() {
+					apply_xhr.get('<%=url('servicectl/status')%>', null,
+						function(x) {
+							if( x.responseText == 'finish' )
+							{
+								var e = document.getElementById('cbi-apply-<%=id%>-status');
+								if( e )
+								{
+									e.innerHTML = '<%:Configuration applied.%>';
+									window.setTimeout(function() {
+										e.parentNode.style.display = 'none';
+										<% if redirect then %>location.href='<%=redirect%>';<% end %>
+									}, 1000);
+								}
+							}
+							else
+							{
+								var e = document.getElementById('cbi-apply-<%=id%>-status');
+								if( e && x.responseText ) e.innerHTML = x.responseText;
+								window.setTimeout(checkfinish, 1000);
+							}
+						}
+					);
+				}
+
+				window.setTimeout(checkfinish, 1000);
+			}
+		);
+	//]]></script>
+
+	<img src="<%=resource%>/icons/loading.gif" alt="<%:Loading%>" style="vertical-align:middle" />
+	<span id="cbi-apply-<%=id%>-status"><%:Waiting for changes to be applied...%></span>
+</fieldset>
+<%-	end) %>
+EOF_OPENWRT_LUCI_8080_APPLY
+}
+
+
 prepare_openwrt_luci_8080_packages() {
     if [ "${1:-}" = argon ]; then
         fetch_openwrt_luci_8080_package "${OPENWRT_LUCI_8080_ARGON_URL##*/}" "$WORKDIR/argon-8080/luci-theme-argon.ipk" \
@@ -70047,11 +65807,6 @@ local function between(data, first, last, replacement)
 	return data:sub(1, a - 1) .. replacement .. data:sub(b)
 end
 edit("model/cbi/AdGuardHome/base.lua", function(data)
-	data = between(data, 'local binmtime=', 'o=s:option(Button,"restart"', [[local e = uci:get("AdGuardHome", "AdGuardHome", "coreversion") or ""
-if e == "" then e = uci:get("AdGuardHome", "AdGuardHome", "version") or "" end
-if not fs.access(configpath) then e = e .. " " .. translate("no config") end
-if not fs.access(binpath) then e = e .. " " .. translate("no core") end
-]])
 	data = between(data, 'local port=luci.sys.exec(', '---- Redirect', [[local port = (fs.readfile(configpath) or ""):match("\n%s+port:%s*(%d+)") or "?"
 ]])
 	data = data:gsub('fs%.rmdir%(value%)', '-- Invalid paths are reported by the native validator below.')
@@ -70342,7 +66097,7 @@ function M.snapshot()
 end
 function M.connect_assets(root)
 	local protected = {
-		["menu-argon.js"]=true, ["cbi.js"]=true, ["luci.js"]=true, ["ui.js"]=true,
+		["menu-argon.js"]=true, ["cbi.js"]=true, ["luci.js"]=true, ["ui.js"]=true, ["form.js"]=true,
 		["fs.js"]=true, ["rpc.js"]=true, ["uci.js"]=true, ["validation.js"]=true,
 		["xhr.js"]=true, codemirror=true, ["twin-bcrypt.min.js"]=true
 	}
@@ -70373,6 +66128,13 @@ function M.connect_assets(root)
 			connect(src, target .. "/" .. name)
 		end
 	end
+	local translations = root .. "/usr/lib/lua/luci/i18n"
+	if fs.access(translations .. "/firewall.zh-cn.lmo") then
+		for src in (fs.glob("/usr/lib/lua/luci/i18n/*.lmo") or function() end) do
+			local name = src:match("([^/]+)$")
+			if name ~= "firewall.zh-cn.lmo" then connect(src, translations .. "/" .. name) end
+		end
+	end
 end
 function M.entries()
 	local entries = {}
@@ -70389,6 +66151,7 @@ function M.entries()
 	return entries
 end
 if arg and arg[1] == "--snapshot" then io.write(M.snapshot(), "\n") end
+if arg and arg[1] == "--index-snapshot" then io.write(M.index_snapshot(), "\n") end
 return M
 EOF_OPENWRT_LUCI_8080_PLUGIN_STATE
     chmod 644 "$OPENWRT_LUCI_8080_ROOT/plugin-state.lua" || die "设置插件状态模块权限失败"
@@ -70400,10 +66163,79 @@ write_openwrt_luci_8080_files() {
     mkdir -p "$OPENWRT_LUCI_8080_DOCROOT/cgi-bin" "$(dirname "$OPENWRT_LUCI_8080_DETAILS")" "$OPENWRT_LUCI_8080_VIEWDIR/openclash" || die "创建 OpenWrt LuCI（8080）目录失败"
     ensure_dir_writable "$OPENWRT_LUCI_8080_ROOT" "OpenWrt LuCI（8080）应用目录"
     write_openwrt_luci_8080_overview
+    write_openwrt_luci_8080_apply
     write_openwrt_luci_8080_adguard
     write_openwrt_luci_8080_openvpn
     write_openwrt_luci_8080_plugin_state
 
+    cat > "$OPENWRT_LUCI_8080_ROOT/ubus.lua" <<'EOF_OPENWRT_LUCI_8080_UBUS'
+local http = require "luci.http"
+local context = require("luci.dispatcher").context
+local util = require "luci.util"
+local json = require "luci.jsonc"
+local function error_reply(id, code, message)
+	return { jsonrpc = "2.0", id = id, error = { code = code, message = message } }
+end
+http.prepare_content("application/json")
+local sid = context.authsession
+if http.getenv("REQUEST_METHOD") ~= "POST" or context.authuser ~= "root" or
+   type(sid) ~= "string" or sid == "" then
+	http.write_json(error_reply(nil, -32002, "Authentication required"))
+	return
+end
+local ok, request = pcall(json.parse, http.content() or "")
+if not ok or type(request) ~= "table" then
+	http.write_json(error_reply(nil, -32700, "Invalid JSON request"))
+	return
+end
+local function dispatch(req)
+	if type(req) ~= "table" then return error_reply(nil, -32600, "Invalid request") end
+	local id = req.id
+	if req.jsonrpc ~= "2.0" or (type(id) ~= "string" and type(id) ~= "number") then
+		return error_reply(nil, -32600, "Invalid request")
+	end
+	if req.method == "list" then
+		if req.sid ~= sid then return error_reply(id, -32602, "Invalid session") end
+		local params = req.params or {}
+		if type(params) ~= "table" then return error_reply(id, -32602, "Invalid parameters") end
+		local listed = {}
+		if #params == 0 then
+			local success, objects = pcall(util.ubus)
+			if not success then return error_reply(id, -32603, "Unable to list ubus objects") end
+			for _, object in ipairs(objects or {}) do listed[object] = {} end
+		else
+			for _, object in ipairs(params) do
+				if type(object) ~= "string" then return error_reply(id, -32602, "Invalid object") end
+				local success, methods = pcall(util.ubus, object)
+				if success and methods then listed[object] = methods end
+			end
+		end
+		return { jsonrpc = "2.0", id = id, result = listed }
+	end
+	if req.method ~= "call" then return error_reply(id, -32601, "Unsupported method") end
+	local params = req.params
+	if type(params) ~= "table" or #params ~= 4 or params[1] ~= sid or
+	   type(params[2]) ~= "string" or type(params[3]) ~= "string" or type(params[4]) ~= "table" then
+		return error_reply(id, -32602, "Invalid call parameters or session")
+	end
+	local args = params[4]
+	if args.ubus_rpc_session and args.ubus_rpc_session ~= sid then
+		return error_reply(id, -32002, "Session mismatch")
+	end
+	args.ubus_rpc_session = sid
+	local success, result, code = pcall(util.ubus, params[2], params[3], args)
+	if not success then return error_reply(id, -32603, "ubus call failed") end
+	return { jsonrpc = "2.0", id = id, result = result ~= nil and { 0, result } or { tonumber(code) or 1 } }
+end
+if request[1] ~= nil then
+	local replies = {}
+	for _, req in ipairs(request) do replies[#replies + 1] = dispatch(req) end
+	http.write_json(replies)
+else
+	http.write_json(dispatch(request))
+end
+EOF_OPENWRT_LUCI_8080_UBUS
+    chmod 644 "$OPENWRT_LUCI_8080_ROOT/ubus.lua" || die "设置 8080 RPC 接口权限失败"
     cat > "$OPENWRT_LUCI_8080_ROOT/openvpn-upload.lua" <<'EOF_OPENWRT_LUCI_8080_UPLOAD'
 -- Receive the complete multipart body before inspecting form fields.
 local http = require "luci.http"
@@ -70525,8 +66357,10 @@ function parser.parse(path, ...)
 		   name == "admin_status/nradio_details.htm" or
 		   name == "admin_status/nradio_8080_sysauth.htm" or
 		   name == "openclash/nradio_tabs.htm" or
+		   (name == "cbi/apply_xhr.htm" and require("nixio.fs").access(private_viewdir .. "/" .. name)) or
 		   (name:match("^AdGuardHome/") and require("nixio.fs").access(private_viewdir .. "/" .. name)) or
 		   (name:match("^openvpn/") and require("nixio.fs").access(private_viewdir .. "/" .. name)) or
+		   (name:match("^firewall/") and require("nixio.fs").access(private_viewdir .. "/" .. name)) or
 		   name:match("^argon%-config/") then
 			path = private_viewdir .. "/" .. name
 		end
@@ -70548,7 +66382,8 @@ local cbi = require "luci.cbi"
 local original_cbi_load = cbi.load
 function cbi.load(model, ...)
 	if model == "AdGuardHome/base" or model == "AdGuardHome/manual" or model == "AdGuardHome/log" or
-	   model == "openvpn" or model == "openvpn-basic" or model == "openvpn-advanced" or model == "openvpn-file" then
+	   model == "openvpn" or model == "openvpn-basic" or model == "openvpn-advanced" or model == "openvpn-file" or
+	   model:match("^firewall/") or model == "admin_network/dhcp" then
 		local private_model = instance_root .. "/usr/lib/lua/luci/model/cbi/" .. model .. ".lua"
 		if require("nixio.fs").access(private_model) then model = private_model end
 	end
@@ -70575,6 +66410,13 @@ local function active_theme_name()
 		if name == "argon" then return "argon" end
 	end
 	return "bootstrap"
+end
+
+local private_firewall = instance_root .. "/usr/lib/lua/luci/controller/firewall.lua"
+if active_theme_name() == "argon" and require("nixio.fs").access(private_firewall) then
+	package.loaded["luci.tools.firewall"] = nil
+	package.preload["luci.tools.firewall"] = assert(loadfile(instance_root .. "/usr/lib/lua/luci/tools/firewall.lua"))
+	require("luci.i18n").i18ndir = instance_root .. "/usr/lib/lua/luci/i18n/"
 end
 
 local function set_active_theme(node, theme_name)
@@ -70647,6 +66489,63 @@ function luci.dispatcher.createtree()
 	if changed and fs.writefile(stamp, signature) then fs.chmod(stamp, "600") end
 	local admin = tree.nodes and tree.nodes.admin
 	if admin then
+		if active_theme_name() == "argon" then
+			local d = luci.dispatcher
+			local system = admin.nodes.system or { order = 30 }
+			admin.nodes.system = system
+			system.nodes = system.nodes or {}
+			system.target = system.target or d.alias("admin", "system", "system")
+			system.title = "系统"
+			system.auto, system.hidden, system.leaf = nil, nil, nil
+			system.nodes.admin = {
+				title = "管理权", order = 2, leaf = true,
+				target = d.cbi("admin_system/admin")
+			}
+			if fs.access("/sbin/block") and fs.access("/etc/config/fstab") then
+				system.nodes.fstab = {
+					title = "挂载点", order = 50,
+					target = d.cbi("admin_system/fstab"),
+					nodes = {
+						mount = { target = d.cbi("admin_system/fstab/mount"), leaf = true },
+						swap = { target = d.cbi("admin_system/fstab/swap"), leaf = true }
+					}
+				}
+			end
+			local network = admin.nodes.network or { order = 50 }
+			admin.nodes.network = network
+			network.nodes = network.nodes or {}
+			network.target = d.firstchild()
+			network.title = "网络"
+			network.auto, network.hidden, network.leaf = nil, nil, nil
+			-- Native LuCI firewall forms, explicitly attached to the 8080 tree.
+			network.nodes.firewall = {
+				title = "防火墙", order = 60,
+				target = d.alias("admin", "network", "firewall", "zones"),
+				nodes = {
+					zones = {
+						title = "基本设置", order = 10, leaf = true,
+						target = d.arcombine(d.cbi("firewall/zones"), d.cbi("firewall/zone-details"))
+					},
+					forwards = {
+						title = "端口转发", order = 20, leaf = true,
+						target = d.arcombine(d.cbi("firewall/forwards"), d.cbi("firewall/forward-details"))
+					},
+					rules = {
+						title = "通信规则", order = 30, leaf = true,
+						target = d.arcombine(d.cbi("firewall/rules"), d.cbi("firewall/rule-details"))
+					},
+					custom = {
+						title = "自定义规则", order = 40, leaf = true,
+						target = d.form("firewall/custom")
+					}
+				}
+			}
+			-- NROS ships this view, but its controller points at a missing CBI model.
+			network.nodes.diagnostics = {
+				title = "网络诊断", order = 70, leaf = true,
+				target = d.template("admin_network/diagnostics")
+			}
+		end
 		for _, plugin in ipairs(plugins.entries()) do
 			local node, category = tree, plugin.route:match("^admin/([^/]+)/")
 			for part in plugin.route:gmatch("[^/]+") do
@@ -70706,6 +66605,15 @@ function luci.dispatcher.createtree()
 			end
 		end
 
+		if not admin.nodes.ubus then
+			admin.nodes.ubus = {
+				target = function()
+					local action = assert(loadfile(instance_root .. "/ubus.lua"))
+					return action()
+				end,
+				leaf = true
+			}
+		end
 		admin.nodes.menu = {
 			target = function()
 				http.prepare_content("application/json")
@@ -71541,10 +67449,10 @@ uninstall_openwrt_luci_8080() {
 
 manage_openwrt_luci_8080() {
     require_openwrt_luci_8080_supported_model
-    print_menu_header '4 / 3 / OpenWrt 原版 LuCI（8080）'
+    print_menu_header '4 > 3 > OpenWrt 原版 LuCI（8080）'
     print_menu_item 1 '安装或更新'
     print_menu_item 2 '卸载'
-    print_menu_item 0 '返回应用商店与页面'
+    print_menu_item 0 '返回上级'
     print_menu_prompt '0-2'
     read_category_choice
     case "$UI_READ_RESULT" in
@@ -71596,6 +67504,24 @@ publish_openwrt_luci_8080_files() {
     lua - "$1" "$2" <<'EOF_OPENWRT_LUCI_8080_PUBLISH'
 local fs = require "nixio.fs"
 local source, target = arg[1], arg[2]
+local resources = source .. "/www/luci-static/resources/"
+if fs.access(resources .. "luci.js") then
+	local loaded = { baseclass=true, dom=true, poll=true, request=true, session=true, view=true }
+	local function dependency(name)
+		if loaded[name] then return end
+		local path = resources .. name:gsub("%.", "/") .. ".js"
+		local code = fs.readfile(path)
+		assert(code and code:match("%S"), "Missing LuCI resource: " .. path)
+		loaded[name] = true
+		for line in code:gmatch("[^\r\n]+") do
+			local required = line:match("^%s*['\"]require%s+([%w_.%-]+)")
+			if required then dependency(required) end
+		end
+	end
+	for _, name in ipairs({ "cbi", "luci", "xhr", "ui", "rpc", "form", "menu-argon" }) do
+		dependency(name)
+	end
+end
 local function visit(root, callback)
 	for name in fs.dir(root) do
 		local path = root .. "/" .. name
@@ -71648,8 +67574,18 @@ build_argon_8080_files() {
     local OPENWRT_LUCI_8080_DETAILS="$OPENWRT_LUCI_8080_VIEWDIR/admin_status/nradio_details.htm"
     local OPENWRT_LUCI_8080_SYSAUTH="$OPENWRT_LUCI_8080_VIEWDIR/admin_status/nradio_8080_sysauth.htm"
     deploy_argon_8080_theme
+    prepare_openwrt_luci_8080_system
+    write_openwrt_luci_8080_firewall
+    write_openwrt_luci_8080_dhcp
     write_openwrt_luci_8080_files
+    refresh_openwrt_luci_8080_resource_version
     publish_openwrt_luci_8080_files "$OPENWRT_LUCI_8080_ROOT" "$live_root"
+}
+
+refresh_openwrt_luci_8080_resource_version() {
+    printf '%s-%s-%s\n' "$SCRIPT_VERSION" "$(date +%s)" "$$" > "$OPENWRT_LUCI_8080_ROOT/resource.version.new" || die "写入 8080 资源版本失败"
+    chmod 644 "$OPENWRT_LUCI_8080_ROOT/resource.version.new" || die "设置 8080 资源版本权限失败"
+    mv -f "$OPENWRT_LUCI_8080_ROOT/resource.version.new" "$OPENWRT_LUCI_8080_ROOT/resource.version" || die "更新 8080 资源版本失败"
 }
 
 write_openwrt_luci_8080_shared_assets() {
@@ -71661,7 +67597,7 @@ write_openwrt_luci_8080_shared_assets() {
         asset_name="${asset_source##*/}"
         case "$asset_source" in
             /www/luci-static/resources/*)
-                case "$asset_name" in menu-argon.js|cbi.js|luci.js|ui.js|fs.js|rpc.js|uci.js|validation.js|xhr.js|codemirror|twin-bcrypt.min.js) continue ;; esac
+                case "$asset_name" in menu-argon.js|cbi.js|luci.js|ui.js|form.js|fs.js|rpc.js|uci.js|validation.js|xhr.js|codemirror|twin-bcrypt.min.js) continue ;; esac
                 asset_target="$asset_stage/resources/$asset_name"
                 ;;
             *)
@@ -71701,10 +67637,12 @@ sync_openwrt_luci_8080_plugins() {
         rm -rf "$OPENWRT_LUCI_8080_VIEWDIR/openvpn"
     fi
     write_openwrt_luci_8080_shared_assets
+    sync_openwrt_luci_8080_firewall_i18n
     find -P "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci" -type d -exec chmod 755 {} \;
     find -P "$OPENWRT_LUCI_8080_ROOT/usr/lib/lua/luci" -type f -exec chmod 644 {} \;
     find -P "$OPENWRT_LUCI_8080_DOCROOT/luci-static/resources" -type d -exec chmod 755 {} \;
     find -P "$OPENWRT_LUCI_8080_DOCROOT/luci-static/resources" -type f -exec chmod 644 {} \;
+    refresh_openwrt_luci_8080_resource_version
     rm -f "$OPENWRT_LUCI_8080_INDEX_CACHE" /tmp/luci-indexcache /tmp/luci-indexcache.json /tmp/luci-indexcache-admin /tmp/luci-indexcache-store
     log "8080 插件页面、资源与菜单已同步"
 }
@@ -71899,21 +67837,41 @@ snapshot() {
 if [ "${1:-}" = --snapshot ]; then snapshot; exit $?; fi
 last="$(cat "$root/plugins.signature" 2>/dev/null)"
 pending=''
+last_index=''
+ticks=0
+mark_error() {
+    printf '%s\n' "$1" > "$root/plugins.sync-error"
+    chmod 644 "$root/plugins.sync-error"
+    logger -t nradio-luci8080 "$1"
+}
 while sleep 15; do
     [ "$(cat "$root/theme.active" 2>/dev/null)" = argon ] || continue
     [ ! -d /var/run/nradio-plugin-assistant.lock ] || continue
     pidof opkg >/dev/null 2>&1 && continue
-    current="$(snapshot)" || { logger -t nradio-luci8080 '读取插件文件状态失败'; continue; }
-    [ -n "$current" ] || continue
-    [ "$current" != "$last" ] || { pending=''; continue; }
+    index="$(lua "$root/plugin-state.lua" --index-snapshot)" || { mark_error '读取插件索引失败'; continue; }
+    ticks=$((ticks + 1))
+    if [ "$index" = "$last_index" ] && [ -z "$pending" ] && [ "$ticks" -lt 4 ] && [ ! -f "$root/plugins.sync-error" ]; then
+        continue
+    fi
+    last_index="$index"
+    ticks=0
+    current="$(snapshot)" || { mark_error '读取插件文件状态失败'; continue; }
+    [ -n "$current" ] || { mark_error '插件文件状态为空'; continue; }
+    if [ "$current" = "$last" ]; then
+        pending=''
+        rm -f "$root/plugins.sync-error"
+        continue
+    fi
     [ "$current" = "$pending" ] || { pending="$current"; continue; }
     installer="$(cat "$root/installer.path" 2>/dev/null)"
     if [ -f "$installer" ] && sh "$installer" --sync-luci8080 > /var/run/nradio-luci8080-sync.log 2>&1; then
+        printf '%s\n' "$current" > "$root/plugins.signature.new" &&
+            mv -f "$root/plugins.signature.new" "$root/plugins.signature" || { mark_error '保存插件同步状态失败'; continue; }
         last="$current"
-        printf '%s\n' "$last" > "$root/plugins.signature"
+        rm -f "$root/plugins.sync-error"
         pending=''
     else
-        logger -t nradio-luci8080 '插件同步未完成，详情见 /var/run/nradio-luci8080-sync.log'
+        mark_error '插件同步未完成，详情见 /var/run/nradio-luci8080-sync.log'
         sleep 60
     fi
 done
@@ -72004,14 +67962,14 @@ EOF_ARGON_8080_CONFIG
         [ -e "$shared_resource" ] || continue
         resource_name="${shared_resource##*/}"
         case "$resource_name" in
-            openclash|icons|menu-argon.js|cbi.js|luci.js|ui.js|fs.js|rpc.js|uci.js|validation.js|xhr.js) continue ;;
+            openclash|icons|menu-argon.js|cbi.js|luci.js|ui.js|form.js|fs.js|rpc.js|uci.js|validation.js|xhr.js) continue ;;
         esac
         if [ ! -e "$argon_resources/$resource_name" ] && [ ! -L "$argon_resources/$resource_name" ]; then
             ln -s "$shared_resource" "$argon_resources/$resource_name" || die "链接 LuCI 公共资源失败: $resource_name"
         fi
     done
     write_openwrt_luci_8080_shared_assets
-    for resource_name in menu-argon.js cbi.js luci.js ui.js fs.js rpc.js uci.js validation.js xhr.js; do
+    for resource_name in menu-argon.js cbi.js luci.js ui.js form.js fs.js rpc.js uci.js validation.js xhr.js; do
         if [ -L "$argon_resources/$resource_name" ]; then
             rm -f "$argon_resources/$resource_name" || die "移除共享 JS 链接失败: $resource_name"
         fi
@@ -74306,16 +70264,28 @@ EOF_ARGON_8080_CBI_JS
 		requestQueue.length = 0;
 
 		Request.request(rpcBaseURL, reqopt).then(function(reply) {
-			var json = null, req = null;
+			var json = null, req = null, parseError = null;
 
 			try { json = reply.json() }
-			catch(e) { }
+			catch(e) { parseError = e }
+
+			if (!Array.isArray(json)) {
+				var detail = json && json.error && json.error.message;
+				if (!detail)
+					detail = parseError ? parseError.message : 'Invalid RPC batch response';
+				var error = new Error('RPC batch HTTP ' + reply.status + ': ' + detail);
+				while ((req = batch.shift()) != null)
+					req[1].call(reqopt, error);
+				return;
+			}
+
+			var expected = batch.length, received = json.length;
 
 			while ((req = batch.shift()) != null)
-				if (Array.isArray(json) && json.length)
+				if (json.length)
 					req[2].call(reqopt, reply.clone(json.shift()));
 				else
-					req[1].call(reqopt, new Error('No related RPC reply'));
+					req[1].call(reqopt, new Error('RPC batch returned ' + received + ' of ' + expected + ' replies'));
 		}).catch(function(error) {
 			var req = null;
 
@@ -76276,6 +72246,7 @@ EOF_ARGON_8080_CBI_JS
 					jsonrpc: '2.0',
 					id:      'init',
 					method:  'list',
+					sid:     env.sessionid,
 					params:  undefined
 				};
 				var rpcFallbackURL = this.url('admin/ubus');
@@ -82141,6 +78112,4826 @@ var UI = baseclass.extend(/** @lends LuCI.ui.prototype */ {
 
 return UI;
 EOF_ARGON_8080_UI_JS
+    # LuCI openwrt-23.05, commit 3d39e8c38cfa276d5cdfad7105dbf47933eaed4f.
+    cat > "$argon_target_root/www/luci-static/resources/form.js" <<'EOF_ARGON_8080_FORM_JS'
+'use strict';
+'require ui';
+'require uci';
+'require rpc';
+'require dom';
+'require baseclass';
+
+var scope = this;
+
+var callSessionAccess = rpc.declare({
+	object: 'session',
+	method: 'access',
+	params: [ 'scope', 'object', 'function' ],
+	expect: { 'access': false }
+});
+
+var CBIJSONConfig = baseclass.extend({
+	__init__: function(data) {
+		data = Object.assign({}, data);
+
+		this.data = {};
+
+		var num_sections = 0,
+		    section_ids = [];
+
+		for (var sectiontype in data) {
+			if (!data.hasOwnProperty(sectiontype))
+				continue;
+
+			if (Array.isArray(data[sectiontype])) {
+				for (var i = 0, index = 0; i < data[sectiontype].length; i++) {
+					var item = data[sectiontype][i],
+					    anonymous, name;
+
+					if (!L.isObject(item))
+						continue;
+
+					if (typeof(item['.name']) == 'string') {
+						name = item['.name'];
+						anonymous = false;
+					}
+					else {
+						name = sectiontype + num_sections;
+						anonymous = true;
+					}
+
+					if (!this.data.hasOwnProperty(name))
+						section_ids.push(name);
+
+					this.data[name] = Object.assign(item, {
+						'.index': num_sections++,
+						'.anonymous': anonymous,
+						'.name': name,
+						'.type': sectiontype
+					});
+				}
+			}
+			else if (L.isObject(data[sectiontype])) {
+				this.data[sectiontype] = Object.assign(data[sectiontype], {
+					'.anonymous': false,
+					'.name': sectiontype,
+					'.type': sectiontype
+				});
+
+				section_ids.push(sectiontype);
+				num_sections++;
+			}
+		}
+
+		section_ids.sort(L.bind(function(a, b) {
+			var indexA = (this.data[a]['.index'] != null) ? +this.data[a]['.index'] : 9999,
+			    indexB = (this.data[b]['.index'] != null) ? +this.data[b]['.index'] : 9999;
+
+			if (indexA != indexB)
+				return (indexA - indexB);
+
+			return L.naturalCompare(a, b);
+		}, this));
+
+		for (var i = 0; i < section_ids.length; i++)
+			this.data[section_ids[i]]['.index'] = i;
+	},
+
+	load: function() {
+		return Promise.resolve(this.data);
+	},
+
+	save: function() {
+		return Promise.resolve();
+	},
+
+	get: function(config, section, option) {
+		if (section == null)
+			return null;
+
+		if (option == null)
+			return this.data[section];
+
+		if (!this.data.hasOwnProperty(section))
+			return null;
+
+		var value = this.data[section][option];
+
+		if (Array.isArray(value))
+			return value;
+
+		if (value != null)
+			return String(value);
+
+		return null;
+	},
+
+	set: function(config, section, option, value) {
+		if (section == null || option == null || option.charAt(0) == '.')
+			return;
+
+		if (!this.data.hasOwnProperty(section))
+			return;
+
+		if (value == null)
+			delete this.data[section][option];
+		else if (Array.isArray(value))
+			this.data[section][option] = value;
+		else
+			this.data[section][option] = String(value);
+	},
+
+	unset: function(config, section, option) {
+		return this.set(config, section, option, null);
+	},
+
+	sections: function(config, sectiontype, callback) {
+		var rv = [];
+
+		for (var section_id in this.data)
+			if (sectiontype == null || this.data[section_id]['.type'] == sectiontype)
+				rv.push(this.data[section_id]);
+
+		rv.sort(function(a, b) { return a['.index'] - b['.index'] });
+
+		if (typeof(callback) == 'function')
+			for (var i = 0; i < rv.length; i++)
+				callback.call(this, rv[i], rv[i]['.name']);
+
+		return rv;
+	},
+
+	add: function(config, sectiontype, sectionname) {
+		var num_sections_type = 0, next_index = 0;
+
+		for (var name in this.data) {
+			num_sections_type += (this.data[name]['.type'] == sectiontype);
+			next_index = Math.max(next_index, this.data[name]['.index']);
+		}
+
+		var section_id = sectionname || sectiontype + num_sections_type;
+
+		if (!this.data.hasOwnProperty(section_id)) {
+			this.data[section_id] = {
+				'.name': section_id,
+				'.type': sectiontype,
+				'.anonymous': (sectionname == null),
+				'.index': next_index + 1
+			};
+		}
+
+		return section_id;
+	},
+
+	remove: function(config, section) {
+		if (this.data.hasOwnProperty(section))
+			delete this.data[section];
+	},
+
+	resolveSID: function(config, section_id) {
+		return section_id;
+	},
+
+	move: function(config, section_id1, section_id2, after) {
+		return uci.move.apply(this, [config, section_id1, section_id2, after]);
+	}
+});
+
+/**
+ * @class AbstractElement
+ * @memberof LuCI.form
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `AbstractElement` class serves as abstract base for the different form
+ * elements implemented by `LuCI.form`. It provides the common logic for
+ * loading and rendering values, for nesting elements and for defining common
+ * properties.
+ *
+ * This class is private and not directly accessible by user code.
+ */
+var CBIAbstractElement = baseclass.extend(/** @lends LuCI.form.AbstractElement.prototype */ {
+	__init__: function(title, description) {
+		this.title = title || '';
+		this.description = description || '';
+		this.children = [];
+	},
+
+	/**
+	 * Add another form element as children to this element.
+	 *
+	 * @param {AbstractElement} element
+	 * The form element to add.
+	 */
+	append: function(obj) {
+		this.children.push(obj);
+	},
+
+	/**
+	 * Parse this elements form input.
+	 *
+	 * The `parse()` function recursively walks the form element tree and
+	 * triggers input value reading and validation for each encountered element.
+	 *
+	 * Elements which are hidden due to unsatisified dependencies are skipped.
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once this element's value and the values of
+	 * all child elements have been parsed. The returned promise is rejected
+	 * if any parsed values are not meeting the validation constraints of their
+	 * respective elements.
+	 */
+	parse: function() {
+		var args = arguments;
+		this.children.forEach(function(child) {
+			child.parse.apply(child, args);
+		});
+	},
+
+	/**
+	 * Render the form element.
+	 *
+	 * The `render()` function recursively walks the form element tree and
+	 * renders the markup for each element, returning the assembled DOM tree.
+	 *
+	 * @abstract
+	 * @returns {Node|Promise<Node>}
+	 * May return a DOM Node or a promise resolving to a DOM node containing
+	 * the form element's markup, including the markup of any child elements.
+	 */
+	render: function() {
+		L.error('InternalError', 'Not implemented');
+	},
+
+	/** @private */
+	loadChildren: function(/* ... */) {
+		var tasks = [];
+
+		if (Array.isArray(this.children))
+			for (var i = 0; i < this.children.length; i++)
+				if (!this.children[i].disable)
+					tasks.push(this.children[i].load.apply(this.children[i], arguments));
+
+		return Promise.all(tasks);
+	},
+
+	/** @private */
+	renderChildren: function(tab_name /*, ... */) {
+		var tasks = [],
+		    index = 0;
+
+		if (Array.isArray(this.children))
+			for (var i = 0; i < this.children.length; i++)
+				if (tab_name === null || this.children[i].tab === tab_name)
+					if (!this.children[i].disable)
+						tasks.push(this.children[i].render.apply(
+							this.children[i], this.varargs(arguments, 1, index++)));
+
+		return Promise.all(tasks);
+	},
+
+	/**
+	 * Strip any HTML tags from the given input string.
+	 *
+	 * @param {string} input
+	 * The input string to clean.
+	 *
+	 * @returns {string}
+	 * The cleaned input string with HTML tags removed.
+	 */
+	stripTags: function(s) {
+		if (typeof(s) == 'string' && !s.match(/[<>]/))
+			return s;
+
+		var x = dom.elem(s) ? s : dom.parse('<div>' + s + '</div>');
+
+		x.querySelectorAll('br').forEach(function(br) {
+			x.replaceChild(document.createTextNode('\n'), br);
+		});
+
+		return (x.textContent || x.innerText || '').replace(/([ \t]*\n)+/g, '\n');
+	},
+
+	/**
+	 * Format the given named property as title string.
+	 *
+	 * This function looks up the given named property and formats its value
+	 * suitable for use as element caption or description string. It also
+	 * strips any HTML tags from the result.
+	 *
+	 * If the property value is a string, it is passed to `String.format()`
+	 * along with any additional parameters passed to `titleFn()`.
+	 *
+	 * If the property value is a function, it is invoked with any additional
+	 * `titleFn()` parameters as arguments and the obtained return value is
+	 * converted to a string.
+	 *
+	 * In all other cases, `null` is returned.
+	 *
+	 * @param {string} property
+	 * The name of the element property to use.
+	 *
+	 * @param {...*} fmt_args
+	 * Extra values to format the title string with.
+	 *
+	 * @returns {string|null}
+	 * The formatted title string or `null` if the property did not exist or
+	 * was neither a string nor a function.
+	 */
+	titleFn: function(attr /*, ... */) {
+		var s = null;
+
+		if (typeof(this[attr]) == 'function')
+			s = this[attr].apply(this, this.varargs(arguments, 1));
+		else if (typeof(this[attr]) == 'string')
+			s = (arguments.length > 1) ? ''.format.apply(this[attr], this.varargs(arguments, 1)) : this[attr];
+
+		if (s != null)
+			s = this.stripTags(String(s)).trim();
+
+		if (s == null || s == '')
+			return null;
+
+		return s;
+	}
+});
+
+/**
+ * @constructor Map
+ * @memberof LuCI.form
+ * @augments LuCI.form.AbstractElement
+ *
+ * @classdesc
+ *
+ * The `Map` class represents one complete form. A form usually maps one UCI
+ * configuraton file and is divided into multiple sections containing multiple
+ * fields each.
+ *
+ * It serves as main entry point into the `LuCI.form` for typical view code.
+ *
+ * @param {string} config
+ * The UCI configuration to map. It is automatically loaded along when the
+ * resulting map instance.
+ *
+ * @param {string} [title]
+ * The title caption of the form. A form title is usually rendered as separate
+ * headline element before the actual form contents. If omitted, the
+ * corresponding headline element will not be rendered.
+ *
+ * @param {string} [description]
+ * The description text of the form which is usually rendered as text
+ * paragraph below the form title and before the actual form conents.
+ * If omitted, the corresponding paragraph element will not be rendered.
+ */
+var CBIMap = CBIAbstractElement.extend(/** @lends LuCI.form.Map.prototype */ {
+	__init__: function(config /*, ... */) {
+		this.super('__init__', this.varargs(arguments, 1));
+
+		this.config = config;
+		this.parsechain = [ config ];
+		this.data = uci;
+	},
+
+	/**
+	 * Toggle readonly state of the form.
+	 *
+	 * If set to `true`, the Map instance is marked readonly and any form
+	 * option elements added to it will inherit the readonly state.
+	 *
+	 * If left unset, the Map will test the access permission of the primary
+	 * uci configuration upon loading and mark the form readonly if no write
+	 * permissions are granted.
+	 *
+	 * @name LuCI.form.Map.prototype#readonly
+	 * @type boolean
+	 */
+
+	/**
+	 * Find all DOM nodes within this Map which match the given search
+	 * parameters. This function is essentially a convenience wrapper around
+	 * `querySelectorAll()`.
+	 *
+	 * This function is sensitive to the amount of arguments passed to it;
+	 * if only one argument is specified, it is used as selector-expression
+	 * as-is. When two arguments are passed, the first argument is treated
+	 * as attribute name, the second one as attribute value to match.
+	 *
+	 * As an example, `map.findElements('input')` would find all `<input>`
+	 * nodes while `map.findElements('type', 'text')` would find any DOM node
+	 * with a `type="text"` attribute.
+	 *
+	 * @param {string} selector_or_attrname
+	 * If invoked with only one parameter, this argument is a
+	 * `querySelectorAll()` compatible selector expression. If invoked with
+	 * two parameters, this argument is the attribute name to filter for.
+	 *
+	 * @param {string} [attrvalue]
+	 * In case the function is invoked with two parameters, this argument
+	 * specifies the attribute value to match.
+	 *
+	 * @throws {InternalError}
+	 * Throws an `InternalError` if more than two function parameters are
+	 * passed.
+	 *
+	 * @returns {NodeList}
+	 * Returns a (possibly empty) DOM `NodeList` containing the found DOM nodes.
+	 */
+	findElements: function(/* ... */) {
+		var q = null;
+
+		if (arguments.length == 1)
+			q = arguments[0];
+		else if (arguments.length == 2)
+			q = '[%s="%s"]'.format(arguments[0], arguments[1]);
+		else
+			L.error('InternalError', 'Expecting one or two arguments to findElements()');
+
+		return this.root.querySelectorAll(q);
+	},
+
+	/**
+	 * Find the first DOM node within this Map which matches the given search
+	 * parameters. This function is essentially a convenience wrapper around
+	 * `findElements()` which only returns the first found node.
+	 *
+	 * This function is sensitive to the amount of arguments passed to it;
+	 * if only one argument is specified, it is used as selector-expression
+	 * as-is. When two arguments are passed, the first argument is treated
+	 * as attribute name, the second one as attribute value to match.
+	 *
+	 * As an example, `map.findElement('input')` would find the first `<input>`
+	 * node while `map.findElement('type', 'text')` would find the first DOM
+	 * node with a `type="text"` attribute.
+	 *
+	 * @param {string} selector_or_attrname
+	 * If invoked with only one parameter, this argument is a `querySelector()`
+	 * compatible selector expression. If invoked with two parameters, this
+	 * argument is the attribute name to filter for.
+	 *
+	 * @param {string} [attrvalue]
+	 * In case the function is invoked with two parameters, this argument
+	 * specifies the attribute value to match.
+	 *
+	 * @throws {InternalError}
+	 * Throws an `InternalError` if more than two function parameters are
+	 * passed.
+	 *
+	 * @returns {Node|null}
+	 * Returns the first found DOM node or `null` if no element matched.
+	 */
+	findElement: function(/* ... */) {
+		var res = this.findElements.apply(this, arguments);
+		return res.length ? res[0] : null;
+	},
+
+	/**
+	 * Tie another UCI configuration to the map.
+	 *
+	 * By default, a map instance will only load the UCI configuration file
+	 * specified in the constructor but sometimes access to values from
+	 * further configuration files is required. This function allows for such
+	 * use cases by registering further UCI configuration files which are
+	 * needed by the map.
+	 *
+	 * @param {string} config
+	 * The additional UCI configuration file to tie to the map. If the given
+	 * config already is in the list of required files, it will be ignored.
+	 */
+	chain: function(config) {
+		if (this.parsechain.indexOf(config) == -1)
+			this.parsechain.push(config);
+	},
+
+	/**
+	 * Add a configuration section to the map.
+	 *
+	 * LuCI forms follow the structure of the underlying UCI configurations,
+	 * means that a map, which represents a single UCI configuration, is
+	 * divided into multiple sections which in turn contain an arbitrary
+	 * number of options.
+	 *
+	 * While UCI itself only knows two kinds of sections - named and anonymous
+	 * ones - the form class offers various flavors of form section elements
+	 * to present configuration sections in different ways. Refer to the
+	 * documentation of the different section classes for details.
+	 *
+	 * @param {LuCI.form.AbstractSection} sectionclass
+	 * The section class to use for rendering the configuration section.
+	 * Note that this value must be the class itself, not a class instance
+	 * obtained from calling `new`. It must also be a class dervied from
+	 * `LuCI.form.AbstractSection`.
+	 *
+	 * @param {...string} classargs
+	 * Additional arguments which are passed as-is to the contructor of the
+	 * given section class. Refer to the class specific constructor
+	 * documentation for details.
+	 *
+	 * @returns {LuCI.form.AbstractSection}
+	 * Returns the instantiated section class instance.
+	 */
+	section: function(cbiClass /*, ... */) {
+		if (!CBIAbstractSection.isSubclass(cbiClass))
+			L.error('TypeError', 'Class must be a descendent of CBIAbstractSection');
+
+		var obj = cbiClass.instantiate(this.varargs(arguments, 1, this));
+		this.append(obj);
+		return obj;
+	},
+
+	/**
+	 * Load the configuration covered by this map.
+	 *
+	 * The `load()` function first loads all referenced UCI configurations,
+	 * then it recursively walks the form element tree and invokes the
+	 * load function of each child element.
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once the entire form completed loading all
+	 * data. The promise may reject with an error if any configuration failed
+	 * to load or if any of the child elements load functions rejected with
+	 * an error.
+	 */
+	load: function() {
+		var doCheckACL = (!(this instanceof CBIJSONMap) && this.readonly == null),
+		    loadTasks = [ doCheckACL ? callSessionAccess('uci', this.config, 'write') : true ],
+		    configs = this.parsechain || [ this.config ];
+
+		loadTasks.push.apply(loadTasks, configs.map(L.bind(function(config, i) {
+			return i ? L.resolveDefault(this.data.load(config)) : this.data.load(config);
+		}, this)));
+
+		return Promise.all(loadTasks).then(L.bind(function(res) {
+			if (res[0] === false)
+				this.readonly = true;
+
+			return this.loadChildren();
+		}, this));
+	},
+
+	/**
+	 * Parse the form input values.
+	 *
+	 * The `parse()` function recursively walks the form element tree and
+	 * triggers input value reading and validation for each child element.
+	 *
+	 * Elements which are hidden due to unsatisified dependencies are skipped.
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once the entire form completed parsing all
+	 * input values. The returned promise is rejected if any parsed values are
+	 * not meeting the validation constraints of their respective elements.
+	 */
+	parse: function() {
+		var tasks = [];
+
+		if (Array.isArray(this.children))
+			for (var i = 0; i < this.children.length; i++)
+				tasks.push(this.children[i].parse());
+
+		return Promise.all(tasks);
+	},
+
+	/**
+	 * Save the form input values.
+	 *
+	 * This function parses the current form, saves the resulting UCI changes,
+	 * reloads the UCI configuration data and redraws the form elements.
+	 *
+	 * @param {function} [cb]
+	 * An optional callback function that is invoked after the form is parsed
+	 * but before the changed UCI data is saved. This is useful to perform
+	 * additional data manipulation steps before saving the changes.
+	 *
+	 * @param {boolean} [silent=false]
+	 * If set to `true`, trigger an alert message to the user in case saving
+	 * the form data failes. Otherwise fail silently.
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once the entire save operation is complete.
+	 * The returned promise is rejected if any step of the save operation
+	 * failed.
+	 */
+	save: function(cb, silent) {
+		this.checkDepends();
+
+		return this.parse()
+			.then(cb)
+			.then(this.data.save.bind(this.data))
+			.then(this.load.bind(this))
+			.catch(function(e) {
+				if (!silent) {
+					ui.showModal(_('Save error'), [
+						E('p', {}, [ _('An error occurred while saving the form:') ]),
+						E('p', {}, [ E('em', { 'style': 'white-space:pre-wrap' }, [ e.message ]) ]),
+						E('div', { 'class': 'right' }, [
+							E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, [ _('Dismiss') ])
+						])
+					]);
+				}
+
+				return Promise.reject(e);
+			}).then(this.renderContents.bind(this));
+	},
+
+	/**
+	 * Reset the form by re-rendering its contents. This will revert all
+	 * unsaved user inputs to their initial form state.
+	 *
+	 * @returns {Promise<Node>}
+	 * Returns a promise resolving to the toplevel form DOM node once the
+	 * re-rendering is complete.
+	 */
+	reset: function() {
+		return this.renderContents();
+	},
+
+	/**
+	 * Render the form markup.
+	 *
+	 * @returns {Promise<Node>}
+	 * Returns a promise resolving to the toplevel form DOM node once the
+	 * rendering is complete.
+	 */
+	render: function() {
+		return this.load().then(this.renderContents.bind(this));
+	},
+
+	/** @private */
+	renderContents: function() {
+		var mapEl = this.root || (this.root = E('div', {
+			'id': 'cbi-%s'.format(this.config),
+			'class': 'cbi-map',
+			'cbi-dependency-check': L.bind(this.checkDepends, this)
+		}));
+
+		dom.bindClassInstance(mapEl, this);
+
+		return this.renderChildren(null).then(L.bind(function(nodes) {
+			var initialRender = !mapEl.firstChild;
+
+			dom.content(mapEl, null);
+
+			if (this.title != null && this.title != '')
+				mapEl.appendChild(E('h2', { 'name': 'content' }, this.title));
+
+			if (this.description != null && this.description != '')
+				mapEl.appendChild(E('div', { 'class': 'cbi-map-descr' }, this.description));
+
+			if (this.tabbed)
+				dom.append(mapEl, E('div', { 'class': 'cbi-map-tabbed' }, nodes));
+			else
+				dom.append(mapEl, nodes);
+
+			if (!initialRender) {
+				mapEl.classList.remove('flash');
+
+				window.setTimeout(function() {
+					mapEl.classList.add('flash');
+				}, 1);
+			}
+
+			this.checkDepends();
+
+			var tabGroups = mapEl.querySelectorAll('.cbi-map-tabbed, .cbi-section-node-tabbed');
+
+			for (var i = 0; i < tabGroups.length; i++)
+				ui.tabs.initTabGroup(tabGroups[i].childNodes);
+
+			return mapEl;
+		}, this));
+	},
+
+	/**
+	 * Find a form option element instance.
+	 *
+	 * @param {string} name_or_id
+	 * The name or the full ID of the option element to look up.
+	 *
+	 * @param {string} [section_id]
+	 * The ID of the UCI section containing the option to look up. May be
+	 * omitted if a full ID is passed as first argument.
+	 *
+	 * @param {string} [config]
+	 * The name of the UCI configuration the option instance is belonging to.
+	 * Defaults to the main UCI configuration of the map if omitted.
+	 *
+	 * @returns {Array<LuCI.form.AbstractValue,string>|null}
+	 * Returns a two-element array containing the form option instance as
+	 * first item and the corresponding UCI section ID as second item.
+	 * Returns `null` if the option could not be found.
+	 */
+	lookupOption: function(name, section_id, config_name) {
+		var id, elem, sid, inst;
+
+		if (name.indexOf('.') > -1)
+			id = 'cbid.%s'.format(name);
+		else
+			id = 'cbid.%s.%s.%s'.format(config_name || this.config, section_id, name);
+
+		elem = this.findElement('data-field', id);
+		sid  = elem ? id.split(/\./)[2] : null;
+		inst = elem ? dom.findClassInstance(elem) : null;
+
+		return (inst instanceof CBIAbstractValue) ? [ inst, sid ] : null;
+	},
+
+	/** @private */
+	checkDepends: function(ev, n) {
+		var changed = false;
+
+		for (var i = 0, s = this.children[0]; (s = this.children[i]) != null; i++)
+			if (s.checkDepends(ev, n))
+				changed = true;
+
+		if (changed && (n || 0) < 10)
+			this.checkDepends(ev, (n || 10) + 1);
+
+		ui.tabs.updateTabs(ev, this.root);
+	},
+
+	/** @private */
+	isDependencySatisfied: function(depends, config_name, section_id) {
+		var def = false;
+
+		if (!Array.isArray(depends) || !depends.length)
+			return true;
+
+		for (var i = 0; i < depends.length; i++) {
+			var istat = true,
+			    reverse = depends[i]['!reverse'],
+			    contains = depends[i]['!contains'];
+
+			for (var dep in depends[i]) {
+				if (dep == '!reverse' || dep == '!contains') {
+					continue;
+				}
+				else if (dep == '!default') {
+					def = true;
+					istat = false;
+				}
+				else {
+					var res = this.lookupOption(dep, section_id, config_name),
+					    val = (res && res[0].isActive(res[1])) ? res[0].formvalue(res[1]) : null;
+
+					var equal = contains
+						? isContained(val, depends[i][dep])
+						: isEqual(val, depends[i][dep]);
+
+					istat = (istat && equal);
+				}
+			}
+
+			if (istat ^ reverse)
+				return true;
+		}
+
+		return def;
+	}
+});
+
+/**
+ * @constructor JSONMap
+ * @memberof LuCI.form
+ * @augments LuCI.form.Map
+ *
+ * @classdesc
+ *
+ * A `JSONMap` class functions similar to [LuCI.form.Map]{@link LuCI.form.Map}
+ * but uses a multidimensional JavaScript object instead of UCI configuration
+ * as data source.
+ *
+ * @param {Object<string, Object<string, *>|Array<Object<string, *>>>} data
+ * The JavaScript object to use as data source. Internally, the object is
+ * converted into an UCI-like format. Its toplevel keys are treated like UCI
+ * section types while the object or array-of-object values are treated as
+ * section contents.
+ *
+ * @param {string} [title]
+ * The title caption of the form. A form title is usually rendered as separate
+ * headline element before the actual form contents. If omitted, the
+ * corresponding headline element will not be rendered.
+ *
+ * @param {string} [description]
+ * The description text of the form which is usually rendered as text
+ * paragraph below the form title and before the actual form conents.
+ * If omitted, the corresponding paragraph element will not be rendered.
+ */
+var CBIJSONMap = CBIMap.extend(/** @lends LuCI.form.JSONMap.prototype */ {
+	__init__: function(data /*, ... */) {
+		this.super('__init__', this.varargs(arguments, 1, 'json'));
+
+		this.config = 'json';
+		this.parsechain = [ 'json' ];
+		this.data = new CBIJSONConfig(data);
+	}
+});
+
+/**
+ * @class AbstractSection
+ * @memberof LuCI.form
+ * @augments LuCI.form.AbstractElement
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `AbstractSection` class serves as abstract base for the different form
+ * section styles implemented by `LuCI.form`. It provides the common logic for
+ * enumerating underlying configuration section instances, for registering
+ * form options and for handling tabs to segment child options.
+ *
+ * This class is private and not directly accessible by user code.
+ */
+var CBIAbstractSection = CBIAbstractElement.extend(/** @lends LuCI.form.AbstractSection.prototype */ {
+	__init__: function(map, sectionType /*, ... */) {
+		this.super('__init__', this.varargs(arguments, 2));
+
+		this.sectiontype = sectionType;
+		this.map = map;
+		this.config = map.config;
+
+		this.optional = true;
+		this.addremove = false;
+		this.dynamic = false;
+	},
+
+	/**
+	 * Access the parent option container instance.
+	 *
+	 * In case this section is nested within an option element container,
+	 * this property will hold a reference to the parent option instance.
+	 *
+	 * If this section is not nested, the property is `null`.
+	 *
+	 * @name LuCI.form.AbstractSection.prototype#parentoption
+	 * @type LuCI.form.AbstractValue
+	 * @readonly
+	 */
+
+	/**
+	 * Enumerate the UCI section IDs covered by this form section element.
+	 *
+	 * @abstract
+	 * @throws {InternalError}
+	 * Throws an `InternalError` exception if the function is not implemented.
+	 *
+	 * @returns {string[]}
+	 * Returns an array of UCI section IDs covered by this form element.
+	 * The sections will be rendered in the same order as the returned array.
+	 */
+	cfgsections: function() {
+		L.error('InternalError', 'Not implemented');
+	},
+
+	/**
+	 * Filter UCI section IDs to render.
+	 *
+	 * The filter function is invoked for each UCI section ID of a given type
+	 * and controls whether the given UCI section is rendered or ignored by
+	 * the form section element.
+	 *
+	 * The default implementation always returns `true`. User code or
+	 * classes extending `AbstractSection` may overwrite this function with
+	 * custom implementations.
+	 *
+	 * @abstract
+	 * @param {string} section_id
+	 * The UCI section ID to test.
+	 *
+	 * @returns {boolean}
+	 * Returns `true` when the given UCI section ID should be handled and
+	 * `false` when it should be ignored.
+	 */
+	filter: function(section_id) {
+		return true;
+	},
+
+	/**
+	 * Load the configuration covered by this section.
+	 *
+	 * The `load()` function recursively walks the section element tree and
+	 * invokes the load function of each child option element.
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once the values of all child elements have
+	 * been loaded. The promise may reject with an error if any of the child
+	 * elements load functions rejected with an error.
+	 */
+	load: function() {
+		var section_ids = this.cfgsections(),
+		    tasks = [];
+
+		if (Array.isArray(this.children))
+			for (var i = 0; i < section_ids.length; i++)
+				tasks.push(this.loadChildren(section_ids[i])
+					.then(Function.prototype.bind.call(function(section_id, set_values) {
+						for (var i = 0; i < set_values.length; i++)
+							this.children[i].cfgvalue(section_id, set_values[i]);
+					}, this, section_ids[i])));
+
+		return Promise.all(tasks);
+	},
+
+	/**
+	 * Parse this sections form input.
+	 *
+	 * The `parse()` function recursively walks the section element tree and
+	 * triggers input value reading and validation for each encountered child
+	 * option element.
+	 *
+	 * Options which are hidden due to unsatisified dependencies are skipped.
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once the values of all child elements have
+	 * been parsed. The returned promise is rejected if any parsed values are
+	 * not meeting the validation constraints of their respective elements.
+	 */
+	parse: function() {
+		var section_ids = this.cfgsections(),
+		    tasks = [];
+
+		if (Array.isArray(this.children))
+			for (var i = 0; i < section_ids.length; i++)
+				for (var j = 0; j < this.children.length; j++)
+					tasks.push(this.children[j].parse(section_ids[i]));
+
+		return Promise.all(tasks);
+	},
+
+	/**
+	 * Add an option tab to the section.
+	 *
+	 * The child option elements of a section may be divided into multiple
+	 * tabs to provide a better overview to the user.
+	 *
+	 * Before options can be moved into a tab pane, the corresponding tab
+	 * has to be defined first, which is done by calling this function.
+	 *
+	 * Note that once tabs are defined, user code must use the `taboption()`
+	 * method to add options to specific tabs. Option elements added by
+	 * `option()` will not be assigned to any tab and not be rendered in this
+	 * case.
+	 *
+	 * @param {string} name
+	 * The name of the tab to register. It may be freely chosen and just serves
+	 * as an identifier to differentiate tabs.
+	 *
+	 * @param {string} title
+	 * The human readable caption of the tab.
+	 *
+	 * @param {string} [description]
+	 * An additional description text for the corresponding tab pane. It is
+	 * displayed as text paragraph below the tab but before the tab pane
+	 * contents. If omitted, no description will be rendered.
+	 *
+	 * @throws {Error}
+	 * Throws an exeption if a tab with the same `name` already exists.
+	 */
+	tab: function(name, title, description) {
+		if (this.tabs && this.tabs[name])
+			throw 'Tab already declared';
+
+		var entry = {
+			name: name,
+			title: title,
+			description: description,
+			children: []
+		};
+
+		this.tabs = this.tabs || [];
+		this.tabs.push(entry);
+		this.tabs[name] = entry;
+
+		this.tab_names = this.tab_names || [];
+		this.tab_names.push(name);
+	},
+
+	/**
+	 * Add a configuration option widget to the section.
+	 *
+	 * Note that [taboption()]{@link LuCI.form.AbstractSection#taboption}
+	 * should be used instead if this form section element uses tabs.
+	 *
+	 * @param {LuCI.form.AbstractValue} optionclass
+	 * The option class to use for rendering the configuration option. Note
+	 * that this value must be the class itself, not a class instance obtained
+	 * from calling `new`. It must also be a class dervied from
+	 * [LuCI.form.AbstractSection]{@link LuCI.form.AbstractSection}.
+	 *
+	 * @param {...*} classargs
+	 * Additional arguments which are passed as-is to the contructor of the
+	 * given option class. Refer to the class specific constructor
+	 * documentation for details.
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception in case the passed class value is not a
+	 * descendent of `AbstractValue`.
+	 *
+	 * @returns {LuCI.form.AbstractValue}
+	 * Returns the instantiated option class instance.
+	 */
+	option: function(cbiClass /*, ... */) {
+		if (!CBIAbstractValue.isSubclass(cbiClass))
+			throw L.error('TypeError', 'Class must be a descendent of CBIAbstractValue');
+
+		var obj = cbiClass.instantiate(this.varargs(arguments, 1, this.map, this));
+		this.append(obj);
+		return obj;
+	},
+
+	/**
+	 * Add a configuration option widget to a tab of the section.
+	 *
+	 * @param {string} tabname
+	 * The name of the section tab to add the option element to.
+	 *
+	 * @param {LuCI.form.AbstractValue} optionclass
+	 * The option class to use for rendering the configuration option. Note
+	 * that this value must be the class itself, not a class instance obtained
+	 * from calling `new`. It must also be a class dervied from
+	 * [LuCI.form.AbstractSection]{@link LuCI.form.AbstractSection}.
+	 *
+	 * @param {...*} classargs
+	 * Additional arguments which are passed as-is to the contructor of the
+	 * given option class. Refer to the class specific constructor
+	 * documentation for details.
+	 *
+	 * @throws {ReferenceError}
+	 * Throws a `ReferenceError` exception when the given tab name does not
+	 * exist.
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception in case the passed class value is not a
+	 * descendent of `AbstractValue`.
+	 *
+	 * @returns {LuCI.form.AbstractValue}
+	 * Returns the instantiated option class instance.
+	 */
+	taboption: function(tabName /*, ... */) {
+		if (!this.tabs || !this.tabs[tabName])
+			throw L.error('ReferenceError', 'Associated tab not declared');
+
+		var obj = this.option.apply(this, this.varargs(arguments, 1));
+		obj.tab = tabName;
+		this.tabs[tabName].children.push(obj);
+		return obj;
+	},
+
+	/**
+	 * Query underlying option configuration values.
+	 *
+	 * This function is sensitive to the amount of arguments passed to it;
+	 * if only one argument is specified, the configuration values of all
+	 * options within this section are returned as dictionary.
+	 *
+	 * If both the section ID and an option name are supplied, this function
+	 * returns the configuration value of the specified option only.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @param {string} [option]
+	 * The name of the option to query
+	 *
+	 * @returns {null|string|string[]|Object<string, null|string|string[]>}
+	 * Returns either a dictionary of option names and their corresponding
+	 * configuration values or just a single configuration value, depending
+	 * on the amount of passed arguments.
+	 */
+	cfgvalue: function(section_id, option) {
+		var rv = (arguments.length == 1) ? {} : null;
+
+		for (var i = 0, o; (o = this.children[i]) != null; i++)
+			if (rv)
+				rv[o.option] = o.cfgvalue(section_id);
+			else if (o.option == option)
+				return o.cfgvalue(section_id);
+
+		return rv;
+	},
+
+	/**
+	 * Query underlying option widget input values.
+	 *
+	 * This function is sensitive to the amount of arguments passed to it;
+	 * if only one argument is specified, the widget input values of all
+	 * options within this section are returned as dictionary.
+	 *
+	 * If both the section ID and an option name are supplied, this function
+	 * returns the widget input value of the specified option only.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @param {string} [option]
+	 * The name of the option to query
+	 *
+	 * @returns {null|string|string[]|Object<string, null|string|string[]>}
+	 * Returns either a dictionary of option names and their corresponding
+	 * widget input values or just a single widget input value, depending
+	 * on the amount of passed arguments.
+	 */
+	formvalue: function(section_id, option) {
+		var rv = (arguments.length == 1) ? {} : null;
+
+		for (var i = 0, o; (o = this.children[i]) != null; i++) {
+			var func = this.map.root ? this.children[i].formvalue : this.children[i].cfgvalue;
+
+			if (rv)
+				rv[o.option] = func.call(o, section_id);
+			else if (o.option == option)
+				return func.call(o, section_id);
+		}
+
+		return rv;
+	},
+
+	/**
+	 * Obtain underlying option LuCI.ui widget instances.
+	 *
+	 * This function is sensitive to the amount of arguments passed to it;
+	 * if only one argument is specified, the LuCI.ui widget instances of all
+	 * options within this section are returned as dictionary.
+	 *
+	 * If both the section ID and an option name are supplied, this function
+	 * returns the LuCI.ui widget instance value of the specified option only.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @param {string} [option]
+	 * The name of the option to query
+	 *
+	 * @returns {null|LuCI.ui.AbstractElement|Object<string, null|LuCI.ui.AbstractElement>}
+	 * Returns either a dictionary of option names and their corresponding
+	 * widget input values or just a single widget input value, depending
+	 * on the amount of passed arguments.
+	 */
+	getUIElement: function(section_id, option) {
+		var rv = (arguments.length == 1) ? {} : null;
+
+		for (var i = 0, o; (o = this.children[i]) != null; i++)
+			if (rv)
+				rv[o.option] = o.getUIElement(section_id);
+			else if (o.option == option)
+				return o.getUIElement(section_id);
+
+		return rv;
+	},
+
+	/**
+	 * Obtain underlying option objects.
+	 *
+	 * This function is sensitive to the amount of arguments passed to it;
+	 * if no option name is specified, all options within this section are
+	 * returned as dictionary.
+	 *
+	 * If an option name is supplied, this function returns the matching
+	 * LuCI.form.AbstractValue instance only.
+	 *
+	 * @param {string} [option]
+	 * The name of the option object to obtain
+	 *
+	 * @returns {null|LuCI.form.AbstractValue|Object<string, LuCI.form.AbstractValue>}
+	 * Returns either a dictionary of option names and their corresponding
+	 * option instance objects or just a single object instance value,
+	 * depending on the amount of passed arguments.
+	 */
+	getOption: function(option) {
+		var rv = (arguments.length == 0) ? {} : null;
+
+		for (var i = 0, o; (o = this.children[i]) != null; i++)
+			if (rv)
+				rv[o.option] = o;
+			else if (o.option == option)
+				return o;
+
+		return rv;
+	},
+
+	/** @private */
+	renderUCISection: function(section_id) {
+		var renderTasks = [];
+
+		if (!this.tabs)
+			return this.renderOptions(null, section_id);
+
+		for (var i = 0; i < this.tab_names.length; i++)
+			renderTasks.push(this.renderOptions(this.tab_names[i], section_id));
+
+		return Promise.all(renderTasks)
+			.then(this.renderTabContainers.bind(this, section_id));
+	},
+
+	/** @private */
+	renderTabContainers: function(section_id, nodes) {
+		var config_name = this.uciconfig || this.map.config,
+		    containerEls = E([]);
+
+		for (var i = 0; i < nodes.length; i++) {
+			var tab_name = this.tab_names[i],
+			    tab_data = this.tabs[tab_name],
+			    containerEl = E('div', {
+			    	'id': 'container.%s.%s.%s'.format(config_name, section_id, tab_name),
+			    	'data-tab': tab_name,
+			    	'data-tab-title': tab_data.title,
+			    	'data-tab-active': tab_name === this.selected_tab
+			    });
+
+			if (tab_data.description != null && tab_data.description != '')
+				containerEl.appendChild(
+					E('div', { 'class': 'cbi-tab-descr' }, tab_data.description));
+
+			containerEl.appendChild(nodes[i]);
+			containerEls.appendChild(containerEl);
+		}
+
+		return containerEls;
+	},
+
+	/** @private */
+	renderOptions: function(tab_name, section_id) {
+		var in_table = (this instanceof CBITableSection);
+		return this.renderChildren(tab_name, section_id, in_table).then(function(nodes) {
+			var optionEls = E([]);
+			for (var i = 0; i < nodes.length; i++)
+				optionEls.appendChild(nodes[i]);
+			return optionEls;
+		});
+	},
+
+	/** @private */
+	checkDepends: function(ev, n) {
+		var changed = false,
+		    sids = this.cfgsections();
+
+		for (var i = 0, sid = sids[0]; (sid = sids[i]) != null; i++) {
+			for (var j = 0, o = this.children[0]; (o = this.children[j]) != null; j++) {
+				var isActive = o.isActive(sid),
+				    isSatisified = o.checkDepends(sid);
+
+				if (isActive != isSatisified) {
+					o.setActive(sid, !isActive);
+					isActive = !isActive;
+					changed = true;
+				}
+
+				if (!n && isActive)
+					o.triggerValidation(sid);
+			}
+		}
+
+		return changed;
+	}
+});
+
+
+var isEqual = function(x, y) {
+	if (typeof(y) == 'object' && y instanceof RegExp)
+		return (x == null) ? false : y.test(x);
+
+	if (x != null && y != null && typeof(x) != typeof(y))
+		return false;
+
+	if ((x == null && y != null) || (x != null && y == null))
+		return false;
+
+	if (Array.isArray(x)) {
+		if (x.length != y.length)
+			return false;
+
+		for (var i = 0; i < x.length; i++)
+			if (!isEqual(x[i], y[i]))
+				return false;
+	}
+	else if (typeof(x) == 'object') {
+		for (var k in x) {
+			if (x.hasOwnProperty(k) && !y.hasOwnProperty(k))
+				return false;
+
+			if (!isEqual(x[k], y[k]))
+				return false;
+		}
+
+		for (var k in y)
+			if (y.hasOwnProperty(k) && !x.hasOwnProperty(k))
+				return false;
+	}
+	else if (x != y) {
+		return false;
+	}
+
+	return true;
+};
+
+var isContained = function(x, y) {
+	if (Array.isArray(x)) {
+		for (var i = 0; i < x.length; i++)
+			if (x[i] == y)
+				return true;
+	}
+	else if (L.isObject(x)) {
+		if (x.hasOwnProperty(y) && x[y] != null)
+			return true;
+	}
+	else if (typeof(x) == 'string') {
+		return (x.indexOf(y) > -1);
+	}
+
+	return false;
+};
+
+/**
+ * @class AbstractValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.AbstractElement
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `AbstractValue` class serves as abstract base for the different form
+ * option styles implemented by `LuCI.form`. It provides the common logic for
+ * handling option input values, for dependencies among options and for
+ * validation constraints that should be applied to entered values.
+ *
+ * This class is private and not directly accessible by user code.
+ */
+var CBIAbstractValue = CBIAbstractElement.extend(/** @lends LuCI.form.AbstractValue.prototype */ {
+	__init__: function(map, section, option /*, ... */) {
+		this.super('__init__', this.varargs(arguments, 3));
+
+		this.section = section;
+		this.option = option;
+		this.map = map;
+		this.config = map.config;
+
+		this.deps = [];
+		this.initial = {};
+		this.rmempty = true;
+		this.default = null;
+		this.size = null;
+		this.optional = false;
+		this.retain = false;
+	},
+
+	/**
+	 * If set to `false`, the underlying option value is retained upon saving
+	 * the form when the option element is disabled due to unsatisfied
+	 * dependency constraints.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#rmempty
+	 * @type boolean
+	 * @default true
+	 */
+
+	/**
+	 * If set to `true`, the underlying ui input widget is allowed to be empty,
+	 * otherwise the option element is marked invalid when no value is entered
+	 * or selected by the user.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#optional
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * If set to `true`, the underlying ui input widget value is not cleared
+	 * from the configuration on unsatisfied depedencies. The default behavior
+	 * is to remove the values of all options whose dependencies are not
+	 * fulfilled.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#retain
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Sets a default value to use when the underlying UCI option is not set.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#default
+	 * @type *
+	 * @default null
+	 */
+
+	/**
+	 * Specifies a datatype constraint expression to validate input values
+	 * against. Refer to {@link LuCI.validation} for details on the format.
+	 *
+	 * If the user entered input does not match the datatype validation, the
+	 * option element is marked as invalid.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#datatype
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Specifies a custom validation function to test the user input for
+	 * validity. The validation function must return `true` to accept the
+	 * value. Any other return value type is converted to a string and
+	 * displayed to the user as validation error message.
+	 *
+	 * If the user entered input does not pass the validation function, the
+	 * option element is marked as invalid.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#validate
+	 * @type function
+	 * @default null
+	 */
+
+	/**
+	 * Override the UCI configuration name to read the option value from.
+	 *
+	 * By default, the configuration name is inherited from the parent Map.
+	 * By setting this property, a deviating configuration may be specified.
+	 *
+	 * The default is null, means inheriting from the parent form.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#uciconfig
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Override the UCI section name to read the option value from.
+	 *
+	 * By default, the section ID is inherited from the parent section element.
+	 * By setting this property, a deviating section may be specified.
+	 *
+	 * The default is null, means inheriting from the parent section.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#ucisection
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Override the UCI option name to read the value from.
+	 *
+	 * By default, the elements name, which is passed as third argument to
+	 * the constructor, is used as UCI option name. By setting this property,
+	 * a deviating UCI option may be specified.
+	 *
+	 * The default is null, means using the option element name.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#ucioption
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Mark grid section option element as editable.
+	 *
+	 * Options which are displayed in the table portion of a `GridSection`
+	 * instance are rendered as readonly text by default. By setting the
+	 * `editable` property of a child option element to `true`, that element
+	 * is rendered as full input widget within its cell instead of a text only
+	 * preview.
+	 *
+	 * This property has no effect on options that are not children of grid
+	 * section elements.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#editable
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Move grid section option element into the table, the modal popup or both.
+	 *
+	 * If this property is `null` (the default), the option element is
+	 * displayed in both the table preview area and the per-section instance
+	 * modal popup of a grid section. When it is set to `false` the option
+	 * is only shown in the table but not the modal popup. When set to `true`,
+	 * the option is only visible in the modal popup but not the table.
+	 *
+	 * This property has no effect on options that are not children of grid
+	 * section elements.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#modalonly
+	 * @type boolean
+	 * @default null
+	 */
+
+	/**
+	 * Make option element readonly.
+	 *
+	 * This property defaults to the readonly state of the parent form element.
+	 * When set to `true`, the underlying widget is rendered in disabled state,
+	 * means its contents cannot be changed and the widget cannot be interacted
+	 * with.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#readonly
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Override the cell width of a table or grid section child option.
+	 *
+	 * If the property is set to a numeric value, it is treated as pixel width
+	 * which is set on the containing cell element of the option, essentially
+	 * forcing a certain column width. When the property is set to a string
+	 * value, it is applied as-is to the CSS `width` property.
+	 *
+	 * This property has no effect on options that are not children of grid or
+	 * table section elements.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#width
+	 * @type number|string
+	 * @default null
+	 */
+
+	/**
+	 * Register a custom value change handler.
+	 *
+	 * If this property is set to a function value, the function is invoked
+	 * whenever the value of the underlying UI input element is changing.
+	 *
+	 * The invoked handler function will receive the DOM click element as
+	 * first and the underlying configuration section ID as well as the input
+	 * value as second and third argument respectively.
+	 *
+	 * @name LuCI.form.AbstractValue.prototype#onchange
+	 * @type function
+	 * @default null
+	 */
+
+	/**
+	 * Add a dependency contraint to the option.
+	 *
+	 * Dependency constraints allow making the presence of option elements
+	 * dependant on the current values of certain other options within the
+	 * same form. An option element with unsatisfied dependencies will be
+	 * hidden from the view and its current value is omitted when saving.
+	 *
+	 * Multiple constraints (that is, multiple calls to `depends()`) are
+	 * treated as alternatives, forming a logical "or" expression.
+	 *
+	 * By passing an object of name => value pairs as first argument, it is
+	 * possible to depend on multiple options simultaneously, allowing to form
+	 * a logical "and" expression.
+	 *
+	 * Option names may be given in "dot notation" which allows to reference
+	 * option elements outside of the current form section. If a name without
+	 * dot is specified, it refers to an option within the same configuration
+	 * section. If specified as <code>configname.sectionid.optionname</code>,
+	 * options anywhere within the same form may be specified.
+	 *
+	 * The object notation also allows for a number of special keys which are
+	 * not treated as option names but as modifiers to influence the dependency
+	 * constraint evaluation. The associated value of these special "tag" keys
+	 * is ignored. The recognized tags are:
+	 *
+	 * <ul>
+	 *   <li>
+	 *    <code>!reverse</code><br>
+	 *    Invert the dependency, instead of requiring another option to be
+	 *    equal to the dependency value, that option should <em>not</em> be
+	 *    equal.
+	 *   </li>
+	 *   <li>
+	 *    <code>!contains</code><br>
+	 *    Instead of requiring an exact match, the dependency is considered
+	 *    satisfied when the dependency value is contained within the option
+	 *    value.
+	 *   </li>
+	 *   <li>
+	 *    <code>!default</code><br>
+	 *    The dependency is always satisfied
+	 *   </li>
+	 * </ul>
+	 *
+	 * Examples:
+	 *
+	 * <ul>
+	 *  <li>
+	 *   <code>opt.depends("foo", "test")</code><br>
+	 *   Require the value of `foo` to be `test`.
+	 *  </li>
+	 *  <li>
+	 *   <code>opt.depends({ foo: "test" })</code><br>
+	 *   Equivalent to the previous example.
+	 *  </li>
+	 *  <li>
+	 *   <code>opt.depends({ foo: /test/ })</code><br>
+	 *   Require the value of `foo` to match the regular expression `/test/`.
+	 *  </li>
+	 *  <li>
+	 *   <code>opt.depends({ foo: "test", bar: "qrx" })</code><br>
+	 *   Require the value of `foo` to be `test` and the value of `bar` to be
+	 *   `qrx`.
+	 *  </li>
+	 *  <li>
+	 *   <code>opt.depends({ foo: "test" })<br>
+	 *         opt.depends({ bar: "qrx" })</code><br>
+	 *   Require either <code>foo</code> to be set to <code>test</code>,
+	 *   <em>or</em> the <code>bar</code> option to be <code>qrx</code>.
+	 *  </li>
+	 *  <li>
+	 *   <code>opt.depends("test.section1.foo", "bar")</code><br>
+	 *   Require the "foo" form option within the "section1" section to be
+	 *   set to "bar".
+	 *  </li>
+	 *  <li>
+	 *   <code>opt.depends({ foo: "test", "!contains": true })</code><br>
+	 *   Require the "foo" option value to contain the substring "test".
+	 *  </li>
+	 * </ul>
+	 *
+	 * @param {string|Object<string, string|RegExp>} optionname_or_depends
+	 * The name of the option to depend on or an object describing multiple
+	 * dependencies which must be satified (a logical "and" expression).
+	 *
+	 * @param {string} optionvalue|RegExp
+	 * When invoked with a plain option name as first argument, this parameter
+	 * specifies the expected value. In case an object is passed as first
+	 * argument, this parameter is ignored.
+	 */
+	depends: function(field, value) {
+		var deps;
+
+		if (typeof(field) === 'string')
+			deps = {}, deps[field] = value;
+		else
+			deps = field;
+
+		this.deps.push(deps);
+	},
+
+	/** @private */
+	transformDepList: function(section_id, deplist) {
+		var list = deplist || this.deps,
+		    deps = [];
+
+		if (Array.isArray(list)) {
+			for (var i = 0; i < list.length; i++) {
+				var dep = {};
+
+				for (var k in list[i]) {
+					if (list[i].hasOwnProperty(k)) {
+						if (k.charAt(0) === '!')
+							dep[k] = list[i][k];
+						else if (k.indexOf('.') !== -1)
+							dep['cbid.%s'.format(k)] = list[i][k];
+						else
+							dep['cbid.%s.%s.%s'.format(
+								this.uciconfig || this.section.uciconfig || this.map.config,
+								this.ucisection || section_id,
+								k
+							)] = list[i][k];
+					}
+				}
+
+				for (var k in dep) {
+					if (dep.hasOwnProperty(k)) {
+						deps.push(dep);
+						break;
+					}
+				}
+			}
+		}
+
+		return deps;
+	},
+
+	/** @private */
+	transformChoices: function() {
+		if (!Array.isArray(this.keylist) || this.keylist.length == 0)
+			return null;
+
+		var choices = {};
+
+		for (var i = 0; i < this.keylist.length; i++)
+			choices[this.keylist[i]] = this.vallist[i];
+
+		return choices;
+	},
+
+	/** @private */
+	checkDepends: function(section_id) {
+		var config_name = this.uciconfig || this.section.uciconfig || this.map.config,
+		    active = this.map.isDependencySatisfied(this.deps, config_name, section_id);
+
+		if (active)
+			this.updateDefaultValue(section_id);
+
+		return active;
+	},
+
+	/** @private */
+	updateDefaultValue: function(section_id) {
+		if (!L.isObject(this.defaults))
+			return;
+
+		var config_name = this.uciconfig || this.section.uciconfig || this.map.config,
+		    cfgvalue = L.toArray(this.cfgvalue(section_id))[0],
+		    default_defval = null, satisified_defval = null;
+
+		for (var value in this.defaults) {
+			if (!this.defaults[value] || this.defaults[value].length == 0) {
+				default_defval = value;
+				continue;
+			}
+			else if (this.map.isDependencySatisfied(this.defaults[value], config_name, section_id)) {
+				satisified_defval = value;
+				break;
+			}
+		}
+
+		if (satisified_defval == null)
+			satisified_defval = default_defval;
+
+		var node = this.map.findElement('id', this.cbid(section_id));
+		if (node && node.getAttribute('data-changed') != 'true' && satisified_defval != null && cfgvalue == null)
+			dom.callClassMethod(node, 'setValue', satisified_defval);
+
+		this.default = satisified_defval;
+	},
+
+	/**
+	 * Obtain the internal ID ("cbid") of the element instance.
+	 *
+	 * Since each form section element may map multiple underlying
+	 * configuration sections, the configuration section ID is required to
+	 * form a fully qualified ID pointing to the specific element instance
+	 * within the given specific section.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception when no `section_id` was specified.
+	 *
+	 * @returns {string}
+	 * Returns the element ID.
+	 */
+	cbid: function(section_id) {
+		if (section_id == null)
+			L.error('TypeError', 'Section ID required');
+
+		return 'cbid.%s.%s.%s'.format(
+			this.uciconfig || this.section.uciconfig || this.map.config,
+			section_id, this.option);
+	},
+
+	/**
+	 * Load the underlying configuration value.
+	 *
+	 * The default implementation of this method reads and returns the
+	 * underlying UCI option value (or the related JavaScript property for
+	 * `JSONMap` instances). It may be overwritten by user code to load data
+	 * from nonstandard sources.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception when no `section_id` was specified.
+	 *
+	 * @returns {*|Promise<*>}
+	 * Returns the configuration value to initialize the option element with.
+	 * The return value of this function is filtered through `Promise.resolve()`
+	 * so it may return promises if overridden by user code.
+	 */
+	load: function(section_id) {
+		if (section_id == null)
+			L.error('TypeError', 'Section ID required');
+
+		return this.map.data.get(
+			this.uciconfig || this.section.uciconfig || this.map.config,
+			this.ucisection || section_id,
+			this.ucioption || this.option);
+	},
+
+	/**
+	 * Obtain the underlying `LuCI.ui` element instance.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception when no `section_id` was specified.
+	 *
+	 * @return {LuCI.ui.AbstractElement|null}
+	 * Returns the `LuCI.ui` element instance or `null` in case the form
+	 * option implementation does not use `LuCI.ui` widgets.
+	 */
+	getUIElement: function(section_id) {
+		var node = this.map.findElement('id', this.cbid(section_id)),
+		    inst = node ? dom.findClassInstance(node) : null;
+		return (inst instanceof ui.AbstractElement) ? inst : null;
+	},
+
+	/**
+	 * Query the underlying configuration value.
+	 *
+	 * The default implementation of this method returns the cached return
+	 * value of [load()]{@link LuCI.form.AbstractValue#load}. It may be
+	 * overwritten by user code to obtain the configuration value in a
+	 * different way.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception when no `section_id` was specified.
+	 *
+	 * @returns {*}
+	 * Returns the configuration value.
+	 */
+	cfgvalue: function(section_id, set_value) {
+		if (section_id == null)
+			L.error('TypeError', 'Section ID required');
+
+		if (arguments.length == 2) {
+			this.data = this.data || {};
+			this.data[section_id] = set_value;
+		}
+
+		return this.data ? this.data[section_id] : null;
+	},
+
+	/**
+	 * Query the current form input value.
+	 *
+	 * The default implementation of this method returns the current input
+	 * value of the underlying [LuCI.ui]{@link LuCI.ui.AbstractElement} widget.
+	 * It may be overwritten by user code to handle input values differently.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception when no `section_id` was specified.
+	 *
+	 * @returns {*}
+	 * Returns the current input value.
+	 */
+	formvalue: function(section_id) {
+		var elem = this.getUIElement(section_id);
+		return elem ? elem.getValue() : null;
+	},
+
+	/**
+	 * Obtain a textual input representation.
+	 *
+	 * The default implementation of this method returns the HTML escaped
+	 * current input value of the underlying
+	 * [LuCI.ui]{@link LuCI.ui.AbstractElement} widget. User code or specific
+	 * option element implementations may overwrite this function to apply a
+	 * different logic, e.g. to return `Yes` or `No` depending on the checked
+	 * state of checkbox elements.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @throws {TypeError}
+	 * Throws a `TypeError` exception when no `section_id` was specified.
+	 *
+	 * @returns {string}
+	 * Returns the text representation of the current input value.
+	 */
+	textvalue: function(section_id) {
+		var cval = this.cfgvalue(section_id);
+
+		if (cval == null)
+			cval = this.default;
+
+		if (Array.isArray(cval))
+			cval = cval.join(' ');
+
+		return (cval != null) ? '%h'.format(cval) : null;
+	},
+
+	/**
+	 * Apply custom validation logic.
+	 *
+	 * This method is invoked whenever incremental validation is performed on
+	 * the user input, e.g. on keyup or blur events.
+	 *
+	 * The default implementation of this method does nothing and always
+	 * returns `true`. User code may overwrite this method to provide
+	 * additional validation logic which is not covered by data type
+	 * constraints.
+	 *
+	 * @abstract
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @param {*} value
+	 * The value to validate
+	 *
+	 * @returns {*}
+	 * The method shall return `true` to accept the given value. Any other
+	 * return value is treated as failure, converted to a string and displayed
+	 * as error message to the user.
+	 */
+	validate: function(section_id, value) {
+		return true;
+	},
+
+	/**
+	 * Test whether the input value is currently valid.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @returns {boolean}
+	 * Returns `true` if the input value currently is valid, otherwise it
+	 * returns `false`.
+	 */
+	isValid: function(section_id) {
+		var elem = this.getUIElement(section_id);
+		return elem ? elem.isValid() : true;
+	},
+
+	/**
+	 * Returns the current validation error for this input.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @returns {string}
+	 * The validation error at this time
+	 */
+	getValidationError: function (section_id) {
+		var elem = this.getUIElement(section_id);
+		return elem ? elem.getValidationError() : '';
+	},
+
+	/**
+	 * Test whether the option element is currently active.
+	 *
+	 * An element is active when it is not hidden due to unsatisfied dependency
+	 * constraints.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @returns {boolean}
+	 * Returns `true` if the option element currently is active, otherwise it
+	 * returns `false`.
+	 */
+	isActive: function(section_id) {
+		var field = this.map.findElement('data-field', this.cbid(section_id));
+		return (field != null && !field.classList.contains('hidden'));
+	},
+
+	/** @private */
+	setActive: function(section_id, active) {
+		var field = this.map.findElement('data-field', this.cbid(section_id));
+
+		if (field && field.classList.contains('hidden') == active) {
+			field.classList[active ? 'remove' : 'add']('hidden');
+
+			if (dom.matches(field.parentNode, '.td.cbi-value-field'))
+				field.parentNode.classList[active ? 'remove' : 'add']('inactive');
+
+			return true;
+		}
+
+		return false;
+	},
+
+	/** @private */
+	triggerValidation: function(section_id) {
+		var elem = this.getUIElement(section_id);
+		return elem ? elem.triggerValidation() : true;
+	},
+
+	/**
+	 * Parse the option element input.
+	 *
+	 * The function is invoked when the `parse()` method has been invoked on
+	 * the parent form and triggers input value reading and validation.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @returns {Promise<void>}
+	 * Returns a promise resolving once the input value has been read and
+	 * validated or rejecting in case the input value does not meet the
+	 * validation constraints.
+	 */
+	parse: function(section_id) {
+		var active = this.isActive(section_id);
+
+		if (active && !this.isValid(section_id)) {
+			var title = this.stripTags(this.title).trim(),
+			    error = this.getValidationError(section_id);
+
+			return Promise.reject(new TypeError(
+				_('Option "%s" contains an invalid input value.').format(title || this.option) + ' ' + error));
+		}
+
+		if (active) {
+			var cval = this.cfgvalue(section_id),
+			    fval = this.formvalue(section_id);
+
+			if (fval == null || fval == '') {
+				if (this.rmempty || this.optional) {
+					return Promise.resolve(this.remove(section_id));
+				}
+				else {
+					var title = this.stripTags(this.title).trim();
+
+					return Promise.reject(new TypeError(
+						_('Option "%s" must not be empty.').format(title || this.option)));
+				}
+			}
+			else if (this.forcewrite || !isEqual(cval, fval)) {
+				return Promise.resolve(this.write(section_id, fval));
+			}
+		}
+		else if (!this.retain) {
+			return Promise.resolve(this.remove(section_id));
+		}
+
+		return Promise.resolve();
+	},
+
+	/**
+	 * Write the current input value into the configuration.
+	 *
+	 * This function is invoked upon saving the parent form when the option
+	 * element is valid and when its input value has been changed compared to
+	 * the initial value returned by
+	 * [cfgvalue()]{@link LuCI.form.AbstractValue#cfgvalue}.
+	 *
+	 * The default implementation simply sets the given input value in the
+	 * UCI configuration (or the associated JavaScript object property in
+	 * case of `JSONMap` forms). It may be overwritten by user code to
+	 * implement alternative save logic, e.g. to transform the input value
+	 * before it is written.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 *
+	 * @param {string|string[]}	formvalue
+	 * The input value to write.
+	 */
+	write: function(section_id, formvalue) {
+		return this.map.data.set(
+			this.uciconfig || this.section.uciconfig || this.map.config,
+			this.ucisection || section_id,
+			this.ucioption || this.option,
+			formvalue);
+	},
+
+	/**
+	 * Remove the corresponding value from the configuration.
+	 *
+	 * This function is invoked upon saving the parent form when the option
+	 * element has been hidden due to unsatisfied dependencies or when the
+	 * user cleared the input value and the option is marked optional.
+	 *
+	 * The default implementation simply removes the associated option from the
+	 * UCI configuration (or the associated JavaScript object property in
+	 * case of `JSONMap` forms). It may be overwritten by user code to
+	 * implement alternative removal logic, e.g. to retain the original value.
+	 *
+	 * @param {string} section_id
+	 * The configuration section ID
+	 */
+	remove: function(section_id) {
+		var this_cfg = this.uciconfig || this.section.uciconfig || this.map.config,
+		    this_sid = this.ucisection || section_id,
+		    this_opt = this.ucioption || this.option;
+
+		for (var i = 0; i < this.section.children.length; i++) {
+			var sibling = this.section.children[i];
+
+			if (sibling === this || sibling.ucioption == null)
+				continue;
+
+			var sibling_cfg = sibling.uciconfig || sibling.section.uciconfig || sibling.map.config,
+			    sibling_sid = sibling.ucisection || section_id,
+			    sibling_opt = sibling.ucioption || sibling.option;
+
+			if (this_cfg != sibling_cfg || this_sid != sibling_sid || this_opt != sibling_opt)
+				continue;
+
+			if (!sibling.isActive(section_id))
+				continue;
+
+			/* found another active option aliasing the same uci option name,
+			 * so we can't remove the value */
+			return;
+		}
+
+		this.map.data.unset(this_cfg, this_sid, this_opt);
+	}
+});
+
+/**
+ * @class TypedSection
+ * @memberof LuCI.form
+ * @augments LuCI.form.AbstractSection
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `TypedSection` class maps all or - if `filter()` is overwritten - a
+ * subset of the underlying UCI configuration sections of a given type.
+ *
+ * Layout wise, the configuration section instances mapped by the section
+ * element (sometimes referred to as "section nodes") are stacked beneath
+ * each other in a single column, with an optional section remove button next
+ * to each section node and a section add button at the end, depending on the
+ * value of the `addremove` property.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [section()]{@link LuCI.form.Map#section}.
+ *
+ * @param {string} section_type
+ * The type of the UCI section to map.
+ *
+ * @param {string} [title]
+ * The title caption of the form section element.
+ *
+ * @param {string} [description]
+ * The description text of the form section element.
+ */
+var CBITypedSection = CBIAbstractSection.extend(/** @lends LuCI.form.TypedSection.prototype */ {
+	__name__: 'CBI.TypedSection',
+
+	/**
+	 * If set to `true`, the user may add or remove instances from the form
+	 * section widget, otherwise only preexisting sections may be edited.
+	 * The default is `false`.
+	 *
+	 * @name LuCI.form.TypedSection.prototype#addremove
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * If set to `true`, mapped section instances are treated as anonymous
+	 * UCI sections, which means that section instance elements will be
+	 * rendered without title element and that no name is required when adding
+	 * new sections. The default is `false`.
+	 *
+	 * @name LuCI.form.TypedSection.prototype#anonymous
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * When set to `true`, instead of rendering section instances one below
+	 * another, treat each instance as separate tab pane and render a tab menu
+	 * at the top of the form section element, allowing the user to switch
+	 * among instances. The default is `false`.
+	 *
+	 * @name LuCI.form.TypedSection.prototype#tabbed
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Override the caption used for the section add button at the bottom of
+	 * the section form element. If set to a string, it will be used as-is,
+	 * if set to a function, the function will be invoked and its return value
+	 * is used as caption, after converting it to a string. If this property
+	 * is not set, the default is `Add`.
+	 *
+	 * @name LuCI.form.TypedSection.prototype#addbtntitle
+	 * @type string|function
+	 * @default null
+	 */
+
+	/**
+	 * Override the UCI configuration name to read the section IDs from. By
+	 * default, the configuration name is inherited from the parent `Map`.
+	 * By setting this property, a deviating configuration may be specified.
+	 * The default is `null`, means inheriting from the parent form.
+	 *
+	 * @name LuCI.form.TypedSection.prototype#uciconfig
+	 * @type string
+	 * @default null
+	 */
+
+	/** @override */
+	cfgsections: function() {
+		return this.map.data.sections(this.uciconfig || this.map.config, this.sectiontype)
+			.map(function(s) { return s['.name'] })
+			.filter(L.bind(this.filter, this));
+	},
+
+	/** @private */
+	handleAdd: function(ev, name) {
+		var config_name = this.uciconfig || this.map.config;
+
+		this.map.data.add(config_name, this.sectiontype, name);
+		return this.map.save(null, true);
+	},
+
+	/** @private */
+	handleRemove: function(section_id, ev) {
+		var config_name = this.uciconfig || this.map.config;
+
+		this.map.data.remove(config_name, section_id);
+		return this.map.save(null, true);
+	},
+
+	/** @private */
+	renderSectionAdd: function(extra_class) {
+		if (!this.addremove)
+			return E([]);
+
+		var createEl = E('div', { 'class': 'cbi-section-create' }),
+		    config_name = this.uciconfig || this.map.config,
+		    btn_title = this.titleFn('addbtntitle');
+
+		if (extra_class != null)
+			createEl.classList.add(extra_class);
+
+		if (this.anonymous) {
+			createEl.appendChild(E('button', {
+				'class': 'cbi-button cbi-button-add',
+				'title': btn_title || _('Add'),
+				'click': ui.createHandlerFn(this, 'handleAdd'),
+				'disabled': this.map.readonly || null
+			}, [ btn_title || _('Add') ]));
+		}
+		else {
+			var nameEl = E('input', {
+				'type': 'text',
+				'class': 'cbi-section-create-name',
+				'disabled': this.map.readonly || null
+			});
+
+			dom.append(createEl, [
+				E('div', {}, nameEl),
+				E('button', {
+					'class': 'cbi-button cbi-button-add',
+					'title': btn_title || _('Add'),
+					'click': ui.createHandlerFn(this, function(ev) {
+						if (nameEl.classList.contains('cbi-input-invalid'))
+							return;
+
+						return this.handleAdd(ev, nameEl.value);
+					}),
+					'disabled': this.map.readonly || true
+				}, [ btn_title || _('Add') ])
+			]);
+
+			if (this.map.readonly !== true) {
+				ui.addValidator(nameEl, 'uciname', true, function(v) {
+					var button = createEl.querySelector('.cbi-section-create > .cbi-button-add');
+					if (v !== '') {
+						button.disabled = null;
+						return true;
+					}
+					else {
+						button.disabled = true;
+						return _('Expecting: %s').format(_('non-empty value'));
+					}
+				}, 'blur', 'keyup');
+			}
+		}
+
+		return createEl;
+	},
+
+	/** @private */
+	renderSectionPlaceholder: function() {
+		return E('em', _('This section contains no values yet'));
+	},
+
+	/** @private */
+	renderContents: function(cfgsections, nodes) {
+		var section_id = null,
+		    config_name = this.uciconfig || this.map.config,
+		    sectionEl = E('div', {
+				'id': 'cbi-%s-%s'.format(config_name, this.sectiontype),
+				'class': 'cbi-section',
+				'data-tab': (this.map.tabbed && !this.parentoption) ? this.sectiontype : null,
+				'data-tab-title': (this.map.tabbed && !this.parentoption) ? this.title || this.sectiontype : null
+			});
+
+		if (this.title != null && this.title != '')
+			sectionEl.appendChild(E('h3', {}, this.title));
+
+		if (this.description != null && this.description != '')
+			sectionEl.appendChild(E('div', { 'class': 'cbi-section-descr' }, this.description));
+
+		for (var i = 0; i < nodes.length; i++) {
+			if (this.addremove) {
+				sectionEl.appendChild(
+					E('div', { 'class': 'cbi-section-remove right' },
+						E('button', {
+							'class': 'cbi-button',
+							'name': 'cbi.rts.%s.%s'.format(config_name, cfgsections[i]),
+							'data-section-id': cfgsections[i],
+							'click': ui.createHandlerFn(this, 'handleRemove', cfgsections[i]),
+							'disabled': this.map.readonly || null
+						}, [ _('Delete') ])));
+			}
+
+			if (!this.anonymous)
+				sectionEl.appendChild(E('h3', cfgsections[i].toUpperCase()));
+
+			sectionEl.appendChild(E('div', {
+				'id': 'cbi-%s-%s'.format(config_name, cfgsections[i]),
+				'class': this.tabs
+					? 'cbi-section-node cbi-section-node-tabbed' : 'cbi-section-node',
+				'data-section-id': cfgsections[i]
+			}, nodes[i]));
+		}
+
+		if (nodes.length == 0)
+			sectionEl.appendChild(this.renderSectionPlaceholder());
+
+		sectionEl.appendChild(this.renderSectionAdd());
+
+		dom.bindClassInstance(sectionEl, this);
+
+		return sectionEl;
+	},
+
+	/** @override */
+	render: function() {
+		var cfgsections = this.cfgsections(),
+		    renderTasks = [];
+
+		for (var i = 0; i < cfgsections.length; i++)
+			renderTasks.push(this.renderUCISection(cfgsections[i]));
+
+		return Promise.all(renderTasks).then(this.renderContents.bind(this, cfgsections));
+	}
+});
+
+/**
+ * @class TableSection
+ * @memberof LuCI.form
+ * @augments LuCI.form.TypedSection
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `TableSection` class maps all or - if `filter()` is overwritten - a
+ * subset of the underlying UCI configuration sections of a given type.
+ *
+ * Layout wise, the configuration section instances mapped by the section
+ * element (sometimes referred to as "section nodes") are rendered as rows
+ * within an HTML table element, with an optional section remove button in the
+ * last column and a section add button below the table, depending on the
+ * value of the `addremove` property.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [section()]{@link LuCI.form.Map#section}.
+ *
+ * @param {string} section_type
+ * The type of the UCI section to map.
+ *
+ * @param {string} [title]
+ * The title caption of the form section element.
+ *
+ * @param {string} [description]
+ * The description text of the form section element.
+ */
+var CBITableSection = CBITypedSection.extend(/** @lends LuCI.form.TableSection.prototype */ {
+	__name__: 'CBI.TableSection',
+
+	/**
+	 * Override the per-section instance title caption shown in the first
+	 * column of the table unless `anonymous` is set to true. If set to a
+	 * string, it will be used as `String.format()` pattern with the name of
+	 * the underlying UCI section as first argument, if set to a function, the
+	 * function will be invoked with the section name as first argument and
+	 * its return value is used as caption, after converting it to a string.
+	 * If this property is not set, the default is the name of the underlying
+	 * UCI configuration section.
+	 *
+	 * @name LuCI.form.TableSection.prototype#sectiontitle
+	 * @type string|function
+	 * @default null
+	 */
+
+	/**
+	 * Override the per-section instance modal popup title caption shown when
+	 * clicking the `More…` button in a section specifying `max_cols`. If set
+	 * to a string, it will be used as `String.format()` pattern with the name
+	 * of the underlying UCI section as first argument, if set to a function,
+	 * the function will be invoked with the section name as first argument and
+	 * its return value is used as caption, after converting it to a string.
+	 * If this property is not set, the default is the name of the underlying
+	 * UCI configuration section.
+	 *
+	 * @name LuCI.form.TableSection.prototype#modaltitle
+	 * @type string|function
+	 * @default null
+	 */
+
+	/**
+	 * Specify a maximum amount of columns to display. By default, one table
+	 * column is rendered for each child option of the form section element.
+	 * When this option is set to a positive number, then no more columns than
+	 * the given amount are rendered. When the number of child options exceeds
+	 * the specified amount, a `More…` button is rendered in the last column,
+	 * opening a modal dialog presenting all options elements in `NamedSection`
+	 * style when clicked.
+	 *
+	 * @name LuCI.form.TableSection.prototype#max_cols
+	 * @type number
+	 * @default null
+	 */
+
+	/**
+	 * If set to `true`, alternating `cbi-rowstyle-1` and `cbi-rowstyle-2` CSS
+	 * classes are added to the table row elements. Not all LuCI themes
+	 * implement these row style classes. The default is `false`.
+	 *
+	 * @name LuCI.form.TableSection.prototype#rowcolors
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Enables a per-section instance row `Edit` button which triggers a certain
+	 * action when clicked. If set to a string, the string value is used
+	 * as `String.format()` pattern with the name of the underlying UCI section
+	 * as first format argument. The result is then interpreted as URL which
+	 * LuCI will navigate to when the user clicks the edit button.
+	 *
+	 * If set to a function, this function will be registered as click event
+	 * handler on the rendered edit button, receiving the section instance
+	 * name as first and the DOM click event as second argument.
+	 *
+	 * @name LuCI.form.TableSection.prototype#extedit
+	 * @type string|function
+	 * @default null
+	 */
+
+	/**
+	 * If set to `true`, a sort button is added to the last column, allowing
+	 * the user to reorder the section instances mapped by the section form
+	 * element.
+	 *
+	 * @name LuCI.form.TableSection.prototype#sortable
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * If set to `true`, the header row with the options descriptions will
+	 * not be displayed. By default, descriptions row is automatically displayed
+	 * when at least one option has a description.
+	 *
+	 * @name LuCI.form.TableSection.prototype#nodescriptions
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * The `TableSection` implementation does not support option tabbing, so
+	 * its implementation of `tab()` will always throw an exception when
+	 * invoked.
+	 *
+	 * @override
+	 * @throws Throws an exception when invoked.
+	 */
+	tab: function() {
+		throw 'Tabs are not supported by TableSection';
+	},
+
+	/** @private */
+	renderContents: function(cfgsections, nodes) {
+		var section_id = null,
+		    config_name = this.uciconfig || this.map.config,
+		    max_cols = isNaN(this.max_cols) ? this.children.length : this.max_cols,
+		    has_more = max_cols < this.children.length,
+		    drag_sort = this.sortable && !('ontouchstart' in window),
+		    touch_sort = this.sortable && ('ontouchstart' in window),
+		    sectionEl = E('div', {
+				'id': 'cbi-%s-%s'.format(config_name, this.sectiontype),
+				'class': 'cbi-section cbi-tblsection',
+				'data-tab': (this.map.tabbed && !this.parentoption) ? this.sectiontype : null,
+				'data-tab-title': (this.map.tabbed && !this.parentoption) ? this.title || this.sectiontype : null
+			}),
+			tableEl = E('table', {
+				'class': 'table cbi-section-table'
+			});
+
+		if (this.title != null && this.title != '')
+			sectionEl.appendChild(E('h3', {}, this.title));
+
+		if (this.description != null && this.description != '')
+			sectionEl.appendChild(E('div', { 'class': 'cbi-section-descr' }, this.description));
+
+		tableEl.appendChild(this.renderHeaderRows(max_cols));
+
+		for (var i = 0; i < nodes.length; i++) {
+			var sectionname = this.titleFn('sectiontitle', cfgsections[i]);
+
+			if (sectionname == null)
+				sectionname = cfgsections[i];
+
+			var trEl = E('tr', {
+				'id': 'cbi-%s-%s'.format(config_name, cfgsections[i]),
+				'class': 'tr cbi-section-table-row',
+				'data-sid': cfgsections[i],
+				'draggable': (drag_sort || touch_sort) ? true : null,
+				'mousedown': drag_sort ? L.bind(this.handleDragInit, this) : null,
+				'dragstart': drag_sort ? L.bind(this.handleDragStart, this) : null,
+				'dragover': drag_sort ? L.bind(this.handleDragOver, this) : null,
+				'dragenter': drag_sort ? L.bind(this.handleDragEnter, this) : null,
+				'dragleave': drag_sort ? L.bind(this.handleDragLeave, this) : null,
+				'dragend': drag_sort ? L.bind(this.handleDragEnd, this) : null,
+				'drop': drag_sort ? L.bind(this.handleDrop, this) : null,
+				'touchmove': touch_sort ? L.bind(this.handleTouchMove, this) : null,
+				'touchend': touch_sort ? L.bind(this.handleTouchEnd, this) : null,
+				'data-title': (sectionname && (!this.anonymous || this.sectiontitle)) ? sectionname : null,
+				'data-section-id': cfgsections[i]
+			});
+
+			if (this.extedit || this.rowcolors)
+				trEl.classList.add(!(tableEl.childNodes.length % 2)
+					? 'cbi-rowstyle-1' : 'cbi-rowstyle-2');
+
+			for (var j = 0; j < max_cols && nodes[i].firstChild; j++)
+				trEl.appendChild(nodes[i].firstChild);
+
+			trEl.appendChild(this.renderRowActions(cfgsections[i], has_more ? _('More…') : null));
+			tableEl.appendChild(trEl);
+		}
+
+		if (nodes.length == 0)
+			tableEl.appendChild(E('tr', { 'class': 'tr cbi-section-table-row placeholder' },
+				E('td', { 'class': 'td' }, this.renderSectionPlaceholder())));
+
+		sectionEl.appendChild(tableEl);
+
+		sectionEl.appendChild(this.renderSectionAdd('cbi-tblsection-create'));
+
+		dom.bindClassInstance(sectionEl, this);
+
+		return sectionEl;
+	},
+
+	/** @private */
+	renderHeaderRows: function(max_cols, has_action) {
+		var has_titles = false,
+		    has_descriptions = false,
+		    max_cols = isNaN(this.max_cols) ? this.children.length : this.max_cols,
+		    has_more = max_cols < this.children.length,
+		    anon_class = (!this.anonymous || this.sectiontitle) ? 'named' : 'anonymous',
+		    trEls = E([]);
+
+		for (var i = 0, opt; i < max_cols && (opt = this.children[i]) != null; i++) {
+			if (opt.modalonly)
+				continue;
+
+			has_titles = has_titles || !!opt.title;
+			has_descriptions = has_descriptions || !!opt.description;
+		}
+
+		if (has_titles) {
+			var trEl = E('tr', {
+				'class': 'tr cbi-section-table-titles ' + anon_class,
+				'data-title': (!this.anonymous || this.sectiontitle) ? _('Name') : null,
+				'click': this.sortable ? ui.createHandlerFn(this, 'handleSort') : null
+			});
+
+			for (var i = 0, opt; i < max_cols && (opt = this.children[i]) != null; i++) {
+				if (opt.modalonly)
+					continue;
+
+				trEl.appendChild(E('th', {
+					'class': 'th cbi-section-table-cell',
+					'data-widget': opt.__name__,
+					'data-sortable-row': this.sortable ? '' : null
+				}));
+
+				if (opt.width != null)
+					trEl.lastElementChild.style.width =
+						(typeof(opt.width) == 'number') ? opt.width+'px' : opt.width;
+
+				if (opt.titleref)
+					trEl.lastElementChild.appendChild(E('a', {
+						'href': opt.titleref,
+						'class': 'cbi-title-ref',
+						'title': this.titledesc || _('Go to relevant configuration page')
+					}, opt.title));
+				else
+					dom.content(trEl.lastElementChild, opt.title);
+			}
+
+			if (this.sortable || this.extedit || this.addremove || has_more || has_action)
+				trEl.appendChild(E('th', {
+					'class': 'th cbi-section-table-cell cbi-section-actions'
+				}));
+
+			trEls.appendChild(trEl);
+		}
+
+		if (has_descriptions && !this.nodescriptions) {
+			var trEl = E('tr', {
+				'class': 'tr cbi-section-table-descr ' + anon_class
+			});
+
+			for (var i = 0, opt; i < max_cols && (opt = this.children[i]) != null; i++) {
+				if (opt.modalonly)
+					continue;
+
+				trEl.appendChild(E('th', {
+					'class': 'th cbi-section-table-cell',
+					'data-widget': opt.__name__
+				}, opt.description));
+
+				if (opt.width != null)
+					trEl.lastElementChild.style.width =
+						(typeof(opt.width) == 'number') ? opt.width+'px' : opt.width;
+			}
+
+			if (this.sortable || this.extedit || this.addremove || has_more || has_action)
+				trEl.appendChild(E('th', {
+					'class': 'th cbi-section-table-cell cbi-section-actions'
+				}));
+
+			trEls.appendChild(trEl);
+		}
+
+		return trEls;
+	},
+
+	/** @private */
+	renderRowActions: function(section_id, more_label) {
+		var config_name = this.uciconfig || this.map.config;
+
+		if (!this.sortable && !this.extedit && !this.addremove && !more_label)
+			return E([]);
+
+		var tdEl = E('td', {
+			'class': 'td cbi-section-table-cell nowrap cbi-section-actions'
+		}, E('div'));
+
+		if (this.sortable) {
+			dom.append(tdEl.lastElementChild, [
+				E('button', {
+					'title': _('Drag to reorder'),
+					'class': 'cbi-button drag-handle center',
+					'style': 'cursor:move',
+					'disabled': this.map.readonly || null
+				}, '☰')
+			]);
+		}
+
+		if (this.extedit) {
+			var evFn = null;
+
+			if (typeof(this.extedit) == 'function')
+				evFn = L.bind(this.extedit, this);
+			else if (typeof(this.extedit) == 'string')
+				evFn = L.bind(function(sid, ev) {
+					location.href = this.extedit.format(sid);
+				}, this, section_id);
+
+			dom.append(tdEl.lastElementChild,
+				E('button', {
+					'title': _('Edit'),
+					'class': 'cbi-button cbi-button-edit',
+					'click': evFn
+				}, [ _('Edit') ])
+			);
+		}
+
+		if (more_label) {
+			dom.append(tdEl.lastElementChild,
+				E('button', {
+					'title': more_label,
+					'class': 'cbi-button cbi-button-edit',
+					'click': ui.createHandlerFn(this, 'renderMoreOptionsModal', section_id)
+				}, [ more_label ])
+			);
+		}
+
+		if (this.addremove) {
+			var btn_title = this.titleFn('removebtntitle', section_id);
+
+			dom.append(tdEl.lastElementChild,
+				E('button', {
+					'title': btn_title || _('Delete'),
+					'class': 'cbi-button cbi-button-remove',
+					'click': ui.createHandlerFn(this, 'handleRemove', section_id),
+					'disabled': this.map.readonly || null
+				}, [ btn_title || _('Delete') ])
+			);
+		}
+
+		return tdEl;
+	},
+
+	/** @private */
+	handleDragInit: function(ev) {
+		scope.dragState = { node: ev.target };
+	},
+
+	/** @private */
+	handleDragStart: function(ev) {
+		if (!scope.dragState || !scope.dragState.node.classList.contains('drag-handle')) {
+			scope.dragState = null;
+			ev.preventDefault();
+			return false;
+		}
+
+		scope.dragState.node = dom.parent(scope.dragState.node, '.tr');
+		ev.dataTransfer.setData('text', 'drag');
+		ev.target.style.opacity = 0.4;
+	},
+
+	/** @private */
+	handleDragOver: function(ev) {
+		var n = scope.dragState.targetNode,
+		    r = scope.dragState.rect,
+		    t = r.top + r.height / 2;
+
+		if (ev.clientY <= t) {
+			n.classList.remove('drag-over-below');
+			n.classList.add('drag-over-above');
+		}
+		else {
+			n.classList.remove('drag-over-above');
+			n.classList.add('drag-over-below');
+		}
+
+		ev.dataTransfer.dropEffect = 'move';
+		ev.preventDefault();
+		return false;
+	},
+
+	/** @private */
+	handleDragEnter: function(ev) {
+		scope.dragState.rect = ev.currentTarget.getBoundingClientRect();
+		scope.dragState.targetNode = ev.currentTarget;
+	},
+
+	/** @private */
+	handleDragLeave: function(ev) {
+		ev.currentTarget.classList.remove('drag-over-above');
+		ev.currentTarget.classList.remove('drag-over-below');
+	},
+
+	/** @private */
+	handleDragEnd: function(ev) {
+		var n = ev.target;
+
+		n.style.opacity = '';
+		n.classList.add('flash');
+		n.parentNode.querySelectorAll('.drag-over-above, .drag-over-below')
+			.forEach(function(tr) {
+				tr.classList.remove('drag-over-above');
+				tr.classList.remove('drag-over-below');
+			});
+	},
+
+	/** @private */
+	handleDrop: function(ev) {
+		var s = scope.dragState;
+
+		if (s.node && s.targetNode) {
+			var config_name = this.uciconfig || this.map.config,
+			    ref_node = s.targetNode,
+			    after = false;
+
+		    if (ref_node.classList.contains('drag-over-below')) {
+		    	ref_node = ref_node.nextElementSibling;
+		    	after = true;
+		    }
+
+		    var sid1 = s.node.getAttribute('data-sid'),
+		        sid2 = s.targetNode.getAttribute('data-sid');
+
+		    s.node.parentNode.insertBefore(s.node, ref_node);
+		    this.map.data.move(config_name, sid1, sid2, after);
+		}
+
+		scope.dragState = null;
+		ev.target.style.opacity = '';
+		ev.stopPropagation();
+		ev.preventDefault();
+		return false;
+	},
+
+	/** @private */
+	determineBackgroundColor: function(node) {
+		var r = 255, g = 255, b = 255;
+
+		while (node) {
+			var s = window.getComputedStyle(node),
+			    c = (s.getPropertyValue('background-color') || '').replace(/ /g, '');
+
+			if (c != '' && c != 'transparent' && c != 'rgba(0,0,0,0)') {
+				if (/^#([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})$/i.test(c)) {
+					r = parseInt(RegExp.$1, 16);
+					g = parseInt(RegExp.$2, 16);
+					b = parseInt(RegExp.$3, 16);
+				}
+				else if (/^rgba?\(([0-9]+),([0-9]+),([0-9]+)[,)]$/.test(c)) {
+					r = +RegExp.$1;
+					g = +RegExp.$2;
+					b = +RegExp.$3;
+				}
+
+				break;
+			}
+
+			node = node.parentNode;
+		}
+
+		return [ r, g, b ];
+	},
+
+	/** @private */
+	handleTouchMove: function(ev) {
+		if (!ev.target.classList.contains('drag-handle'))
+			return;
+
+		var touchLoc = ev.targetTouches[0],
+		    rowBtn = ev.target,
+		    rowElem = dom.parent(rowBtn, '.tr'),
+		    htmlElem = document.querySelector('html'),
+		    dragHandle = document.querySelector('.touchsort-element'),
+		    viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+
+		if (!dragHandle) {
+			var rowRect = rowElem.getBoundingClientRect(),
+			    btnRect = rowBtn.getBoundingClientRect(),
+			    paddingLeft = btnRect.left - rowRect.left,
+			    paddingRight = rowRect.right - btnRect.right,
+			    colorBg = this.determineBackgroundColor(rowElem),
+			    colorFg = (colorBg[0] * 0.299 + colorBg[1] * 0.587 + colorBg[2] * 0.114) > 186 ? [ 0, 0, 0 ] : [ 255, 255, 255 ];
+
+			dragHandle = E('div', { 'class': 'touchsort-element' }, [
+				E('strong', [ rowElem.getAttribute('data-title') ]),
+				rowBtn.cloneNode(true)
+			]);
+
+			Object.assign(dragHandle.style, {
+				position: 'absolute',
+				boxShadow: '0 0 3px rgba(%d, %d, %d, 1)'.format(colorFg[0], colorFg[1], colorFg[2]),
+				background: 'rgba(%d, %d, %d, 0.8)'.format(colorBg[0], colorBg[1], colorBg[2]),
+				top: rowRect.top + 'px',
+				left: rowRect.left + 'px',
+				width: rowRect.width + 'px',
+				height: (rowBtn.offsetHeight + 4) + 'px'
+			});
+
+			Object.assign(dragHandle.firstElementChild.style, {
+				position: 'absolute',
+				lineHeight: dragHandle.style.height,
+				whiteSpace: 'nowrap',
+				overflow: 'hidden',
+				textOverflow: 'ellipsis',
+				left: (paddingRight > paddingLeft) ? '' : '5px',
+				right: (paddingRight > paddingLeft) ? '5px' : '',
+				width: (Math.max(paddingLeft, paddingRight) - 10) + 'px'
+			});
+
+			Object.assign(dragHandle.lastElementChild.style, {
+				position: 'absolute',
+				top: '2px',
+				left: paddingLeft + 'px',
+				width: rowBtn.offsetWidth + 'px'
+			});
+
+			document.body.appendChild(dragHandle);
+
+			rowElem.classList.remove('flash');
+			rowBtn.blur();
+		}
+
+		dragHandle.style.top = (touchLoc.pageY - (parseInt(dragHandle.style.height) / 2)) + 'px';
+
+		rowElem.parentNode.querySelectorAll('[draggable]').forEach(function(tr, i, trs) {
+			var trRect = tr.getBoundingClientRect(),
+			    yTop = trRect.top + window.scrollY,
+			    yBottom = trRect.bottom + window.scrollY,
+			    yMiddle = yTop + ((yBottom - yTop) / 2);
+
+			tr.classList.remove('drag-over-above', 'drag-over-below');
+
+			if ((i == 0 || touchLoc.pageY >= yTop) && touchLoc.pageY <= yMiddle)
+				tr.classList.add('drag-over-above');
+			else if ((i == (trs.length - 1) || touchLoc.pageY <= yBottom) && touchLoc.pageY > yMiddle)
+				tr.classList.add('drag-over-below');
+		});
+
+		/* prevent standard scrolling and scroll page when drag handle is
+		 * moved very close (~30px) to the viewport edge */
+
+		ev.preventDefault();
+
+		if (touchLoc.clientY < 30)
+			window.requestAnimationFrame(function() { htmlElem.scrollTop -= 30 });
+		else if (touchLoc.clientY > viewportHeight - 30)
+			window.requestAnimationFrame(function() { htmlElem.scrollTop += 30 });
+	},
+
+	/** @private */
+	handleTouchEnd: function(ev) {
+		var rowElem = dom.parent(ev.target, '.tr'),
+		    htmlElem = document.querySelector('html'),
+		    dragHandle = document.querySelector('.touchsort-element'),
+		    targetElem = rowElem.parentNode.querySelector('.drag-over-above, .drag-over-below'),
+		    viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+
+		if (!dragHandle)
+			return;
+
+		if (targetElem) {
+		    var isBelow = targetElem.classList.contains('drag-over-below');
+
+			rowElem.parentNode.insertBefore(rowElem, isBelow ? targetElem.nextElementSibling : targetElem);
+
+			this.map.data.move(
+				this.uciconfig || this.map.config,
+				rowElem.getAttribute('data-sid'),
+				targetElem.getAttribute('data-sid'),
+				isBelow);
+
+			window.requestAnimationFrame(function() {
+				var rowRect = rowElem.getBoundingClientRect();
+
+				if (rowRect.top < 50)
+					htmlElem.scrollTop = (htmlElem.scrollTop + rowRect.top - 50);
+				else if (rowRect.bottom > viewportHeight - 50)
+					htmlElem.scrollTop = (htmlElem.scrollTop + viewportHeight - 50 - rowRect.height);
+
+				rowElem.classList.add('flash');
+			});
+
+			targetElem.classList.remove('drag-over-above', 'drag-over-below');
+		}
+
+		document.body.removeChild(dragHandle);
+	},
+
+	/** @private */
+	handleModalCancel: function(modalMap, ev) {
+		var prevNode = this.getPreviousModalMap(),
+		    resetTasks = Promise.resolve();
+
+		if (prevNode) {
+			var heading = prevNode.parentNode.querySelector('h4'),
+			    prevMap = dom.findClassInstance(prevNode);
+
+			while (prevMap) {
+				resetTasks = resetTasks
+					.then(L.bind(prevMap.load, prevMap))
+					.then(L.bind(prevMap.reset, prevMap));
+
+				prevMap = prevMap.parent;
+			}
+
+			prevNode.classList.add('flash');
+			prevNode.classList.remove('hidden');
+			prevNode.parentNode.removeChild(prevNode.nextElementSibling);
+
+			heading.removeChild(heading.lastElementChild);
+
+			if (!this.getPreviousModalMap())
+				prevNode.parentNode
+					.querySelector('div.right > button')
+					.firstChild.data = _('Dismiss');
+		}
+		else {
+			ui.hideModal();
+		}
+
+		return resetTasks;
+	},
+
+	/** @private */
+	handleModalSave: function(modalMap, ev) {
+		var mapNode = this.getActiveModalMap(),
+		    activeMap = dom.findClassInstance(mapNode),
+		    saveTasks = activeMap.save(null, true);
+
+		while (activeMap.parent) {
+			activeMap = activeMap.parent;
+			saveTasks = saveTasks
+				.then(L.bind(activeMap.load, activeMap))
+				.then(L.bind(activeMap.reset, activeMap));
+		}
+
+		return saveTasks
+			.then(L.bind(this.handleModalCancel, this, modalMap, ev, true))
+			.catch(function() {});
+	},
+
+	/** @private */
+	handleSort: function(ev) {
+		if (!ev.target.matches('th[data-sortable-row]'))
+			return;
+
+		var th = ev.target,
+		    descending = (th.getAttribute('data-sort-direction') == 'desc'),
+		    config_name = this.uciconfig || this.map.config,
+		    index = 0,
+		    list = [];
+
+		ev.currentTarget.querySelectorAll('th').forEach(function(other_th, i) {
+			if (other_th !== th)
+				other_th.removeAttribute('data-sort-direction');
+			else
+				index = i;
+		});
+
+		ev.currentTarget.parentNode.querySelectorAll('tr.cbi-section-table-row').forEach(L.bind(function(tr, i) {
+			var sid = tr.getAttribute('data-sid'),
+			    opt = tr.childNodes[index].getAttribute('data-name'),
+			    val = this.cfgvalue(sid, opt);
+
+			tr.querySelectorAll('.flash').forEach(function(n) {
+				n.classList.remove('flash')
+			});
+
+			list.push([
+				ui.Table.prototype.deriveSortKey((val != null) ? val.trim() : ''),
+				tr
+			]);
+		}, this));
+
+		list.sort(function(a, b) {
+			return descending
+				? -L.naturalCompare(a[0], b[0])
+				: L.naturalCompare(a[0], b[0]);
+		});
+
+		window.requestAnimationFrame(L.bind(function() {
+			var ref_sid, cur_sid;
+
+			for (var i = 0; i < list.length; i++) {
+				list[i][1].childNodes[index].classList.add('flash');
+				th.parentNode.parentNode.appendChild(list[i][1]);
+
+				cur_sid = list[i][1].getAttribute('data-sid');
+
+				if (ref_sid)
+					this.map.data.move(config_name, cur_sid, ref_sid, true);
+
+				ref_sid = cur_sid;
+			}
+
+			th.setAttribute('data-sort-direction', descending ? 'asc' : 'desc');
+		}, this));
+	},
+
+	/**
+	 * Add further options to the per-section instanced modal popup.
+	 *
+	 * This function may be overwritten by user code to perform additional
+	 * setup steps before displaying the more options modal which is useful to
+	 * e.g. query additional data or to inject further option elements.
+	 *
+	 * The default implementation of this function does nothing.
+	 *
+	 * @abstract
+	 * @param {LuCI.form.NamedSection} modalSection
+	 * The `NamedSection` instance about to be rendered in the modal popup.
+	 *
+	 * @param {string} section_id
+	 * The ID of the underlying UCI section the modal popup belongs to.
+	 *
+	 * @param {Event} ev
+	 * The DOM event emitted by clicking the `More…` button.
+	 *
+	 * @returns {*|Promise<*>}
+	 * Return values of this function are ignored but if a promise is returned,
+	 * it is run to completion before the rendering is continued, allowing
+	 * custom logic to perform asynchroneous work before the modal dialog
+	 * is shown.
+	 */
+	addModalOptions: function(modalSection, section_id, ev) {
+
+	},
+
+	/** @private */
+	getActiveModalMap: function() {
+		return document.querySelector('body.modal-overlay-active > #modal_overlay > .modal.cbi-modal > .cbi-map:not(.hidden)');
+	},
+
+	/** @private */
+	getPreviousModalMap: function() {
+		var mapNode = this.getActiveModalMap(),
+		    prevNode = mapNode ? mapNode.previousElementSibling : null;
+
+		return (prevNode && prevNode.matches('.cbi-map.hidden')) ? prevNode : null;
+	},
+
+	/** @private */
+	cloneOptions: function(src_section, dest_section) {
+		for (var i = 0; i < src_section.children.length; i++) {
+			var o1 = src_section.children[i];
+
+			if (o1.modalonly === false && src_section === this)
+				continue;
+
+			var o2;
+
+			if (o1.subsection) {
+				o2 = dest_section.option(o1.constructor, o1.option, o1.subsection.constructor, o1.subsection.sectiontype, o1.subsection.title, o1.subsection.description);
+
+				for (var k in o1.subsection) {
+					if (!o1.subsection.hasOwnProperty(k))
+						continue;
+
+					switch (k) {
+					case 'map':
+					case 'children':
+					case 'parentoption':
+						continue;
+
+					default:
+						o2.subsection[k] = o1.subsection[k];
+					}
+				}
+
+				this.cloneOptions(o1.subsection, o2.subsection);
+			}
+			else {
+				o2 = dest_section.option(o1.constructor, o1.option, o1.title, o1.description);
+			}
+
+			for (var k in o1) {
+				if (!o1.hasOwnProperty(k))
+					continue;
+
+				switch (k) {
+				case 'map':
+				case 'section':
+				case 'option':
+				case 'title':
+				case 'description':
+				case 'subsection':
+					continue;
+
+				default:
+					o2[k] = o1[k];
+				}
+			}
+		}
+	},
+
+	/** @private */
+	renderMoreOptionsModal: function(section_id, ev) {
+		var parent = this.map,
+		    sref = parent.data.get(parent.config, section_id),
+		    mapNode = this.getActiveModalMap(),
+		    activeMap = mapNode ? dom.findClassInstance(mapNode) : null,
+		    stackedMap = activeMap && (activeMap.parent !== parent || activeMap.section !== section_id);
+
+		return (stackedMap ? activeMap.save(null, true) : Promise.resolve()).then(L.bind(function() {
+			section_id = sref['.name'];
+
+			var m;
+
+			if (parent instanceof CBIJSONMap) {
+				m = new CBIJSONMap(null, null, null);
+				m.data = parent.data;
+			}
+			else {
+				m = new CBIMap(parent.config, null, null);
+			}
+
+			var s = m.section(CBINamedSection, section_id, this.sectiontype);
+
+			m.parent = parent;
+			m.section = section_id;
+			m.readonly = parent.readonly;
+
+			s.tabs = this.tabs;
+			s.tab_names = this.tab_names;
+
+			this.cloneOptions(this, s);
+
+			return Promise.resolve(this.addModalOptions(s, section_id, ev)).then(function() {
+				return m.render();
+			}).then(L.bind(function(nodes) {
+				var title = parent.title,
+				    name = null;
+
+				if ((name = this.titleFn('modaltitle', section_id)) != null)
+					title = name;
+				else if ((name = this.titleFn('sectiontitle', section_id)) != null)
+					title = '%s - %s'.format(parent.title, name);
+				else if (!this.anonymous)
+					title = '%s - %s'.format(parent.title, section_id);
+
+				if (stackedMap) {
+					mapNode.parentNode
+						.querySelector('h4')
+						.appendChild(E('span', title ? ' » ' + title : ''));
+
+					mapNode.parentNode
+						.querySelector('div.right > button')
+						.firstChild.data = _('Back');
+
+					mapNode.classList.add('hidden');
+					mapNode.parentNode.insertBefore(nodes, mapNode.nextElementSibling);
+
+					nodes.classList.add('flash');
+				}
+				else {
+					ui.showModal(title, [
+						nodes,
+						E('div', { 'class': 'right' }, [
+							E('button', {
+								'class': 'cbi-button',
+								'click': ui.createHandlerFn(this, 'handleModalCancel', m)
+							}, [ _('Dismiss') ]), ' ',
+							E('button', {
+								'class': 'cbi-button cbi-button-positive important',
+								'click': ui.createHandlerFn(this, 'handleModalSave', m),
+								'disabled': m.readonly || null
+							}, [ _('Save') ])
+						])
+					], 'cbi-modal');
+				}
+			}, this));
+		}, this)).catch(L.error);
+	}
+});
+
+/**
+ * @class GridSection
+ * @memberof LuCI.form
+ * @augments LuCI.form.TableSection
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `GridSection` class maps all or - if `filter()` is overwritten - a
+ * subset of the underlying UCI configuration sections of a given type.
+ *
+ * A grid section functions similar to a {@link LuCI.form.TableSection} but
+ * supports tabbing in the modal overlay. Option elements added with
+ * [option()]{@link LuCI.form.GridSection#option} are shown in the table while
+ * elements added with [taboption()]{@link LuCI.form.GridSection#taboption}
+ * are displayed in the modal popup.
+ *
+ * Another important difference is that the table cells show a readonly text
+ * preview of the corresponding option elements by default, unless the child
+ * option element is explicitely made writable by setting the `editable`
+ * property to `true`.
+ *
+ * Additionally, the grid section honours a `modalonly` property of child
+ * option elements. Refer to the [AbstractValue]{@link LuCI.form.AbstractValue}
+ * documentation for details.
+ *
+ * Layout wise, a grid section looks mostly identical to table sections.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [section()]{@link LuCI.form.Map#section}.
+ *
+ * @param {string} section_type
+ * The type of the UCI section to map.
+ *
+ * @param {string} [title]
+ * The title caption of the form section element.
+ *
+ * @param {string} [description]
+ * The description text of the form section element.
+ */
+var CBIGridSection = CBITableSection.extend(/** @lends LuCI.form.GridSection.prototype */ {
+	/**
+	 * Add an option tab to the section.
+	 *
+	 * The modal option elements of a grid section may be divided into multiple
+	 * tabs to provide a better overview to the user.
+	 *
+	 * Before options can be moved into a tab pane, the corresponding tab
+	 * has to be defined first, which is done by calling this function.
+	 *
+	 * Note that tabs are only effective in modal popups, options added with
+	 * `option()` will not be assigned to a specific tab and are rendered in
+	 * the table view only.
+	 *
+	 * @param {string} name
+	 * The name of the tab to register. It may be freely chosen and just serves
+	 * as an identifier to differentiate tabs.
+	 *
+	 * @param {string} title
+	 * The human readable caption of the tab.
+	 *
+	 * @param {string} [description]
+	 * An additional description text for the corresponding tab pane. It is
+	 * displayed as text paragraph below the tab but before the tab pane
+	 * contents. If omitted, no description will be rendered.
+	 *
+	 * @throws {Error}
+	 * Throws an exeption if a tab with the same `name` already exists.
+	 */
+	tab: function(name, title, description) {
+		CBIAbstractSection.prototype.tab.call(this, name, title, description);
+	},
+
+	/** @private */
+	handleAdd: function(ev, name) {
+		var config_name = this.uciconfig || this.map.config,
+		    section_id = this.map.data.add(config_name, this.sectiontype, name),
+		    mapNode = this.getPreviousModalMap(),
+		    prevMap = mapNode ? dom.findClassInstance(mapNode) : this.map;
+
+		prevMap.addedSection = section_id;
+
+		return this.renderMoreOptionsModal(section_id);
+	},
+
+	/** @private */
+	handleModalSave: function(/* ... */) {
+		var mapNode = this.getPreviousModalMap(),
+		    prevMap = mapNode ? dom.findClassInstance(mapNode) : this.map;
+
+		return this.super('handleModalSave', arguments);
+	},
+
+	/** @private */
+	handleModalCancel: function(modalMap, ev, isSaving) {
+		var config_name = this.uciconfig || this.map.config,
+		    mapNode = this.getPreviousModalMap(),
+		    prevMap = mapNode ? dom.findClassInstance(mapNode) : this.map;
+
+		if (prevMap.addedSection != null && !isSaving)
+			this.map.data.remove(config_name, prevMap.addedSection);
+
+		delete prevMap.addedSection;
+
+		return this.super('handleModalCancel', arguments);
+	},
+
+	/** @private */
+	renderUCISection: function(section_id) {
+		return this.renderOptions(null, section_id);
+	},
+
+	/** @private */
+	renderChildren: function(tab_name, section_id, in_table) {
+		var tasks = [], index = 0;
+
+		for (var i = 0, opt; (opt = this.children[i]) != null; i++) {
+			if (opt.disable || opt.modalonly)
+				continue;
+
+			if (opt.editable)
+				tasks.push(opt.render(index++, section_id, in_table));
+			else
+				tasks.push(this.renderTextValue(section_id, opt));
+		}
+
+		return Promise.all(tasks);
+	},
+
+	/** @private */
+	renderTextValue: function(section_id, opt) {
+		var title = this.stripTags(opt.title).trim(),
+		    descr = this.stripTags(opt.description).trim(),
+		    value = opt.textvalue(section_id);
+
+		return E('td', {
+			'class': 'td cbi-value-field',
+			'data-title': (title != '') ? title : null,
+			'data-description': (descr != '') ? descr : null,
+			'data-name': opt.option,
+			'data-widget': 'CBI.DummyValue'
+		}, (value != null) ? value : E('em', _('none')));
+	},
+
+	/** @private */
+	renderHeaderRows: function(section_id) {
+		return this.super('renderHeaderRows', [ NaN, true ]);
+	},
+
+	/** @private */
+	renderRowActions: function(section_id) {
+		return this.super('renderRowActions', [ section_id, _('Edit') ]);
+	},
+
+	/** @override */
+	parse: function() {
+		var section_ids = this.cfgsections(),
+		    tasks = [];
+
+		if (Array.isArray(this.children)) {
+			for (var i = 0; i < section_ids.length; i++) {
+				for (var j = 0; j < this.children.length; j++) {
+					if (!this.children[j].editable || this.children[j].modalonly)
+						continue;
+
+					tasks.push(this.children[j].parse(section_ids[i]));
+				}
+			}
+		}
+
+		return Promise.all(tasks);
+	}
+});
+
+/**
+ * @class NamedSection
+ * @memberof LuCI.form
+ * @augments LuCI.form.AbstractSection
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `NamedSection` class maps exactly one UCI section instance which is
+ * specified when constructing the class instance.
+ *
+ * Layout and functionality wise, a named section is essentially a
+ * `TypedSection` which allows exactly one section node.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [section()]{@link LuCI.form.Map#section}.
+ *
+ * @param {string} section_id
+ * The name (ID) of the UCI section to map.
+ *
+ * @param {string} section_type
+ * The type of the UCI section to map.
+ *
+ * @param {string} [title]
+ * The title caption of the form section element.
+ *
+ * @param {string} [description]
+ * The description text of the form section element.
+ */
+var CBINamedSection = CBIAbstractSection.extend(/** @lends LuCI.form.NamedSection.prototype */ {
+	__name__: 'CBI.NamedSection',
+	__init__: function(map, section_id /*, ... */) {
+		this.super('__init__', this.varargs(arguments, 2, map));
+
+		this.section = section_id;
+	},
+
+	/**
+	 * If set to `true`, the user may remove or recreate the sole mapped
+	 * configuration instance from the form section widget, otherwise only a
+	 * preexisting section may be edited. The default is `false`.
+	 *
+	 * @name LuCI.form.NamedSection.prototype#addremove
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Override the UCI configuration name to read the section IDs from. By
+	 * default, the configuration name is inherited from the parent `Map`.
+	 * By setting this property, a deviating configuration may be specified.
+	 * The default is `null`, means inheriting from the parent form.
+	 *
+	 * @name LuCI.form.NamedSection.prototype#uciconfig
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * The `NamedSection` class overwrites the generic `cfgsections()`
+	 * implementation to return a one-element array containing the mapped
+	 * section ID as sole element. User code should not normally change this.
+	 *
+	 * @returns {string[]}
+	 * Returns a one-element array containing the mapped section ID.
+	 */
+	cfgsections: function() {
+		return [ this.section ];
+	},
+
+	/** @private */
+	handleAdd: function(ev) {
+		var section_id = this.section,
+		    config_name = this.uciconfig || this.map.config;
+
+		this.map.data.add(config_name, this.sectiontype, section_id);
+		return this.map.save(null, true);
+	},
+
+	/** @private */
+	handleRemove: function(ev) {
+		var section_id = this.section,
+		    config_name = this.uciconfig || this.map.config;
+
+		this.map.data.remove(config_name, section_id);
+		return this.map.save(null, true);
+	},
+
+	/** @private */
+	renderContents: function(data) {
+		var ucidata = data[0], nodes = data[1],
+		    section_id = this.section,
+		    config_name = this.uciconfig || this.map.config,
+		    sectionEl = E('div', {
+				'id': ucidata ? null : 'cbi-%s-%s'.format(config_name, section_id),
+				'class': 'cbi-section',
+				'data-tab': (this.map.tabbed && !this.parentoption) ? this.sectiontype : null,
+				'data-tab-title': (this.map.tabbed && !this.parentoption) ? this.title || this.sectiontype : null
+			});
+
+		if (typeof(this.title) === 'string' && this.title !== '')
+			sectionEl.appendChild(E('h3', {}, this.title));
+
+		if (typeof(this.description) === 'string' && this.description !== '')
+			sectionEl.appendChild(E('div', { 'class': 'cbi-section-descr' }, this.description));
+
+		if (ucidata) {
+			if (this.addremove) {
+				sectionEl.appendChild(
+					E('div', { 'class': 'cbi-section-remove right' },
+						E('button', {
+							'class': 'cbi-button',
+							'click': ui.createHandlerFn(this, 'handleRemove'),
+							'disabled': this.map.readonly || null
+						}, [ _('Delete') ])));
+			}
+
+			sectionEl.appendChild(E('div', {
+				'id': 'cbi-%s-%s'.format(config_name, section_id),
+				'class': this.tabs
+					? 'cbi-section-node cbi-section-node-tabbed' : 'cbi-section-node',
+				'data-section-id': section_id
+			}, nodes));
+		}
+		else if (this.addremove) {
+			sectionEl.appendChild(
+				E('button', {
+					'class': 'cbi-button cbi-button-add',
+					'click': ui.createHandlerFn(this, 'handleAdd'),
+					'disabled': this.map.readonly || null
+				}, [ _('Add') ]));
+		}
+
+		dom.bindClassInstance(sectionEl, this);
+
+		return sectionEl;
+	},
+
+	/** @override */
+	render: function() {
+		var config_name = this.uciconfig || this.map.config,
+		    section_id = this.section;
+
+		return Promise.all([
+			this.map.data.get(config_name, section_id),
+			this.renderUCISection(section_id)
+		]).then(this.renderContents.bind(this));
+	}
+});
+
+/**
+ * @class Value
+ * @memberof LuCI.form
+ * @augments LuCI.form.AbstractValue
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `Value` class represents a simple one-line form input using the
+ * {@link LuCI.ui.Textfield} or - in case choices are added - the
+ * {@link LuCI.ui.Combobox} class as underlying widget.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIValue = CBIAbstractValue.extend(/** @lends LuCI.form.Value.prototype */ {
+	__name__: 'CBI.Value',
+
+	/**
+	 * If set to `true`, the field is rendered as password input, otherwise
+	 * as plain text input.
+	 *
+	 * @name LuCI.form.Value.prototype#password
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Set a placeholder string to use when the input field is empty.
+	 *
+	 * @name LuCI.form.Value.prototype#placeholder
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Add a predefined choice to the form option. By adding one or more
+	 * choices, the plain text input field is turned into a combobox widget
+	 * which prompts the user to select a predefined choice, or to enter a
+	 * custom value.
+	 *
+	 * @param {string} key
+	 * The choice value to add.
+	 *
+	 * @param {Node|string} value
+	 * The caption for the choice value. May be a DOM node, a document fragment
+	 * or a plain text string. If omitted, the `key` value is used as caption.
+	 */
+	value: function(key, val) {
+		this.keylist = this.keylist || [];
+		this.keylist.push(String(key));
+
+		this.vallist = this.vallist || [];
+		this.vallist.push(dom.elem(val) ? val : String(val != null ? val : key));
+	},
+
+	/** @override */
+	render: function(option_index, section_id, in_table) {
+		return Promise.resolve(this.cfgvalue(section_id))
+			.then(this.renderWidget.bind(this, section_id, option_index))
+			.then(this.renderFrame.bind(this, section_id, in_table, option_index));
+	},
+
+	/** @private */
+	handleValueChange: function(section_id, state, ev) {
+		if (typeof(this.onchange) != 'function')
+			return;
+
+		var value = this.formvalue(section_id);
+
+		if (isEqual(value, state.previousValue))
+			return;
+
+		state.previousValue = value;
+		this.onchange.call(this, ev, section_id, value);
+	},
+
+	/** @private */
+	renderFrame: function(section_id, in_table, option_index, nodes) {
+		var config_name = this.uciconfig || this.section.uciconfig || this.map.config,
+		    depend_list = this.transformDepList(section_id),
+		    optionEl;
+
+		if (in_table) {
+			var title = this.stripTags(this.title).trim();
+			optionEl = E('td', {
+				'class': 'td cbi-value-field',
+				'data-title': (title != '') ? title : null,
+				'data-description': this.stripTags(this.description).trim(),
+				'data-name': this.option,
+				'data-widget': this.typename || (this.template ? this.template.replace(/^.+\//, '') : null) || this.__name__
+			}, E('div', {
+				'id': 'cbi-%s-%s-%s'.format(config_name, section_id, this.option),
+				'data-index': option_index,
+				'data-depends': depend_list,
+				'data-field': this.cbid(section_id)
+			}));
+		}
+		else {
+			optionEl = E('div', {
+				'class': 'cbi-value',
+				'id': 'cbi-%s-%s-%s'.format(config_name, section_id, this.option),
+				'data-index': option_index,
+				'data-depends': depend_list,
+				'data-field': this.cbid(section_id),
+				'data-name': this.option,
+				'data-widget': this.typename || (this.template ? this.template.replace(/^.+\//, '') : null) || this.__name__
+			});
+
+			if (this.last_child)
+				optionEl.classList.add('cbi-value-last');
+
+			if (typeof(this.title) === 'string' && this.title !== '') {
+				optionEl.appendChild(E('label', {
+					'class': 'cbi-value-title',
+					'for': 'widget.cbid.%s.%s.%s'.format(config_name, section_id, this.option),
+					'click': function(ev) {
+						var node = ev.currentTarget,
+						    elem = node.nextElementSibling.querySelector('#' + node.getAttribute('for')) || node.nextElementSibling.querySelector('[data-widget-id="' + node.getAttribute('for') + '"]');
+
+						if (elem) {
+							elem.click();
+							elem.focus();
+						}
+					}
+				},
+				this.titleref ? E('a', {
+					'class': 'cbi-title-ref',
+					'href': this.titleref,
+					'title': this.titledesc || _('Go to relevant configuration page')
+				}, this.title) : this.title));
+
+				optionEl.appendChild(E('div', { 'class': 'cbi-value-field' }));
+			}
+		}
+
+		if (nodes)
+			(optionEl.lastChild || optionEl).appendChild(nodes);
+
+		if (!in_table && typeof(this.description) === 'string' && this.description !== '')
+			dom.append(optionEl.lastChild || optionEl,
+				E('div', { 'class': 'cbi-value-description' }, this.description.trim()));
+
+		if (depend_list && depend_list.length)
+			optionEl.classList.add('hidden');
+
+		optionEl.addEventListener('widget-change',
+			L.bind(this.map.checkDepends, this.map));
+
+		optionEl.addEventListener('widget-change',
+			L.bind(this.handleValueChange, this, section_id, {}));
+
+		dom.bindClassInstance(optionEl, this);
+
+		return optionEl;
+	},
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var value = (cfgvalue != null) ? cfgvalue : this.default,
+		    choices = this.transformChoices(),
+		    widget;
+
+		if (choices) {
+			var placeholder = (this.optional || this.rmempty)
+				? E('em', _('unspecified')) : _('-- Please choose --');
+
+			widget = new ui.Combobox(Array.isArray(value) ? value.join(' ') : value, choices, {
+				id: this.cbid(section_id),
+				sort: this.keylist,
+				optional: this.optional || this.rmempty,
+				datatype: this.datatype,
+				select_placeholder: this.placeholder || placeholder,
+				validate: L.bind(this.validate, this, section_id),
+				disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+			});
+		}
+		else {
+			widget = new ui.Textfield(Array.isArray(value) ? value.join(' ') : value, {
+				id: this.cbid(section_id),
+				password: this.password,
+				optional: this.optional || this.rmempty,
+				datatype: this.datatype,
+				placeholder: this.placeholder,
+				validate: L.bind(this.validate, this, section_id),
+				disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+			});
+		}
+
+		return widget.render();
+	}
+});
+
+/**
+ * @class DynamicList
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `DynamicList` class represents a multi value widget allowing the user
+ * to enter multiple unique values, optionally selected from a set of
+ * predefined choices. It builds upon the {@link LuCI.ui.DynamicList} widget.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIDynamicList = CBIValue.extend(/** @lends LuCI.form.DynamicList.prototype */ {
+	__name__: 'CBI.DynamicList',
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var value = (cfgvalue != null) ? cfgvalue : this.default,
+		    choices = this.transformChoices(),
+		    items = L.toArray(value);
+
+		var widget = new ui.DynamicList(items, choices, {
+			id: this.cbid(section_id),
+			sort: this.keylist,
+			optional: this.optional || this.rmempty,
+			datatype: this.datatype,
+			placeholder: this.placeholder,
+			validate: L.bind(this.validate, this, section_id),
+			disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+		});
+
+		return widget.render();
+	},
+});
+
+/**
+ * @class ListValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `ListValue` class implements a simple static HTML select element
+ * allowing the user to choose a single value from a set of predefined choices.
+ * It builds upon the {@link LuCI.ui.Select} widget.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIListValue = CBIValue.extend(/** @lends LuCI.form.ListValue.prototype */ {
+	__name__: 'CBI.ListValue',
+
+	__init__: function() {
+		this.super('__init__', arguments);
+		this.widget = 'select';
+		this.orientation = 'horizontal';
+		this.deplist = [];
+	},
+
+	/**
+	 * Set the size attribute of the underlying HTML select element.
+	 *
+	 * @name LuCI.form.ListValue.prototype#size
+	 * @type number
+	 * @default null
+	 */
+
+	/**
+	 * Set the type of the underlying form controls.
+	 *
+	 * May be one of `select` or `radio`. If set to `select`, an HTML
+	 * select element is rendered, otherwise a collection of `radio`
+	 * elements is used.
+	 *
+	 * @name LuCI.form.ListValue.prototype#widget
+	 * @type string
+	 * @default select
+	 */
+
+	/**
+	 * Set the orientation of the underlying radio or checkbox elements.
+	 *
+	 * May be one of `horizontal` or `vertical`. Only applies to non-select
+	 * widget types.
+	 *
+	 * @name LuCI.form.ListValue.prototype#orientation
+	 * @type string
+	 * @default horizontal
+	 */
+
+	 /** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var choices = this.transformChoices();
+		var widget = new ui.Select((cfgvalue != null) ? cfgvalue : this.default, choices, {
+			id: this.cbid(section_id),
+			size: this.size,
+			sort: this.keylist,
+			widget: this.widget,
+			optional: this.optional,
+			orientation: this.orientation,
+			placeholder: this.placeholder,
+			validate: L.bind(this.validate, this, section_id),
+			disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+		});
+
+		return widget.render();
+	},
+});
+
+/**
+ * @class FlagValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `FlagValue` element builds upon the {@link LuCI.ui.Checkbox} widget to
+ * implement a simple checkbox element.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIFlagValue = CBIValue.extend(/** @lends LuCI.form.FlagValue.prototype */ {
+	__name__: 'CBI.FlagValue',
+
+	__init__: function() {
+		this.super('__init__', arguments);
+
+		this.enabled = '1';
+		this.disabled = '0';
+		this.default = this.disabled;
+	},
+
+	/**
+	 * Sets the input value to use for the checkbox checked state.
+	 *
+	 * @name LuCI.form.FlagValue.prototype#enabled
+	 * @type number
+	 * @default 1
+	 */
+
+	/**
+	 * Sets the input value to use for the checkbox unchecked state.
+	 *
+	 * @name LuCI.form.FlagValue.prototype#disabled
+	 * @type number
+	 * @default 0
+	 */
+
+	/**
+	 * Set a tooltip for the flag option.
+	 *
+	 * If set to a string, it will be used as-is as a tooltip.
+	 *
+	 * If set to a function, the function will be invoked and the return
+	 * value will be shown as a tooltip. If the return value of the function
+	 * is `null` no tooltip will be set.
+	 *
+	 * @name LuCI.form.FlagValue.prototype#tooltip
+	 * @type string|function
+	 * @default null
+	 */
+
+	/**
+	 * Set a tooltip icon for the flag option.
+	 *
+	 * If set, this icon will be shown for the default one.
+	 * This could also be a png icon from the resources directory.
+	 *
+	 * @name LuCI.form.FlagValue.prototype#tooltipicon
+	 * @type string
+	 * @default 'ℹ️';
+	 */
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var tooltip = null;
+
+		if (typeof(this.tooltip) == 'function')
+			tooltip = this.tooltip.apply(this, [section_id]);
+		else if (typeof(this.tooltip) == 'string')
+			tooltip = (arguments.length > 1) ? ''.format.apply(this.tooltip, this.varargs(arguments, 1)) : this.tooltip;
+
+		var widget = new ui.Checkbox((cfgvalue != null) ? cfgvalue : this.default, {
+			id: this.cbid(section_id),
+			value_enabled: this.enabled,
+			value_disabled: this.disabled,
+			validate: L.bind(this.validate, this, section_id),
+			tooltip: tooltip,
+			tooltipicon: this.tooltipicon,
+			disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+		});
+
+		return widget.render();
+	},
+
+	/**
+	 * Query the checked state of the underlying checkbox widget and return
+	 * either the `enabled` or the `disabled` property value, depending on
+	 * the checked state.
+	 *
+	 * @override
+	 */
+	formvalue: function(section_id) {
+		var elem = this.getUIElement(section_id),
+		    checked = elem ? elem.isChecked() : false;
+		return checked ? this.enabled : this.disabled;
+	},
+
+	/**
+	 * Query the checked state of the underlying checkbox widget and return
+	 * either a localized `Yes` or `No` string, depending on the checked state.
+	 *
+	 * @override
+	 */
+	textvalue: function(section_id) {
+		var cval = this.cfgvalue(section_id);
+
+		if (cval == null)
+			cval = this.default;
+
+		return (cval == this.enabled) ? _('Yes') : _('No');
+	},
+
+	/** @override */
+	parse: function(section_id) {
+		if (this.isActive(section_id)) {
+			var fval = this.formvalue(section_id);
+
+			if (!this.isValid(section_id)) {
+				var title = this.stripTags(this.title).trim();
+				var error = this.getValidationError(section_id);
+				return Promise.reject(new TypeError(
+					_('Option "%s" contains an invalid input value.').format(title || this.option) + ' ' + error));
+			}
+
+			if (fval == this.default && (this.optional || this.rmempty))
+				return Promise.resolve(this.remove(section_id));
+			else
+				return Promise.resolve(this.write(section_id, fval));
+		}
+		else if (!this.retain) {
+			return Promise.resolve(this.remove(section_id));
+		}
+	},
+});
+
+/**
+ * @class MultiValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.DynamicList
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `MultiValue` class is a modified variant of the `DynamicList` element
+ * which leverages the {@link LuCI.ui.Dropdown} widget to implement a multi
+ * select dropdown element.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIMultiValue = CBIDynamicList.extend(/** @lends LuCI.form.MultiValue.prototype */ {
+	__name__: 'CBI.MultiValue',
+
+	__init__: function() {
+		this.super('__init__', arguments);
+		this.placeholder = _('-- Please choose --');
+	},
+
+	/**
+	 * Allows to specify the [display_items]{@link LuCI.ui.Dropdown.InitOptions}
+	 * property of the underlying dropdown widget. If omitted, the value of
+	 * the `size` property is used or `3` when `size` is unspecified as well.
+	 *
+	 * @name LuCI.form.MultiValue.prototype#display_size
+	 * @type number
+	 * @default null
+	 */
+
+	/**
+	 * Allows to specify the [dropdown_items]{@link LuCI.ui.Dropdown.InitOptions}
+	 * property of the underlying dropdown widget. If omitted, the value of
+	 * the `size` property is used or `-1` when `size` is unspecified as well.
+	 *
+	 * @name LuCI.form.MultiValue.prototype#dropdown_size
+	 * @type number
+	 * @default null
+	 */
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var value = (cfgvalue != null) ? cfgvalue : this.default,
+		    choices = this.transformChoices();
+
+		var widget = new ui.Dropdown(L.toArray(value), choices, {
+			id: this.cbid(section_id),
+			sort: this.keylist,
+			multiple: true,
+			optional: this.optional || this.rmempty,
+			select_placeholder: this.placeholder,
+			display_items: this.display_size || this.size || 3,
+			dropdown_items: this.dropdown_size || this.size || -1,
+			validate: L.bind(this.validate, this, section_id),
+			disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+		});
+
+		return widget.render();
+	},
+});
+
+/**
+ * @class TextValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `TextValue` class implements a multi-line textarea input using
+ * {@link LuCI.ui.Textarea}.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBITextValue = CBIValue.extend(/** @lends LuCI.form.TextValue.prototype */ {
+	__name__: 'CBI.TextValue',
+
+	/** @ignore */
+	value: null,
+
+	/**
+	 * Enforces the use of a monospace font for the textarea contents when set
+	 * to `true`.
+	 *
+	 * @name LuCI.form.TextValue.prototype#monospace
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Allows to specify the [cols]{@link LuCI.ui.Textarea.InitOptions}
+	 * property of the underlying textarea widget.
+	 *
+	 * @name LuCI.form.TextValue.prototype#cols
+	 * @type number
+	 * @default null
+	 */
+
+	/**
+	 * Allows to specify the [rows]{@link LuCI.ui.Textarea.InitOptions}
+	 * property of the underlying textarea widget.
+	 *
+	 * @name LuCI.form.TextValue.prototype#rows
+	 * @type number
+	 * @default null
+	 */
+
+	/**
+	 * Allows to specify the [wrap]{@link LuCI.ui.Textarea.InitOptions}
+	 * property of the underlying textarea widget.
+	 *
+	 * @name LuCI.form.TextValue.prototype#wrap
+	 * @type number
+	 * @default null
+	 */
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var value = (cfgvalue != null) ? cfgvalue : this.default;
+
+		var widget = new ui.Textarea(value, {
+			id: this.cbid(section_id),
+			optional: this.optional || this.rmempty,
+			placeholder: this.placeholder,
+			monospace: this.monospace,
+			cols: this.cols,
+			rows: this.rows,
+			wrap: this.wrap,
+			validate: L.bind(this.validate, this, section_id),
+			disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+		});
+
+		return widget.render();
+	}
+});
+
+/**
+ * @class DummyValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `DummyValue` element wraps an {@link LuCI.ui.Hiddenfield} widget and
+ * renders the underlying UCI option or default value as readonly text.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIDummyValue = CBIValue.extend(/** @lends LuCI.form.DummyValue.prototype */ {
+	__name__: 'CBI.DummyValue',
+
+	/**
+	 * Set an URL which is opened when clicking on the dummy value text.
+	 *
+	 * By setting this property, the dummy value text is wrapped in an `<a>`
+	 * element with the property value used as `href` attribute.
+	 *
+	 * @name LuCI.form.DummyValue.prototype#href
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Treat the UCI option value (or the `default` property value) as HTML.
+	 *
+	 * By default, the value text is HTML escaped before being rendered as
+	 * text. In some cases it may be needed to actually interpret and render
+	 * HTML contents as-is. When set to `true`, HTML escaping is disabled.
+	 *
+	 * @name LuCI.form.DummyValue.prototype#rawhtml
+	 * @type boolean
+	 * @default null
+	 */
+
+    /**
+	 * Render the UCI option value as hidden using the HTML display: none style property.
+	 *
+	 * By default, the value is displayed
+	 *
+	 * @name LuCI.form.DummyValue.prototype#hidden
+	 * @type boolean
+	 * @default null
+	 */
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var value = (cfgvalue != null) ? cfgvalue : this.default,
+		    hiddenEl = new ui.Hiddenfield(value, { id: this.cbid(section_id) }),
+		    outputEl = E('div', { 'style': this.hidden ? 'display:none' : null });
+
+		if (this.href && !((this.readonly != null) ? this.readonly : this.map.readonly))
+			outputEl.appendChild(E('a', { 'href': this.href }));
+
+		dom.append(outputEl.lastChild || outputEl,
+			this.rawhtml ? value : [ value ]);
+
+		return E([
+			outputEl,
+			hiddenEl.render()
+		]);
+	},
+
+	/** @override */
+	remove: function() {},
+
+	/** @override */
+	write: function() {}
+});
+
+/**
+ * @class ButtonValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `DummyValue` element wraps an {@link LuCI.ui.Hiddenfield} widget and
+ * renders the underlying UCI option or default value as readonly text.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIButtonValue = CBIValue.extend(/** @lends LuCI.form.ButtonValue.prototype */ {
+	__name__: 'CBI.ButtonValue',
+
+	/**
+	 * Override the rendered button caption.
+	 *
+	 * By default, the option title - which is passed as fourth argument to the
+	 * constructor - is used as caption for the button element. When setting
+	 * this property to a string, it is used as `String.format()` pattern with
+	 * the underlying UCI section name passed as first format argument. When
+	 * set to a function, it is invoked passing the section ID as sole argument
+	 * and the resulting return value is converted to a string before being
+	 * used as button caption.
+	 *
+	 * The default is `null`, means the option title is used as caption.
+	 *
+	 * @name LuCI.form.ButtonValue.prototype#inputtitle
+	 * @type string|function
+	 * @default null
+	 */
+
+	/**
+	 * Override the button style class.
+	 *
+	 * By setting this property, a specific `cbi-button-*` CSS class can be
+	 * selected to influence the style of the resulting button.
+	 *
+	 * Suitable values which are implemented by most themes are `positive`,
+	 * `negative` and `primary`.
+	 *
+	 * The default is `null`, means a neutral button styling is used.
+	 *
+	 * @name LuCI.form.ButtonValue.prototype#inputstyle
+	 * @type string
+	 * @default null
+	 */
+
+	/**
+	 * Override the button click action.
+	 *
+	 * By default, the underlying UCI option (or default property) value is
+	 * copied into a hidden field tied to the button element and the save
+	 * action is triggered on the parent form element.
+	 *
+	 * When this property is set to a function, it is invoked instead of
+	 * performing the default actions. The handler function will receive the
+	 * DOM click element as first and the underlying configuration section ID
+	 * as second argument.
+	 *
+	 * @name LuCI.form.ButtonValue.prototype#onclick
+	 * @type function
+	 * @default null
+	 */
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var value = (cfgvalue != null) ? cfgvalue : this.default,
+		    hiddenEl = new ui.Hiddenfield(value, { id: this.cbid(section_id) }),
+		    outputEl = E('div'),
+		    btn_title = this.titleFn('inputtitle', section_id) || this.titleFn('title', section_id);
+
+		if (value !== false)
+			dom.content(outputEl, [
+				E('button', {
+					'class': 'cbi-button cbi-button-%s'.format(this.inputstyle || 'button'),
+					'click': ui.createHandlerFn(this, function(section_id, ev) {
+						if (this.onclick)
+							return this.onclick(ev, section_id);
+
+						ev.currentTarget.parentNode.nextElementSibling.value = value;
+						return this.map.save();
+					}, section_id),
+					'disabled': ((this.readonly != null) ? this.readonly : this.map.readonly) || null
+				}, [ btn_title ])
+			]);
+		else
+			dom.content(outputEl, ' - ');
+
+		return E([
+			outputEl,
+			hiddenEl.render()
+		]);
+	}
+});
+
+/**
+ * @class HiddenValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `HiddenValue` element wraps an {@link LuCI.ui.Hiddenfield} widget.
+ *
+ * Hidden value widgets used to be necessary in legacy code which actually
+ * submitted the underlying HTML form the server. With client side handling of
+ * forms, there are more efficient ways to store hidden state data.
+ *
+ * Since this widget has no visible content, the title and description values
+ * of this form element should be set to `null` as well to avoid a broken or
+ * distorted form layout when rendering the option element.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIHiddenValue = CBIValue.extend(/** @lends LuCI.form.HiddenValue.prototype */ {
+	__name__: 'CBI.HiddenValue',
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var widget = new ui.Hiddenfield((cfgvalue != null) ? cfgvalue : this.default, {
+			id: this.cbid(section_id)
+		});
+
+		return widget.render();
+	}
+});
+
+/**
+ * @class FileUpload
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `FileUpload` element wraps an {@link LuCI.ui.FileUpload} widget and
+ * offers the ability to browse, upload and select remote files.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The name of the UCI option to map.
+ *
+ * @param {string} [title]
+ * The title caption of the option element.
+ *
+ * @param {string} [description]
+ * The description text of the option element.
+ */
+var CBIFileUpload = CBIValue.extend(/** @lends LuCI.form.FileUpload.prototype */ {
+	__name__: 'CBI.FileSelect',
+
+	__init__: function(/* ... */) {
+		this.super('__init__', arguments);
+
+		this.show_hidden = false;
+		this.enable_upload = true;
+		this.enable_remove = true;
+		this.root_directory = '/etc/luci-uploads';
+	},
+
+	/**
+	 * Toggle display of hidden files.
+	 *
+	 * Display hidden files when rendering the remote directory listing.
+	 * Note that this is merely a cosmetic feature, hidden files are always
+	 * included in received remote file listings.
+	 *
+	 * The default is `false`, means hidden files are not displayed.
+	 *
+	 * @name LuCI.form.FileUpload.prototype#show_hidden
+	 * @type boolean
+	 * @default false
+	 */
+
+	/**
+	 * Toggle file upload functionality.
+	 *
+	 * When set to `true`, the underlying widget provides a button which lets
+	 * the user select and upload local files to the remote system.
+	 * Note that this is merely a cosmetic feature, remote upload access is
+	 * controlled by the session ACL rules.
+	 *
+	 * The default is `true`, means file upload functionality is displayed.
+	 *
+	 * @name LuCI.form.FileUpload.prototype#enable_upload
+	 * @type boolean
+	 * @default true
+	 */
+
+	/**
+	 * Toggle remote file delete functionality.
+	 *
+	 * When set to `true`, the underlying widget provides a buttons which let
+	 * the user delete files from remote directories. Note that this is merely
+	 * a cosmetic feature, remote delete permissions are controlled by the
+	 * session ACL rules.
+	 *
+	 * The default is `true`, means file removal buttons are displayed.
+	 *
+	 * @name LuCI.form.FileUpload.prototype#enable_remove
+	 * @type boolean
+	 * @default true
+	 */
+
+	/**
+	 * Specify the root directory for file browsing.
+	 *
+	 * This property defines the topmost directory the file browser widget may
+	 * navigate to, the UI will not allow browsing directories outside this
+	 * prefix. Note that this is merely a cosmetic feature, remote file access
+	 * and directory listing permissions are controlled by the session ACL
+	 * rules.
+	 *
+	 * The default is `/etc/luci-uploads`.
+	 *
+	 * @name LuCI.form.FileUpload.prototype#root_directory
+	 * @type string
+	 * @default /etc/luci-uploads
+	 */
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		var browserEl = new ui.FileUpload((cfgvalue != null) ? cfgvalue : this.default, {
+			id: this.cbid(section_id),
+			name: this.cbid(section_id),
+			show_hidden: this.show_hidden,
+			enable_upload: this.enable_upload,
+			enable_remove: this.enable_remove,
+			root_directory: this.root_directory,
+			disabled: (this.readonly != null) ? this.readonly : this.map.readonly
+		});
+
+		return browserEl.render();
+	}
+});
+
+/**
+ * @class SectionValue
+ * @memberof LuCI.form
+ * @augments LuCI.form.Value
+ * @hideconstructor
+ * @classdesc
+ *
+ * The `SectionValue` widget embeds a form section element within an option
+ * element container, allowing to nest form sections into other sections.
+ *
+ * @param {LuCI.form.Map|LuCI.form.JSONMap} form
+ * The configuration form this section is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {LuCI.form.AbstractSection} section
+ * The configuration section this option is added to. It is automatically passed
+ * by [option()]{@link LuCI.form.AbstractSection#option} or
+ * [taboption()]{@link LuCI.form.AbstractSection#taboption} when adding the
+ * option to the section.
+ *
+ * @param {string} option
+ * The internal name of the option element holding the section. Since a section
+ * container element does not read or write any configuration itself, the name
+ * is only used internally and does not need to relate to any underlying UCI
+ * option name.
+ *
+ * @param {LuCI.form.AbstractSection} subsection_class
+ * The class to use for instantiating the nested section element. Note that
+ * the class value itself is expected here, not a class instance obtained by
+ * calling `new`. The given class argument must be a subclass of the
+ * `AbstractSection` class.
+ *
+ * @param {...*} [class_args]
+ * All further arguments are passed as-is to the subclass constructor. Refer
+ * to the corresponding class constructor documentations for details.
+ */
+var CBISectionValue = CBIValue.extend(/** @lends LuCI.form.SectionValue.prototype */ {
+	__name__: 'CBI.ContainerValue',
+	__init__: function(map, section, option, cbiClass /*, ... */) {
+		this.super('__init__', [map, section, option]);
+
+		if (!CBIAbstractSection.isSubclass(cbiClass))
+			throw 'Sub section must be a descendent of CBIAbstractSection';
+
+		this.subsection = cbiClass.instantiate(this.varargs(arguments, 4, this.map));
+		this.subsection.parentoption = this;
+	},
+
+	/**
+	 * Access the embedded section instance.
+	 *
+	 * This property holds a reference to the instantiated nested section.
+	 *
+	 * @name LuCI.form.SectionValue.prototype#subsection
+	 * @type LuCI.form.AbstractSection
+	 * @readonly
+	 */
+
+	/** @override */
+	load: function(section_id) {
+		return this.subsection.load(section_id);
+	},
+
+	/** @override */
+	parse: function(section_id) {
+		return this.subsection.parse(section_id);
+	},
+
+	/** @private */
+	renderWidget: function(section_id, option_index, cfgvalue) {
+		return this.subsection.render(section_id);
+	},
+
+	/** @private */
+	checkDepends: function(section_id) {
+		this.subsection.checkDepends(section_id);
+		return CBIValue.prototype.checkDepends.apply(this, [ section_id ]);
+	},
+
+	/**
+	 * Since the section container is not rendering an own widget,
+	 * its `value()` implementation is a no-op.
+	 *
+	 * @override
+	 */
+	value: function() {},
+
+	/**
+	 * Since the section container is not tied to any UCI configuration,
+	 * its `write()` implementation is a no-op.
+	 *
+	 * @override
+	 */
+	write: function() {},
+
+	/**
+	 * Since the section container is not tied to any UCI configuration,
+	 * its `remove()` implementation is a no-op.
+	 *
+	 * @override
+	 */
+	remove: function() {},
+
+	/**
+	 * Since the section container is not tied to any UCI configuration,
+	 * its `cfgvalue()` implementation will always return `null`.
+	 *
+	 * @override
+	 * @returns {null}
+	 */
+	cfgvalue: function() { return null },
+
+	/**
+	 * Since the section container is not tied to any UCI configuration,
+	 * its `formvalue()` implementation will always return `null`.
+	 *
+	 * @override
+	 * @returns {null}
+	 */
+	formvalue: function() { return null }
+});
+
+/**
+ * @class form
+ * @memberof LuCI
+ * @hideconstructor
+ * @classdesc
+ *
+ * The LuCI form class provides high level abstractions for creating creating
+ * UCI- or JSON backed configurations forms.
+ *
+ * To import the class in views, use `'require form'`, to import it in
+ * external JavaScript, use `L.require("form").then(...)`.
+ *
+ * A typical form is created by first constructing a
+ * {@link LuCI.form.Map} or {@link LuCI.form.JSONMap} instance using `new` and
+ * by subsequently adding sections and options to it. Finally
+ * [render()]{@link LuCI.form.Map#render} is invoked on the instance to
+ * assemble the HTML markup and insert it into the DOM.
+ *
+ * Example:
+ *
+ * <pre>
+ * 'use strict';
+ * 'require form';
+ *
+ * var m, s, o;
+ *
+ * m = new form.Map('example', 'Example form',
+ *	'This is an example form mapping the contents of /etc/config/example');
+ *
+ * s = m.section(form.NamedSection, 'first_section', 'example', 'The first section',
+ * 	'This sections maps "config example first_section" of /etc/config/example');
+ *
+ * o = s.option(form.Flag, 'some_bool', 'A checkbox option');
+ *
+ * o = s.option(form.ListValue, 'some_choice', 'A select element');
+ * o.value('choice1', 'The first choice');
+ * o.value('choice2', 'The second choice');
+ *
+ * m.render().then(function(node) {
+ * 	document.body.appendChild(node);
+ * });
+ * </pre>
+ */
+return baseclass.extend(/** @lends LuCI.form.prototype */ {
+	Map: CBIMap,
+	JSONMap: CBIJSONMap,
+	AbstractSection: CBIAbstractSection,
+	AbstractValue: CBIAbstractValue,
+
+	TypedSection: CBITypedSection,
+	TableSection: CBITableSection,
+	GridSection: CBIGridSection,
+	NamedSection: CBINamedSection,
+
+	Value: CBIValue,
+	DynamicList: CBIDynamicList,
+	ListValue: CBIListValue,
+	Flag: CBIFlagValue,
+	MultiValue: CBIMultiValue,
+	TextValue: CBITextValue,
+	DummyValue: CBIDummyValue,
+	Button: CBIButtonValue,
+	HiddenValue: CBIHiddenValue,
+	FileUpload: CBIFileUpload,
+	SectionValue: CBISectionValue
+});
+EOF_ARGON_8080_FORM_JS
     cat > "$argon_target_root/www/luci-static/resources/fs.js" <<'EOF_ARGON_8080_FS_JS'
 ﻿'use strict';
 'require rpc';
@@ -82611,7 +83402,7 @@ return baseclass.extend(/** @lends LuCI.rpc.prototype */ {
 
 		return request.post(rpcBaseURL + q, req, {
 			timeout: (L.env.rpctimeout || 20) * 1000,
-			nobatch: nobatch,
+			nobatch: true,
 			credentials: true
 		}).then(cb, cb);
 	},
@@ -82720,6 +83511,7 @@ return baseclass.extend(/** @lends LuCI.rpc.prototype */ {
 			jsonrpc: '2.0',
 			id:      rpcRequestID++,
 			method:  'list',
+			sid:     rpcSessionID,
 			params:  arguments.length ? this.varargs(arguments) : undefined
 		};
 
@@ -84705,6 +85497,7 @@ XHR = function()
 {
 	this.reinit = function()
 	{
+		if (this._xmlHttp) this.cancel();
 		if (window.XMLHttpRequest) {
 			this._xmlHttp = new XMLHttpRequest();
 		}
@@ -84717,24 +85510,46 @@ XHR = function()
 	}
 
 	this.busy = function() {
-		if (!this._xmlHttp)
-			return false;
-
-		switch (this._xmlHttp.readyState)
-		{
-			case 1:
-			case 2:
-			case 3:
-				return true;
-
-			default:
-				return false;
-		}
+		return this._active === true;
 	}
 
 	this.abort = function() {
-		if (this.busy())
-			this._xmlHttp.abort();
+		this.cancel();
+	}
+
+	this._listen = function(url, callback, parseJSON, timeout) {
+		var self = this, xhr = this._xmlHttp, finished = false;
+		self._active = true;
+		xhr.timeout = timeout;
+		function finish(error, json) {
+			if (finished) return;
+			finished = true;
+			self._active = false;
+			XHR.setError(url, error);
+			if (typeof callback === 'function') {
+				try { callback(xhr, json, error); }
+				catch (e) {
+					if (!error) XHR.setError(url, '页面数据处理失败，请刷新重试。');
+					if (window.console) console.error(e);
+				}
+			}
+		}
+		xhr.onload = function() {
+			var json = null;
+			var type = (xhr.getResponseHeader('Content-Type') || '').split(';')[0].trim().toLowerCase();
+			if (parseJSON && (type === 'application/json' || /\+json$/.test(type))) {
+				try { json = JSON.parse(xhr.responseText); }
+				catch (e) { finish('返回的数据无法解析，请稍后重试。', null); return; }
+			}
+			finish(null, json);
+		};
+		xhr.onerror = function() { finish('连接失败，请检查网络后重试。', null); };
+		xhr.ontimeout = function() { finish('数据请求超时，请稍后重试。', null); };
+		xhr.onabort = function() { finish('数据请求已中断。', null); };
+		return function(data) {
+			try { xhr.send(data); }
+			catch (e) { finish('数据请求未能发送，请稍后重试。', null); }
+		};
 	}
 
 	this.get = function(url,data,callback)
@@ -84747,31 +85562,10 @@ XHR = function()
 		url = location.protocol + '//' + location.host + url;
 
 		if (code)
-			if (url.substr(url.length-1,1) == '&')
-				url += code;
-			else
-				url += '?' + code;
+			url += (/[?&]$/.test(url) ? '' : (url.indexOf('?') < 0 ? '?' : '&')) + code;
 
 		xhr.open('GET', url, true);
-
-		xhr.onreadystatechange = function()
-		{
-			if (xhr.readyState == 4) {
-				var json = null;
-				if (xhr.getResponseHeader("Content-Type") == "application/json") {
-					try {
-						json = eval('(' + xhr.responseText + ')');
-					}
-					catch(e) {
-						json = null;
-					}
-				}
-
-				callback(xhr, json);
-			}
-		}
-
-		xhr.send(null);
+		this._listen(url.replace(/[?&]_=[^&]*/, ''), callback, true, 20000)(null);
 	}
 
 	this.post = function(url,data,callback)
@@ -84781,22 +85575,17 @@ XHR = function()
 		var xhr  = this._xmlHttp;
 		var code = this._encode(data);
 
-		xhr.onreadystatechange = function()
-		{
-			if (xhr.readyState == 4)
-				callback(xhr);
-		}
-
 		xhr.open('POST', url, true);
 		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-		xhr.setRequestHeader('Content-length', code.length);
-		xhr.setRequestHeader('Connection', 'close');
-		xhr.send(code);
+		this._listen(url, callback, false, 120000)(code);
 	}
 
 	this.cancel = function()
 	{
-		this._xmlHttp.onreadystatechange = function(){};
+		this._active = false;
+		if (!this._xmlHttp) return;
+		this._xmlHttp.onload = this._xmlHttp.onerror = this._xmlHttp.ontimeout = this._xmlHttp.onabort = null;
+		this._xmlHttp.onreadystatechange = null;
 		this._xmlHttp.abort();
 	}
 
@@ -84860,6 +85649,30 @@ XHR = function()
 		}
 
 		return obj;
+	}
+}
+
+XHR.setError = function(url, message)
+{
+	XHR._errors = XHR._errors || {};
+	if (message) XHR._errors[url] = message;
+	else delete XHR._errors[url];
+	var keys = Object.keys(XHR._errors);
+	var node = document.getElementById('nradio8080-request-error');
+	if (!node && keys.length) {
+		var parent = document.querySelector('#maincontent .container');
+		if (parent) {
+			node = document.createElement('div');
+			node.id = 'nradio8080-request-error';
+			node.className = 'alert-message warning';
+			node.setAttribute('role', 'status');
+			node.setAttribute('aria-live', 'polite');
+			parent.insertBefore(node, parent.firstChild);
+		}
+	}
+	if (node) {
+		node.textContent = keys.length ? XHR._errors[keys[0]] : '';
+		node.style.display = keys.length ? '' : 'none';
 	}
 }
 
@@ -84981,6 +85794,7 @@ EOF_ARGON_8080_XHR_JS
 	local mode = 'normal'
 	local private_webroot = NRADIO_8080_INSTANCE_ROOT and (NRADIO_8080_INSTANCE_ROOT .. "/www")
 		or (os.getenv("SCRIPT_FILENAME") or ""):match("^(.*)/cgi%-bin/luci$") or "/www"
+	local resource_version = (fs.readfile(private_webroot:gsub('/www$', '') .. '/resource.version') or ''):match('^[%w._-]+') or 'argon-20260928-1'
 	local dark_css = fs.readfile(private_webroot .. '/luci-static/argon/css/dark.css') or ""
 	local bar_color = '#5e72e4'
 	local primary, dark_primary, blur_radius, blur_radius_dark, blur_opacity
@@ -85048,6 +85862,11 @@ EOF_ARGON_8080_XHR_JS
             --blur-opacity-dark:<%=blur_opacity_dark%>;
         }
         <% end -%>
+        #mainmenu .nav > li > a[href$="/admin/status"]::before { content: "\e906"; color: var(--primary, #5e72e4); }
+        #mainmenu .nav > li > a[href$="/admin/system"]::before { content: "\e90a"; color: #fb6340; }
+        #mainmenu .nav > li > a[href$="/admin/services"]::before { content: "\e909"; color: #11cdef; }
+        #mainmenu .nav > li > a[href$="/admin/network"]::before { content: "\e908"; color: #8965e0; }
+        #mainmenu .nav > li > a[href$="/admin/logout"]::before { content: "\e907"; color: #adb5bd; }
     </style>
 	<link rel="shortcut icon" href="<%=media%>/favicon.ico">
 	<% if node and node.css then %>
@@ -85059,10 +85878,10 @@ EOF_ARGON_8080_XHR_JS
 	</style>
 	<% end -%>
 	<script src="<%=media%>/js/polyfill.min.js?v=2.2.9.4"></script>
-	<script src="<%=url('admin/translations', luci.i18n.context.lang)%>?v=<%=ver.luciversion%>"></script>
-	<script src="<%=resource%>/cbi.js?v=<%=ver.luciversion%>-argonfix"></script>
-	<script src="<%=resource%>/luci.js?v=<%=ver.luciversion%>-argonfix"></script>
-	<script src="<%=resource%>/xhr.js?v=<%=ver.luciversion%>-argonfix"></script>
+	<script src="<%=url('admin/translations', luci.i18n.context.lang)%>?v=<%=resource_version%>"></script>
+	<script src="<%=resource%>/cbi.js?v=<%=resource_version%>"></script>
+	<script src="<%=resource%>/luci.js?v=<%=resource_version%>"></script>
+	<script src="<%=resource%>/xhr.js?v=<%=resource_version%>"></script>
 	<script src="<%=media%>/js/jquery.min.js?v=3.5.1"></script>
 </head>
 
@@ -85102,6 +85921,9 @@ EOF_ARGON_8080_XHR_JS
 			<div class="darkMask"></div>
 			<div id="maincontent">
 				<div class="container">
+					<% if NRADIO_8080_INSTANCE_ROOT and fs.access(NRADIO_8080_INSTANCE_ROOT .. '/plugins.sync-error') then %>
+					<div class="alert-message warning" role="status">插件菜单同步失败，稍后会自动重试。恢复后刷新页面即可更新入口。</div>
+					<% end %>
 					<%- if luci.sys.process.info("uid") == 0 and luci.sys.user.getuser("root") and not luci.sys.user.getpasswd("root") then -%>
 					<div class="alert-message error">
 						<h4><%:No password set!%></h4>
@@ -85128,7 +85950,23 @@ EOF_ARGON_8080_HEADER_HTM
 	Argon theme footer - clean version with L init
 -%>
 
-<% local ver = require "luci.version" %>
+<%
+local ver = require "luci.version"
+local disp = require "luci.dispatcher"
+local context = disp.context
+local instance = NRADIO_8080_INSTANCE_ROOT
+local env = {
+	scriptname = luci.http.getenv('SCRIPT_NAME') or '/cgi-bin/luci',
+	requestpath = context.requestpath or context.path or {},
+	dispatchpath = context.path or {},
+	sessionid = context.authsession,
+	token = context.authtoken,
+	ubuspath = disp.build_url('admin', 'ubus'),
+	documentroot = instance and (instance .. '/www') or '/www',
+	rpctimeout = 20,
+	nodespec = { satisfied = true, readonly = context.authuser ~= 'root' }
+}
+%>
 </div>
 <footer class="mobile-hide">
 	<div>
@@ -85141,32 +85979,20 @@ EOF_ARGON_8080_HEADER_HTM
 </div>
 </div>
 <script>
-	var luciLocation = <%= luci.http.write_json(luci.dispatcher.context.path) %>;
-	if (typeof window.L === 'undefined' && typeof window.LuCI === 'function') {
-		var _origError = window.LuCI.prototype.error;
-		window.LuCI.prototype.error = function(type, fmt) {
-			var msg = (fmt && String(fmt)) || (type && type.message) || String(type || '');
-			if (msg.indexOf('No related RPC reply') !== -1 || msg.indexOf('RPC') !== -1)
-				return;
-			return _origError.apply(this, arguments);
-		};
-		try {
-			var luciPath = luciLocation.slice(0);
-			window.L = new LuCI({scriptname:'/cgi-bin/luci', requestpath: luciPath, dispatchpath: luciPath});
-		} catch(e) {}
-	}
-	if (window.L && window.LuCI) {
-		var _origError = window.LuCI.prototype.error;
-		window.LuCI.prototype.error = function(type, fmt) {
-			var msg = (fmt && String(fmt)) || (type && type.message) || String(type || '');
-			if (msg.indexOf('No related RPC reply') !== -1 || msg.indexOf('RPC') !== -1)
-				return;
-			return _origError.apply(this, arguments);
-		};
-	}
-	window.TR={"663359c9":"状态","48e137c0":"系统日志","4f261233":"内核日志","919b0d7c":"路由表","adbaae97":"总览","8e770194":"进程","3b61f469":"实时图表","34f9da4c":"防火墙","93a3f9dd":"流量","d55cef16":"无线网络","14d9d010":"连接","ee1cb0cb":"负载","e54695b9":"网络","d6cdbe5e":"网络接口","9ff4dd9e":"DHCP 与 DNS","a0c974c7":"诊断","a4045d6b":"主机名","6c218dd2":"静态路由","246f4de5":"服务","5675672c":"系统","5f721cb8":"启动项","8e8dba2a":"软件包","c755ff17":"重启","a958389f":"安全","7ee2e566":"计划任务","e4b34079":"备份 / 升级","a58e56be":"配置","420558ef":"注销","bc925621":"AC 服务","afd81cd4":"管理","03e953fd":"插件","7ec58e04":"全部插件入口","7ead2d19":"OpenClash","612c0d89":"OpenVPN","63e7ceb2":"AdGuardHome","a27fff15":"第二系统"};
+	(function() {
+		var language = <%=luci.http.write_json(luci.i18n.context.lang)%>;
+		var fallbackTranslations = {"663359c9":"状态","48e137c0":"系统日志","4f261233":"内核日志","919b0d7c":"路由表","adbaae97":"总览","8e770194":"进程","3b61f469":"实时图表","34f9da4c":"防火墙","93a3f9dd":"流量","d55cef16":"无线网络","14d9d010":"连接","ee1cb0cb":"负载","e54695b9":"网络","d6cdbe5e":"网络接口","9ff4dd9e":"DHCP 与 DNS","a0c974c7":"诊断","a4045d6b":"主机名","6c218dd2":"静态路由","246f4de5":"服务","5675672c":"系统","5f721cb8":"启动项","8e8dba2a":"软件包","c755ff17":"重启","a958389f":"安全","7ee2e566":"计划任务","e4b34079":"备份 / 升级","a58e56be":"配置","420558ef":"注销","bc925621":"AC 服务","afd81cd4":"管理","03e953fd":"插件","7ec58e04":"全部插件入口","7ead2d19":"OpenClash","612c0d89":"OpenVPN","63e7ceb2":"AdGuardHome","a27fff15":"第二系统"};
+		if (/^zh(?:[-_]|$)/i.test(language || '')) {
+			window.TR = window.TR || {};
+			Object.keys(fallbackTranslations).forEach(function(key) {
+				if (!Object.prototype.hasOwnProperty.call(window.TR, key))
+					window.TR[key] = fallbackTranslations[key];
+			});
+		}
+		if (!window.L) window.L = new LuCI(<%=luci.http.write_json(env)%>);
+		L.require('menu-argon').catch(function(error) { L.error(error); });
+	})();
 </script>
-<script type="text/javascript">L.require('menu-argon')</script>
 </body>
 </html>
 EOF_ARGON_8080_FOOTER_HTM
@@ -86020,13 +86846,13 @@ nradio_hwaccel_set() {
 
 manage_nradio_hardware_acceleration() {
     local menu_path='5 > 11' result=PASS action
-    print_menu_header "$menu_path / 硬件加速管理"
+    print_menu_header "$menu_path > 硬件加速管理"
     nradio_hwaccel_show_status
     printf '\n'
     print_menu_item 1 '开启硬件加速'
-    print_menu_item 2 '关闭硬件加速（保留软件加速）'
+    print_menu_item 2 '关闭硬件加速' '保留软件加速'
     print_menu_item 3 '查看当前状态'
-    print_menu_item 0 '返回设备维护'
+    print_menu_item 0 '返回上级'
     print_menu_prompt '0-3'
     read_category_choice
     action="$UI_READ_RESULT"
@@ -86260,9 +87086,9 @@ common_plugin_menu() {
     while :; do
         submenu_feature=''
         if is_current_model_c8_788; then
-            print_menu_header '1 / 常用插件 · C8-788'
+            print_menu_header '主菜单 > 常用插件 · C8-788'
             print_menu_item 1 '哈基米'
-            print_menu_item 0 '返回功能分类'
+            print_menu_item 0 '返回上级'
             print_menu_prompt '0-1'
             read_category_choice
             case "$UI_READ_RESULT" in
@@ -86273,18 +87099,18 @@ common_plugin_menu() {
             run_menu_feature "$submenu_feature"
             return 0
         fi
-        print_menu_header '1 / 常用插件'
-        print_menu_item 1 'swap 虚拟内存（C2000MAX / C2000Ultra）'
+        print_menu_header '主菜单 > 常用插件'
+        print_menu_item 1 'Swap 虚拟内存' 'C2000MAX / C2000Ultra'
         print_menu_item 2 '哈基米'
         print_menu_item 3 'ttyd / Web SSH'
         print_menu_item 4 'AdGuardHome'
         print_menu_item 5 'OpenList'
         print_menu_item 6 'MosDNS'
         print_menu_item 7 'DDNS-GO'
-        print_menu_item 8 'Docker（C5800 系列 / C8-688）'
+        print_menu_item 8 'Docker' 'C5800 系列 / C8-688 / C2000Ultra'
         print_menu_item 9 'MT5700 WebUI V3.0.0'
         print_menu_item 10 'Open-Box'
-        print_menu_item 0 '返回功能分类'
+        print_menu_item 0 '返回上级'
         print_menu_prompt '0-10'
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -86309,7 +87135,7 @@ common_plugin_menu() {
 network_route_menu() {
     while :; do
         submenu_feature=''
-        print_menu_header '2 / VPN 与组网'
+        print_menu_header '主菜单 > VPN 与组网'
         print_menu_item 1 'ZeroTier'
         print_menu_item 2 'EasyTier'
         print_menu_item 3 'OpenVPN'
@@ -86317,7 +87143,7 @@ network_route_menu() {
         print_menu_item 5 'OpenVPN 路由表向导'
         print_menu_item 6 'EasyTier 路由表向导'
         print_menu_item 7 'OpenVPN 自检'
-        print_menu_item 0 '返回功能分类'
+        print_menu_item 0 '返回上级'
         print_menu_prompt '0-7'
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -86338,10 +87164,10 @@ network_route_menu() {
 
 lightweight_appcenter_menu() {
     lightweight_appcenter_model_supported || die "轻量应用商店当前仅支持 C2000Pro / AK68-798"
-    print_menu_header '4 / 轻量应用商店'
+    print_menu_header '应用商店与页面 > 轻量应用商店'
     print_menu_item 1 '创建 / 更新轻量应用商店'
-    print_menu_item 2 '移除轻量应用商店（保留插件记录）'
-    print_menu_item 0 '返回应用商店菜单'
+    print_menu_item 2 '移除轻量应用商店' '保留插件记录'
+    print_menu_item 0 '返回上级'
     print_menu_prompt '0-2'
     read_category_choice
     case "$UI_READ_RESULT" in
@@ -86353,22 +87179,27 @@ lightweight_appcenter_menu() {
 }
 
 appcenter_polish_menu() {
+    local appcenter_choice_prompt
     while :; do
         submenu_feature=''
-        print_menu_header '4 / 应用商店与页面'
+        appcenter_choice_prompt='0'
+        print_menu_header '主菜单 > 应用商店与页面'
         if ! lightweight_appcenter_model_supported; then
             print_menu_item 1 '美化应用商店'
             print_menu_item 2 '还原应用商店'
+            appcenter_choice_prompt="$appcenter_choice_prompt / 1-2"
         fi
         if openwrt_luci_8080_model_supported; then
             print_menu_item 3 'OpenWrt 原版 LuCI（8080）'
-            print_menu_item 4 'argon 主题（8080）'
+            print_menu_item 4 'Argon 主题（8080）'
+            appcenter_choice_prompt="$appcenter_choice_prompt / 3-4"
         fi
         if lightweight_appcenter_model_supported; then
             print_menu_item 5 '轻量应用商店'
+            appcenter_choice_prompt="$appcenter_choice_prompt / 5"
         fi
-        print_menu_item 0 '返回功能分类'
-        print_menu_prompt '上方编号，0 返回'
+        print_menu_item 0 '返回上级'
+        print_menu_prompt "$appcenter_choice_prompt"
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 0 ;;
@@ -86448,26 +87279,74 @@ game_accel_set_appcenter_entry() {
 
 docker_require_supported_model() {
     case "${CURRENT_DETECTED_MODEL:-}" in
-        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688)
+        NRadio_C5800-650|NRadio_C5800-688|NRadio_C8-688|NRadio_C2000Ultra)
             return 0
             ;;
     esac
-    die "Docker 仅支持 NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C8-688，当前机型：${CURRENT_DETECTED_MODEL:-unknown}"
+    die "Docker 仅支持 NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C8-688 / NRadio_C2000Ultra，当前机型：${CURRENT_DETECTED_MODEL:-unknown}"
 }
 
 docker_prepare_storage() {
-    storage_expand_require_active
+    local docker_storage_mount docker_storage_apps_dir docker_storage_label
+    local docker_mount_fstype docker_mount_options docker_expected_root docker_existing_root
+    local docker_link_root docker_link_target docker_manifest_root docker_uci_root docker_daemon_root
 
-    docker_avail_kib="$(get_mount_available_kib "$ROOTFS_2ND_STORAGE_MOUNT_POINT" 2>/dev/null || true)"
+    if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000Ultra' ]; then
+        docker_storage_mount="$(detect_c2000max_storage_mount 2>/dev/null || true)"
+        [ -n "$docker_storage_mount" ] || die "Docker 安装需要已挂载的 SD 存储卡"
+        docker_mount_fstype="$(awk -v m="$docker_storage_mount" '$2 == m { print $3; exit }' /proc/mounts 2>/dev/null || true)"
+        docker_mount_options="$(awk -v m="$docker_storage_mount" '$2 == m { print $4; exit }' /proc/mounts 2>/dev/null || true)"
+        case "$docker_mount_fstype" in
+            ext2|ext3|ext4|f2fs|btrfs|xfs) ;;
+            *) die "Docker 存储卡文件系统不支持：${docker_mount_fstype:-unknown}，需要支持 Unix 权限和链接的文件系统" ;;
+        esac
+        case ",$docker_mount_options," in
+            *,noexec,*) die "Docker 存储卡以 noexec 挂载，无法运行卡上的程序：$docker_storage_mount" ;;
+        esac
+        docker_storage_apps_dir="$docker_storage_mount/nradio-apps"
+        docker_storage_label='SD 存储卡'
+        docker_expected_root="$docker_storage_apps_dir/docker"
+
+        docker_link_root=''
+        if [ -L /usr/bin/docker ]; then
+            docker_link_target="$(readlink -f /usr/bin/docker 2>/dev/null || readlink /usr/bin/docker 2>/dev/null || true)"
+            case "$docker_link_target" in
+                */nradio-apps/docker/opt/usr/bin/docker)
+                    docker_link_root="${docker_link_target%/opt/usr/bin/docker}"
+                    ;;
+            esac
+        fi
+        docker_manifest_root=''
+        if [ -s "$DOCKER_PAYLOAD_MANIFEST" ]; then
+            docker_manifest_root="$(awk -F'|' '$1 == "root" { print $2; exit }' "$DOCKER_PAYLOAD_MANIFEST" 2>/dev/null || true)"
+        fi
+        for docker_existing_root in "$docker_link_root" "$docker_manifest_root"; do
+            [ -z "$docker_existing_root" ] || [ "$docker_existing_root" = "$docker_expected_root" ] ||
+                die "Docker 原目录为 $docker_existing_root，当前存储卡路径为 $docker_expected_root；请先挂载原存储卡"
+        done
+        docker_uci_root="$(uci -q get dockerd.globals.data_root 2>/dev/null || true)"
+        docker_daemon_root="$(sed -n 's/.*"data-root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /etc/docker/daemon.json 2>/dev/null | sed -n '1p' || true)"
+        for docker_existing_root in "$docker_uci_root" "$docker_daemon_root"; do
+            [ -z "$docker_existing_root" ] || [ "$docker_existing_root" = "$docker_expected_root/data" ] ||
+                die "Docker 已配置的数据目录为 $docker_existing_root，当前存储卡路径为 $docker_expected_root/data；请先核对原存储卡"
+        done
+    else
+        storage_expand_require_active
+        docker_storage_mount="$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+        docker_storage_apps_dir="$ROOTFS_2ND_STORAGE_APPS_DIR"
+        docker_storage_label='扩展盘'
+    fi
+
+    docker_avail_kib="$(get_mount_available_kib "$docker_storage_mount" 2>/dev/null || true)"
     case "$docker_avail_kib" in
         ''|*[!0-9]*)
-            die "Docker 扩展盘空间读取失败：$ROOTFS_2ND_STORAGE_MOUNT_POINT"
+            die "Docker 存储盘空间读取失败：$docker_storage_mount"
             ;;
     esac
     docker_avail_mib=$((docker_avail_kib / 1024))
-    [ "$docker_avail_mib" -ge "$DOCKER_MIN_FREE_MIB" ] 2>/dev/null || die "Docker 扩展盘可用空间不足：需要 ${DOCKER_MIN_FREE_MIB}M，当前 ${docker_avail_mib}M"
+    [ "$docker_avail_mib" -ge "$DOCKER_MIN_FREE_MIB" ] 2>/dev/null || die "Docker 存储盘可用空间不足：需要 ${DOCKER_MIN_FREE_MIB}M，当前 ${docker_avail_mib}M"
 
-    DOCKER_ROOT="$ROOTFS_2ND_STORAGE_APPS_DIR/docker"
+    DOCKER_ROOT="$docker_storage_apps_dir/docker"
     DOCKER_DATA_ROOT="$DOCKER_ROOT/data"
     DOCKER_PACKAGE_DIR="$DOCKER_ROOT/packages"
     DOCKER_OPKG_CACHE="$DOCKER_ROOT/opkg-cache"
@@ -86475,15 +87354,42 @@ docker_prepare_storage() {
     DOCKER_LOG_DIR="$DOCKER_ROOT/log"
     DOCKER_OPT_DIR="$DOCKER_ROOT/opt"
     WORKDIR="$DOCKER_ROOT/work.$$"
-    mkdir -p "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR" || die "创建 Docker 扩展盘目录失败"
+    log "$docker_storage_label: $docker_storage_mount，可用 ${docker_avail_mib}M"
+    log "Docker: $DOCKER_ROOT"
+}
+
+docker_create_storage_dirs() {
+    local docker_storage_mount docker_storage_apps_dir docker_path docker_mount_real docker_root_real docker_real_path
+    docker_storage_mount="${DOCKER_ROOT%/nradio-apps/docker}"
+    docker_storage_apps_dir="$docker_storage_mount/nradio-apps"
+
+    if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000Ultra' ]; then
+        awk -v m="$docker_storage_mount" '$1 ~ /^\/dev\/mmcblk[0-9]+p[0-9]+$/ && $2 == m { found=1 } END { exit !found }' /proc/mounts 2>/dev/null ||
+            die "Docker 安装需要 SD 存储卡保持挂载：$docker_storage_mount"
+        for docker_path in "$docker_storage_apps_dir" "$DOCKER_ROOT" "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR"; do
+            [ ! -L "$docker_path" ] || die "Docker 存储路径不能是软链接：$docker_path"
+        done
+    fi
+    mkdir -p "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR" || die "创建 Docker 存储盘目录失败"
+
+    if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000Ultra' ]; then
+        docker_mount_real="$(readlink -f "$docker_storage_mount" 2>/dev/null || true)"
+        docker_root_real="$(readlink -f "$DOCKER_ROOT" 2>/dev/null || true)"
+        [ -n "$docker_mount_real" ] && [ "$docker_root_real" = "$docker_mount_real/nradio-apps/docker" ] || die "Docker 存储目录未落在 SD 存储卡上"
+        for docker_path in "$DOCKER_DATA_ROOT" "$DOCKER_PACKAGE_DIR" "$DOCKER_OPKG_CACHE" "$DOCKER_TMP_DIR" "$DOCKER_LOG_DIR" "$DOCKER_OPT_DIR" "$WORKDIR"; do
+            docker_real_path="$(readlink -f "$docker_path" 2>/dev/null || true)"
+            [ "$docker_real_path" = "$docker_root_real/${docker_path##*/}" ] || die "Docker 子目录未落在 SD 存储卡上：$docker_path"
+        done
+    fi
     ensure_dir_writable "$DOCKER_ROOT" "$DOCKER_ROOT"
     ensure_dir_writable "$DOCKER_PACKAGE_DIR" "$DOCKER_PACKAGE_DIR"
     ensure_dir_writable "$DOCKER_TMP_DIR" "$DOCKER_TMP_DIR"
     ensure_dir_writable "$DOCKER_DATA_ROOT" "$DOCKER_DATA_ROOT"
-    chmod 755 "$ROOTFS_2ND_STORAGE_MOUNT_POINT" "$ROOTFS_2ND_STORAGE_APPS_DIR" "$DOCKER_ROOT" "$DOCKER_DATA_ROOT" 2>/dev/null || true
-
-    log "扩展盘: $ROOTFS_2ND_STORAGE_MOUNT_POINT，可用 ${docker_avail_mib}M"
-    log "Docker: $DOCKER_ROOT"
+    if [ "${CURRENT_DETECTED_MODEL:-}" = 'NRadio_C2000Ultra' ]; then
+        chmod 755 "$docker_storage_apps_dir" "$DOCKER_ROOT" "$DOCKER_DATA_ROOT" 2>/dev/null || true
+    else
+        chmod 755 "$docker_storage_mount" "$docker_storage_apps_dir" "$DOCKER_ROOT" "$DOCKER_DATA_ROOT" 2>/dev/null || true
+    fi
 }
 
 docker_resolve_feed_index_file() {
@@ -87081,7 +87987,7 @@ docker_install_packages_to_expand_disk() {
     docker_install_payload_tree_to_system
 
     [ -x /etc/init.d/cgroupfs-mount ] && /etc/init.d/cgroupfs-mount start >/dev/null 2>&1 || true
-    log "安装:   Docker 包内容已解到扩展盘，必要入口和依赖写入系统盘"
+    log "安装:   Docker 包内容已解到存储盘，必要入口和依赖写入系统盘"
 }
 
 docker_configure_storage() {
@@ -87149,6 +88055,7 @@ write_docker_luci_controller() {
 module("luci.controller.nradio_adv.docker", package.seeall)
 
 local fs = require "nixio.fs"
+local nixio = require "nixio"
 
 local function trim(s)
     return (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -87165,6 +88072,28 @@ local function command_output(cmd)
     local data = fp:read("*a") or ""
     fp:close()
     return trim(data)
+end
+
+local function command_result(cmd)
+    local fp = io.popen(cmd .. " 2>&1")
+    if not fp then return "", false end
+    local data = fp:read("*a") or ""
+    local a, b, c = fp:close()
+    return trim(data), a == true or a == 0 or (b == "exit" and c == 0)
+end
+
+local function first_lines(data, limit)
+    local lines = {}
+    for line in tostring(data or ""):gmatch("[^\r\n]+") do
+        if #lines >= limit then break end
+        lines[#lines + 1] = line
+    end
+    return table.concat(lines, "\n")
+end
+
+local function query_error(output, running, label)
+    if not running then return "Docker daemon 已停止" end
+    return output ~= "" and first_lines(output, 3) or (label .. "读取失败")
 end
 
 local function exec_ok(cmd)
@@ -87194,7 +88123,9 @@ local function docker_data_root()
     if root ~= "" then return root end
     local daemon_root = command_output("sed -n 's/.*\"data-root\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' /etc/docker/daemon.json | sed -n '1p'")
     if daemon_root ~= "" then return daemon_root end
-    return "/mnt/rootfs_2nd_data/nradio-apps/docker/data"
+    local linked_root = command_output("readlink -f /usr/bin/docker"):match("^(.-)/opt/usr/bin/docker$")
+    if linked_root and linked_root:match("/nradio%-apps/docker$") then return linked_root .. "/data" end
+    return ""
 end
 
 local function service_running()
@@ -87202,10 +88133,19 @@ local function service_running()
     return exec_ok("pidof dockerd")
 end
 
+local function wait_for_service(expected)
+    for _ = 1, 4 do
+        local running = service_running()
+        if running == expected then return running end
+        os.execute("sleep 1 >/dev/null 2>&1")
+    end
+    return service_running()
+end
+
 local function action_log_path()
     local root = docker_data_root()
     local base = root:gsub("/data$", "")
-    if base == root then base = "/mnt/rootfs_2nd_data/nradio-apps/docker" end
+    if base == root or base == "" then return "/tmp/nradio-docker-ui-action.log" end
     os.execute("mkdir -p " .. shell_quote(base .. "/log") .. " >/dev/null 2>&1")
     return base .. "/log/ui-action.log"
 end
@@ -87217,13 +88157,17 @@ end
 
 local function completed_action(cmd, success_msg)
     local log_path = action_log_path()
-    local a, b, c = os.execute("(" .. cmd .. ") > " .. shell_quote(log_path) .. " 2>&1")
+    local request_log = log_path .. "." .. tostring(nixio.getpid()) .. "." .. tostring(os.time())
+    local a, b, c = os.execute("(" .. cmd .. ") > " .. shell_quote(request_log) .. " 2>&1")
     local ok = a == true or a == 0 or (b == "exit" and c == 0)
+    local error_text = ok and nil or command_output("tail -n 40 " .. shell_quote(request_log))
+    os.execute("cp " .. shell_quote(request_log) .. " " .. shell_quote(log_path) .. " >/dev/null 2>&1")
+    os.remove(request_log)
     return {
         ok = ok,
         completed = true,
         msg = ok and success_msg or "operation failed",
-        error = ok and nil or command_output("tail -n 40 " .. shell_quote(log_path)),
+        error = error_text,
         log = log_path
     }
 end
@@ -87258,19 +88202,30 @@ end
 function action_status()
     local root = docker_data_root()
     local root_q = shell_quote(root)
+    local running = service_running()
+    local containers, containers_ok = command_result("docker ps -a --size --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.Size}}'")
+    local images, images_ok = command_result("docker images --format '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}'")
+    local networks, networks_ok = command_result("docker network ls --format '{{.ID}}\t{{.Name}}\t{{.Driver}}\t{{.Scope}}'")
+    local volumes, volumes_ok = command_result("docker volume ls --format '{{.Name}}\t{{.Driver}}\t{{.Mountpoint}}'")
+    local stats, stats_ok = command_result("docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}'")
     write_json({
         ok = true,
-        running = service_running(),
+        running = running,
         docker = command_output("docker --version"),
         dockerd = command_output("dockerd --version"),
         data_root = root,
         data_root_exists = fs.access(root) and true or false,
         storage = command_output("df -hP " .. root_q .. " | awk 'NR==2{print $2\" total / \"$4\" free / \"$5\" used\"}'"),
-        containers = command_output("docker ps -a --size --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.Size}}' | sed -n '1,80p'"),
-        images = command_output("docker images --format '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}' | sed -n '1,80p'"),
-        networks = command_output("docker network ls --format '{{.ID}}\t{{.Name}}\t{{.Driver}}\t{{.Scope}}' | sed -n '1,80p'"),
-        volumes = command_output("docker volume ls --format '{{.Name}}\t{{.Driver}}\t{{.Mountpoint}}' | sed -n '1,80p'"),
-        stats = command_output("docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' | sed -n '1,80p'"),
+        containers = containers_ok and first_lines(containers, 81) or "",
+        containers_error = containers_ok and nil or query_error(containers, running, "容器列表"),
+        images = images_ok and first_lines(images, 81) or "",
+        images_error = images_ok and nil or query_error(images, running, "镜像列表"),
+        networks = networks_ok and first_lines(networks, 81) or "",
+        networks_error = networks_ok and nil or query_error(networks, running, "网络列表"),
+        volumes = volumes_ok and first_lines(volumes, 81) or "",
+        volumes_error = volumes_ok and nil or query_error(volumes, running, "卷列表"),
+        stats = stats_ok and first_lines(stats, 81) or "",
+        stats_error = stats_ok and nil or query_error(stats, running, "资源数据"),
         disk = command_output("docker system df"),
         logs = command_output("tail -n 80 " .. shell_quote(action_log_path())),
         info = command_output("docker info 2>/dev/null | sed -n '1,42p'")
@@ -87278,21 +88233,21 @@ function action_status()
 end
 
 function action_start()
-    local command_ok = exec_ok("/etc/init.d/dockerd start")
-    local running = service_running()
-    write_json({ ok = command_ok and running, completed = true, running = running, log = action_log_path() })
+    local output, command_ok = command_result("/etc/init.d/dockerd start")
+    local running = wait_for_service(true)
+    write_json({ ok = command_ok and running, completed = true, running = running, error = command_ok and (running and nil or "daemon 未进入运行状态") or (output ~= "" and output or "启动命令执行失败") })
 end
 
 function action_stop()
-    local command_ok = exec_ok("/etc/init.d/dockerd stop")
-    local running = service_running()
-    write_json({ ok = command_ok and not running, completed = true, running = running, log = action_log_path() })
+    local output, command_ok = command_result("/etc/init.d/dockerd stop")
+    local running = wait_for_service(false)
+    write_json({ ok = command_ok and not running, completed = true, running = running, error = command_ok and (running and "daemon 仍在运行" or nil) or (output ~= "" and output or "停止命令执行失败") })
 end
 
 function action_restart()
-    local command_ok = exec_ok("/etc/init.d/dockerd restart")
-    local running = service_running()
-    write_json({ ok = command_ok and running, completed = true, running = running, log = action_log_path() })
+    local output, command_ok = command_result("/etc/init.d/dockerd restart")
+    local running = wait_for_service(true)
+    write_json({ ok = command_ok and running, completed = true, running = running, error = command_ok and (running and nil or "daemon 未进入运行状态") or (output ~= "" and output or "重启命令执行失败") })
 end
 
 function action_pull()
@@ -87346,13 +88301,15 @@ end
 function action_logs()
     local id = request_value("id")
     if id == "" then write_json({ ok = false, error = "container id required" }); return end
-    write_json({ ok = true, logs = command_output("docker logs --tail 120 " .. shell_quote(id) .. " 2>&1") })
+    local logs, ok = command_result("docker logs --tail 120 " .. shell_quote(id))
+    write_json({ ok = ok, logs = ok and logs or "", error = ok and nil or logs })
 end
 
 function action_inspect()
     local id = request_value("id")
     if id == "" then write_json({ ok = false, error = "id required" }); return end
-    write_json({ ok = true, inspect = command_output("docker inspect " .. shell_quote(id) .. " 2>&1 | sed -n '1,220p'") })
+    local inspect, ok = command_result("docker inspect " .. shell_quote(id))
+    write_json({ ok = ok, inspect = ok and first_lines(inspect, 220) or "", error = ok and nil or inspect })
 end
 
 function action_image()
@@ -87374,7 +88331,8 @@ function action_prune()
     elseif target == "networks" then cmd = "docker network prune -f"
     elseif target == "volumes" then cmd = "docker volume prune -f"
     elseif target == "system_volumes" then cmd = "docker system prune -af --volumes"
-    else cmd = "docker system prune -af" end
+    elseif target == "system" then cmd = "docker system prune -af"
+    else write_json({ ok = false, error = "unsupported prune target" }); return end
     write_json(completed_action(cmd, "prune completed"))
 end
 
@@ -87417,28 +88375,64 @@ write_docker_luci_view() {
     cat > "$DOCKER_VIEW" <<'EOF_DOCKER_VIEW'
 <%+header%>
 <style>
-html,body{width:100%!important;max-width:none!important;margin:0!important;background:#0d1117!important;overflow-x:hidden}.container.body-container:not(.visible-xs-block),.main,.main-content,#maincontent{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important}.docker-shell{--panel:#0f172a;--panel2:#111c2f;--panel3:#0b1220;--line:rgba(148,163,184,.24);--text:#eef2ff;--muted:#9fb0c9;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--accent:#22d3ee;--accent2:#38bdf8;width:100%;max-width:none;min-height:100vh;margin:0;padding:24px 30px 36px;color:var(--text);font-family:Inter,Arial,"Microsoft YaHei",sans-serif;box-sizing:border-box}.docker-shell *{box-sizing:border-box}.docker-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#0b1424 0%,#10253a 54%,#0d3347 100%);border:1px solid rgba(34,211,238,.3);border-radius:8px;padding:20px 22px;box-shadow:0 18px 50px rgba(2,6,23,.28)}.docker-hero:after{content:"";position:absolute;left:20px;right:20px;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.8),rgba(34,197,94,.36),transparent)}.docker-titlebar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.docker-titlebar h2{margin:0 0 7px;font-size:28px;font-weight:900;letter-spacing:0;color:#38e7ff}.docker-titlebar p{margin:0;color:#bfd0e6;line-height:1.7}.docker-live{display:flex;align-items:center;gap:8px;min-width:132px;justify-content:flex-end;color:#dbeafe;font-weight:900}.docker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:16px}.docker-card{background:rgba(15,23,42,.75);border:1px solid var(--line);border-radius:8px;padding:13px;min-height:84px}.docker-card b{display:block;font-size:12px;color:#b8c6dd;font-weight:800;margin-bottom:8px}.docker-card span{font-size:14px;line-height:1.5;word-break:break-word}.docker-dot{display:inline-block;width:9px;height:9px;border-radius:999px;background:var(--bad);vertical-align:middle}.docker-dot.ok{background:var(--ok);box-shadow:0 0 0 4px rgba(34,197,94,.14)}.docker-toolbar,.docker-row-actions,.docker-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.docker-toolbar{margin:14px 0 12px}.docker-tabs{margin:0 0 14px;border-bottom:1px solid rgba(148,163,184,.18);padding-bottom:10px}.docker-btn,.docker-tab{min-height:36px;border:1px solid rgba(34,211,238,.35);background:#0d2638;color:#e0f7ff;border-radius:7px;padding:8px 12px;font-weight:800;cursor:pointer}.docker-tab{background:rgba(15,23,42,.74);color:#bdd7ee}.docker-tab.active{background:rgba(14,116,144,.34);border-color:rgba(34,211,238,.68);color:#e0f7ff}.docker-btn:hover,.docker-tab:hover{border-color:rgba(34,211,238,.68);background:#12354e}.docker-btn.danger{border-color:rgba(248,113,113,.44);background:rgba(127,29,29,.42);color:#fee2e2}.docker-btn.warn{border-color:rgba(245,158,11,.48);background:rgba(120,53,15,.38);color:#ffedd5}.docker-btn.good{border-color:rgba(34,197,94,.44);background:rgba(20,83,45,.38);color:#dcfce7}.docker-btn:disabled{opacity:.55;cursor:wait}.docker-select,.docker-input,.docker-textarea{width:100%;border:1px solid rgba(148,163,184,.28);background:#050b16;color:#eef2ff;border-radius:7px;padding:9px 10px;outline:0}.docker-select:focus,.docker-input:focus,.docker-textarea:focus{border-color:rgba(34,211,238,.68);box-shadow:0 0 0 3px rgba(34,211,238,.12)}.docker-toolbar .docker-select{width:auto;min-width:170px}.docker-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.docker-section{display:none}.docker-section.active{display:block}.docker-panel{background:#0b1220;border:1px solid var(--line);border-radius:8px;margin-top:12px;overflow:hidden}.docker-panel h3{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;padding:11px 13px;border-bottom:1px solid var(--line);font-size:14px;background:rgba(30,41,59,.78)}.docker-panel h3 small{color:var(--muted);font-weight:600}.docker-panel-body{padding:12px}.docker-split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:14px}.docker-form{display:grid;gap:10px}.docker-form label{display:grid;gap:5px;color:#b8c6dd;font-size:12px;font-weight:800}.docker-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.docker-check input{width:16px;height:16px}.docker-textarea{min-height:78px;resize:vertical;font:12px/1.5 Consolas,Monaco,"Courier New",monospace}.docker-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.docker-pre{margin:0;padding:12px;min-height:48px;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#dbeafe;font:12px/1.55 Consolas,Monaco,"Courier New",monospace;background:#070b12}.docker-table-wrap{width:100%;overflow:auto}.docker-table{width:100%;border-collapse:collapse;font-size:12px;min-width:760px}.docker-table.compact{min-width:560px}.docker-table th,.docker-table td{border-bottom:1px solid rgba(148,163,184,.14);padding:9px 8px;text-align:left;vertical-align:top}.docker-table th{color:#b8c6dd;font-weight:900;background:rgba(15,23,42,.66);position:sticky;top:0}.docker-table td{color:#e5eefc;word-break:break-word}.docker-empty{padding:16px;color:var(--muted)}.docker-statusline{min-height:22px;color:#a7f3d0;font-size:12px;font-weight:800}.docker-statusline.bad{color:#fecaca}.docker-copy{font-family:Consolas,Monaco,"Courier New",monospace}.docker-muted{color:var(--muted)}@media(max-width:1180px){.docker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.docker-split{grid-template-columns:1fr}.docker-shell{padding:18px}}@media(max-width:640px){.docker-grid,.docker-form-grid{grid-template-columns:1fr}.docker-titlebar{display:block}.docker-live{justify-content:flex-start;margin-top:10px}.docker-toolbar .docker-btn,.docker-row-actions .docker-btn,.docker-tabs .docker-tab{flex:1 1 auto}.docker-toolbar .docker-select{width:100%}.docker-titlebar h2{font-size:23px}.docker-shell{padding:14px}.docker-table{min-width:680px}}
+.docker-shell{padding:16px 20px 28px;min-height:0}
+.docker-shell .docker-hero{padding:14px 18px;box-shadow:0 8px 24px rgba(2,6,23,.17)}
+.docker-shell .docker-titlebar h2{font-size:23px;margin-bottom:4px}
+.docker-shell .docker-titlebar p{font-size:13px;line-height:1.5}
+.docker-shell .docker-live{min-width:0}
+.docker-live small{display:block;margin-top:3px;color:var(--muted);font-size:11px;font-weight:500}
+.docker-shell .docker-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px}
+.docker-shell .docker-card{min-height:70px;padding:10px 12px}
+.docker-shell .docker-card b{margin-bottom:5px}
+.docker-shell .docker-card span{font-size:13px}
+.docker-shell .docker-toolbar{margin:10px 0 8px;gap:7px}
+.docker-shell .docker-tabs{position:sticky;top:0;z-index:5;background:#0d1117;padding:7px 0 9px;margin-bottom:9px}
+.docker-shell .docker-btn:focus-visible,.docker-shell .docker-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.docker-shell .docker-row-actions{gap:5px}
+.docker-shell .docker-row-actions .docker-btn{min-height:30px;padding:5px 8px}
+.docker-more{position:relative}
+.docker-more summary{list-style:none;cursor:pointer;color:#bdd7ee;border:1px solid var(--line);border-radius:7px;padding:6px 9px}
+.docker-more summary::-webkit-details-marker{display:none}
+.docker-more[open]{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.docker-more[open] summary{margin-right:3px}
+@media(max-width:900px){.docker-shell .docker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){
+  .docker-shell{padding:12px}
+  .docker-shell .docker-hero{padding:12px}
+  .docker-shell .docker-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .docker-shell .docker-card{min-height:64px;padding:9px}
+  .docker-shell .docker-card span{font-size:12px}
+  .docker-shell .docker-toolbar .docker-select{width:100%}
+  .docker-shell .docker-table,.docker-shell .docker-table.compact{min-width:0}
+  .docker-shell .docker-table thead{display:none}
+  .docker-shell .docker-table tbody,.docker-shell .docker-table tr,.docker-shell .docker-table td{display:block;width:100%}
+  .docker-shell .docker-table tr{border:1px solid var(--line);border-radius:8px;padding:7px;margin-bottom:9px;background:#101d2e}
+  .docker-shell .docker-table td{display:flex;justify-content:space-between;gap:12px;padding:6px 7px;border:0;word-break:break-word}
+  .docker-shell .docker-table td:before{content:attr(data-label);flex:0 0 64px;color:var(--muted);font-weight:700}
+  .docker-shell .docker-table td.docker-actions-cell{display:block}
+  .docker-shell .docker-table td.docker-actions-cell:before{display:block;margin-bottom:6px}
+}
 </style>
 <div class="docker-shell">
   <section class="docker-hero">
     <div class="docker-titlebar">
       <div>
         <h2>Docker</h2>
-        <p>容器、镜像、网络、卷、运行数据固定走 eMMC 扩展盘。常用 Docker 控制功能集中在此页面。</p>
+        <p>管理容器、镜像、网络和卷；运行数据保存在当前存储盘。</p>
       </div>
-      <div class="docker-live"><i id="docker-dot" class="docker-dot"></i><span id="docker-running">读取中</span></div>
+      <div class="docker-live"><i id="docker-dot" class="docker-dot"></i><div><span id="docker-running">读取中</span><small id="docker-last-sync">正在获取状态</small></div></div>
     </div>
     <div class="docker-grid">
       <div class="docker-card"><b>Docker CLI</b><span id="docker-cli">-</span></div>
       <div class="docker-card"><b>Docker daemon</b><span id="docker-daemon">-</span></div>
-      <div class="docker-card"><b>扩展盘空间</b><span id="docker-storage">-</span></div>
+      <div class="docker-card"><b>存储盘空间</b><span id="docker-storage">-</span></div>
       <div class="docker-card"><b>容器</b><span id="docker-container-count">0</span></div>
       <div class="docker-card"><b>镜像</b><span id="docker-image-count">0</span></div>
       <div class="docker-card"><b>数据目录</b><span id="docker-root-brief">-</span></div>
     </div>
   </section>
   <div class="docker-toolbar">
-    <button class="docker-btn" type="button" onclick="dockerRefresh()">刷新</button>
+     <button class="docker-btn" type="button" onclick="dockerRefresh(true)">刷新</button>
     <button class="docker-btn" type="button" onclick="dockerAction('start')">启动 daemon</button>
     <button class="docker-btn warn" type="button" onclick="dockerAction('restart')">重启 daemon</button>
     <button class="docker-btn danger" type="button" onclick="dockerAction('stop')">停止 daemon</button>
@@ -87451,18 +88445,18 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
       <option value="system_volumes">清理系统含卷</option>
     </select>
     <button class="docker-btn warn" type="button" onclick="dockerPrune()">执行清理</button>
-    <span id="docker-action-state" class="docker-statusline"></span>
+     <span id="docker-action-state" class="docker-statusline" role="status" aria-live="polite"></span>
   </div>
-  <div class="docker-tabs">
-    <button class="docker-tab active" type="button" data-tab="overview">总览</button>
-    <button class="docker-tab" type="button" data-tab="containers">容器</button>
-    <button class="docker-tab" type="button" data-tab="images">镜像</button>
-    <button class="docker-tab" type="button" data-tab="networks">网络</button>
-    <button class="docker-tab" type="button" data-tab="volumes">卷</button>
-    <button class="docker-tab" type="button" data-tab="logs">日志</button>
+  <div class="docker-tabs" role="tablist" aria-label="Docker 页面">
+    <button class="docker-tab active" type="button" role="tab" aria-selected="true" aria-controls="docker-tab-overview" data-tab="overview">总览</button>
+    <button class="docker-tab" type="button" role="tab" aria-selected="false" aria-controls="docker-tab-containers" data-tab="containers">容器</button>
+    <button class="docker-tab" type="button" role="tab" aria-selected="false" aria-controls="docker-tab-images" data-tab="images">镜像</button>
+    <button class="docker-tab" type="button" role="tab" aria-selected="false" aria-controls="docker-tab-networks" data-tab="networks">网络</button>
+    <button class="docker-tab" type="button" role="tab" aria-selected="false" aria-controls="docker-tab-volumes" data-tab="volumes">卷</button>
+    <button class="docker-tab" type="button" role="tab" aria-selected="false" aria-controls="docker-tab-logs" data-tab="logs">日志</button>
   </div>
   <div class="docker-layout">
-    <section id="docker-tab-overview" class="docker-section active">
+    <section id="docker-tab-overview" class="docker-section active" role="tabpanel">
       <div class="docker-split">
         <div>
           <div class="docker-panel"><h3>资源占用</h3><div id="docker-stats" class="docker-panel-body docker-empty">读取中</div></div>
@@ -87481,7 +88475,7 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
               <label>端口映射<textarea id="run-ports" class="docker-textarea" placeholder="8080:80"></textarea></label>
               <label>环境变量<textarea id="run-envs" class="docker-textarea" placeholder="TZ=Asia/Shanghai"></textarea></label>
             </div>
-            <label>目录挂载<textarea id="run-volumes" class="docker-textarea" placeholder="/mnt/rootfs_2nd_data/nradio-apps/docker/volumes/nginx:/usr/share/nginx/html"></textarea></label>
+            <label>目录挂载<textarea id="run-volumes" class="docker-textarea" placeholder="宿主机目录:/容器目录"></textarea></label>
             <label>启动命令（容器内 /bin/sh -c）<input id="run-command" class="docker-input" placeholder="留空使用镜像默认命令；填写后覆盖 ENTRYPOINT"></label>
             <label class="docker-check"><input id="run-privileged" type="checkbox">特权模式</label>
             <button class="docker-btn good" type="button" onclick="dockerRun()">创建并运行</button>
@@ -87491,11 +88485,11 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
         </div>
       </div>
     </section>
-    <section id="docker-tab-containers" class="docker-section"><div class="docker-panel"><h3>容器 <small id="docker-container-count-table">0</small></h3><div id="docker-containers" class="docker-panel-body docker-empty">读取中</div></div></section>
-    <section id="docker-tab-images" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>镜像 <small id="docker-image-count-table">0</small></h3><div id="docker-images" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>拉取镜像</h3><div class="docker-panel-body"><div class="docker-form"><label>镜像名<input id="pull-image-2" class="docker-input" placeholder="alpine:latest"></label><button class="docker-btn" type="button" onclick="dockerPullAlt()">拉取镜像</button></div></div></div></div></section>
-    <section id="docker-tab-networks" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>网络</h3><div id="docker-networks" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建网络</h3><div class="docker-panel-body"><div class="docker-form"><label>网络名<input id="network-name" class="docker-input" placeholder="app_net"></label><label>驱动<select id="network-driver" class="docker-select"><option value="bridge">bridge</option><option value="macvlan">macvlan</option><option value="ipvlan">ipvlan</option></select></label><button class="docker-btn" type="button" onclick="dockerNetworkCreate()">创建网络</button></div></div></div></div></section>
-    <section id="docker-tab-volumes" class="docker-section"><div class="docker-split"><div class="docker-panel"><h3>卷</h3><div id="docker-volumes" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建卷</h3><div class="docker-panel-body"><div class="docker-form"><label>卷名<input id="volume-name" class="docker-input" placeholder="app_data"></label><button class="docker-btn" type="button" onclick="dockerVolumeCreate()">创建卷</button></div></div></div></div></section>
-    <section id="docker-tab-logs" class="docker-section"><div class="docker-panel"><h3>操作日志</h3><pre id="docker-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>容器日志</h3><pre id="docker-container-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>详情 / Inspect</h3><pre id="docker-detail" class="docker-pre">-</pre></div></section>
+    <section id="docker-tab-containers" class="docker-section" role="tabpanel"><div class="docker-panel"><h3>容器 <small id="docker-container-count-table">0</small></h3><div id="docker-containers" class="docker-panel-body docker-empty">读取中</div></div></section>
+    <section id="docker-tab-images" class="docker-section" role="tabpanel"><div class="docker-split"><div class="docker-panel"><h3>镜像 <small id="docker-image-count-table">0</small></h3><div id="docker-images" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>拉取镜像</h3><div class="docker-panel-body"><div class="docker-form"><label>镜像名<input id="pull-image-2" class="docker-input" placeholder="alpine:latest"></label><button class="docker-btn" type="button" onclick="dockerPullAlt()">拉取镜像</button></div></div></div></div></section>
+    <section id="docker-tab-networks" class="docker-section" role="tabpanel"><div class="docker-split"><div class="docker-panel"><h3>网络</h3><div id="docker-networks" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建网络</h3><div class="docker-panel-body"><div class="docker-form"><label>网络名<input id="network-name" class="docker-input" placeholder="app_net"></label><label>驱动<select id="network-driver" class="docker-select"><option value="bridge">bridge</option><option value="macvlan">macvlan</option><option value="ipvlan">ipvlan</option></select></label><button class="docker-btn" type="button" onclick="dockerNetworkCreate()">创建网络</button></div></div></div></div></section>
+    <section id="docker-tab-volumes" class="docker-section" role="tabpanel"><div class="docker-split"><div class="docker-panel"><h3>卷</h3><div id="docker-volumes" class="docker-panel-body docker-empty">读取中</div></div><div class="docker-panel"><h3>创建卷</h3><div class="docker-panel-body"><div class="docker-form"><label>卷名<input id="volume-name" class="docker-input" placeholder="app_data"></label><button class="docker-btn" type="button" onclick="dockerVolumeCreate()">创建卷</button></div></div></div></div></section>
+    <section id="docker-tab-logs" class="docker-section" role="tabpanel"><div class="docker-panel"><h3>操作日志</h3><pre id="docker-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>容器日志</h3><pre id="docker-container-logs" class="docker-pre">-</pre></div><div class="docker-panel"><h3>详情 / Inspect</h3><pre id="docker-detail" class="docker-pre">-</pre></div></section>
   </div>
 </div>
 <script>
@@ -87508,35 +88502,133 @@ html,body{width:100%!important;max-width:none!important;margin:0!important;backg
   function checked(id){var el=document.getElementById(id);return el&&el.checked?'1':'';}
   function state(msg,bad){var el=document.getElementById('docker-action-state');if(!el)return;el.textContent=msg||'';el.className='docker-statusline'+(bad?' bad':'');}
   function form(data){var out=[];for(var k in data){out.push(encodeURIComponent(k)+'='+encodeURIComponent(data[k]||''));}return out.join('&');}
-  function api(path,data,done){var payload=data||{};payload.token=token;payload._=Date.now();var x=new XMLHttpRequest(),url=base+'/'+path;x.open('POST',url,true);x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');x.setRequestHeader('X-Requested-With','XMLHttpRequest');x.onreadystatechange=function(){if(x.readyState===4){var json=null;try{json=JSON.parse(x.responseText||'{}');}catch(e){state('接口读取失败 HTTP '+x.status,true);done&&done(null);return;}done&&done(json);}};x.send(form(payload));}
+  function api(path,data,done){
+    var payload={},key,x=new XMLHttpRequest(),finished=false,url=base+'/'+path;
+    for(key in data||{})if(Object.prototype.hasOwnProperty.call(data,key))payload[key]=data[key];
+    payload.token=token;payload._=Date.now();
+    function finish(result){if(finished)return;finished=true;if(done)done(result);}
+    x.open('POST',url,true);
+    x.timeout=path==='status'?20000:(path==='pull'?300000:120000);
+    x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+    x.setRequestHeader('X-Requested-With','XMLHttpRequest');
+    x.onreadystatechange=function(){if(x.readyState!==4)return;if(x.status<200||x.status>=300){finish({ok:false,error:'HTTP '+x.status});return;}try{finish(JSON.parse(x.responseText||'{}'));}catch(e){finish({ok:false,error:'接口返回格式错误'});}};
+    x.onerror=function(){finish({ok:false,error:'网络连接失败'});};
+    x.ontimeout=function(){finish({ok:false,error:'请求超时，操作可能仍在进行'});};
+    try{x.send(form(payload));}catch(e){finish({ok:false,error:'请求发送失败'});}
+  }
   function splitLines(v){return String(v||'').split(/\r?\n/).filter(function(x){return x.trim();});}
-  function empty(id,msg){var box=document.getElementById(id);if(!box)return;box.className='docker-panel-body docker-empty';box.textContent=msg;}
-  function table(id,html){var box=document.getElementById(id);if(!box)return;box.className='docker-panel-body';box.innerHTML='<div class="docker-table-wrap">'+html+'</div>';}
-  function actionButtons(id,type){var safe=esc(id);if(type==='container')return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-cop="start">启动</button><button class="docker-btn warn" data-id="'+safe+'" data-cop="restart">重启</button><button class="docker-btn" data-id="'+safe+'" data-cop="stop">停止</button><button class="docker-btn" data-id="'+safe+'" data-cop="pause">暂停</button><button class="docker-btn" data-id="'+safe+'" data-cop="unpause">恢复</button><button class="docker-btn danger" data-id="'+safe+'" data-cop="kill">强杀</button><button class="docker-btn" data-id="'+safe+'" data-log="1">日志</button><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-cop="remove">删除</button></div>';if(type==='image')return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-iop="remove">删除</button></div>';if(type==='network')return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-nop="remove">删除</button></div>';return '<div class="docker-row-actions"><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-vop="remove">删除</button></div>';}
-  function renderContainers(v){var rows=splitLines(v),html='<table class="docker-table"><thead><tr><th>ID</th><th>名称</th><th>镜像</th><th>状态</th><th>端口</th><th>大小</th><th>操作</th></tr></thead><tbody>';text('docker-container-count',String(rows.length));text('docker-container-count-table',String(rows.length));if(!rows.length){empty('docker-containers','当前没有容器');return;}rows.forEach(function(line){var p=line.split('\t'),id=p[0]||'',name=p[1]||'',img=p[2]||'',st=p[3]||'',ports=p[4]||'',size=p[5]||'';html+='<tr><td class="docker-copy">'+esc(id)+'</td><td>'+esc(name)+'</td><td>'+esc(img)+'</td><td>'+esc(st)+'</td><td>'+esc(ports)+'</td><td>'+esc(size)+'</td><td>'+actionButtons(id,'container')+'</td></tr>';});html+='</tbody></table>';table('docker-containers',html);}
-  function renderImages(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>镜像</th><th>ID</th><th>大小</th><th>创建</th><th>操作</th></tr></thead><tbody>';text('docker-image-count',String(rows.length));text('docker-image-count-table',String(rows.length));if(!rows.length){empty('docker-images','当前没有镜像');return;}rows.forEach(function(line){var p=line.split('\t'),name=p[0]||'',id=p[1]||'',size=p[2]||'',created=p[3]||'';html+='<tr><td>'+esc(name)+'</td><td class="docker-copy">'+esc(id)+'</td><td>'+esc(size)+'</td><td>'+esc(created)+'</td><td>'+actionButtons(id,'image')+'</td></tr>';});html+='</tbody></table>';table('docker-images',html);}
-  function renderNetworks(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>ID</th><th>名称</th><th>驱动</th><th>范围</th><th>操作</th></tr></thead><tbody>';if(!rows.length){empty('docker-networks','当前没有网络');return;}rows.forEach(function(line){var p=line.split('\t'),id=p[0]||'',name=p[1]||'',driver=p[2]||'',scope=p[3]||'';html+='<tr><td class="docker-copy">'+esc(id)+'</td><td>'+esc(name)+'</td><td>'+esc(driver)+'</td><td>'+esc(scope)+'</td><td>'+actionButtons(name,'network')+'</td></tr>';});html+='</tbody></table>';table('docker-networks',html);}
-  function renderVolumes(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>名称</th><th>驱动</th><th>挂载点</th><th>操作</th></tr></thead><tbody>';if(!rows.length){empty('docker-volumes','当前没有卷');return;}rows.forEach(function(line){var p=line.split('\t'),name=p[0]||'',driver=p[1]||'',mount=p[2]||'';html+='<tr><td>'+esc(name)+'</td><td>'+esc(driver)+'</td><td class="docker-copy">'+esc(mount)+'</td><td>'+actionButtons(name,'volume')+'</td></tr>';});html+='</tbody></table>';table('docker-volumes',html);}
-  function renderStats(v){var rows=splitLines(v),html='<table class="docker-table compact"><thead><tr><th>容器</th><th>CPU</th><th>内存</th><th>网络 IO</th><th>磁盘 IO</th></tr></thead><tbody>';if(!rows.length){empty('docker-stats','暂无运行中容器资源数据');return;}rows.forEach(function(line){var p=line.split('\t');html+='<tr><td>'+esc(p[0]||'')+'</td><td>'+esc(p[1]||'')+'</td><td>'+esc(p[2]||'')+'</td><td>'+esc(p[3]||'')+'</td><td>'+esc(p[4]||'')+'</td></tr>';});html+='</tbody></table>';table('docker-stats',html);}
-  function apply(data){if(!data){text('docker-running','读取失败');return;}var dot=document.getElementById('docker-dot');if(dot)dot.className='docker-dot '+(data.running?'ok':'');text('docker-running',data.running?'运行中':'已停止');text('docker-cli',data.docker||'未检测到 docker');text('docker-daemon',data.dockerd||'未检测到 dockerd');text('docker-storage',data.storage||'-');text('docker-root',data.data_root||'-');text('docker-root-brief',data.data_root||'-');text('docker-info',data.info||'-');text('docker-disk',data.disk||'-');text('docker-logs',data.logs||'-');renderContainers(data.containers||'');renderImages(data.images||'');renderNetworks(data.networks||'');renderVolumes(data.volumes||'');renderStats(data.stats||'');}
-  window.dockerRefresh=function(){api('status',null,function(d){apply(d);});};
-  window.dockerAction=function(action){state(action+'...');api(action,{},function(d){state(d&&d.ok?'操作完成':'操作失败',!(d&&d.ok));window.setTimeout(window.dockerRefresh,700);});};
-  window.dockerPull=function(){var image=value('pull-image');if(!image){state('镜像名不能为空',true);return;}state('pull '+image+'...');api('pull',{image:image},function(d){state(d&&d.ok?'镜像拉取完成':'拉取失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,1200);});};
+  function empty(id,msg){var box=document.getElementById(id);if(!box)return;box._dockerHtml='';box.className='docker-panel-body docker-empty';box.textContent=msg;}
+  function table(id,html){var box=document.getElementById(id);if(!box||box._dockerHtml===html)return;box._dockerHtml=html;box.className='docker-panel-body';box.innerHTML='<div class="docker-table-wrap">'+html+'</div>';}
+  function limitNote(rows){return rows.length>80?'<div class="docker-muted">仅显示前 80 项</div>':'';}
+  function actionButtons(id,type,status){
+    var safe=esc(id),out='<div class="docker-row-actions">',running=/^(Up|Restarting)/.test(status||''),paused=/\(Paused\)/i.test(status||'');
+    if(type==='container'){
+      if(running){out+='<button class="docker-btn" data-id="'+safe+'" data-cop="stop">停止</button><button class="docker-btn warn" data-id="'+safe+'" data-cop="restart">重启</button><button class="docker-btn" data-id="'+safe+'" data-cop="'+(paused?'unpause':'pause')+'">'+(paused?'恢复':'暂停')+'</button>';}
+      else out+='<button class="docker-btn good" data-id="'+safe+'" data-cop="start">启动</button>';
+      out+='<button class="docker-btn" data-id="'+safe+'" data-log="1">日志</button><details class="docker-more"><summary>更多操作</summary><button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button>';
+      if(running)out+='<button class="docker-btn danger" data-id="'+safe+'" data-cop="kill">强杀</button>';
+      return out+'<button class="docker-btn danger" data-id="'+safe+'" data-cop="remove">删除</button></details></div>';
+    }
+    if(type==='image')return out+'<button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-iop="remove">删除</button></div>';
+    if(type==='network')return out+'<button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-nop="remove">删除</button></div>';
+    return out+'<button class="docker-btn" data-id="'+safe+'" data-inspect="1">Inspect</button><button class="docker-btn danger" data-id="'+safe+'" data-vop="remove">删除</button></div>';
+  }
+  function renderContainers(v,error){
+    var rows=splitLines(v),shown=rows.slice(0,80),count=rows.length>80?'80+':String(rows.length),html='<table class="docker-table"><thead><tr><th>ID</th><th>名称</th><th>镜像</th><th>状态</th><th>端口</th><th>大小</th><th>操作</th></tr></thead><tbody>';
+    text('docker-container-count',error?'-':count);text('docker-container-count-table',error?'-':count);
+    if(error){empty('docker-containers',error);return;}
+    if(!rows.length){empty('docker-containers','当前没有容器');return;}
+    shown.forEach(function(line){var p=line.split('\t'),id=p[0]||'',st=p[3]||'';html+='<tr><td data-label="ID" class="docker-copy">'+esc(id)+'</td><td data-label="名称">'+esc(p[1]||'')+'</td><td data-label="镜像">'+esc(p[2]||'')+'</td><td data-label="状态">'+esc(st)+'</td><td data-label="端口">'+esc(p[4]||'')+'</td><td data-label="大小">'+esc(p[5]||'')+'</td><td data-label="操作" class="docker-actions-cell">'+actionButtons(id,'container',st)+'</td></tr>';});
+    table('docker-containers',html+'</tbody></table>'+limitNote(rows));
+  }
+  function renderImages(v,error){
+    var rows=splitLines(v),shown=rows.slice(0,80),count=rows.length>80?'80+':String(rows.length),html='<table class="docker-table compact"><thead><tr><th>镜像</th><th>ID</th><th>大小</th><th>创建</th><th>操作</th></tr></thead><tbody>';
+    text('docker-image-count',error?'-':count);text('docker-image-count-table',error?'-':count);
+    if(error){empty('docker-images',error);return;}
+    if(!rows.length){empty('docker-images','当前没有镜像');return;}
+    shown.forEach(function(line){var p=line.split('\t'),id=p[1]||'';html+='<tr><td data-label="镜像">'+esc(p[0]||'')+'</td><td data-label="ID" class="docker-copy">'+esc(id)+'</td><td data-label="大小">'+esc(p[2]||'')+'</td><td data-label="创建">'+esc(p[3]||'')+'</td><td data-label="操作" class="docker-actions-cell">'+actionButtons(id,'image')+'</td></tr>';});
+    table('docker-images',html+'</tbody></table>'+limitNote(rows));
+  }
+  function renderNetworks(v,error){
+    var rows=splitLines(v),shown=rows.slice(0,80),html='<table class="docker-table compact"><thead><tr><th>ID</th><th>名称</th><th>驱动</th><th>范围</th><th>操作</th></tr></thead><tbody>';
+    if(error){empty('docker-networks',error);return;}
+    if(!rows.length){empty('docker-networks','当前没有网络');return;}
+    shown.forEach(function(line){var p=line.split('\t'),name=p[1]||'';html+='<tr><td data-label="ID" class="docker-copy">'+esc(p[0]||'')+'</td><td data-label="名称">'+esc(name)+'</td><td data-label="驱动">'+esc(p[2]||'')+'</td><td data-label="范围">'+esc(p[3]||'')+'</td><td data-label="操作" class="docker-actions-cell">'+actionButtons(name,'network')+'</td></tr>';});
+    table('docker-networks',html+'</tbody></table>'+limitNote(rows));
+  }
+  function renderVolumes(v,error){
+    var rows=splitLines(v),shown=rows.slice(0,80),html='<table class="docker-table compact"><thead><tr><th>名称</th><th>驱动</th><th>挂载点</th><th>操作</th></tr></thead><tbody>';
+    if(error){empty('docker-volumes',error);return;}
+    if(!rows.length){empty('docker-volumes','当前没有卷');return;}
+    shown.forEach(function(line){var p=line.split('\t'),name=p[0]||'';html+='<tr><td data-label="名称">'+esc(name)+'</td><td data-label="驱动">'+esc(p[1]||'')+'</td><td data-label="挂载点" class="docker-copy">'+esc(p[2]||'')+'</td><td data-label="操作" class="docker-actions-cell">'+actionButtons(name,'volume')+'</td></tr>';});
+    table('docker-volumes',html+'</tbody></table>'+limitNote(rows));
+  }
+  function renderStats(v,error){
+    var rows=splitLines(v),shown=rows.slice(0,80),html='<table class="docker-table compact"><thead><tr><th>容器</th><th>CPU</th><th>内存</th><th>网络 IO</th><th>磁盘 IO</th></tr></thead><tbody>';
+    if(error){empty('docker-stats',error);return;}
+    if(!rows.length){empty('docker-stats','暂无运行中容器资源数据');return;}
+    shown.forEach(function(line){var p=line.split('\t');html+='<tr><td data-label="容器">'+esc(p[0]||'')+'</td><td data-label="CPU">'+esc(p[1]||'')+'</td><td data-label="内存">'+esc(p[2]||'')+'</td><td data-label="网络 IO">'+esc(p[3]||'')+'</td><td data-label="磁盘 IO">'+esc(p[4]||'')+'</td></tr>';});
+    table('docker-stats',html+'</tbody></table>'+limitNote(rows));
+  }
+  function volumePlaceholder(dataRoot){var el=document.getElementById('run-volumes');if(!el||!dataRoot)return;var root=String(dataRoot).replace(/\/data\/?$/,'');el.placeholder=root+'/volumes/nginx:/usr/share/nginx/html';}
+  var statusBusy=false,actionBusy=false,statusGeneration=0,lastSync=false;
+  function errorText(data,fallback){var lines=String(data&&data.error||fallback||'操作失败').split(/\r?\n/).filter(function(line){return line.trim();});return (lines[lines.length-1]||fallback||'操作失败').slice(0,180);}
+  function setBusy(busy){actionBusy=busy;var buttons=document.querySelectorAll('.docker-shell .docker-btn');for(var i=0;i<buttons.length;i++)buttons[i].disabled=busy;}
+  function apply(data){
+    var dot=document.getElementById('docker-dot');if(dot)dot.className='docker-dot '+(data.running?'ok':'');
+    text('docker-running',data.running?'运行中':'已停止');text('docker-last-sync','更新于 '+new Date().toLocaleTimeString('zh-CN',{hour12:false}));lastSync=true;
+    text('docker-cli',data.docker||'未检测到 docker');text('docker-daemon',data.dockerd||'未检测到 dockerd');text('docker-storage',data.storage||'-');
+    text('docker-root',data.data_root||'-');text('docker-root-brief',data.data_root||'-');text('docker-info',data.info||'-');text('docker-disk',data.disk||'-');text('docker-logs',data.logs||'-');
+    renderContainers(data.containers||'',data.containers_error?errorText({error:data.containers_error},'容器读取失败'):'');
+    renderImages(data.images||'',data.images_error?errorText({error:data.images_error},'镜像读取失败'):'');
+    renderNetworks(data.networks||'',data.networks_error?errorText({error:data.networks_error},'网络读取失败'):'');
+    renderVolumes(data.volumes||'',data.volumes_error?errorText({error:data.volumes_error},'卷读取失败'):'');
+    renderStats(data.stats||'',data.stats_error?errorText({error:data.stats_error},'资源数据读取失败'):'');
+    volumePlaceholder(data.data_root);
+  }
+  window.dockerRefresh=function(manual){
+    if(statusBusy||actionBusy){if(manual)state('正在处理，请稍后刷新');return;}
+    if(document.hidden&&!manual)return;
+    statusBusy=true;var generation=statusGeneration;
+    api('status',null,function(data){
+      statusBusy=false;
+      if(generation!==statusGeneration||actionBusy){if(!actionBusy)window.setTimeout(window.dockerRefresh,0);return;}
+      if(!data||!data.ok){var dot=document.getElementById('docker-dot');if(dot)dot.className='docker-dot';text('docker-running','读取失败');text('docker-last-sync',lastSync?'刷新失败，显示上次数据':'尚无状态数据');if(manual)state('刷新失败：'+errorText(data,'接口无响应'),true);return;}
+      apply(data);if(manual)state('数据已刷新');
+    });
+  };
+  function mutate(path,data,pending,success,failure,delay){
+    if(actionBusy)return;
+    statusGeneration++;setBusy(true);state(pending);
+    api(path,data,function(result){
+      setBusy(false);
+      state(result&&result.ok?success:failure+'：'+errorText(result,'接口无响应'),!(result&&result.ok));
+      window.setTimeout(window.dockerRefresh,delay||800);
+    });
+  }
+  window.dockerAction=function(action){
+    var names={start:'启动',stop:'停止',restart:'重启'};if(!names[action])return;
+    if(action==='stop'&&!confirm('确认停止 Docker daemon？运行中的容器将受影响。'))return;
+    if(action==='restart'&&!confirm('确认重启 Docker daemon？运行中的容器可能暂时中断。'))return;
+    mutate(action,{},names[action]+' daemon 中…','daemon '+names[action]+'完成','daemon '+names[action]+'失败',900);
+  };
+  window.dockerPull=function(){var image=value('pull-image');if(!image){state('镜像名不能为空',true);return;}mutate('pull',{image:image},'正在拉取 '+image+'…','镜像拉取完成','镜像拉取失败',1200);};
   window.dockerPullAlt=function(){var alt=value('pull-image-2'),main=document.getElementById('pull-image');if(main)main.value=alt;window.dockerPull();};
-  window.dockerRun=function(){var image=value('run-image');if(!image){state('镜像不能为空',true);return;}state('run '+image+'...');api('run',{image:image,name:value('run-name'),ports:value('run-ports'),volumes:value('run-volumes'),envs:value('run-envs'),restart:value('run-restart'),network:value('run-network'),privileged:checked('run-privileged'),command:value('run-command')},function(d){state(d&&d.ok?'容器创建完成':'创建失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,1200);});};
-  window.dockerContainer=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除容器 '+id+' 吗？'))return;state(op+' '+id+'...');api('container',{id:id,op:op},function(d){state(d&&d.ok?'容器操作完成':'容器操作失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  window.dockerLogs=function(id){if(!id)return;state('读取容器日志 '+id+'...');api('logs',{id:id},function(d){text('docker-container-logs',d&&d.logs?d.logs:'无日志');state(d&&d.ok?'日志已读取':'日志读取失败',!(d&&d.ok));});};
-  window.dockerInspect=function(id){if(!id)return;state('inspect '+id+'...');api('inspect',{id:id},function(d){text('docker-detail',d&&d.inspect?d.inspect:'无详情');state(d&&d.ok?'详情已读取':'详情读取失败',!(d&&d.ok));showTab('logs');});};
-  window.dockerImage=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除镜像 '+id+' 吗？'))return;state(op+' image '+id+'...');api('image',{id:id,op:op},function(d){state(d&&d.ok?'镜像操作完成':'镜像操作失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  window.dockerPrune=function(){var target=value('prune-target')||'system';if(!confirm('确认执行 Docker 清理：'+target+' ?'))return;state('prune '+target+'...');api('prune',{target:target},function(d){state(d&&d.ok?'清理完成':'清理失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,1400);});};
-  window.dockerNetworkCreate=function(){var name=value('network-name');if(!name){state('网络名不能为空',true);return;}api('network',{op:'create',name:name,driver:value('network-driver')},function(d){state(d&&d.ok?'网络创建完成':'网络创建失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  window.dockerNetwork=function(name,op){if(!name)return;if(op==='remove'&&!confirm('确认删除网络 '+name+' 吗？'))return;api('network',{op:op,name:name},function(d){state(d&&d.ok?'网络操作完成':'网络操作失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  window.dockerVolumeCreate=function(){var name=value('volume-name');if(!name){state('卷名不能为空',true);return;}api('volume',{op:'create',name:name},function(d){state(d&&d.ok?'卷创建完成':'卷创建失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  window.dockerVolume=function(name,op){if(!name)return;if(op==='remove'&&!confirm('确认删除卷 '+name+' 吗？'))return;api('volume',{op:op,name:name},function(d){state(d&&d.ok?'卷操作完成':'卷操作失败'+(d&&d.error?': '+d.error:''),!(d&&d.ok));window.setTimeout(window.dockerRefresh,900);});};
-  function showTab(tab){var tabs=document.querySelectorAll('.docker-tab'),sections=document.querySelectorAll('.docker-section'),i;for(i=0;i<tabs.length;i++){tabs[i].className='docker-tab'+(tabs[i].getAttribute('data-tab')===tab?' active':'');}for(i=0;i<sections.length;i++){sections[i].className='docker-section'+(sections[i].id==='docker-tab-'+tab?' active':'');}}
-  document.addEventListener('click',function(e){var b=e.target;if(!b||!b.getAttribute)return;if(b.className&&String(b.className).indexOf('docker-tab')!==-1){showTab(b.getAttribute('data-tab'));return;}var id=b.getAttribute('data-id');if(!id)return;if(b.getAttribute('data-log')){window.dockerLogs(id);showTab('logs');return;}if(b.getAttribute('data-inspect')){window.dockerInspect(id);return;}var cop=b.getAttribute('data-cop');if(cop){window.dockerContainer(id,cop);return;}var iop=b.getAttribute('data-iop');if(iop){window.dockerImage(id,iop);return;}var nop=b.getAttribute('data-nop');if(nop){window.dockerNetwork(id,nop);return;}var vop=b.getAttribute('data-vop');if(vop)window.dockerVolume(id,vop);});
+  window.dockerRun=function(){var image=value('run-image');if(!image){state('镜像不能为空',true);return;}mutate('run',{image:image,name:value('run-name'),ports:value('run-ports'),volumes:value('run-volumes'),envs:value('run-envs'),restart:value('run-restart'),network:value('run-network'),privileged:checked('run-privileged'),command:value('run-command')},'正在创建容器…','容器创建完成','容器创建失败',1200);};
+  window.dockerContainer=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除容器 '+id+' 吗？'))return;if(op==='kill'&&!confirm('确认强制停止容器 '+id+' 吗？'))return;mutate('container',{id:id,op:op},'正在操作容器 '+id+'…','容器操作完成','容器操作失败',900);};
+  window.dockerLogs=function(id){if(!id||actionBusy)return;state('读取容器日志 '+id+'…');api('logs',{id:id},function(data){text('docker-container-logs',data&&data.ok?(data.logs||'无日志'):errorText(data,'日志读取失败'));state(data&&data.ok?'日志已读取':'日志读取失败：'+errorText(data,'接口无响应'),!(data&&data.ok));showTab('logs');});};
+  window.dockerInspect=function(id){if(!id||actionBusy)return;state('读取详情 '+id+'…');api('inspect',{id:id},function(data){text('docker-detail',data&&data.ok?(data.inspect||'无详情'):errorText(data,'详情读取失败'));state(data&&data.ok?'详情已读取':'详情读取失败：'+errorText(data,'接口无响应'),!(data&&data.ok));showTab('logs');});};
+  window.dockerImage=function(id,op){if(!id)return;if(op==='remove'&&!confirm('确认删除镜像 '+id+' 吗？'))return;mutate('image',{id:id,op:op},'正在操作镜像 '+id+'…','镜像操作完成','镜像操作失败',900);};
+  window.dockerPrune=function(){var target=value('prune-target')||'system',sel=document.getElementById('prune-target'),label=sel&&sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:target;if(!confirm('确认'+label+'？'+(target==='system_volumes'?'未使用的卷数据也将删除。':'')))return;mutate('prune',{target:target},'正在清理…','清理完成','清理失败',1400);};
+  window.dockerNetworkCreate=function(){var name=value('network-name');if(!name){state('网络名不能为空',true);return;}mutate('network',{op:'create',name:name,driver:value('network-driver')},'正在创建网络…','网络创建完成','网络创建失败',900);};
+  window.dockerNetwork=function(name,op){if(!name)return;if(op==='remove'&&!confirm('确认删除网络 '+name+' 吗？'))return;mutate('network',{op:op,name:name},'正在操作网络…','网络操作完成','网络操作失败',900);};
+  window.dockerVolumeCreate=function(){var name=value('volume-name');if(!name){state('卷名不能为空',true);return;}mutate('volume',{op:'create',name:name},'正在创建卷…','卷创建完成','卷创建失败',900);};
+  window.dockerVolume=function(name,op){if(!name)return;if(op==='remove'&&!confirm('确认删除卷 '+name+' 吗？卷中的数据也将删除。'))return;mutate('volume',{op:op,name:name},'正在操作卷…','卷操作完成','卷操作失败',900);};
+  function showTab(tab){var tabs=document.querySelectorAll('.docker-tab'),sections=document.querySelectorAll('.docker-section'),i,active;for(i=0;i<tabs.length;i++){active=tabs[i].getAttribute('data-tab')===tab;tabs[i].className='docker-tab'+(active?' active':'');tabs[i].setAttribute('aria-selected',active?'true':'false');}for(i=0;i<sections.length;i++){sections[i].className='docker-section'+(sections[i].id==='docker-tab-'+tab?' active':'');}}
+  document.addEventListener('click',function(e){var b=e.target;if(!b||!b.getAttribute)return;if(b.getAttribute('data-tab')){showTab(b.getAttribute('data-tab'));return;}var id=b.getAttribute('data-id');if(!id)return;if(b.getAttribute('data-log')){window.dockerLogs(id);return;}if(b.getAttribute('data-inspect')){window.dockerInspect(id);return;}var cop=b.getAttribute('data-cop');if(cop){window.dockerContainer(id,cop);return;}var iop=b.getAttribute('data-iop');if(iop){window.dockerImage(id,iop);return;}var nop=b.getAttribute('data-nop');if(nop){window.dockerNetwork(id,nop);return;}var vop=b.getAttribute('data-vop');if(vop)window.dockerVolume(id,vop);});
+  document.addEventListener('keydown',function(e){var b=e.target;if(!b||!b.getAttribute||b.getAttribute('role')!=='tab'||(e.key!=='ArrowLeft'&&e.key!=='ArrowRight'))return;var tabs=document.querySelectorAll('.docker-tab'),i;for(i=0;i<tabs.length;i++)if(tabs[i]===b)break;if(i>=tabs.length)return;e.preventDefault();var next=tabs[(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.focus();showTab(next.getAttribute('data-tab'));});
   window.dockerRefresh();
-  setInterval(window.dockerRefresh,5000);
+  setInterval(function(){window.dockerRefresh(false);},15000);
 })();
 </script>
 <%+footer%>
@@ -87613,9 +88705,9 @@ verify_docker_install() {
     [ -d "$DOCKER_DATA_ROOT" ] || die "Docker 校验失败：data-root 目录缺失"
     if command -v uci >/dev/null 2>&1; then
         docker_configured_root="$(uci -q get dockerd.globals.data_root 2>/dev/null || true)"
-        [ "$docker_configured_root" = "$DOCKER_DATA_ROOT" ] || die "Docker 校验失败：dockerd data_root 未指向扩展盘"
+        [ "$docker_configured_root" = "$DOCKER_DATA_ROOT" ] || die "Docker 校验失败：dockerd data_root 未指向存储盘"
     fi
-    grep -Fq "$DOCKER_DATA_ROOT" /etc/docker/daemon.json 2>/dev/null || die "Docker 校验失败：daemon.json 未指向扩展盘"
+    grep -Fq "$DOCKER_DATA_ROOT" /etc/docker/daemon.json 2>/dev/null || die "Docker 校验失败：daemon.json 未指向存储盘"
     verify_appcenter_route "$DOCKER_APP_NAME" "$DOCKER_ROUTE"
     verify_file_exists "$DOCKER_CONTROLLER" "Docker LuCI 控制器"
     verify_file_exists "$DOCKER_VIEW" "Docker LuCI 页面"
@@ -87626,17 +88718,18 @@ verify_docker_install() {
 }
 
 install_docker_plugin() {
-    log_stage 1 6 "Docker 环境与扩展盘检查"
+    log_stage 1 6 "Docker 环境与存储盘检查"
     docker_require_supported_model
     game_accel_require_appcenter
     docker_prepare_storage
 
     confirm_or_exit "确认安装 Docker 并接入 NRadio 应用商店吗？所有下载缓存和 Docker 数据将写入 $DOCKER_ROOT"
+    docker_create_storage_dirs
 
-    log_stage 2 6 "下载 Docker 软件包到扩展盘"
+    log_stage 2 6 "下载 Docker 软件包到存储盘"
     docker_install_packages_to_expand_disk
 
-    log_stage 3 6 "配置 Docker 扩展盘 data-root"
+    log_stage 3 6 "配置 Docker 存储盘 data-root"
     docker_configure_storage
     docker_start_service
 
@@ -88225,6 +89318,108 @@ leigod_attach_integrated() {
     log "完成：雷神加速器已接入 NRadio 应用商店"
 }
 
+leigod_prepare_installer_compat() {
+    local compat="$WORKDIR/leigod-nradio-compat.sh"
+    local patched="$WORKDIR/leigod-plugin-install.sh"
+    mkdir -p "$WORKDIR" || return 1
+    cat > "$compat" <<'EOF_LEIGOD_INSTALL_COMPAT'
+# NRadio: 保留官方安装流程，仅适配可选 NETEM 与内核模块检测。
+nradio_leigod_prepare_deps() {
+    local pkg packages
+    packages=$(plat_required_deps "${FIREWALL_BACKEND:-iptables}") || return 1
+    NRADIO_LEIGOD_REQUIRED_DEPS=""
+    for pkg in ${packages}; do
+        [ "$pkg" = "kmod-netem" ] && continue
+        NRADIO_LEIGOD_REQUIRED_DEPS="${NRADIO_LEIGOD_REQUIRED_DEPS} $pkg"
+    done
+
+    plat_required_deps() {
+        printf '%s\n' "$NRADIO_LEIGOD_REQUIRED_DEPS"
+    }
+
+    # 上游隐藏了 opkg 原始错误；保留输出和真实退出状态。
+    opkg_install() {
+        local pkg="$1" output rc
+        log "安装依赖包: ${pkg}"
+        output=$(opkg install "$pkg" 2>&1)
+        rc=$?
+        [ -z "$output" ] || printf '%s\n' "$output" | tee -a "${LOG_FILE:-/tmp/leigod_acc_install.log}"
+        if [ "$rc" -eq 0 ]; then
+            log "依赖包已装好: ${pkg}"
+            return 0
+        fi
+        log "依赖包安装失败: ${pkg}"
+        return 1
+    }
+
+    modprobe_module() {
+        local module="$1"
+        # xt_TPROXY 自动加载当前内核的依赖，兼容旧 core 与新 ipv4/ipv6 拆分。
+        [ "$module" != "nf_tproxy_core" ] || module="xt_TPROXY"
+        if [ -d "/sys/module/$module" ] || is_module_loaded "$module"; then
+            return 0
+        fi
+        modprobe "$module" >/dev/null 2>&1
+        if [ -d "/sys/module/$module" ] || is_module_loaded "$module"; then
+            log "模块已加载: ${module}"
+            return 0
+        fi
+        log "模块加载失败: ${module}"
+        return 1
+    }
+
+    # NETEM 是网络仿真组件；缺少匹配固件的 kmod 时允许受限安装。
+    # 不伪造包安装状态，其余依赖仍由官方 ensure_deps 严格检查。
+    if [ -d /sys/module/sch_netem ] || modprobe sch_netem >/dev/null 2>&1; then
+        log "NETEM 内核能力可用"
+    else
+        if ! is_package_installed kmod-netem; then
+            opkg_install kmod-netem || :
+        fi
+        if [ -d /sys/module/sch_netem ] || modprobe sch_netem >/dev/null 2>&1; then
+            log "NETEM 内核能力可用"
+        else
+            log "提示: 当前固件 NETEM 不可用，继续安装雷神；部分延迟/NAT 检测能力可能受限"
+        fi
+    fi
+}
+
+nradio_leigod_prepare_runtime() {
+    local dir file
+    dir=$(plat_sbin_dir) || return 1
+    # 安装后的开机脚本、守护脚本同样保留 xt_TPROXY，让内核处理模块依赖。
+    for file in "$dir/acc.init" "$dir/monitor.sh"; do
+        [ -f "$file" ] || { log "雷神运行脚本缺失: $file"; return 1; }
+        if grep -q ' nf_tproxy_core' "$file"; then
+            sed 's/ nf_tproxy_core//g' "$file" > "$file.nradio" || return 1
+            chmod +x "$file.nradio" || return 1
+            mv -f "$file.nradio" "$file" || return 1
+        fi
+    done
+}
+EOF_LEIGOD_INSTALL_COMPAT
+    [ -s "$compat" ] || return 1
+    # 自举后才加载平台函数；在 deps 前挂接，在 init 部署前修正运行脚本。
+    awk -v compat="$compat" '
+        /^step_deps\(\)[[:space:]]*\{/ {
+            print
+            print "    nradio_leigod_prepare_deps || return 1"
+            next
+        }
+        /^step_init\(\)[[:space:]]*\{/ {
+            print
+            print "    nradio_leigod_prepare_runtime || return 1"
+            next
+        }
+        /^main "\$@"[[:space:]]*$/ {
+            while ((getline line < compat) > 0) print line
+            close(compat)
+        }
+        { print }
+    ' /tmp/leigod-plugin-install.sh > "$patched" || return 1
+    mv -f "$patched" /tmp/leigod-plugin-install.sh
+}
+
 leigod_install_integrated() {
     game_accel_require_appcenter
     cat <<'EOF_LEIGOD_RISK'
@@ -88236,12 +89431,14 @@ EOF_LEIGOD_RISK
     command -v opkg >/dev/null 2>&1 || die "系统没有 opkg，无法自动安装雷神依赖"
     log "[1/4] 下载雷神官方安装脚本"
     download_file "$LEIGOD_INSTALLER_URL" "/tmp/leigod-plugin-install.sh" || die "下载雷神官方安装脚本失败"
-    grep -q 'leigod\|acc-gw\|accelerator' /tmp/leigod-plugin-install.sh 2>/dev/null || die "雷神官方安装脚本内容异常，已停止执行"
-    sh -n /tmp/leigod-plugin-install.sh >/dev/null 2>&1 || die "雷神官方安装脚本语法异常，已停止执行"
+    leigod_prepare_installer_compat || die "写入雷神安装兼容处理失败"
     log "[2/4] 安装雷神依赖"
     ensure_opkg_update || die "opkg update 失败，已停止雷神依赖安装"
     lg_dep_failed=''
-    for lg_pkg in curl libpcap iptables kmod-ipt-nat iptables-mod-tproxy kmod-ipt-ipset ipset kmod-tun kmod-ipt-tproxy kmod-netem tc-full conntrack miniupnpd luci-app-upnp; do
+    for lg_pkg in curl libpcap iptables kmod-ipt-nat iptables-mod-tproxy kmod-ipt-ipset ipset kmod-tun kmod-ipt-tproxy tc-full conntrack miniupnpd luci-app-upnp; do
+        if [ "$lg_pkg" = "miniupnpd" ] && command -v miniupnpd >/dev/null 2>&1; then
+            continue
+        fi
         if ! opkg list-installed 2>/dev/null | grep -q "^$lg_pkg "; then
             log "安装依赖：$lg_pkg"
             if ! opkg install "$lg_pkg"; then
@@ -88288,12 +89485,12 @@ leigod_uninstall_integrated() {
 
 qiyou_integrated_menu() {
     while :; do
-        print_menu_header '3 / 游戏加速器 / 奇游'
+        print_menu_header '游戏加速器 > 奇游联机宝'
         print_menu_item 1 '安装奇游并接入应用商店'
         print_menu_item 2 '查看奇游状态'
         print_menu_item 3 '卸载奇游联机宝'
         print_menu_item 4 '刷新设备识别与插件页面'
-        print_menu_item 0 '返回游戏加速器'
+        print_menu_item 0 '返回上级'
         print_menu_prompt '0-4'
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -88324,12 +89521,12 @@ qiyou_integrated_menu() {
 
 leigod_integrated_menu() {
     while :; do
-        print_menu_header '3 / 游戏加速器 / 雷神'
+        print_menu_header '游戏加速器 > 雷神加速器'
         print_menu_item 1 '安装雷神并接入应用商店'
         print_menu_item 2 '接入已安装的雷神'
         print_menu_item 3 '查看雷神状态'
         print_menu_item 4 '卸载雷神加速器'
-        print_menu_item 0 '返回游戏加速器'
+        print_menu_item 0 '返回上级'
         print_menu_prompt '0-4'
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -88360,10 +89557,10 @@ leigod_integrated_menu() {
 
 game_accelerator_menu() {
     while :; do
-        print_menu_header '3 / 游戏加速器'
+        print_menu_header '主菜单 > 游戏加速器'
         print_menu_item 1 '奇游联机宝'
         print_menu_item 2 '雷神加速器'
-        print_menu_item 0 '返回功能分类'
+        print_menu_item 0 '返回上级'
         print_menu_prompt '0-2'
         read_category_choice
         case "$UI_READ_RESULT" in
@@ -88389,12 +89586,13 @@ maintenance_test_menu() {
         submenu_feature=''
         if is_current_model_ak798; then
             CURRENT_HOME_TEMP_MENU_PATH='5 > 2'
-            print_menu_header '5 / 设备维护 · AK68-798'
+            print_menu_header '主菜单 > 设备维护与检测'
+            print_menu_note 'AK68-798'
             print_menu_item 1 '统一体检增强版'
             print_menu_item 2 'LuCI 首页 CPU 温度显示'
             print_menu_item 11 '硬件加速管理'
-            print_menu_item 12 '返回功能分类'
-            print_menu_prompt '0-2 / 11-12'
+            print_menu_item 0 '返回上级'
+            print_menu_prompt '0-2 / 11'
             read_category_choice
             case "$UI_READ_RESULT" in
                 0|12) return 0 ;;
@@ -88406,15 +89604,16 @@ maintenance_test_menu() {
         fi
         if is_current_model_c8_788; then
             CURRENT_HOME_TEMP_MENU_PATH='5 > 5'
-            print_menu_header '5 / 设备维护 · C8-788'
+            print_menu_header '主菜单 > 设备维护与检测'
+            print_menu_note 'C8-788'
             print_menu_item 1 '统一体检增强版'
-            print_menu_item 2 '风扇控制（C8-688/788、C2000MAX）'
+            print_menu_item 2 '风扇控制' 'C8-688 / C8-788 / C2000MAX'
             print_menu_item 3 '哈基米傻瓜分流助手'
             print_menu_item 4 '哈基米依赖检查修复'
             print_menu_item 5 '首页 CPU / 5G 温度切换'
             print_menu_item 11 '硬件加速管理'
-            print_menu_item 12 '返回功能分类'
-            print_menu_prompt '0-5 / 11-12'
+            print_menu_item 0 '返回上级'
+            print_menu_prompt '0-5 / 11'
             read_category_choice
             case "$UI_READ_RESULT" in
                 0|12) return 0 ;;
@@ -88436,12 +89635,12 @@ maintenance_test_menu() {
         fi
 
         maintenance_next_choice=1
-        print_menu_header '5 / 设备维护'
+        print_menu_header '主菜单 > 设备维护与检测'
         maintenance_health_choice=$maintenance_next_choice
         print_menu_item "$maintenance_health_choice" '统一体检增强版'
         maintenance_next_choice=$((maintenance_next_choice + 1))
         maintenance_fan_choice=$maintenance_next_choice
-        print_menu_item "$maintenance_fan_choice" '风扇控制（C8-688/788、C2000MAX）'
+        print_menu_item "$maintenance_fan_choice" '风扇控制' 'C8-688 / C8-788 / C2000MAX'
         maintenance_next_choice=$((maintenance_next_choice + 1))
         maintenance_split_choice=$maintenance_next_choice
         print_menu_item "$maintenance_split_choice" '哈基米傻瓜分流助手'
@@ -88480,11 +89679,11 @@ maintenance_test_menu() {
         maintenance_hwaccel_choice=11
         print_menu_item "$maintenance_hwaccel_choice" '硬件加速管理'
         maintenance_return_choice=12
-        print_menu_item "$maintenance_return_choice" '返回功能分类'
+        print_menu_item 0 '返回上级'
         if [ "$maintenance_next_choice" -eq 11 ]; then
-            print_menu_prompt '0-12'
+            print_menu_prompt '0-11'
         else
-            print_menu_prompt "0-$((maintenance_next_choice - 1)) / 11-12"
+            print_menu_prompt "0-$((maintenance_next_choice - 1)) / 11"
         fi
         read_category_choice
         if [ "$UI_READ_RESULT" = '0' ] || [ "$UI_READ_RESULT" = "$maintenance_return_choice" ]; then
@@ -88527,6 +89726,7 @@ maintenance_test_menu() {
 }
 
 main_menu() {
+    local menu_choice_prompt
     choice="${1:-}"
     require_root
     acquire_script_lock
@@ -88577,28 +89777,27 @@ main_menu() {
     fi
 
     while :; do
-        print_menu_header '功能分类'
+        print_menu_header '主菜单'
         if is_current_model_ak798; then
-            print_menu_item 4 '应用商店与页面美化'
+            print_menu_item 4 '应用商店与页面'
             print_menu_item 5 '设备维护与检测'
-            print_menu_item 0 '退出'
-            print_menu_prompt '0 / 4 / 5'
+            menu_choice_prompt='0 / 4 / 5'
         elif is_current_model_c8_788; then
-            print_menu_item 1 '常用插件安装（仅哈基米）'
+            print_menu_item 1 '常用插件' '仅哈基米'
             print_menu_item 3 '游戏加速器'
-            print_menu_item 4 '应用商店与页面美化'
+            print_menu_item 4 '应用商店与页面'
             print_menu_item 5 '设备维护与检测'
-            print_menu_item 0 '退出'
-            print_menu_prompt '0 / 1 / 3 / 4 / 5'
+            menu_choice_prompt='0 / 1 / 3 / 4 / 5'
         else
-            print_menu_item 1 '常用插件安装'
-            print_menu_item 2 'VPN / 组网 / 路由向导'
+            print_menu_item 1 '常用插件'
+            print_menu_item 2 'VPN 与组网'
             print_menu_item 3 '游戏加速器'
-            print_menu_item 4 '应用商店与页面美化'
+            print_menu_item 4 '应用商店与页面'
             print_menu_item 5 '设备维护与检测'
-            print_menu_item 0 '退出'
-            print_menu_prompt '0-5'
+            menu_choice_prompt='0-5'
         fi
+        print_menu_item 0 '退出'
+        print_menu_prompt "$menu_choice_prompt"
         read_category_choice
         MENU_ACTION_COMPLETED='0'
 
@@ -88662,6 +89861,16 @@ if [ "${1:-}" = '--sync-luci8080' ]; then
     require_root
     acquire_script_lock
     sync_openwrt_luci_8080_plugins
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-adguard-autostart' ]; then
+    require_root
+    acquire_script_lock
+    ensure_adguard_autostart || die "AdGuardHome 开机启动修复失败"
+    if ! /etc/init.d/AdGuardHome running >/dev/null 2>&1; then
+        /etc/init.d/AdGuardHome start || die "AdGuardHome 启动失败"
+    fi
     exit 0
 fi
 

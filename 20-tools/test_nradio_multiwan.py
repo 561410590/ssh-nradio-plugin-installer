@@ -44,7 +44,7 @@ class MultiwanTest(unittest.TestCase):
         main = MAIN.read_text(encoding='utf-8')
         embedded = main.split("<<'EOF_NRADIO_MULTIWAN'\n", 1)[1].split('\nEOF_NRADIO_MULTIWAN', 1)[0]
         self.assertEqual(embedded, SOURCE.read_text(encoding='utf-8').rstrip())
-        self.assertIn('SCRIPT_VERSION="V3.2.3"', main)
+        self.assertIn('SCRIPT_VERSION="V3.2.4"', main)
 
     def test_two_lines(self):
         shares = distribution(render('cpe_4|3|eth1|online|1\ncpe1_4|5|port5|online|3'))
