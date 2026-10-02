@@ -1,10 +1,10 @@
-# NRadio V3.2.4 release checksums
+# NRadio V3.2.6 release checksums
 
-Generated from local file contents on 2026-09-28.
+Generated from local file contents on 2026-10-03.
 
 ```text
-db5a192a8cb05f599be9d8be6b34578cddeace6d8644bc231cddebdffbd65be3  3444319  00-current/ssh-nradio-plugin-installer.sh
-914dc3b6091f1cd944de6ff195ecba51872ce6e4128d4a328c684face36839b9    80603  40-server-web/mayebano-support/index.html
+8a9cc3d99aab0a95167bd8673b71a2ff7776979c152c6098cf44cb6d3e4fcc80  3465630  00-current/ssh-nradio-plugin-installer.sh
+32dcb8511f02c49ce92eede72139eb0768405d5e632cbe42cdb83bdb48085a46    83731  40-server-web/mayebano-support/index.html
 970ee082b03762421d585b6538806b184bdce9d7a7ce6e8379915a3b32c727a1      258  40-server-web/mayebano-support/AK68-798-SSH-2222.nr
 13485656cc0f72664db1fb0a82dc645d30e745c6d0158067e15a67f63f46565c     4319  40-server-web/mayebano-support/nradio-ssh-manager.ipk
 6319c33633e3a1f413474f2b1b826e059dc44c26c0816e85b078ac5a5a794541  7499156  40-server-web/mayebano-support/nradio-mesh.ipk

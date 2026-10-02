@@ -27,7 +27,7 @@ body:
     id: script_version
     attributes:
       label: Script version
-      placeholder: V3.2.4
+      placeholder: V3.2.6
     validations:
       required: true
   - type: input

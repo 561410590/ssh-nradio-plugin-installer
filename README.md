@@ -2,15 +2,15 @@
 
 NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 
-- 当前版本：`V3.2.4`（2026-09-28）
+- 当前版本：`V3.2.6`（2026-10-03）
 - 公开版本：以 GitHub Releases 页面为准
-- 当前功能：雷神安装兼容修复、Argon 8080 防火墙与网络诊断、OpenVPN / AdGuardHome 弹窗、应用商店及 SSH 菜单优化、C2000Ultra Docker SD 卡存储。
+- 当前功能：iStore 扩展盘安装、Argon 8080 页面加载优化、实时连接与 LAN 地址跟随、Bootstrap 系统和网络设置、OpenVPN / AdGuardHome 弹窗及双栈多线分流。
 - 公网页：[https://nradio.mayebano.shop/](https://nradio.mayebano.shop/)
 - GitHub Releases：[发布页](https://github.com/561410590/ssh-nradio-plugin-installer/releases)
 
 ## 当前维护状态
 
-本地总脚本、支持页、仓库资料与检查规则使用 `V3.2.4`。脚本代理下载读取 GitHub main；支持页的 Mesh 与 AK68-798 透传插件使用同站文件。本地更新不代表已经发布到公网。
+本地总脚本、支持页、仓库资料与检查规则使用 `V3.2.6`。脚本代理下载读取 GitHub main；支持页的 Mesh 与 AK68-798 透传插件使用同站文件。本地更新不代表已经发布到公网。
 
 ## Mesh组网插件 1.20.1-4
 
@@ -31,7 +31,7 @@ NRadio 官方 NROS 路由器使用的 SSH 菜单脚本。
 - VPN 与双线路联动：启停、VPN 重连和后台检查同步站点路由的 mwan3 排除集合；失败显示诊断，VPN-only 恢复保留限速队列。
 - C8-788：依据 `HC-WT9302 / HCMT7987-NAND / NROS 2.2.12.n0.c1` 实机输出适配 `eth3` 蜂窝出口及原厂双栈全宽 mark 分类顺序。
 - 合并 IPv6 多地址跟踪、减少队列重建、未保存输入保护和请求超时处理。本地回归与安装包检查通过；实机 VPN 连通性和限速数值需按设备验收。
-- 本节是独立 QoS 插件更新，当前本地总脚本版本为 `V3.2.4`。
+- 本节是独立 QoS 插件更新，当前本地总脚本版本为 `V3.2.6`。
 
 ## 适用设备
 
@@ -83,6 +83,19 @@ cd /tmp && wget -O ssh-nradio-plugin-installer.sh https://ghproxy.vip/https://gi
 | 游戏加速器 | 奇游、雷神、状态读取和卸载链 |
 | 应用商店与页面美化 | 卡片视觉、状态徽标、手机保存按钮兼容、原厂还原、C2000Pro / AK68-798 轻量应用商店、OpenWrt LuCI 8080、Argon 主题与 iStore 插件接入 |
 | 设备维护与检测 | 统一体检、哈基米依赖修复、封版工具箱、C8/C5800 eMMC 存储扩展、PicoClaw / 鲲鹏小龙虾迁移与还原、通用卸载链、风扇控制、智能频段 v7、首页 CPU/5G 温度、5G 连接监听、硬件加速管理 |
+
+## V3.2.6 更新
+
+- C8-688、C5800-650、C5800-688、NBCPE 开启存储扩展且 rootfs_2nd 挂载正常时，8080 iStore 将插件、新增依赖及缓存直接安装到扩展盘。未开启扩展时及 MAX、Ultra 等其他机型沿用 overlay。
+- 修复命令转义、递归目录链接重复创建和 LuCI、Argon 依赖识别；C5800-688 已完成百度网盘插件的扩展盘安装。
+- Argon 菜单复用当前页面数据，减少额外请求；深色样式独立加载并使用缓存，省去相同 RPC 地址的重复探测和无用设备查询。
+- 版本日期更新为 `2026-10-03`。
+
+## V3.2.5 更新
+
+- 修复 Argon 实时连接统计解析及首次采样，8080 监听跟随已生效的 LAN 地址变化。
+- 登录背景支持 JPEG 和大写扩展名，按所选来源读取必应壁纸或本地文件；插件同步覆盖 OpenVPN、AdGuardHome 模板及中文翻译。
+- Bootstrap 补齐管理权、挂载点、Swap、防火墙四页及网络诊断；DHCP / DNS 表单加入缓存条目数、同时查询全部上游 DNS 和静态租约 DUID。
 
 ## V3.2.4 更新
 
@@ -364,9 +377,9 @@ cd /tmp && wget -O ssh-nradio-plugin-installer.sh https://ghproxy.vip/https://gi
 
 | 文件 | 用途 |
 | --- | --- |
-| `00-current/ssh-nradio-plugin-installer.sh` | V3.2.4 本地总脚本，包含 Argon 8080、iStore 插件同步、双栈多线分流与设备维护 |
+| `00-current/ssh-nradio-plugin-installer.sh` | V3.2.6 本地总脚本，包含 Argon 8080、iStore 扩展盘安装、双栈多线分流与设备维护 |
 | `00-current/nradio-smart-band.sh` | 历史独立开发校验源；当前运行代码以总脚本内嵌 v7 为准，不是运行或发布依赖 |
-| `40-server-web/mayebano-support/index.html` | V3.2.4 本地支持页入口 |
+| `40-server-web/mayebano-support/index.html` | V3.2.6 本地支持页入口 |
 | `40-server-web/mayebano-support/AK68-798-SSH-2222.nr` | AK68-798 SSH 2222 配置恢复包 |
 | `40-server-web/mayebano-support/nradio-ssh-manager.ipk` | C8-788 在 NRadio 应用商店本地安装的 SSH 管理包 |
 | `40-server-web/mayebano-support/nradio-mesh.ipk` | NROS 应用商店本地安装的 Mesh 组网包 |
@@ -404,15 +417,15 @@ sh -n 00-current/ssh-nradio-plugin-installer.sh
 bash -n 00-current/ssh-nradio-plugin-installer.sh
 ```
 
-`CHECKSUMS.txt` 记录 V3.2.4 本地配套文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布前重新核对总脚本、支持页、AK68-798 SSH 配置包、四个插件 IPK 和 `vercel.json` 的 hash 与大小。
+`CHECKSUMS.txt` 记录 V3.2.6 本地配套文件；独立 `nradio-smart-band.sh` 不进入发布文件清单。发布前重新核对总脚本、支持页、AK68-798 SSH 配置包、四个插件 IPK 和 `vercel.json` 的 hash 与大小。
 
 ## 脚本校验
 
 当前脚本：
 
 ```text
-SHA256  db5a192a8cb05f599be9d8be6b34578cddeace6d8644bc231cddebdffbd65be3
-Bytes   3444319
+SHA256  8a9cc3d99aab0a95167bd8673b71a2ff7776979c152c6098cf44cb6d3e4fcc80
+Bytes   3465630
 Path    00-current/ssh-nradio-plugin-installer.sh
 ```
 

@@ -36,10 +36,10 @@ jobs:
           test -f CONTRIBUTING.md
           test -f SECURITY.md
 
-      - name: Verify V3.2.4 script state
+      - name: Verify V3.2.6 script state
         run: |
-          grep -q 'SCRIPT_VERSION="V3.2.4"' 00-current/ssh-nradio-plugin-installer.sh
-          grep -q 'SCRIPT_RELEASE_DATE="2026-09-28"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_VERSION="V3.2.6"' 00-current/ssh-nradio-plugin-installer.sh
+          grep -q 'SCRIPT_RELEASE_DATE="2026-10-03"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'CURRENT_DETECTED_NROS_REVISION=""' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_OPERATOR_FIX_VERSION="20260828-1"' 00-current/ssh-nradio-plugin-installer.sh
           grep -q 'NRADIO_HOME_TEMP_VERSION="20260912-6"' 00-current/ssh-nradio-plugin-installer.sh
@@ -318,9 +318,9 @@ jobs:
 
       - name: Verify support page state
         run: |
-          grep -q '<title>NRadio 插件脚本 V3.2.4 | 支持页</title>' 40-server-web/mayebano-support/index.html
-          grep -q 'aria-label="当前版本">V3.2.4' 40-server-web/mayebano-support/index.html
-          grep -q 'V3.2.4 / 2026-09-28' 40-server-web/mayebano-support/index.html
+          grep -q '<title>NRadio 插件脚本 V3.2.6 | 支持页</title>' 40-server-web/mayebano-support/index.html
+          grep -q 'aria-label="当前版本">V3.2.6' 40-server-web/mayebano-support/index.html
+          grep -q 'V3.2.6 / 2026-10-03' 40-server-web/mayebano-support/index.html
           grep -q '10 款 NRadio 机型' 40-server-web/mayebano-support/index.html
           grep -q '5G 连接监听' 40-server-web/mayebano-support/index.html
           grep -q 'GitHub 下载加速' 40-server-web/mayebano-support/index.html
@@ -333,7 +333,7 @@ jobs:
           grep -q '<div class="step-index">04</div>' 40-server-web/mayebano-support/index.html
           grep -q '配置双栈多线分流' 40-server-web/mayebano-support/index.html
           grep -q '5 → 5 → 2' 40-server-web/mayebano-support/index.html
-          grep -q '雷神安装修复与插件页面更新' 40-server-web/mayebano-support/index.html
+          grep -q 'iStore 扩展盘安装与 Argon 页面优化' 40-server-web/mayebano-support/index.html
           grep -q 'role="progressbar"' 40-server-web/mayebano-support/index.html
           grep -q 'aria-current="page"' 40-server-web/mayebano-support/index.html
           grep -q 'history-toggle' 40-server-web/mayebano-support/index.html
@@ -378,7 +378,7 @@ jobs:
           grep -q 'V2.6.0' 40-server-web/mayebano-support/index.html
           grep -q 'V2.5.0' 40-server-web/mayebano-support/index.html
           grep -q 'PicoClaw / 鲲鹏小龙虾' 40-server-web/mayebano-support/index.html
-          grep -q '当前页面：V3.2.4 / 2026-09-28｜雷神安装修复与插件页面更新' 40-server-web/mayebano-support/index.html
+          grep -q '当前页面：V3.2.6 / 2026-10-03｜iStore 扩展盘安装与 Argon 页面优化' 40-server-web/mayebano-support/index.html
           ! grep -q 'ChatGPT 会员' 40-server-web/mayebano-support/index.html || exit 1
           grep -q '动态 Swap' 40-server-web/mayebano-support/index.html
           grep -q '/_vercel/insights/script.js' 40-server-web/mayebano-support/index.html
@@ -556,8 +556,8 @@ jobs:
 
       - name: Verify checksum record
         run: |
-          grep -q 'NRadio V3.2.4 release checksums' CHECKSUMS.txt
-          grep -q 'Generated from local file contents on 2026-09-28' CHECKSUMS.txt
+          grep -q 'NRadio V3.2.6 release checksums' CHECKSUMS.txt
+          grep -q 'Generated from local file contents on 2026-10-03' CHECKSUMS.txt
           ! grep -q '00-current/nradio-smart-band.sh' CHECKSUMS.txt || exit 1
           records=0
           main_seen=0
@@ -603,10 +603,10 @@ jobs:
           grep -q '## Mesh组网插件 1.20.1-4' README.md
           grep -q '## AK68-798 透传插件 1.2.0-5' README.md
           grep -q '## NRadio Mesh 1.0.14 - 2026-09-02' CHANGELOG.md
-          grep -q '当前版本：`V3.2.4`' README.md
+          grep -q '当前版本：`V3.2.6`' README.md
           grep -q '公开版本：以 GitHub Releases 页面为准' README.md
-          grep -q '## V3.2.4 更新' README.md
-          grep -q '## V3.2.4 - 2026-09-28（本地更新）' CHANGELOG.md
+          grep -q '## V3.2.6 更新' README.md
+          grep -q '## V3.2.6 - 2026-10-03（本地更新）' CHANGELOG.md
           grep -q '## NRadio Mesh 1.20.1-4 - 2026-09-14（本地下载包更新）' CHANGELOG.md
           grep -q '## AK68-798 透传插件 1.2.0-5 - 2026-09-14（本地下载包新增）' CHANGELOG.md
           grep -q '## V3.1.0 - 2026-09-12（正式发布）' CHANGELOG.md

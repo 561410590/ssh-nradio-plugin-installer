@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.2.4"
+SCRIPT_VERSION="V3.2.6"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-09-28"
+SCRIPT_RELEASE_DATE="2026-10-03"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -66089,8 +66089,11 @@ function M.snapshot()
 		if name ~= "nradio" and name ~= "argon" and name ~= "bootstrap" then walk(path) end
 	end
 	for _, pattern in ipairs({ "/usr/lib/lua/luci/model/cbi/openvpn*.lua",
-		"/usr/lib/lua/luci/model/cbi/AdGuardHome/*" }) do
+		"/usr/lib/lua/luci/model/cbi/AdGuardHome/*", "/usr/lib/lua/luci/i18n/*.lmo" }) do
 		for path in (fs.glob(pattern) or function() end) do record(rows, path) end
+	end
+	for _, path in ipairs({ "/usr/lib/lua/luci/view/openvpn", "/usr/lib/lua/luci/view/AdGuardHome" }) do
+		walk(path)
 	end
 	table.sort(rows)
 	return table.concat(rows, "\n")
@@ -66157,16 +66160,392 @@ EOF_OPENWRT_LUCI_8080_PLUGIN_STATE
     chmod 644 "$OPENWRT_LUCI_8080_ROOT/plugin-state.lua" || die "设置插件状态模块权限失败"
 }
 
+write_openwrt_luci_8080_istore_storage() {
+    mkdir -p /usr/libexec/nradio-istore-8080/bin || die "创建 iStore 存储适配目录失败"
+    cat > /usr/libexec/nradio-istore-8080/bin/opkg <<'EOF_ISTORE_8080_OPKG'
+#!/bin/sh
+exec /usr/bin/lua /usr/libexec/nradio-istore-8080/storage.lua --opkg "$@"
+EOF_ISTORE_8080_OPKG
+    cat > /usr/libexec/nradio-istore-8080/storage.lua <<'EOF_ISTORE_8080_STORAGE'
+local fs = require "nixio.fs"
+local nixio = require "nixio"
+local util = require "luci.util"
+local quote = util.shellquote or function(value)
+	return "'" .. tostring(value or ""):gsub("'", "'\\''") .. "'"
+end
+local base = "/usr/libexec/nradio-istore-8080"
+local mount = "/mnt/rootfs_2nd_data"
+local root = mount .. "/nradio-apps/istore-root"
+local info = "/usr/lib/opkg/info"
+local mode = table.remove(arg, 1)
+local function read(path) return fs.readfile(path) or "" end
+local function mkdir(path)
+	assert(fs.mkdirr(path) or fs.stat(path, "type") == "dir", "创建目录失败: " .. path)
+end
+local function command(exe, args)
+	local words = { quote(exe) }
+	for _, word in ipairs(args) do words[#words + 1] = quote(word) end
+	return table.concat(words, " ")
+end
+local function run(cmd)
+	local code = os.execute(cmd)
+	return code > 255 and math.floor(code / 256) or code
+end
+local function native(args)
+	return run(command(assert(os.getenv("NRADIO_ISTORE_OPKG")), args))
+end
+local function logical(path)
+	if path:sub(1, #root + 1) == root .. "/" then path = path:sub(#root + 1) end
+	path = path:gsub("/+", "/")
+	if path ~= "/" then path = path:gsub("/$", "") end
+	assert(path:sub(1, 1) == "/" and not (path .. "/"):find("/%.%./") and
+		not (path .. "/"):find("/%./"), "无效软件包路径: " .. path)
+	return path
+end
+local function states(data)
+	local result = {}
+	for block in (data .. "\n\n"):gmatch("(.-)\n%s*\n") do
+		local name = block:match("^Package: ([^\n]+)")
+		if name then result[name] = block end
+	end
+	return result
+end
+local function provide(block, name)
+	local provided = block:match("\nProvides: ([^\n]+)")
+	for entry in (provided or ""):gmatch("[^,]+") do
+		if entry:match("^%s*([^%s(]+)") == name then return block end
+	end
+	if provided then
+		return block:gsub("\nProvides: [^\n]+", "\nProvides: " .. provided .. ", " .. name, 1)
+	end
+	return block:gsub("\nStatus:", "\nProvides: " .. name .. "\nStatus:", 1)
+end
+local function builtin_providers(data)
+	local packages = states(data)
+	local function installed(name)
+		return packages[name] and packages[name]:match("\nStatus: [^\n]* installed")
+	end
+	-- NROS already ships the legacy Lua libraries split across its LuCI packages.
+	-- Declare their actual capability rather than installing overlapping upstream files.
+	if installed("luci-base") and installed("luci-mod-nradio-v3") then
+		local complete = true
+		for _, path in ipairs({ "cbi.lua", "model/uci.lua", "model/network.lua",
+			"model/firewall.lua", "tools/webadmin.lua", "view/cbi/map.htm" }) do
+			if not fs.stat("/usr/lib/lua/luci/" .. path) then complete = false end
+		end
+		local ok, cbi = pcall(require, "luci.cbi")
+		if complete and ok and cbi.Map and cbi.TypedSection then
+			packages["luci-base"] = provide(packages["luci-base"], "luci-compat")
+			io.write("iStore: 复用 NROS 已有 LuCI Lua 兼容库\n")
+		end
+	end
+	-- Only CONFIG=y capabilities qualify; absent or loadable modules stay unresolved.
+	if installed("kernel") and fs.access("/proc/config.gz") then
+		local config = "\n" .. util.exec("zcat /proc/config.gz") .. "\n"
+		for _, item in ipairs({
+			{ "kmod-br-netfilter", "CONFIG_BRIDGE_NETFILTER=y" },
+			{ "kmod-ikconfig", "CONFIG_IKCONFIG=y", "CONFIG_IKCONFIG_PROC=y" }
+		}) do
+			if config:find("\n" .. item[2] .. "\n", 1, true) and
+				(not item[3] or config:find("\n" .. item[3] .. "\n", 1, true)) then
+				packages.kernel = provide(packages.kernel, item[1])
+				io.write("iStore: 内核已内置 " .. item[1] .. "，复用现有能力\n")
+			end
+		end
+	end
+	local result = {}
+	for block in (data .. "\n\n"):gmatch("(.-)\n%s*\n") do
+		local name = block:match("^Package: ([^\n]+)")
+		if name then result[#result + 1] = packages[name] end
+	end
+	return table.concat(result, "\n\n") .. "\n\n"
+end
+local function files(pkg, dir)
+	local result = {}
+	for path in read(dir .. "/" .. pkg .. ".list"):gmatch("[^\r\n]+") do
+		path = logical(path)
+		if path ~= "" then result[path] = true end
+	end
+	return result
+end
+local function copy(src, dst)
+	if fs.realpath(src) == fs.realpath(dst) and fs.stat(dst) then return end
+	mkdir(dst:match("^(.*)/[^/]+$"))
+	assert(fs.copy(src, dst), "复制软件包状态失败: " .. src)
+end
+local function active(instance)
+	local model = read(instance .. "/model.display"):match("[^\r\n]+")
+	if model ~= "NRadio_C8-688" and model ~= "NRadio_C5800-650" and
+	   model ~= "NRadio_C5800-688" and model ~= "NRadio_NBCPE" then return false end
+	if not fs.access("/etc/nradio_storage_expand_enabled") then return false end
+	local device = fs.realpath("/dev/disk/by-partlabel/rootfs_2nd")
+	if not device then
+		for path in (fs.glob("/sys/class/block/*/uevent") or function() end) do
+			local data = read(path)
+			if ("\n" .. data):find("\nPARTNAME=rootfs_2nd\n", 1, true) then
+				device = fs.realpath("/dev/" .. assert(data:match("DEVNAME=([^\n]+)")))
+				break
+			end
+		end
+	end
+	local source = read("/proc/mounts"):match("([^%s]+) " .. mount .. " ")
+	assert(device and source and fs.realpath(source) == device,
+		"rootfs_2nd 扩展已启用但挂载异常，停止 iStore 安装")
+	return true
+end
+local function expose(path)
+	local target = root .. path
+	local st = assert(fs.lstat(target), "扩展盘缺少软件包文件: " .. path)
+	local old = fs.lstat(path)
+	if st.type == "dir" then
+		if not old then
+			local parent = path:match("^(.*)/[^/]+$")
+			if parent == "" then parent = "/" end
+			if not fs.stat(parent) then expose(parent) end
+			assert(fs.chmod(target, "755"))
+			-- Linking a missing parent also exposes all of its staged children.
+			if not fs.lstat(path) then
+				assert(fs.symlink(target, path), "创建软件包目录入口失败: " .. path)
+			else assert(fs.stat(path, "type") == "dir", "软件包目录冲突: " .. path) end
+		else assert(fs.stat(path, "type") == "dir", "软件包目录冲突: " .. path) end
+		return
+	end
+	local parent = path:match("^(.*)/[^/]+$")
+	if parent == "" then parent = "/" end
+	if not fs.stat(parent) then expose(parent) end
+	if fs.realpath(path) == fs.realpath(target) then return end
+	local pending = path .. ".nradio-istore-new"
+	fs.unlink(pending)
+	assert(fs.symlink(target, pending), "创建软件包入口失败: " .. path)
+	assert(fs.rename(pending, path), "发布软件包入口失败: " .. path)
+end
+local function install(args, conf)
+	-- Hold the same lockf lock as native opkg while resolving and publishing.
+	local lock = assert(nixio.open("/var/lock/opkg.lock", "w"))
+	assert(lock:lock("tlock"), "opkg 正忙，请稍后重试")
+	local before_data = builtin_providers(read("/usr/lib/opkg/status"))
+	local before = states(before_data)
+	mkdir(root .. info)
+	mkdir(root .. "/var/lock")
+	mkdir(root .. "/.nradio-tmp")
+	mkdir(root .. "/.nradio-cache")
+	mkdir(root .. "/.nradio-packages")
+	assert(fs.chmod(mount, "755"))
+	assert(fs.chmod(mount .. "/nradio-apps", "755"))
+	assert(fs.chmod(root, "755"))
+	assert(fs.writefile(root .. "/usr/lib/opkg/status", before_data))
+	local previous, scripts = {}, {}
+	for pkg in pairs(before) do
+		previous[pkg] = files(pkg, info)
+		scripts[pkg] = { prerm = read(info .. "/" .. pkg .. ".prerm") }
+	end
+	for path in (fs.glob(info .. "/*") or function() end) do
+		if fs.stat(path, "type") == "reg" then copy(path, root .. path) end
+	end
+	-- Preserve live conffiles before opkg compares their hashes in offline mode.
+	for path in (fs.glob(info .. "/*.conffiles") or function() end) do
+		for entry in read(path):gmatch("[^\r\n]+") do
+			local file = logical(assert(entry:match("^([^%s]+)")))
+			if fs.stat(file, "type") == "reg" then copy(file, root .. file) end
+		end
+	end
+	mkdir(root .. "/etc/opkg")
+	local feeds = os.getenv("OPKG_CONF_DIR") or "/etc/opkg"
+	for path in (fs.glob(root .. "/etc/opkg/*.conf") or function() end) do assert(fs.unlink(path)) end
+	for path in (fs.glob(feeds .. "/*.conf") or function() end) do
+		copy(path, root .. "/etc/opkg/" .. assert(path:match("[^/]+$")))
+	end
+	local config = read(conf)
+	local lists = config:match("lists_dir%s+%S+%s+([^%s]+)") or "/var/opkg-lists"
+	mkdir(root .. "/var/istore-lists")
+	for path in (fs.glob(lists .. "/*") or function() end) do
+		if fs.stat(path, "type") == "reg" then
+			copy(path, root .. "/var/istore-lists/" .. assert(path:match("[^/]+$")))
+		end
+	end
+	config = config:gsub("[^\n]*lists_dir[^\n]*\n?", "")
+	config = config:gsub("[^\n]*option%s+overlay_root[^\n]*\n?", "")
+	config = config .. "\nlists_dir ext /var/istore-lists\noption overlay_root " .. root .. "\n"
+	local config_path = root .. "/.nradio-opkg.conf"
+	assert(fs.writefile(config_path, config))
+	local offline = { "-f", config_path, "--offline-root", root, "--cache", root .. "/.nradio-cache",
+		"--tmp-dir", root .. "/.nradio-tmp" }
+	for _, value in ipairs(args) do offline[#offline + 1] = value end
+	io.write("iStore: 软件包与依赖直接安装到 rootfs_2nd\n"); io.flush()
+	local code = native(offline)
+	local after = states(read(root .. "/usr/lib/opkg/status"))
+	local changed = {}
+	for pkg, block in pairs(after) do
+		if block ~= before[pkg] and (block:match("\nStatus: [^\n]* installed") or
+			block:match("\nStatus: [^\n]* unpacked")) then changed[pkg] = true end
+	end
+	local owners = {}
+	for pkg, paths in pairs(previous) do
+		for path in pairs(paths) do owners[path] = pkg end
+	end
+	-- Publish only packages changed by this transaction, including dependencies.
+	for pkg in pairs(changed) do
+		local paths = files(pkg, root .. info)
+		for path in pairs(paths) do
+			local owner = owners[path]
+			local st = fs.lstat(root .. path)
+			assert((st and st.type == "dir") or not owner or owner == pkg or changed[owner] or
+				(" " .. (after[pkg]:match("\nReplaces: ([^\n]+)") or "") .. ","):find(" " .. owner .. ",", 1, true),
+				"软件包文件归属冲突: " .. path)
+		end
+		if scripts[pkg] and scripts[pkg].prerm ~= "" then
+			local old_script = root .. "/.nradio-tmp/" .. pkg .. ".prerm"
+			assert(fs.writefile(old_script, scripts[pkg].prerm))
+			assert(run("IPKG_INSTROOT= PKG_ROOT=/ PKG_UPGRADE=1 sh " .. quote(old_script) ..
+				" upgrade " .. quote(after[pkg]:match("\nVersion: ([^\n]+)") or "")) == 0,
+				"停止旧软件包失败: " .. pkg)
+			fs.unlink(old_script)
+		end
+		local preinst = root .. info .. "/" .. pkg .. ".preinst"
+		if fs.access(preinst) then
+			assert(run("IPKG_INSTROOT= PKG_ROOT=/ PKG_UPGRADE=" .. (before[pkg] and "1" or "0") ..
+				" sh " .. quote(preinst) .. " install") == 0, "软件包安装前处理失败: " .. pkg)
+		end
+		local ordered = {}
+		for path in pairs(paths) do ordered[#ordered + 1] = path end
+		table.sort(ordered, function(a, b) return #a < #b end)
+		for _, path in ipairs(ordered) do
+			if fs.lstat(root .. path) then expose(path) end
+		end
+		for path in pairs(previous[pkg] or {}) do
+			if not paths[path] and fs.readlink(path) == root .. path then fs.unlink(path) end
+		end
+		local list = table.concat(ordered, "\n") .. "\n"
+		assert(fs.writefile(root .. info .. "/" .. pkg .. ".list", list))
+		assert(fs.writefile(root .. "/.nradio-packages/" .. pkg .. ".list", list))
+		for path in (fs.glob(root .. info .. "/" .. pkg .. ".*") or function() end) do
+			expose(path:sub(#root + 1))
+		end
+		after[pkg] = after[pkg]:gsub("(\nStatus: [^\n]+) installed", "%1 unpacked")
+	end
+	local merged = {}
+	for pkg, block in pairs(after) do merged[#merged + 1] = changed[pkg] and block or (before[pkg] or block) end
+	table.sort(merged)
+	assert(fs.writefile("/usr/lib/opkg/status.nradio-istore-new", table.concat(merged, "\n\n") .. "\n\n"))
+	assert(fs.rename("/usr/lib/opkg/status.nradio-istore-new", "/usr/lib/opkg/status"))
+	lock:lock("ulock"); lock:close()
+	-- Native configure runs real postinst scripts after all system links exist.
+	if next(changed) and native({ "configure" }) ~= 0 then code = 1 end
+	return code
+end
+local function remove(args)
+	local code = native(args)
+	local installed = states(read("/usr/lib/opkg/status"))
+	for manifest in (fs.glob(root .. "/.nradio-packages/*.list") or function() end) do
+		local pkg = assert(manifest:match("/([^/]+)%.list$"))
+		if not installed[pkg] or not installed[pkg]:match("\nStatus: [^\n]* installed") then
+			for path in read(manifest):gmatch("[^\r\n]+") do
+				path = logical(path)
+				if not fs.lstat(path) and fs.lstat(root .. path) and fs.lstat(root .. path).type ~= "dir" then
+					assert(fs.unlink(root .. path))
+				end
+			end
+			fs.unlink(manifest)
+		end
+	end
+	return code
+end
+local function main()
+	if mode == "--run" then
+		local instance = assert(table.remove(arg, 1))
+		if not active(instance) then
+			nixio.exec("/bin/sh", "-c", "exec is-opkg " .. command("", arg):sub(4))
+			return 127
+		end
+		local exe = util.exec("command -v opkg"):match("[^\r\n]+")
+		assert(exe and exe ~= base .. "/bin/opkg", "找不到系统 opkg")
+		nixio.setenv("NRADIO_ISTORE_OPKG", exe)
+		nixio.setenv("NRADIO_ISTORE_INSTANCE", instance)
+		nixio.setenv("PATH", base .. "/bin:" .. (os.getenv("PATH") or "/usr/sbin:/usr/bin:/sbin:/bin"))
+		-- Keep official is-opkg behavior; redirect its space check to the data disk.
+		local source = assert(fs.readfile(util.exec("command -v is-opkg"):match("[^\r\n]+")))
+		source = source:gsub("df %-kP / ", "df -kP " .. root .. " ")
+		mkdir(root)
+		local runner = root .. "/.nradio-is-opkg"
+		assert(fs.writefile(runner, source)); assert(fs.chmod(runner, "755"))
+		nixio.exec("/bin/sh", "-c", "exec " .. command(runner, arg))
+		return 127
+	end
+	assert(mode == "--opkg", "无效 iStore 存储操作")
+	assert(active(assert(os.getenv("NRADIO_ISTORE_INSTANCE"))))
+	local args, conf, action = {}, "/etc/opkg.conf", nil
+	local i = 1
+	while i <= #arg do
+		local value = arg[i]
+		if value == "-f" or value == "--conf" or value == "--conf-file" then
+			i = i + 1; conf = assert(arg[i])
+		elseif value == "-o" or value == "--offline-root" or value == "--offline" then
+			-- Official is-opkg uses a separate offline root solely for feed updates.
+			return native(arg)
+		else
+			if value == "install" or value == "upgrade" or value == "remove" then action = value end
+			args[#args + 1] = value
+		end
+		i = i + 1
+	end
+	if action == "install" or action == "upgrade" then return install(args, conf) end
+	if action == "remove" then return remove(arg) end
+	return native(arg)
+end
+local ok, code = pcall(main)
+if not ok then io.stderr:write("iStore 存储适配失败: " .. tostring(code) .. "\n"); code = 1 end
+os.exit(code or 0)
+EOF_ISTORE_8080_STORAGE
+    chmod 755 /usr/libexec/nradio-istore-8080/bin/opkg || die "设置 iStore opkg 入口权限失败"
+    chmod 644 /usr/libexec/nradio-istore-8080/storage.lua || die "设置 iStore 存储适配权限失败"
+}
+
+ensure_openwrt_luci_8080_istore_argon_dependency() {
+    local istore_argon_source istore_argon_work istore_argon_fixed
+    prepare_openwrt_luci_8080_storage
+    [ "$OPENWRT_LUCI_8080_STORAGE_LABEL" = rootfs_2nd ] || return 0
+    istore_argon_source="$OPENWRT_LUCI_8080_ROOT/packages/${OPENWRT_LUCI_8080_ARGON_URL##*/}"
+    [ -s "$istore_argon_source" ] || return 0
+    istore_argon_work="$ROOTFS_2ND_STORAGE_APPS_DIR/istore-root/.nradio-argon-compat"
+    istore_argon_fixed="$istore_argon_work/luci-theme-argon-master_istore_all.ipk"
+    mkdir -p "$istore_argon_work/pkg" "$istore_argon_work/control" "$istore_argon_work/data"
+    extract_ipk_archive "$istore_argon_source" "$istore_argon_work/pkg"
+    tar -xzf "$istore_argon_work/pkg/control.tar.gz" -C "$istore_argon_work/control"
+    tar -xzf "$istore_argon_work/pkg/data.tar.gz" -C "$istore_argon_work/data"
+    lua - "$istore_argon_work" <<'EOF_ISTORE_ARGON_DEPENDENCY'
+local fs = require "nixio.fs"
+local work = assert(arg[1])
+local path = work .. "/control/control"
+local control = assert(fs.readfile(path))
+assert(control:match("^Package: luci%-theme%-argon%-master\n"), "Argon 安装包名称不符")
+assert(not control:find("\nProvides:", 1, true), "Argon 安装包已有其他 Provides，需要核对")
+assert(fs.writefile(path, control:gsub("\n+$", "") .. "\nProvides: luci-theme-argon\n"))
+path = work .. "/data/etc/uci-defaults/30_luci-theme-argon"
+local defaults = assert(fs.readfile(path))
+local fixed, count = defaults:gsub("[^\n]*set%s+luci%.main%.mediaurlbase=[^\n]*\n?", "")
+assert(count == 1, "Argon 默认主题设置位置不符")
+assert(fs.writefile(path, fixed))
+EOF_ISTORE_ARGON_DEPENDENCY
+    tar -czf "$istore_argon_work/pkg/control.tar.gz" -C "$istore_argon_work/control" .
+    tar -czf "$istore_argon_work/pkg/data.tar.gz" -C "$istore_argon_work/data" .
+    (cd "$istore_argon_work/pkg" && tar -czf "$istore_argon_fixed" ./debian-binary ./data.tar.gz ./control.tar.gz)
+    lua /usr/libexec/nradio-istore-8080/storage.lua --run "$OPENWRT_LUCI_8080_ROOT" opkg install "$istore_argon_fixed" || die "iStore Argon 依赖安装失败"
+}
+
 write_openwrt_luci_8080_files() {
     local shared_static static_name
     prepare_openwrt_luci_8080_packages
     mkdir -p "$OPENWRT_LUCI_8080_DOCROOT/cgi-bin" "$(dirname "$OPENWRT_LUCI_8080_DETAILS")" "$OPENWRT_LUCI_8080_VIEWDIR/openclash" || die "创建 OpenWrt LuCI（8080）目录失败"
     ensure_dir_writable "$OPENWRT_LUCI_8080_ROOT" "OpenWrt LuCI（8080）应用目录"
+    prepare_openwrt_luci_8080_system
+    write_openwrt_luci_8080_firewall
+    write_openwrt_luci_8080_dhcp
     write_openwrt_luci_8080_overview
     write_openwrt_luci_8080_apply
     write_openwrt_luci_8080_adguard
     write_openwrt_luci_8080_openvpn
     write_openwrt_luci_8080_plugin_state
+    write_openwrt_luci_8080_istore_storage
 
     cat > "$OPENWRT_LUCI_8080_ROOT/ubus.lua" <<'EOF_OPENWRT_LUCI_8080_UBUS'
 local http = require "luci.http"
@@ -66375,6 +66754,28 @@ if type(luci_util.shellquote) ~= "function" then
 	end
 end
 
+-- Override only this CGI's iStore command; load the current controller on every
+-- request so package upgrades retain the storage adapter without a global patch.
+local shared_require = require
+local private_store_loaded = false
+function require(name)
+	if name ~= "luci.controller.store" then return shared_require(name) end
+	if not private_store_loaded then
+		local fs = shared_require "nixio.fs"
+		local source = assert(fs.readfile("/usr/lib/lua/luci/controller/store.lua"))
+		local cmd = "/usr/bin/lua /usr/libexec/nradio-istore-8080/storage.lua --run " .. luci_util.shellquote(instance_root)
+		local count
+		source, count = source:gsub("local%s+myopkg%s*=%s*[\"']is%-opkg[\"']", function()
+			return "local myopkg = " .. string.format("%q", cmd)
+		end, 1)
+		assert(count == 1, "Unsupported iStore command entry")
+		package.loaded[name] = nil
+		assert(loadstring(source, "@/usr/lib/lua/luci/controller/store.lua"))()
+		private_store_loaded = true
+	end
+	return package.loaded[name]
+end
+
 local original_httpdispatch = luci.dispatcher.httpdispatch
 local original_createtree = luci.dispatcher.createtree
 
@@ -66413,7 +66814,7 @@ local function active_theme_name()
 end
 
 local private_firewall = instance_root .. "/usr/lib/lua/luci/controller/firewall.lua"
-if active_theme_name() == "argon" and require("nixio.fs").access(private_firewall) then
+if require("nixio.fs").access(private_firewall) then
 	package.loaded["luci.tools.firewall"] = nil
 	package.preload["luci.tools.firewall"] = assert(loadfile(instance_root .. "/usr/lib/lua/luci/tools/firewall.lua"))
 	require("luci.i18n").i18ndir = instance_root .. "/usr/lib/lua/luci/i18n/"
@@ -66489,7 +66890,8 @@ function luci.dispatcher.createtree()
 	if changed and fs.writefile(stamp, signature) then fs.chmod(stamp, "600") end
 	local admin = tree.nodes and tree.nodes.admin
 	if admin then
-		if active_theme_name() == "argon" then
+		-- Native settings are shared by Bootstrap and Argon on this listener.
+		do
 			local d = luci.dispatcher
 			local system = admin.nodes.system or { order = 30 }
 			admin.nodes.system = system
@@ -66574,6 +66976,38 @@ function luci.dispatcher.createtree()
 			status.nodes.overview.title = "概况"
 			status.nodes.details = nil
 		end
+		local realtime = status and status.nodes and status.nodes.realtime
+		if active_theme_name() == "argon" and realtime and realtime.nodes then
+			realtime.nodes.connections_status = {
+				leaf = true,
+				target = function()
+					local json = require "luci.jsonc"
+					local connections = require("luci.sys").net.conntrack() or {}
+					local statistics = {}
+					local pipe = io.popen("luci-bwc -c 2>/dev/null")
+					if pipe then
+						for line in pipe:lines() do
+							local sample = json.parse((line:gsub(",%s*$", "")))
+							if type(sample) == "table" and #sample >= 4 then
+								statistics[#statistics + 1] = sample
+							end
+						end
+						pipe:close()
+					end
+					if #statistics == 0 then
+						local sample = { os.time(), 0, 0, 0 }
+						for _, connection in ipairs(connections) do
+							local column = connection.layer4 == "udp" and 2 or
+								(connection.layer4 == "tcp" and 3 or 4)
+							sample[column] = sample[column] + 1
+						end
+						statistics[1] = sample
+					end
+					http.prepare_content("application/json")
+					http.write_json({ connections = connections, statistics = statistics })
+				end
+			}
+		end
 
 		local services = admin.nodes and admin.nodes.services
 		local openvpn = services and services.nodes and services.nodes.openvpn
@@ -66621,6 +67055,8 @@ function luci.dispatcher.createtree()
 			end,
 			leaf = true
 		}
+		-- Render the menu from this request's tree after authentication/language setup.
+		NRADIO_8080_MENU = function() return argon_menu_tree(admin) end
 	end
 	set_active_theme(tree, active_theme_name())
 	return tree
@@ -67465,7 +67901,7 @@ manage_openwrt_luci_8080() {
 }
 
 install_argon_8080() {
-    local configured_home
+    local configured_home argon_lan
     require_root
     require_openwrt_luci_8080_supported_model
     prepare_openwrt_luci_8080_storage
@@ -67476,6 +67912,7 @@ install_argon_8080() {
     if [ ! -d "$OPENWRT_LUCI_8080_ROOT" ] || [ -z "$configured_home" ]; then
         log "正在创建 8080 argon 实例"
         OPENWRT_LUCI_8080_THEME='argon' install_openwrt_luci_8080 "${1:-}"
+        ensure_openwrt_luci_8080_istore_argon_dependency
         record_action_history "4 > 4" "argon 主题（8080）" "PASS" "disabled"
         return 0
     fi
@@ -67487,16 +67924,21 @@ install_argon_8080() {
 
     log_stage 2 3 "私有化解包 argon 主题并更新 8080 页面"
     build_argon_8080_files
+    ensure_openwrt_luci_8080_istore_argon_dependency
     find -P "$ARGON_ROOT" -type d -exec chmod 755 {} \;
     find -P "$ARGON_ROOT" -type f -exec chmod 644 {} \;
     chmod 755 "$OPENWRT_LUCI_8080_CGI" || die "恢复 8080 CGI 可执行权限失败"
 
     log_stage 3 3 "切换 8080 主题并重载服务"
+    argon_lan="$(openwrt_luci_8080_lan_ip 2>/dev/null || true)"
+    [ -n "$argon_lan" ] || die "无法识别 LAN IPv4 地址"
+    uci -q set "uhttpd.openwrt8080.listen_http=$argon_lan:$OPENWRT_LUCI_8080_PORT" &&
+        uci -q commit uhttpd || die "更新 8080 LAN 监听地址失败"
     printf '%s\n' 'argon' > "$ARGON_ROOT/theme.active" || die "写入 argon 主题标记失败"
     install_openwrt_luci_8080_sync
     rm -f "$OPENWRT_LUCI_8080_INDEX_CACHE" /tmp/luci-indexcache /tmp/luci-indexcache.json /tmp/luci-indexcache-admin /tmp/luci-indexcache-store 2>/dev/null || true
     /etc/init.d/uhttpd reload || die "重载 uhttpd 失败"
-    log "入口:   http://$(openwrt_luci_8080_lan_ip 2>/dev/null || true):$OPENWRT_LUCI_8080_PORT/（浏览器请 Ctrl+F5 强制刷新）"
+    log "入口:   http://$argon_lan:$OPENWRT_LUCI_8080_PORT/（浏览器请 Ctrl+F5 强制刷新）"
     record_action_history "4 > 4" "argon 主题（8080）" "PASS" "disabled"
 }
 
@@ -67574,9 +68016,6 @@ build_argon_8080_files() {
     local OPENWRT_LUCI_8080_DETAILS="$OPENWRT_LUCI_8080_VIEWDIR/admin_status/nradio_details.htm"
     local OPENWRT_LUCI_8080_SYSAUTH="$OPENWRT_LUCI_8080_VIEWDIR/admin_status/nradio_8080_sysauth.htm"
     deploy_argon_8080_theme
-    prepare_openwrt_luci_8080_system
-    write_openwrt_luci_8080_firewall
-    write_openwrt_luci_8080_dhcp
     write_openwrt_luci_8080_files
     refresh_openwrt_luci_8080_resource_version
     publish_openwrt_luci_8080_files "$OPENWRT_LUCI_8080_ROOT" "$live_root"
@@ -67839,6 +68278,24 @@ last="$(cat "$root/plugins.signature" 2>/dev/null)"
 pending=''
 last_index=''
 ticks=0
+last_lan="$(uci -q get uhttpd.openwrt8080.listen_http)"
+sync_lan() {
+    local lan wanted current
+    lan="$(uci -q get network.lan.ipaddr)"
+    lan="${lan%%/*}"
+    case "$lan" in *.*.*.*) ;; *) return 0 ;; esac
+    ip -4 addr show br-lan 2>/dev/null | awk -v lan="$lan" '
+        $1 == "inet" { split($2, address, "/"); if (address[1] == lan) found=1 }
+        END { exit !found }
+    ' || return 0
+    wanted="$lan:8080"
+    current="$(uci -q get uhttpd.openwrt8080.listen_http)"
+    [ "$current" != "$wanted" ] || [ "$last_lan" != "$wanted" ] || return 0
+    uci -q set "uhttpd.openwrt8080.listen_http=$wanted" &&
+        uci -q commit uhttpd && /etc/init.d/uhttpd reload || return 1
+    last_lan="$wanted"
+    logger -t nradio-luci8080 "LAN 监听已更新为 $wanted"
+}
 mark_error() {
     printf '%s\n' "$1" > "$root/plugins.sync-error"
     chmod 644 "$root/plugins.sync-error"
@@ -67847,6 +68304,7 @@ mark_error() {
 while sleep 15; do
     [ "$(cat "$root/theme.active" 2>/dev/null)" = argon ] || continue
     [ ! -d /var/run/nradio-plugin-assistant.lock ] || continue
+    sync_lan || { mark_error '更新 8080 LAN 监听失败，稍后自动重试'; continue; }
     pidof opkg >/dev/null 2>&1 && continue
     index="$(lua "$root/plugin-state.lua" --index-snapshot)" || { mark_error '读取插件索引失败'; continue; }
     ticks=$((ticks + 1))
@@ -67976,8 +68434,6 @@ EOF_ARGON_8080_CONFIG
     done
     mkdir -p "$argon_target_root/usr/lib/lua/luci/view/themes/argon" || die "创建 argon 模板目录失败"
     cp "$argon_data/www/luci-static/resources/menu-argon.js" "$argon_resources/menu-argon.js" || die "写入 argon 原版菜单脚本失败"
-    sed -i 's/ui.menu.load().then/ui.menu.flushCache();ui.menu.load().then/' "$argon_resources/menu-argon.js" || die "更新 argon 菜单缓存入口失败"
-    grep -q 'ui.menu.flushCache();ui.menu.load()' "$argon_resources/menu-argon.js" || die "argon 菜单缓存入口缺失"
     cat > "$argon_target_root/www/luci-static/resources/cbi.js" <<'EOF_ARGON_8080_CBI_JS'
 /*
 	LuCI - Lua Configuration Interface
@@ -72238,6 +72694,10 @@ EOF_ARGON_8080_CBI_JS
 
 		/* DOM setup */
 		probeRPCBaseURL: function() {
+			if (env.ubuspath === this.url('admin/ubus')) {
+				rpcBaseURL = env.ubuspath;
+				return Promise.resolve(rpcBaseURL);
+			}
 			if (rpcBaseURL == null)
 				rpcBaseURL = Session.getLocalData('rpcBaseURL');
 
@@ -76252,6 +76712,10 @@ var UIMenu = baseclass.singleton(/** @lends LuCI.ui.menu.prototype */ {
 	 * Returns a promise resolving to the root element of the menu tree.
 	 */
 	load: function() {
+		if (L.isObject(L.env.menu)) {
+			this.menu = scrubMenu(L.env.menu);
+			return Promise.resolve(this.menu);
+		}
 		if (this.menu == null)
 			this.menu = session.getLocalData('menu');
 
@@ -85777,8 +86241,6 @@ EOF_ARGON_8080_XHR_JS
 	local disp = require "luci.dispatcher"
     local ver = require "luci.version"
 
-	local boardinfo = util.ubus("system", "board")
-
 	local node = disp.context.dispatched
 
 	local fs = require "nixio.fs"
@@ -85795,7 +86257,6 @@ EOF_ARGON_8080_XHR_JS
 	local private_webroot = NRADIO_8080_INSTANCE_ROOT and (NRADIO_8080_INSTANCE_ROOT .. "/www")
 		or (os.getenv("SCRIPT_FILENAME") or ""):match("^(.*)/cgi%-bin/luci$") or "/www"
 	local resource_version = (fs.readfile(private_webroot:gsub('/www$', '') .. '/resource.version') or ''):match('^[%w._-]+') or 'argon-20260928-1'
-	local dark_css = fs.readfile(private_webroot .. '/luci-static/argon/css/dark.css') or ""
 	local bar_color = '#5e72e4'
 	local primary, dark_primary, blur_radius, blur_radius_dark, blur_opacity
 	if fs.access('/etc/config/argon') then
@@ -85844,14 +86305,12 @@ EOF_ARGON_8080_XHR_JS
     <meta name="msapplication-TileImage" content="<%=media%>/icon/ms-icon-144x144.png">
     <meta name="theme-color" content="<%=bar_color%>">
     <link rel="stylesheet" href="<%=media%>/css/cascade.css?v=2.2.9.4">
+    <% if mode == 'normal' then %>
+    <link rel="stylesheet" href="<%=media%>/css/dark.css?v=<%=resource_version%>" media="(prefers-color-scheme: dark)">
+    <% elseif mode == 'dark' then %>
+    <link rel="stylesheet" href="<%=media%>/css/dark.css?v=<%=resource_version%>">
+    <% end %>
     <style title="text/css">
-        <% if mode == 'normal' then %>
-            @media (prefers-color-scheme: dark) {
-                <%=dark_css%>
-            }
-        <% elseif mode == 'dark' then %>
-            <%=dark_css%>
-        <% end -%>
         <% if fs.access('/etc/config/argon') then %>
         :root {
             --primary: <%=primary%>;
@@ -85955,6 +86414,11 @@ local ver = require "luci.version"
 local disp = require "luci.dispatcher"
 local context = disp.context
 local instance = NRADIO_8080_INSTANCE_ROOT
+local function script_json(value)
+	return require("luci.jsonc").stringify(value):gsub("<", "\\u003c")
+		:gsub(">", "\\u003e"):gsub("&", "\\u0026")
+		:gsub("\226\128\168", "\\u2028"):gsub("\226\128\169", "\\u2029")
+end
 local env = {
 	scriptname = luci.http.getenv('SCRIPT_NAME') or '/cgi-bin/luci',
 	requestpath = context.requestpath or context.path or {},
@@ -85964,7 +86428,8 @@ local env = {
 	ubuspath = disp.build_url('admin', 'ubus'),
 	documentroot = instance and (instance .. '/www') or '/www',
 	rpctimeout = 20,
-	nodespec = { satisfied = true, readonly = context.authuser ~= 'root' }
+	nodespec = { satisfied = true, readonly = context.authuser ~= 'root' },
+	menu = context.authsession and NRADIO_8080_MENU and NRADIO_8080_MENU() or nil
 }
 %>
 </div>
@@ -85980,7 +86445,7 @@ local env = {
 </div>
 <script>
 	(function() {
-		var language = <%=luci.http.write_json(luci.i18n.context.lang)%>;
+		var language = <%=script_json(luci.i18n.context.lang)%>;
 		var fallbackTranslations = {"663359c9":"状态","48e137c0":"系统日志","4f261233":"内核日志","919b0d7c":"路由表","adbaae97":"总览","8e770194":"进程","3b61f469":"实时图表","34f9da4c":"防火墙","93a3f9dd":"流量","d55cef16":"无线网络","14d9d010":"连接","ee1cb0cb":"负载","e54695b9":"网络","d6cdbe5e":"网络接口","9ff4dd9e":"DHCP 与 DNS","a0c974c7":"诊断","a4045d6b":"主机名","6c218dd2":"静态路由","246f4de5":"服务","5675672c":"系统","5f721cb8":"启动项","8e8dba2a":"软件包","c755ff17":"重启","a958389f":"安全","7ee2e566":"计划任务","e4b34079":"备份 / 升级","a58e56be":"配置","420558ef":"注销","bc925621":"AC 服务","afd81cd4":"管理","03e953fd":"插件","7ec58e04":"全部插件入口","7ead2d19":"OpenClash","612c0d89":"OpenVPN","63e7ceb2":"AdGuardHome","a27fff15":"第二系统"};
 		if (/^zh(?:[-_]|$)/i.test(language || '')) {
 			window.TR = window.TR || {};
@@ -85989,7 +86454,7 @@ local env = {
 					window.TR[key] = fallbackTranslations[key];
 			});
 		}
-		if (!window.L) window.L = new LuCI(<%=luci.http.write_json(env)%>);
+		if (!window.L) window.L = new LuCI(<%=script_json(env)%>);
 		L.require('menu-argon').catch(function(error) { L.error(error); });
 	})();
 </script>
@@ -86164,7 +86629,7 @@ EOF_ARGON_8080_HEADER_LOGIN_HTM
 	end
 
 
-	local imageTypes = " jpg png gif "
+	local imageTypes = " jpg jpeg png gif "
 	local videoTypes = " mp4 webm "
 	local allTypes = imageTypes .. videoTypes
 	function fetchMedia(path,themeDir)
@@ -86174,6 +86639,7 @@ EOF_ARGON_8080_HEADER_LOGIN_HTM
 			local attr = fs.stat(f)
 			if attr then
 				local ext = fs.basename(f):match(".+%.(%w+)$")
+				ext = ext and ext:lower()
 				if ext ~= nil and string.match(allTypes, " "..ext.." ") ~= nil then
 					local bg = {}
 					bg.type = ext
@@ -86195,18 +86661,18 @@ EOF_ARGON_8080_HEADER_LOGIN_HTM
 	local backgroundType 	= "Image"
 	local mimeType 			= ""
 
-	if ( backgroundCount > 0 ) then
+	if uci:get_first('argon', 'global', 'bing_background') == '1' then
+		local bing_script = privateWebroot:gsub('/www$', '') .. '/usr/libexec/argon/bing_wallpaper'
+		local bing = fs.access(bing_script) and sys.exec('sh ' .. util.shellquote(bing_script)) or nil
+		if bing then bing = bing:gsub('%s+$', '') end
+		if bing and bing ~= '' then bgUrl = bing end
+	elseif ( backgroundCount > 0 ) then
 		local currentBg = backgroundTable[math.random(1,backgroundCount)]
 		bgUrl 			= currentBg.url
 		if (string.match(videoTypes, " "..currentBg.type.." ") ~= nil) then
 			backgroundType 	= "Video"
 			mimeType 		= "video/" .. currentBg.type
 		end
-	elseif uci:get_first('argon', 'global', 'bing_background') == '1' then
-		local bing_script = privateWebroot:gsub('/www$', '') .. '/usr/libexec/argon/bing_wallpaper'
-		local bing = fs.access(bing_script) and sys.exec('sh ' .. util.shellquote(bing_script)) or nil
-		if bing then bing = bing:gsub('%s+$', '') end
-		if bing and bing ~= '' then bgUrl = bing end
 	end
 %>
 <!-- Login Page Start -->
@@ -89861,6 +90327,18 @@ if [ "${1:-}" = '--sync-luci8080' ]; then
     require_root
     acquire_script_lock
     sync_openwrt_luci_8080_plugins
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-istore8080' ]; then
+    require_root
+    acquire_script_lock
+    require_nradio_menu_environment
+    backup_file /usr/libexec/nradio-istore-8080/storage.lua
+    backup_file /usr/libexec/nradio-istore-8080/bin/opkg
+    write_openwrt_luci_8080_istore_storage
+    ensure_openwrt_luci_8080_istore_argon_dependency
+    log "8080 iStore 存储适配修复完成"
     exit 0
 fi
 

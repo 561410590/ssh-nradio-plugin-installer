@@ -3,15 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="NRadio NROS 插件脚本 V3.2.4，修复雷神安装、Argon 8080 防火墙与网络诊断，优化 OpenVPN、AdGuardHome 和应用商店页面，包含下载、安装教程、适配机型和更新记录。">
+    <meta name="description" content="NRadio NROS 插件脚本 V3.2.6，支持 iStore 插件安装至已开启的扩展盘，优化 Argon 8080 页面加载，补齐 Bootstrap 系统与网络设置，包含下载、安装教程、适配机型和更新记录。">
     <meta name="robots" content="index,follow">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="color-scheme" content="light">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="NRadio 插件工具 V3.2.4">
-    <meta property="og:description" content="V3.2.4 / 2026-09-28：修复雷神安装依赖与模块兼容，补齐 Argon 8080 防火墙页面并修正网络诊断；优化 OpenVPN、AdGuardHome、应用商店和 SSH 菜单，Docker 支持 C2000Ultra SD 卡存储。">
+    <meta property="og:title" content="NRadio 插件工具 V3.2.6">
+    <meta property="og:description" content="V3.2.6 / 2026-10-03：iStore 插件及新增依赖支持扩展盘安装，修复目录链接与依赖兼容；优化 Argon 页面加载，完善实时连接、LAN 地址跟随、登录背景和 Bootstrap 设置入口。">
     <meta name="theme-color" content="#fff1f2">
-    <title>NRadio 插件脚本 V3.2.4 | 支持页</title>
+    <title>NRadio 插件脚本 V3.2.6 | 支持页</title>
     <style>
         /* 
          * ============================================================
@@ -714,7 +714,7 @@
             <a href="#compatibility" class="nav-link">适配列表</a>
             <a href="#history" class="nav-link">更新记录</a>
             <a href="#donate" class="nav-link">打赏支持</a>
-            <div class="nav-v-info" aria-label="当前版本">V3.2.4</div>
+            <div class="nav-v-info" aria-label="当前版本">V3.2.6</div>
         </nav>
     </div>
 
@@ -731,9 +731,10 @@
                     <a href="https://github.com/561410590/ssh-nradio-plugin-installer" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="btn btn-outline">GitHub 开源</a>
                 </div>
                 <div class="badge-list">
-                    <div class="badge-item">V3.2.4 / 2026-09-28</div>
-                    <div class="badge-item">雷神安装兼容修复</div>
-                    <div class="badge-item">Argon 8080 · iStore</div>
+                    <div class="badge-item">V3.2.6 / 2026-10-03</div>
+                    <div class="badge-item">iStore 扩展盘安装</div>
+                    <div class="badge-item">Argon 8080 加载优化</div>
+                    <div class="badge-item">Bootstrap 8080 设置补齐</div>
                     <div class="badge-item">应用商店双入口</div>
                     <div class="badge-item">IPv4 / IPv6 多线分流</div>
                     <div class="badge-item">Mesh 1.20.1-4</div>
@@ -746,8 +747,8 @@
                     <div class="badge-item">C2000Ultra · SD 卡 / Swap</div>
                 </div>
                 <div class="release-panel" aria-label="当前版本信息">
-                    <div class="release-stat"><span>脚本版本</span><strong>V3.2.4</strong></div>
-                    <div class="release-stat"><span>更新日期</span><strong>2026-09-28</strong></div>
+                    <div class="release-stat"><span>脚本版本</span><strong>V3.2.6</strong></div>
+                    <div class="release-stat"><span>更新日期</span><strong>2026-10-03</strong></div>
                     <div class="release-stat"><span>运行方式</span><strong>SSH 终端</strong></div>
                     <div class="release-stat"><span>适配机型</span><strong>10 款 NRadio 机型</strong></div>
                 </div>
@@ -757,12 +758,18 @@
         <section class="release-notes" id="release" aria-labelledby="release-title">
             <div class="release-notes-head">
                 <div>
-                    <p class="release-kicker">V3.2.4 · 2026-09-28</p>
-                    <h2 id="release-title">雷神安装修复与插件页面更新</h2>
+                    <p class="release-kicker">V3.2.6 · 2026-10-03</p>
+                    <h2 id="release-title">iStore 扩展盘安装与 Argon 页面优化</h2>
                 </div>
-                <div class="release-date-chip">2026-09-28</div>
+                <div class="release-date-chip">2026-10-03</div>
             </div>
             <div class="fix-grid">
+                <article class="fix-card"><span>8080 · iStore 存储</span><strong>插件与依赖安装到扩展盘</strong><p>C8-688、C5800-650、C5800-688、NBCPE 开启存储扩展且挂载正常时，插件、新增依赖及下载缓存直接放入 rootfs_2nd。未开启扩展时使用 overlay；MAX、Ultra 等其他机型沿用 overlay。</p></article>
+                <article class="fix-card"><span>8080 · iStore 安装</span><strong>目录链接与依赖兼容修复</strong><p>修复命令转义、递归目录链接重复创建及 LuCI、Argon 依赖识别，复用固件已有组件。C5800-688 已完成百度网盘插件的扩展盘安装。</p></article>
+                <article class="fix-card"><span>4 → 4 · Argon 8080</span><strong>减少页面重复请求</strong><p>菜单随当前页面更新，减少额外菜单读取；深色样式独立加载并使用缓存，省去重复探测和无用查询，降低每页加载数据量。</p></article>
+                <article class="fix-card"><span>8080 · 连接与访问</span><strong>实时连接与 LAN 地址跟随</strong><p>修复实时连接统计数据解析，首次采样显示当前连接数；LAN 地址变化后，8080 监听跟随已生效的 LAN 地址更新。</p></article>
+                <article class="fix-card"><span>Argon · 登录背景</span><strong>JPEG 与必应壁纸支持</strong><p>补齐 JPEG 和大写扩展名识别，支持 JPG、JPEG、PNG、GIF、MP4、WebM。选择必应来源时使用必应壁纸，选择本地来源时使用上传文件。</p></article>
+                <article class="fix-card"><span>4 → 3 · Bootstrap 8080</span><strong>系统与网络设置补齐</strong><p>补齐管理权、挂载点、Swap、防火墙四页和网络诊断；DHCP / DNS 表单加入 DNS 缓存条目数、同时查询全部上游 DNS 和静态租约 DUID。</p></article>
                 <article class="fix-card"><span>3 → 2 → 1 · 雷神加速器</span><strong>安装依赖与模块兼容修复</strong><p>修复旧模块名误报和依赖包别名兼容，保留安装错误详情；C5800-688 已完成安装并接入应用商店。固件缺少 NETEM 时允许继续安装，部分延迟/NAT 检测能力可能受限。</p></article>
                 <article class="fix-card"><span>4 → 4 · Argon 8080</span><strong>防火墙页面与网络诊断</strong><p>补齐基本设置、端口转发、通信规则、自定义规则四个防火墙页面；修正网络诊断页面缺少模型的报错。C5800-688 已确认防火墙菜单和基本设置页面显示。</p></article>
                 <article class="fix-card"><span>8080 · 登录与页面加载</span><strong>修复会话与资源加载</strong><p>补齐表单资源，修复 RPC 请求、登录会话与页面加载异常；恢复网络菜单图标和颜色，保留中文标题及现有插件入口。</p></article>
@@ -776,7 +783,7 @@
                 <article class="fix-card"><span>ghproxy.vip</span><strong>下载加速</strong><p>脚本、插件和配置包下载统一使用 ghproxy.vip。</p></article>
                 <article class="fix-card"><span>1 → 8 · Docker</span><strong>C2000Ultra SD 卡存储</strong><p>C2000Ultra 支持将 Docker 程序、缓存和数据存放在已挂载 SD 卡中；调整总览卡片与移动端列表，补充操作反馈和日志错误提示。保留 SD 卡检测与 Swap 管理。</p></article>
                 <article class="fix-card"><span>5 → 5 → 2 · 多线分流</span><strong>IPv4 / IPv6 出口与权重</strong><p>双栈分别选择线路和权重，支持按 IP、网段、端口固定出口，并查看连接数与线路速率。多个连接可使用多条线路，单个连接保持同一出口。</p></article>
-                <article class="fix-card"><span>8080 · 安装更新</span><strong>缓存安装包与自动同步</strong><p>重复安装复用已有安装包，资源准备完成后更新页面；持续检测插件文件变化，自动同步 8080 页面和资源。</p></article>
+                <article class="fix-card"><span>8080 · 安装更新</span><strong>缓存安装包与自动同步</strong><p>重复安装复用已有安装包，资源准备完成后更新页面；持续检测插件文件变化，自动同步 8080 页面和资源，覆盖 OpenVPN、AdGuardHome 模板及中文翻译更新。</p></article>
                 <article class="fix-card"><span>MT5700 WebUI</span><strong>5800 双线路页面</strong><p>C5800-650 / C5800-688 检测到双线路时并列展示信号，详情可切换线路，AT 连接与计划独立管理；插件安装登记仅更新自身条目。</p></article>
                 <article class="fix-card"><span>4 → 1 · 应用商店</span><strong>卡片、刷新与更新提示</strong><p>保留顶部与“更多”双入口规则，完善状态徽标、长说明展开、手机指标和空列表提示；修正检测更新弹窗的状态判断、重复点击与超时处理。C2000Pro、AK68-798 轻量入口统一为“应用商店”并补齐图标。</p></article>
                 <article class="fix-card"><span>SSH 终端菜单</span><strong>统一编号与返回入口</strong><p>统一标题、分隔线和输入提示，长机型说明单独显示；维护菜单与 5G 连接监听使用 0 返回，硬件加速管理固定为 5 → 11。MAX / Ultra 保留 SD 卡容量与挂载状态显示。</p></article>
@@ -951,6 +958,8 @@
                                 <ul style="list-style:none; font-size:15px; display:grid; gap:8px;">
                                     <li>• 首次安装自动创建 Argon 8080 实例，缺少 iStore 时一并安装。</li>
                                     <li>• 在 iStore 安装插件后，从商店“打开”或对应菜单进入。</li>
+                                    <li>• C8-688、C5800-650、C5800-688、NBCPE 开启存储扩展且挂载正常后，iStore 插件及新增依赖安装到 <code>rootfs_2nd</code>；未开启扩展时使用 <code>overlay</code>。</li>
+                                    <li>• MAX、Ultra 等其他机型的 iStore 插件沿用 <code>overlay</code>。</li>
                                     <li>• 更新后若仍显示旧页面，按 <code>Ctrl + F5</code> 强制刷新。</li>
                                 </ul>
                             </div>
@@ -966,7 +975,7 @@
             <div class="container">
                 <div class="guide-header">
                     <h2 style="color:white;">适配机型</h2>
-                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">V3.2.4 已识别 10 款机型，功能按机型开放</p>
+                    <p style="color:rgba(255,255,255,0.6); margin-top:15px; font-weight:800; font-size:1.1rem;">V3.2.6 已识别 10 款机型，功能按机型开放</p>
                 </div>
                 <div class="device-grid">
                     <div class="device-card"><strong>NRadio_C8-688</strong><span>已适配</span></div>
@@ -990,7 +999,9 @@
                 <h2>更新记录</h2>
             </div>
             <div class="history-grid" id="historyGrid">
-                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.2.4 · 2026-09-28</h5><p>修复雷神安装依赖与旧模块名兼容，C5800-688 已完成安装并接入应用商店；缺少 NETEM 时提示能力受限。补齐 Argon 8080 防火墙页面，修正网络诊断、资源加载和登录会话；优化 OpenVPN、AdGuardHome 弹窗与应用商店交互，Docker 支持 C2000Ultra SD 卡存储，统一 SSH 菜单。</p></div>
+                <div class="v-card is-latest"><span class="v-badge">LATEST</span><h5>V3.2.6 · 2026-10-03</h5><p>iStore 在支持机型开启存储扩展后，将插件、新增依赖及缓存直接安装到 rootfs_2nd；修复命令转义、目录链接和 LuCI、Argon 依赖兼容。减少 Argon 重复菜单请求、独立加载深色样式并优化 RPC 探测；C5800-688 已完成百度网盘插件的扩展盘安装。</p></div>
+                <div class="v-card"><h5>V3.2.5 · 2026-09-30</h5><p>修复 Argon 实时连接统计，8080 监听跟随 LAN 地址变化；补齐 JPEG 背景识别和必应壁纸来源选择，扩展插件模板及翻译同步。Bootstrap 补齐管理权、挂载点、Swap、防火墙、网络诊断与 DHCP / DNS 设置。</p></div>
+                <div class="v-card"><h5>V3.2.4 · 2026-09-28</h5><p>修复雷神安装依赖与旧模块名兼容，C5800-688 已完成安装并接入应用商店；缺少 NETEM 时提示能力受限。补齐 Argon 8080 防火墙页面，修正网络诊断、资源加载和登录会话；优化 OpenVPN、AdGuardHome 弹窗与应用商店交互，Docker 支持 C2000Ultra SD 卡存储，统一 SSH 菜单。</p></div>
                 <div class="v-card"><h5>V3.2.3 · 2026-09-27</h5><p>完善 Argon 8080 登录、概况、中文标签和原生插件页面；修复 iStore 插件路由与资源同步。修复 AdGuardHome 安装密码设置，调整四标签弹窗；应用商店适配顶部与“更多”入口，增加工具栏吸顶、刷新重试和标签切换。</p></div>
                 <div class="v-card"><h5>V3.2.2 · 2026-09-25</h5><p>加入 4 → 4 Argon 8080 安装入口，支持直接创建独立实例；完善应用商店弹窗、卡片显示与轻量商店 IPK 上传。</p></div>
                 <div class="v-card"><h5>V3.2.1 · 2026-09-23</h5><p>加入 AdGuardHome 后台账号引导，修复应用商店弹窗数据读取与重复导航；完善 OpenClash 加密 DNS 设置和 Ultra MT5700 信号读取。</p></div>
@@ -1059,7 +1070,7 @@
                     <p>本项目用于增强 NRadio 原厂系统功能，并尽量减少对原厂文件和用户配置的影响。</p>
                     <p>代码公开，可查看脚本内容后再决定是否使用。</p>
                     <div class="data-card" style="background:white; border-style:dashed; margin-top: 30px;">
-                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面：V3.2.4 / 2026-09-28｜雷神安装修复与插件页面更新</p>
+                        <p style="font-weight:1000; font-size:16px; margin-bottom:0; color:var(--rose-700); text-align: center;">当前页面：V3.2.6 / 2026-10-03｜iStore 扩展盘安装与 Argon 页面优化</p>
                     </div>
                 </div>
             </div>
@@ -1070,7 +1081,7 @@
 
     <footer>
         <span class="footer-logo">NRadio Plugin Toolkit</span>
-        <p class="footer-pause">总脚本 V3.2.4 / 2026-09-28 · 雷神安装：3 → 2 → 1 · Argon 8080：4 → 4 · 应用商店美化：4 → 1。</p>
+        <p class="footer-pause">总脚本 V3.2.6 / 2026-10-03 · Bootstrap 8080：4 → 3 · Argon 8080：4 → 4 · 应用商店美化：4 → 1。</p>
         <p class="footer-copy">Copyright &copy; 2026 NRadio Script Developer Team. <br>Crafted & Designed by MaYe. All Rights Reserved.</p>
     </footer>
 
