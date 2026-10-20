@@ -1,5 +1,5 @@
 #!/bin/sh
-# NRadio IPv4/IPv6 multi-WAN, V3.2.0 (2026-09-14).
+# NRadio IPv4/IPv6 multi-WAN, native-policy repair (2026-10-20).
 # Reuse native WAN routing/NAT/health and the existing 0xff00 connmark mask.
 MW_RUN=/var/run/nradio-multiwan
 MW_HELPER=/usr/libexec/nradio-multiwan
@@ -101,7 +101,7 @@ mw_interfaces() {
 }
 
 mw_snapshot() {
-    local wanted="${1:-4}" selected iface row weight all seen=' ' family
+    local wanted="${1:-4}" selected iface row weight all seen=' ' family policy member
     selected=$(uci -q get nradio_multiwan.main.interfaces)
     all=$(mw_interfaces "$wanted")
     for iface in $selected; do
@@ -113,9 +113,31 @@ mw_snapshot() {
             family=$(uci -q get "mwan3.$iface.family")
             case "$wanted/$family" in 4/ipv6|6/ipv4) continue ;; *) return 1 ;; esac
         fi
-        weight=$(uci -q get "nradio_multiwan.l_$iface.weight")
+        weight=''
+        case "$wanted" in 6) policy=net6_switch ;; *) policy=net_switch ;; esac
+        for member in $(uci -q get "mwan3.$policy.use_member"); do
+            [ "$(uci -q get "mwan3.$member.interface")" = "$iface" ] || continue
+            weight=$(uci -q get "mwan3.$member.weight")
+            break
+        done
+        [ -n "$weight" ] || weight=$(uci -q get "nradio_multiwan.l_$iface.weight")
         mw_weight "$weight" || return 1
         printf '%s|%s\n' "$row" "$weight"
+    done
+}
+
+# Delegate only if every exit in the live native policy is selected and online.
+# An explicit subset retains its existing classifier and fail-closed behavior.
+mw_native_policy() {
+    local ipt="$1" policy="$2" marks mark id
+    MW_NATIVE_RULES=$($ipt -w 5 -t mangle -S "$policy" 2>/dev/null) || return 1
+    marks=$(printf '%s\n' "$MW_NATIVE_RULES" | awk '{for(i=1;i<NF;i++) if($i=="--set-xmark") print $(i+1)}')
+    [ -n "$marks" ] || return 1
+    for mark in $marks; do
+        case "$mark" in */0xff00) mark=${mark%/*} ;; *) return 1 ;; esac
+        case "$mark" in ''|*[!0-9a-fA-Fx]*) return 1 ;; esac
+        id=$((mark / 256))
+        printf '%s\n' "$MW_SNAPSHOT" | awk -F '|' -v id="$id" '$2==id && $4=="online" {ok=1} END {exit !ok}' || return 1
     done
 }
 
@@ -155,6 +177,13 @@ mw_render() {
     done <<EOF_RULES
 $MW_RULES
 EOF_RULES
+    # Explicit destination/source/port rules above keep their precedence.
+    # Unmatched traffic inherits LuCI's live weight, metric and mode.
+    if [ -n "$MW_NATIVE_POLICY" ]; then
+        printf -- '-A %s -m mark --mark 0/0xff00 -j %s\n' "$chain" "$MW_NATIVE_POLICY"
+        printf -- '-A %s -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00\n' "$chain"
+        return 0
+    fi
     while IFS='|' read -r iface id dev state weight; do
         [ "$state" = online ] || continue
         mark=$(printf '0x%x' "$((id * 256))")
@@ -225,11 +254,14 @@ mw_apply_family() {
     fi
     MW_RULES=$(mw_rule_rows "$af") || return 1
     rules=$($ipt -w 5 -t mangle -S mwan3_rules 2>/dev/null) || return 1
+    MW_NATIVE_POLICY=''
+    MW_NATIVE_RULES=''
+    if mw_native_policy "$ipt" "$policy"; then MW_NATIVE_POLICY="$policy"; fi
     position=$(printf '%s\n' "$rules" | awk -v rule="$default" -v policy="$policy" '
         /^-A / && !/--comment "?nr-multiwan"? / {n++; if($0 ~ "--comment \"?" rule "\"? " && $NF==policy) {print n; exit}}')
     [ -n "$position" ] || return 1
     target=$(printf '%s\n' "$rules" | awk '/--comment "?nr-multiwan"? / {print $NF; exit}')
-    signature=$(printf '%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position")
+    signature=$(printf 'native-policy-v1\n%s\n%s\n%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position" "$MW_NATIVE_POLICY" "$MW_NATIVE_RULES")
     if [ "$signature" = "$(cat "$MW_RUN/signature$af" 2>/dev/null)" ] &&
        $ipt -w 5 -t mangle -C mwan3_rules -m mark --mark 0/0xff00 -m comment --comment nr-multiwan -j "$target" 2>/dev/null &&
        $ipt -w 5 -t mangle -C "$target" -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00 2>/dev/null; then

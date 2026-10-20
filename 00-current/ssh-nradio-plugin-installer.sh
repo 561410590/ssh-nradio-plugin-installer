@@ -2,9 +2,9 @@
 set -eu
 umask 077
 
-SCRIPT_VERSION="V3.2.6"
+SCRIPT_VERSION="V3.3.0"
 SCRIPT_TITLE="NRadio 官方系统插件安装助手 ${SCRIPT_VERSION}"
-SCRIPT_RELEASE_DATE="2026-10-03"
+SCRIPT_RELEASE_DATE="2026-10-19"
 SCRIPT_SIGNATURE="Designed by maye ${SCRIPT_RELEASE_DATE}"
 SCRIPT_MODEL_NOTICE="适用机型：NRadio_C8-668/NRadio_C8-688/NRadio_C8-788/NRadio_C5800-650/NRadio_C5800-688/NRadio_NBCPE/NRadio_C2000MAX/NRadio_C2000Ultra/NRadio_C2000Pro/NRadio_AK68-798 官方NROS系统"
 SCRIPT_SCOPE_NOTICE="适用于受支持的官方 NROS，含 C2000Pro / AK68-798 兼容应用商店；并非标准 OpenWrt"
@@ -21,16 +21,6 @@ STATE_DIR="/root/.nradio-plugin-menu"
 ACTION_HISTORY_FILE="$STATE_DIR/action-history.log"
 CURRENT_DETECTED_MODEL=""
 CURRENT_DETECTED_NROS_REVISION=""
-NRADIO_SMART_BAND_SCRIPT="${NRADIO_SMART_BAND_SCRIPT:-/root/nradio-smart-band.sh}"
-NRADIO_SMART_BAND_CRON_FILE="${NRADIO_SMART_BAND_CRON_FILE:-/etc/crontabs/root}"
-NRADIO_SMART_BAND_CRON_MARKER="# nradio-smart-band"
-NRADIO_SMART_BAND_LEGACY_CRON_MARKER="#nradio-smart-band"
-NRADIO_SMART_BAND_CRON_LINE="*/30 5-21 * * * sh /root/nradio-smart-band.sh >/dev/null 2>&1 # nradio-smart-band"
-NRADIO_SMART_BAND_STATE_FILE="/var/run/nradio-smart-band/band_state"
-NRADIO_SMART_BAND_PREFERENCE_STATE_FILE="/var/run/nradio-smart-band/preference_state_v2"
-NRADIO_SMART_BAND_LEGACY_PREFERENCE_STATE_FILE="/tmp/nradio_band_preference_state"
-NRADIO_SMART_BAND_RUNTIME_LOG="/var/run/nradio-smart-band/runtime.log"
-NRADIO_SMART_BAND_LOCK_DIR="/var/run/nradio-smart-band/lock"
 NRADIO_OPERATOR_FIX_VERSION="20260828-1"
 NRADIO_OPERATOR_FIX_JS="/www/luci-static/nradio/js/nradio-operator-display-fix.js"
 NRADIO_SIM_NAME_MAP_FILE="/etc/nradio-sim-name.map"
@@ -43,15 +33,15 @@ NRADIO_HOME_TEMP_JS="/www/luci-static/nradio/js/nradio-home-temperature-switch.j
 NRADIO_HOME_TEMP_VIEW="/usr/lib/lua/luci/view/nradio_status/index.htm"
 NRADIO_HOME_TEMP_MARKER_BEGIN="<!-- nradio-home-temperature-switch:start -->"
 NRADIO_HOME_TEMP_MARKER_END="<!-- nradio-home-temperature-switch:end -->"
-NRADIO_CPEOPT_VERSION="20260927-1"
+NRADIO_CPEOPT_VERSION="20261020-3"
 NRADIO_CPEOPT_CONTROLLER="/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua"
 NRADIO_CPEOPT_VIEW="/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm"
 NRADIO_CPEOPT_ICON="/www/luci-static/nradio/images/icon/cpeopt.svg"
 NRADIO_CPEOPT_ROUTE="nradioadv/cellular/cpeopt"
 NRADIO_CPEOPT_MONITOR="/usr/libexec/nradio-cpe-monitor.lua"
 NRADIO_CPEOPT_MONITOR_INIT="/etc/init.d/nradio-cpe-monitor"
-NRADIO_CPEOPT_EVENT_LOG="/etc/nradio-cpe-monitor/events.log"
-NRADIO_CPEOPT_MONITOR_STATUS="/var/run/nradio-cpe-monitor/status"
+NRADIO_CPEOPT_EVENT_LOG="/etc/nradio-cpe-monitor/events.jsonl"
+NRADIO_CPEOPT_MONITOR_STATUS="/var/run/nradio-cpe-monitor/status.json"
 RUNTIME_STATE_FILE="$STATE_DIR/openvpn_runtime.conf"
 ROUTE_STATE_FILE="$STATE_DIR/openvpn_routes.conf"
 EASYTIER_ROUTE_STATE_FILE="$STATE_DIR/easytier_routes.conf"
@@ -115,8 +105,8 @@ LEIGOD_ICON_NAME="leigod.svg"
 LEIGOD_DIR="/usr/sbin/leigod"
 LEIGOD_INIT="/etc/init.d/acc"
 OPENCLASH_MIRRORS="${OPENCLASH_MIRRORS:-https://gh-proxy.com/https://raw.githubusercontent.com/vernesong/OpenClash/package/${OPENCLASH_BRANCH} https://raw.githubusercontent.com/vernesong/OpenClash/package/${OPENCLASH_BRANCH} https://cdn.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH} https://fastly.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH} https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@package/${OPENCLASH_BRANCH}}"
-OPENCLASH_CORE_VERSION_MIRRORS="${OPENCLASH_CORE_VERSION_MIRRORS:-https://gh-proxy.com/https://raw.githubusercontent.com/vernesong/OpenClash/core/dev https://raw.githubusercontent.com/vernesong/OpenClash/core/dev https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev}"
-OPENCLASH_CORE_SMART_MIRRORS="${OPENCLASH_CORE_SMART_MIRRORS:-https://gh-proxy.com/https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart https://raw.githubusercontent.com/vernesong/OpenClash/core/dev/smart https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/dev/smart}"
+OPENCLASH_CORE_VERSION_MIRRORS="${OPENCLASH_CORE_VERSION_MIRRORS:-https://gh-proxy.com/https://raw.githubusercontent.com/vernesong/OpenClash/core/${OPENCLASH_BRANCH} https://raw.githubusercontent.com/vernesong/OpenClash/core/${OPENCLASH_BRANCH} https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/${OPENCLASH_BRANCH} https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/${OPENCLASH_BRANCH} https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/${OPENCLASH_BRANCH}}"
+OPENCLASH_CORE_SMART_MIRRORS="${OPENCLASH_CORE_SMART_MIRRORS:-https://gh-proxy.com/https://raw.githubusercontent.com/vernesong/OpenClash/core/${OPENCLASH_BRANCH}/smart https://raw.githubusercontent.com/vernesong/OpenClash/core/${OPENCLASH_BRANCH}/smart https://cdn.jsdelivr.net/gh/vernesong/OpenClash@core/${OPENCLASH_BRANCH}/smart https://fastly.jsdelivr.net/gh/vernesong/OpenClash@core/${OPENCLASH_BRANCH}/smart https://testingcf.jsdelivr.net/gh/vernesong/OpenClash@core/${OPENCLASH_BRANCH}/smart}"
 OPENCLASH_GEOASN_MIRRORS="${OPENCLASH_GEOASN_MIRRORS:-https://gh-proxy.com/https://raw.githubusercontent.com/xishang0128/geoip/release https://raw.githubusercontent.com/xishang0128/geoip/release https://testingcf.jsdelivr.net/gh/xishang0128/geoip@release https://cdn.jsdelivr.net/gh/xishang0128/geoip@release https://fastly.jsdelivr.net/gh/xishang0128/geoip@release}"
 OPENCLASH_MODEL_URLS="${OPENCLASH_MODEL_URLS:-https://gh-proxy.com/https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin https://ghproxy.net/https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin https://mirror.ghproxy.com/https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin}"
 ADGUARDHOME_VERSION="${ADGUARDHOME_VERSION:-1.8-9}"
@@ -1251,6 +1241,12 @@ c2000_storage_swap_model_supported() {
 detect_c2000max_storage_mount() {
     local mount_path
 
+    mount_path="$(awk '$1 ~ /^\/dev\/mmcblk[0-9]+p[0-9]+$/ && $2 == "/mnt/storage/data" { print $2; exit }' /proc/mounts 2>/dev/null || true)"
+    [ -n "$mount_path" ] && {
+        printf '%s\n' "$mount_path"
+        return 0
+    }
+
     mount_path="$(awk '$1 ~ /^\/dev\/mmcblk[0-9]+p[0-9]+$/ && $2 ~ /^\/tmp\/storage\// { print $2; exit }' /proc/mounts 2>/dev/null || true)"
     [ -n "$mount_path" ] && {
         printf '%s\n' "$mount_path"
@@ -1420,7 +1416,7 @@ format_mib_or_gib() {
 }
 
 require_c2000max_storage_ready() {
-    local normalized_model="$1"
+    local normalized_model="${1:-$(detect_current_nradio_model_quiet)}"
     local storage_mount storage_avail_kib storage_avail_mib storage_avail_display
 
     c2000_storage_swap_model_supported "$normalized_model" || return 0
@@ -1450,7 +1446,6 @@ require_supported_nradio_model_environment() {
     CURRENT_DETECTED_MODEL="$normalized_model"
     CURRENT_DETECTED_NROS_REVISION="$nros_revision"
     log "检测到机型：$normalized_model NROS$nros_revision"
-    require_c2000max_storage_ready "$normalized_model"
 }
 
 log_nradio_oem_environment_hint() {
@@ -1725,6 +1720,9 @@ download_file_once() {
                 set -- "$@" -C -
             fi
             case "$url" in
+                *vernesong/OpenClash*/version\?*|*vernesong/OpenClash*/core_version\?*)
+                    set -- "$@" -H 'Cache-Control: no-cache' -H 'Pragma: no-cache'
+                    ;;
                 https://api.github.com/repos/*/releases/assets/*|https://gh-proxy.com/https://api.github.com/repos/*/releases/assets/*)
                     set -- "$@" -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' -H 'User-Agent: nradio-plugin-assistant'
                     ;;
@@ -1811,7 +1809,11 @@ download_file_once() {
 download_from_mirrors() {
     rel="$1"
     out="$2"
-    base_list="$(prioritize_github_proxy_urls "${3:-$OPENCLASH_MIRRORS}")"
+    if [ "${4:-}" = 'http-ranked' ]; then
+        base_list="$3"
+    else
+        base_list="$(prioritize_github_proxy_urls "${3:-$OPENCLASH_MIRRORS}")"
+    fi
     mirror_count=0
     mirror_index=0
     LAST_DOWNLOAD_SOURCE=''
@@ -1831,6 +1833,44 @@ download_from_mirrors() {
         fi
     done
 
+    return 1
+}
+
+download_openclash_metadata() {
+    local oc_meta_rel oc_meta_out oc_meta_bases oc_meta_tree oc_meta_official oc_meta_stamp oc_meta_base
+    oc_meta_rel="$1"
+    oc_meta_out="$2"
+    oc_meta_bases="$3"
+    oc_meta_tree="$4"
+    oc_meta_official="https://raw.githubusercontent.com/vernesong/OpenClash/${oc_meta_tree}/${OPENCLASH_BRANCH}"
+    oc_meta_stamp="$(date +%s 2>/dev/null || printf '%s' "$$")"
+    LAST_DOWNLOAD_SOURCE=''
+    if download_file "$oc_meta_official/$oc_meta_rel?nradio_latest=$oc_meta_stamp" "$oc_meta_out"; then
+        LAST_DOWNLOAD_SOURCE="$oc_meta_official"
+        return 0
+    fi
+    for oc_meta_base in $(prioritize_github_proxy_urls "$oc_meta_bases"); do
+        [ "$oc_meta_base" != "$oc_meta_official" ] || continue
+        if download_file "$oc_meta_base/$oc_meta_rel?nradio_latest=$oc_meta_stamp" "$oc_meta_out"; then
+            LAST_DOWNLOAD_SOURCE="$oc_meta_base"
+            return 0
+        fi
+    done
+    return 1
+}
+
+download_openclash_core_archive() {
+    local oc_core_rel oc_core_out oc_core_tag oc_core_base
+    oc_core_rel="$1"
+    oc_core_out="$2"
+    oc_core_tag="$3"
+    LAST_DOWNLOAD_SOURCE=''
+    for oc_core_base in $(prioritize_github_proxy_urls "$OPENCLASH_CORE_SMART_MIRRORS"); do
+        if download_file "$oc_core_base/$oc_core_rel?nradio_version=$oc_core_tag" "$oc_core_out"; then
+            LAST_DOWNLOAD_SOURCE="$oc_core_base"
+            return 0
+        fi
+    done
     return 1
 }
 
@@ -2008,7 +2048,11 @@ reorder_urls_by_host_rank() {
         fi
     done
 
-    prioritize_github_proxy_urls "$ordered_urls"
+    if [ "${3:-}" = 'http-ranked' ]; then
+        printf '%s\n' "$ordered_urls"
+    else
+        prioritize_github_proxy_urls "$ordered_urls"
+    fi
 }
 
 build_urls_from_base_list() {
@@ -2224,7 +2268,7 @@ refine_ranked_hosts_by_http_probe() {
         [ "$refine_candidate_count" -ge "$CDN_HTTP_PROBE_TOP_HOSTS" ] && break
     done
 
-    [ "$refine_candidate_count" -ge 2 ] || return 0
+    [ "$refine_candidate_count" -ge 1 ] || return 0
 
     log "CDN:    $refine_label HTTP 延迟复测"
     _http_dir="$WORKDIR/${refine_prefix}-http-parallel"
@@ -2259,11 +2303,11 @@ refine_ranked_hosts_by_http_probe() {
                 _http_ms_val="$(printf '%s' "$_http_ms_raw" | sed 's/^0*//')"
                 [ -n "$_http_ms_val" ] || _http_ms_val="0"
                 if [ "$_http_ms_val" = '999999' ]; then
-                    _http_label="超时"
+                    _http_label="连接失败、超时或 HTTP 错误"
                 else
                     _http_label="${_http_ms_val}ms"
                 fi
-                log "HTTP:   $_http_host 首字节=$_http_label"
+                log "HTTP:   $_http_host 响应耗时=$_http_label"
                 printf '%s\n' "$_http_line" >> "$refine_probe_results"
             fi
         fi
@@ -2406,17 +2450,29 @@ optimize_openclash_cdn_order() {
 
 optimize_adguardhome_cdn_order() {
     [ "${ADGUARDHOME_CDN_RANKED:-0}" = '1' ] && return 0
-
-    rank_url_list_hosts \
-        "adguardhome" \
-        "AdGuardHome" \
-        "$ADGUARDHOME_IPK_URLS" \
-        "$ADGUARDHOME_CORE_MIRRORS"
+    mkdir -p "$WORKDIR" || return 1
+    adg_probe_arch="$(get_adguardhome_core_arch 2>/dev/null || true)"
+    adg_probe_core_urls="$(build_urls_from_base_list "AdGuardHome_linux_${adg_probe_arch}.tar.gz" "$ADGUARDHOME_CORE_MIRRORS")"
+    adg_probe_urls="$ADGUARDHOME_IPK_URLS $adg_probe_core_urls"
+    [ "${1:-}" != 'core' ] || adg_probe_urls="$adg_probe_core_urls"
+    # Fake-IP/TUN can synthesize ICMP replies. Rank actual download URLs using
+    # HTTP responses, including every configured source rather than ping's top 2.
+    RANKED_URL_HOSTS=''
+    for adg_probe_url in $adg_probe_urls; do
+        adg_probe_host="$(extract_url_host "$adg_probe_url")"
+        [ -n "$adg_probe_host" ] || continue
+        case " $RANKED_URL_HOSTS " in *" $adg_probe_host "*) continue ;; esac
+        RANKED_URL_HOSTS="$RANKED_URL_HOSTS $adg_probe_host"
+    done
+    RANKED_URL_HOSTS="${RANKED_URL_HOSTS# }"
     [ -n "${RANKED_URL_HOSTS:-}" ] || return 0
-    refine_ranked_hosts_by_http_probe "adguardhome" "AdGuardHome" "$RANKED_URL_HOSTS" "$ADGUARDHOME_IPK_URLS"
+    adg_probe_limit_saved="$CDN_HTTP_PROBE_TOP_HOSTS"
+    CDN_HTTP_PROBE_TOP_HOSTS=999
+    refine_ranked_hosts_by_http_probe "adguardhome" "AdGuardHome 下载地址" "$RANKED_URL_HOSTS" "$adg_probe_urls"
+    CDN_HTTP_PROBE_TOP_HOSTS="$adg_probe_limit_saved"
 
-    ADGUARDHOME_IPK_URLS="$(reorder_urls_by_host_rank "$ADGUARDHOME_IPK_URLS" "$RANKED_URL_HOSTS")"
-    ADGUARDHOME_CORE_MIRRORS="$(reorder_urls_by_host_rank "$ADGUARDHOME_CORE_MIRRORS" "$RANKED_URL_HOSTS")"
+    ADGUARDHOME_IPK_URLS="$(reorder_urls_by_host_rank "$ADGUARDHOME_IPK_URLS" "$RANKED_URL_HOSTS" http-ranked)"
+    ADGUARDHOME_CORE_MIRRORS="$(reorder_urls_by_host_rank "$ADGUARDHOME_CORE_MIRRORS" "$RANKED_URL_HOSTS" http-ranked)"
     ADGUARDHOME_CDN_RANKED='1'
 
     log "CDN:    AdGuardHome 顺序 = $RANKED_URL_HOSTS"
@@ -2466,6 +2522,7 @@ get_core_arch() {
 get_openclash_core_arch() { get_core_arch; }
 
 install_openclash_smart_core() {
+    require_c2000max_storage_ready
     optimize_openclash_cdn_order
     core_arch="$(get_openclash_core_arch 2>/dev/null || true)"
     [ -n "$core_arch" ] || die "无法识别 $OPENCLASH_SMART_DISPLAY_NAME 架构"
@@ -2476,49 +2533,67 @@ install_openclash_smart_core() {
     smart_core_dir="/etc/openclash/core"
 
     log "提示: 正在从 CDN 下载 $OPENCLASH_SMART_DISPLAY_NAME 版本文件..."
-    download_from_mirrors "core_version" "$core_version_file" "$OPENCLASH_CORE_VERSION_MIRRORS" || die "无法从全部 CDN 镜像获取 $OPENCLASH_SMART_DISPLAY_NAME 版本文件"
+    download_openclash_metadata "core_version" "$core_version_file" "$OPENCLASH_CORE_VERSION_MIRRORS" core || die "无法从全部 CDN 镜像获取 $OPENCLASH_SMART_DISPLAY_NAME 版本文件"
     smart_core_ver="$(sed -n '2p' "$core_version_file" | sed 's/^v//g' | tr -d '\r\n')"
     [ -n "$smart_core_ver" ] || smart_core_ver="$(sed -n '1p' "$core_version_file" | sed 's/^v//g' | tr -d '\r\n')"
     [ -n "$smart_core_ver" ] || die "无法解析 $OPENCLASH_SMART_DISPLAY_NAME 版本"
 
     log "提示: 正在从 CDN 下载 $OPENCLASH_SMART_DISPLAY_NAME v$smart_core_ver ($core_arch)..."
-    download_from_mirrors "clash-linux-${core_arch}.tar.gz" "$smart_core_tar" "$OPENCLASH_CORE_SMART_MIRRORS" || die "无法从全部 CDN 镜像获取 $OPENCLASH_SMART_DISPLAY_NAME"
+    download_openclash_core_archive "clash-linux-${core_arch}.tar.gz" "$smart_core_tar" "$smart_core_ver" || die "无法从全部 CDN 镜像获取 $OPENCLASH_SMART_DISPLAY_NAME"
     [ -s "$smart_core_tar" ] || die "$OPENCLASH_SMART_DISPLAY_NAME 下载失败"
 
-    for existing in "$smart_core_dir"/clash*; do
-        [ -f "$existing" ] && backup_file "$existing"
-    done
-
-    tar -xzf "$smart_core_tar" -C "$smart_core_dir" >/dev/null 2>&1 || die "$OPENCLASH_SMART_DISPLAY_NAME 解压失败"
+    tar -xzf "$smart_core_tar" -C "$WORKDIR/openclash/core" >/dev/null 2>&1 || die "$OPENCLASH_SMART_DISPLAY_NAME 解压失败"
     smart_core_entry="$(tar -tzf "$smart_core_tar" 2>/dev/null | awk 'NF && $0 !~ /\/$/ && $0 ~ /(^|\/)clash([._-]|$)/ { print; exit }')"
     [ -n "$smart_core_entry" ] || smart_core_entry="$(tar -tzf "$smart_core_tar" 2>/dev/null | awk 'NF && $0 !~ /\/$/ { print; exit }')"
     smart_core_entry_target="${smart_core_entry#./}"
     smart_core_binary="$(basename "$smart_core_entry_target" 2>/dev/null || true)"
     [ -n "$smart_core_binary" ] || die "无法定位解压后的 $OPENCLASH_SMART_DISPLAY_NAME 二进制"
-
-    case "$smart_core_binary" in
-        clash_meta)
-            ;;
-        *)
-            mv -f "$smart_core_dir/$smart_core_binary" "$smart_core_dir/clash_meta" 2>/dev/null || ln -sf "$smart_core_binary" "$smart_core_dir/clash_meta"
-            ;;
-    esac
+    smart_core_source="$WORKDIR/openclash/core/$smart_core_entry_target"
+    chmod 755 "$smart_core_source"
+    smart_core_actual="$("$smart_core_source" -v 2>/dev/null | awk 'NR==1 {print $3}' || true)"
+    if [ -n "$smart_core_actual" ] && [ "$smart_core_actual" != "$smart_core_ver" ]; then
+        log "提示: 镜像内核为 $smart_core_actual，正在从官方源刷新 $smart_core_ver..."
+        smart_core_official="https://raw.githubusercontent.com/vernesong/OpenClash/core/${OPENCLASH_BRANCH}/smart/clash-linux-${core_arch}.tar.gz?nradio_version=${smart_core_ver}&refresh=${TS}"
+        if download_file "$smart_core_official" "$smart_core_tar"; then
+            tar -xzf "$smart_core_tar" -C "$WORKDIR/openclash/core" >/dev/null 2>&1
+            chmod 755 "$smart_core_source"
+            smart_core_actual="$("$smart_core_source" -v 2>/dev/null | awk 'NR==1 {print $3}' || true)"
+        fi
+    fi
+    [ -z "$smart_core_actual" ] || smart_core_ver="$smart_core_actual"
+    smart_core_existing="$("$smart_core_dir/clash_meta" -v 2>/dev/null | awk 'NR==1 {print $3}' || true)"
+    if [ -n "$smart_core_actual" ] && [ "$smart_core_existing" = "$smart_core_actual" ]; then
+        log "核心:   当前已是 $smart_core_actual，沿用现有内核。"
+    else
+        cp -f "$smart_core_source" "$smart_core_dir/clash_meta.new"
+        chmod 755 "$smart_core_dir/clash_meta.new"
+        mv -f "$smart_core_dir/clash_meta.new" "$smart_core_dir/clash_meta"
+        if [ "$(uci -q get openclash.config.enable 2>/dev/null || true)" = '1' ]; then
+            /etc/init.d/openclash restart
+        fi
+    fi
 
     [ -e "$smart_core_dir/clash" ] || ln -sf clash_meta "$smart_core_dir/clash"
     chmod 755 "$smart_core_dir"/clash* 2>/dev/null || true
 
     mkdir -p /etc/openclash
-    printf '%s\n%s\n' "$(sed -n '1p' "$core_version_file")" "$(sed -n '2p' "$core_version_file")" > /etc/openclash/core_version
+    printf '%s\n%s\n' "$(sed -n '1p' "$core_version_file")" "$smart_core_ver" > /etc/openclash/core_version
     chmod 644 /etc/openclash/core_version 2>/dev/null || true
+    uci -q set "openclash.config.core_version=linux-${core_arch}"
+    uci -q set "openclash.config.release_branch=${OPENCLASH_BRANCH}"
+    uci -q commit openclash
+    rm -f "$smart_core_tar" "$smart_core_source"
 
-    geoasn_mmdb="$WORKDIR/openclash/GeoLite2-ASN.mmdb"
-    log "提示: 正在从 CDN 下载 $OPENCLASH_DISPLAY_NAME ASN.mmdb..."
-    if download_from_mirrors "GeoLite2-ASN.mmdb" "$geoasn_mmdb" "$OPENCLASH_GEOASN_MIRRORS"; then
-        backup_file /etc/openclash/ASN.mmdb
-        cp -f "$geoasn_mmdb" /etc/openclash/ASN.mmdb
-        chmod 644 /etc/openclash/ASN.mmdb 2>/dev/null || true
-    else
-        log "备注:     ASN.mmdb CDN 下载失败，继续安装"
+    if [ ! -s /etc/openclash/ASN.mmdb ]; then
+        geoasn_mmdb="$WORKDIR/openclash/GeoLite2-ASN.mmdb"
+        log "提示: 正在从 CDN 下载 $OPENCLASH_DISPLAY_NAME ASN.mmdb..."
+        if download_from_mirrors "GeoLite2-ASN.mmdb" "$geoasn_mmdb" "$OPENCLASH_GEOASN_MIRRORS"; then
+            cp -f "$geoasn_mmdb" /etc/openclash/ASN.mmdb
+            chmod 644 /etc/openclash/ASN.mmdb 2>/dev/null || true
+            rm -f "$geoasn_mmdb"
+        else
+            log "备注:     ASN.mmdb CDN 下载失败，继续安装"
+        fi
     fi
 
     log "安装完成"
@@ -2531,7 +2606,11 @@ install_openclash_smart_core() {
 download_from_urls() {
     out="$1"
     shift
-    set -- $(prioritize_github_proxy_urls "$*")
+    if [ "${1:-}" = '--http-ranked' ]; then
+        shift
+    else
+        set -- $(prioritize_github_proxy_urls "$*")
+    fi
     url_count=0
     url_index=0
     LAST_DOWNLOAD_SOURCE=''
@@ -7818,6 +7897,55 @@ remove_ak798_compat_appcenter() {
     log "AK68-798 轻量商店已移除；/etc/config/appcenter 插件记录及插件本体保留"
 }
 
+refresh_openclash_appcenter_entry() {
+    local entry_version="$1" entry_size="$2" entry_icon="$3"
+    local entry_attempt=0 entry_reply="$WORKDIR/openclash-appcenter-list.json"
+
+    set_appcenter_entry "luci-app-openclash" "luci-app-openclash" "$entry_version" "$entry_size" "/usr/lib/lua/luci/controller/openclash.lua" "admin/services/openclash" "$entry_icon"
+    uci commit appcenter
+    if [ ! -x /etc/init.d/appcenter ]; then
+        verify_appcenter_route "luci-app-openclash" "admin/services/openclash"
+        return 0
+    fi
+
+    # 原厂进程缓存应用清单；提交后只重载商店，避免 infocd 再次重建登记。
+    rm -f /tmp/luci-indexcache 2>/dev/null || true
+    rm -f /tmp/luci-modulecache/* 2>/dev/null || true
+    /etc/init.d/appcenter restart || die "哈基米应用商店清单重新加载失败"
+    mkdir -p "$WORKDIR"
+    while [ "$entry_attempt" -lt 10 ]; do
+        entry_attempt=$((entry_attempt + 1))
+        sleep 1
+        if ubus call appcenter list > "$entry_reply" 2>/dev/null && lua - "$entry_reply" <<'EOF_OPENCLASH_APPCENTER_VERIFY'
+local json = require "luci.jsonc"
+local file = io.open(arg[1], "rb")
+if not file then os.exit(1) end
+local text = file:read("*a")
+file:close()
+local reply = json.parse(text)
+local parameter = type(reply) == "table" and reply.parameter
+if type(parameter) ~= "table" or tonumber(parameter.status) ~= 0 or
+   tonumber(parameter.appstore_code) ~= 0 then os.exit(1) end
+for _, app in pairs(type(parameter.applist) == "table" and parameter.applist or {}) do
+    if type(app) == "table" and app.name == "luci-app-openclash" and
+       tonumber(app.status) == 1 and tonumber(app.has_luci) == 1 then
+        local route = tostring(app.luci_module_route or "")
+        if route == "admin/services/openclash" or
+           route:sub(1, #"admin/services/openclash/") == "admin/services/openclash/" then
+            print("应用商店: 已安装列表已载入哈基米，入口 " .. route)
+            os.exit(0)
+        end
+    end
+end
+os.exit(1)
+EOF_OPENCLASH_APPCENTER_VERIFY
+        then
+            return 0
+        fi
+    done
+    die "哈基米应用商店实际清单未加载已安装条目或打开入口"
+}
+
 set_appcenter_entry() {
     plugin_name="$1"
     pkg_name="$2"
@@ -9441,6 +9569,15 @@ EOF
     function is_openclash_route(route){
         return route && route.indexOf("admin/services/openclash") === 0;
     }
+    function nr_appcenter_polling_paused(){
+        return document.hidden || window.NR_APPCENTER_OPENCLASH_VISIBLE === true;
+    }
+    function nr_resume_appcenter_polling(){
+        if(nr_appcenter_polling_paused()) return;
+        if(typeof nr_get_system_status === "function") nr_get_system_status();
+        else if(typeof get_system_status === "function") get_system_status();
+        if(typeof get_memory === "function") get_memory();
+    }
     function is_adguardhome_route(route){
         return route && route.indexOf("admin/services/AdGuardHome") === 0;
     }
@@ -9502,6 +9639,7 @@ EOF
     }
     function switch_app_frame_route(obj){
         var route = $(obj).data("route");
+        if((is_openclash_route(route) || is_adguardhome_route(route)) && $(obj).hasClass("app_frame_nav_item_active")) return;
         $(".app_frame_nav_item").removeClass("app_frame_nav_item_active").filter("[aria-pressed]").attr("aria-pressed", "false");
         $(obj).addClass("app_frame_nav_item_active").filter("[aria-pressed]").attr("aria-pressed", "true");
         var frame_src = get_app_route_url(route);
@@ -9658,6 +9796,7 @@ EOF
             }
         });
         if(typeof nr_sync_top_tabs === "function") nr_sync_top_tabs(id, true);
+        if(is_openclash_route(route)) window.NR_APPCENTER_OPENCLASH_VISIBLE = true;
 
         sub_dialogDeal = BootstrapDialog.show({
             type: BootstrapDialog.TYPE_DEFAULT,
@@ -9669,6 +9808,12 @@ EOF
                 $(".top_menu").removeClass("top_menu_active");
                 $(".top_menu").eq(0).addClass("top_menu_active");
                 if(typeof nr_sync_top_tabs === "function") nr_sync_top_tabs(null, false);
+            },
+            onhidden:function(){
+                if(is_openclash_route(route)){
+                    window.NR_APPCENTER_OPENCLASH_VISIBLE = false;
+                    nr_resume_appcenter_polling();
+                }
             },
             onshown:function(){
                 $(".modal.app_frame").scrollTop(0);
@@ -10014,6 +10159,56 @@ EOF
         ' "$TPL" > "$tmp_brand"
     cp "$tmp_brand" "$TPL"
 
+    lua - "$TPL" <<'EOF_APPCENTER_POLLING_PATCH' || die "应用商店后台轮询优化失败"
+local path = assert(arg[1], "missing appcenter template")
+local input = assert(io.open(path, "rb"))
+local html = input:read("*a")
+input:close()
+local first = assert(html:find("    function get_memory(){", 1, true), "get_memory start not found")
+local last = assert(html:find("\n    }", first, true), "get_memory end not found")
+local original = html:sub(first, last + 5)
+local update = original:find("update_memory(data_res.result);", 1, true) and
+    "update_memory(data_res.result);" or "update_memory(TOTAL_MEMORY,USED_MEMORY);"
+local memory = [[    function get_memory(){
+        if(nr_appcenter_polling_paused() || window.NR_APP_MEMORY_BUSY) return;
+        window.NR_APP_MEMORY_BUSY = true;
+        $.ajax({
+            type: "POST",
+            url: '<%=controller%>nradioadv/system/appcenter/memory',
+            data: {token:'<%=token%>'},
+            dataType: "json",
+            timeout: 10000,
+            success: function(data_res){
+                if(data_res && data_res.result){
+                    TFCARD = data_res.result.tfcard || false;
+                    USED_MEMORY = Number(data_res.result.used_memory || 0);
+                    TOTAL_MEMORY = Number(data_res.result.total_memory || 0);
+                    __NR_MEMORY_UPDATE__
+                }
+            },
+            complete: function(){ window.NR_APP_MEMORY_BUSY = false; }
+        });
+    }]]
+memory = memory:gsub("__NR_MEMORY_UPDATE__", update)
+html = html:sub(1, first - 1) .. memory .. html:sub(last + 6)
+for _, name in ipairs({"get_system_status", "nr_get_system_status"}) do
+    local header = "    function " .. name .. "(){"
+    local pos = html:find(header, 1, true)
+    if pos then
+        local body_end = assert(html:find("\n    }", pos, true), name .. " end not found")
+        if not html:sub(pos, body_end):find("nr_appcenter_polling_paused()", 1, true) then
+            local tail = pos + #header
+            html = html:sub(1, tail - 1) .. "\n        if(nr_appcenter_polling_paused()) return;" .. html:sub(tail)
+        end
+    end
+end
+local tmp = path .. ".nradio-polling.tmp"
+local output = assert(io.open(tmp, "wb"))
+assert(output:write(html))
+assert(output:close())
+assert(os.rename(tmp, path), "appcenter polling replace failed")
+EOF_APPCENTER_POLLING_PATCH
+
     if [ "$appcenter_template_v3" = '1' ]; then
         verify_template_marker 'var open_route = db.luci_module_route || "";' 'V3 UCI 打开路由读取逻辑'
     else
@@ -10061,6 +10256,8 @@ EOF
     verify_template_marker 'admin/services/openclash/config-subscribe' 'OpenClash 订阅标签'
     verify_template_marker 'admin/services/openclash/config' 'OpenClash 配置标签'
     verify_template_marker 'admin/services/openclash/log' 'OpenClash 日志标签'
+    verify_template_marker 'window.NR_APPCENTER_OPENCLASH_VISIBLE = true;' 'OpenClash 弹窗后台轮询暂停'
+    verify_template_marker 'complete: function(){ window.NR_APP_MEMORY_BUSY = false; }' '应用商店空间请求并发锁'
     verify_template_marker "action == 'uninstall' && nradio_plugin_uninstall_action(app_name)" '脚本插件异步卸载入口'
     verify_template_marker 'plugin_uninstall/start' '脚本插件异步卸载启动接口'
     verify_template_marker 'plugin_uninstall/check' '脚本插件异步卸载检查接口'
@@ -14885,6 +15082,7 @@ EOF_APPCENTER_PREMIUM_VISUAL_FINISH
     }
 
     function get_system_status(){
+        if(typeof nr_appcenter_polling_paused === "function" && nr_appcenter_polling_paused()) return;
         if(APP_STATUS_POLLING)
             return;
         APP_STATUS_POLLING = true;
@@ -15540,6 +15738,7 @@ patch_appcenter_card_polish_v3() {
 
     cat > "$v3_css" <<'EOF_APPCENTER_V3_CSS'
     /* NRadio appcenter v3: begin */
+    /* Shared catalog layout 20261020-2: OEM top entry and More entry. */
     /* Keep the header quick menu above app tabs and below Bootstrap modals. */
     body > header{
         position: relative;
@@ -15550,7 +15749,7 @@ patch_appcenter_card_polish_v3() {
         --nr-v3-panel: #112337;
         --nr-v3-panel-2: #0e1c2b;
         --nr-v3-line: rgba(128,157,184,.16);
-        --nr-v3-line-soft: rgba(128,157,184,.12);
+        --nr-v3-line-soft: rgba(128,157,184,.15);
         --nr-v3-line-strong: rgba(70,190,214,.42);
         --nr-v3-text: #edf5fb;
         --nr-v3-text-soft: #c5d2de;
@@ -15562,16 +15761,37 @@ patch_appcenter_card_polish_v3() {
         --nr-v3-red: #df7d82;
     }
     @media (min-width: 768px){
-        .main.nr-appcenter-main{ background: var(--nr-v3-bg); }
+        body.nr-appcenter-page > .body-container{
+            width: calc(100% - 64px);
+            max-width: 1440px;
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        .main.nr-appcenter-main{
+            width: 100% !important;
+            max-width: none;
+            border: 1px solid var(--nr-v3-line-soft);
+            border-radius: 16px;
+            background: var(--nr-v3-bg);
+            scrollbar-width: thin;
+            scrollbar-color: #31485c transparent;
+        }
+        .main.nr-appcenter-main > .main-content{
+            width: 100%;
+            max-width: none;
+            padding: 20px 24px 28px;
+        }
     }
     .appcontainer{
         position: relative;
         display: grid;
-        grid-template-columns: 116px minmax(0,1fr);
+        grid-template-columns: minmax(0,1fr);
         grid-template-areas:
-            "toolbar toolbar"
-            "menu content"
-            "status status";
+            "toolbar"
+            "menu"
+            "content";
         gap: 16px;
         align-items: start;
         width: 100%;
@@ -15602,13 +15822,14 @@ patch_appcenter_card_polish_v3() {
         height: auto !important;
         max-height: none !important;
         min-height: 52px;
-        margin: 0 0 12px !important;
-        padding: 6px 10px !important;
+        margin: 0 0 18px !important;
+        padding: 0 0 12px !important;
         overflow: hidden !important;
         box-sizing: border-box;
-        border: 1px solid var(--nr-v3-line-soft);
-        border-radius: 12px;
-        background: var(--nr-v3-panel-2);
+        border: 0;
+        border-bottom: 1px solid var(--nr-v3-line-soft);
+        border-radius: 0;
+        background: transparent;
         font-size: 13px;
         line-height: 1.4;
     }
@@ -15699,6 +15920,17 @@ patch_appcenter_card_polish_v3() {
         background: rgba(76,198,216,.09);
         color: #dffaff !important;
         -webkit-text-fill-color: #dffaff !important;
+    }
+    #app_top_menu .nr_store_tab::before{
+        content: "";
+        flex: 0 0 14px;
+        width: 14px;
+        height: 14px;
+        border: 1px solid currentColor;
+        border-radius: 3px;
+        background: linear-gradient(currentColor,currentColor) center / 1px 100% no-repeat,
+                    linear-gradient(currentColor,currentColor) center / 100% 1px no-repeat;
+        opacity: .8;
     }
     #app_top_menu .top_menu_inner{
         display: inline-flex;
@@ -15791,31 +16023,35 @@ patch_appcenter_card_polish_v3() {
     .app_btn_box{
         grid-area: toolbar;
         display: grid;
-        grid-template-columns: minmax(210px,1fr) minmax(180px,320px) auto;
-        gap: 4px 12px;
+        grid-template-columns: minmax(280px,1fr) auto auto;
+        grid-template-areas: "storage status actions";
+        gap: 14px 20px;
         align-items: center;
         width: 100%;
         min-width: 0;
-        padding: 11px 12px;
+        padding: 18px;
         border: 1px solid var(--nr-v3-line-soft);
         border-radius: 12px;
         background: var(--nr-v3-panel-2);
         box-shadow: none;
     }
     .app_btn_box .mem_track{
+        grid-area: storage;
         width: auto;
-        max-width: 420px;
+        max-width: none;
         min-width: 0;
         margin: 0;
         gap: 7px;
         color: var(--nr-v3-text-soft);
     }
     .app_btn_box .mem_header{
-        font-size: 13px;
+        font-size: 14px;
         color: var(--nr-v3-text-soft);
+        font-variant-numeric: tabular-nums;
+        line-height: 1.5;
     }
     .app_btn_box .mem_progress{
-        height: 5px;
+        height: 6px;
         margin: 0;
         background: rgba(3,8,14,.72);
         box-shadow: inset 0 0 0 1px rgba(128,157,184,.12);
@@ -15828,8 +16064,8 @@ patch_appcenter_card_polish_v3() {
     .app_btn_box .nr-storage-track.nr-has-storage-expand{
         display: grid;
         grid-template-columns: repeat(2,minmax(0,1fr));
-        gap: 12px;
-        max-width: 520px;
+        gap: 24px;
+        max-width: none;
     }
     .app_btn_box .nr-storage-row{
         display: flex;
@@ -15848,114 +16084,14 @@ patch_appcenter_card_polish_v3() {
         background: linear-gradient(90deg, #50c697, #4cc6d8);
         box-shadow: 0 0 10px rgba(80,198,151,.20);
     }
-    .nr_app_search{
-        position: relative;
-        min-width: 0;
-    }
-    .nr_app_search::before{
-        content: "";
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        z-index: 1;
-        transform: translateY(-50%);
-        color: var(--nr-v3-muted);
-        width: 12px;
-        height: 12px;
-        border: 2px solid currentColor;
-        border-radius: 50%;
-        pointer-events: none;
-    }
-    .nr_app_search::after{
-        content: "";
-        position: absolute;
-        left: 24px;
-        top: calc(50% + 5px);
-        width: 6px;
-        height: 2px;
-        transform: rotate(45deg);
-        transform-origin: left center;
-        background: var(--nr-v3-muted);
-        pointer-events: none;
-    }
-    #nr_app_search_input{
-        display: block;
-        width: 100%;
-        height: 38px;
-        padding: 0 86px 0 34px;
-        border: 1px solid var(--nr-v3-line);
-        border-radius: 9px;
-        outline: none;
-        background: rgba(3,9,16,.58);
-        color: var(--nr-v3-text);
-        font-size: 14px;
-    }
-    #nr_app_search_input::placeholder{
-        color: #93a7ba;
-    }
-    #nr_app_search_input:focus{
-        border-color: var(--nr-v3-line-strong);
-        box-shadow: 0 0 0 3px rgba(76,198,216,.09);
-    }
-    .nr_app_search_count{
-        position: absolute;
-        right: 11px;
-        top: 50%;
-        min-width: 34px;
-        height: auto;
-        padding: 0;
-        transform: translateY(-50%);
-        border: 0;
-        background: transparent;
-        color: var(--nr-v3-muted);
-        font-size: 11px;
-        font-weight: 650;
-        line-height: 1;
-        text-align: center;
-        opacity: 1;
-        pointer-events: none;
-    }
-    .nr_app_search_clear{
-        position: absolute;
-        right: 48px;
-        top: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        transform: translateY(-50%) scale(.88);
-        border: 0;
-        border-radius: 6px;
-        outline: 0;
-        appearance: none;
-        background: transparent;
-        color: var(--nr-v3-muted);
-        font-size: 16px;
-        line-height: 1;
-        opacity: 0;
-        pointer-events: none;
-        cursor: pointer;
-        transition: transform .16s ease, opacity .16s ease, color .16s ease, background-color .16s ease;
-    }
-    .nr_app_search.nr_searching .nr_app_search_clear{
-        transform: translateY(-50%) scale(1);
-        opacity: .78;
-        pointer-events: auto;
-    }
-    .nr_app_search_clear:hover{
-        background: rgba(76,198,216,.10);
-        color: #e6fbff;
-        opacity: 1 !important;
-    }
     .app_btn_group{
+        grid-area: actions;
         display: flex;
         justify-content: flex-end;
         gap: 8px;
     }
     .app_btn_group .app_btn_class{
-        min-height: 38px;
+        min-height: 42px;
         padding: 0 14px;
         border: 1px solid rgba(76,198,216,.30);
         border-radius: 9px;
@@ -15966,6 +16102,7 @@ patch_appcenter_card_polish_v3() {
         line-height: 36px;
         white-space: nowrap;
         cursor: pointer;
+        transition: border-color .16s ease, background-color .16s ease;
     }
     .app_btn_group .app_btn_class:hover{
         border-color: rgba(76,198,216,.52);
@@ -15974,12 +16111,13 @@ patch_appcenter_card_polish_v3() {
         -webkit-text-fill-color: currentColor;
     }
     .nr_app_list_feedback{
-        grid-column: 1 / -1;
+        order: 2;
         display: flex;
+        flex: 1 1 220px;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        height: 32px;
+        height: 36px;
         min-width: 0;
         padding: 0 6px;
         border: 1px solid transparent;
@@ -16017,8 +16155,10 @@ patch_appcenter_card_polish_v3() {
     .nr_app_list_retry:focus-visible{ outline: 2px solid var(--nr-v3-cyan); outline-offset: 2px; }
     .container_left{
         grid-area: menu;
-        position: sticky;
-        top: 12px;
+        position: static;
+        display: flex;
+        align-items: center;
+        gap: 12px;
         align-self: start;
         float: none !important;
         width: auto !important;
@@ -16026,28 +16166,35 @@ patch_appcenter_card_polish_v3() {
         min-height: 0 !important;
         min-width: 0;
         margin: 0 !important;
-        padding: 8px;
-        border: 1px solid var(--nr-v3-line-soft);
-        border-radius: 12px;
-        background: var(--nr-v3-panel-2);
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
     }
     .container_left ul{
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 4px;
         margin: 0;
-        padding: 0;
+        padding: 4px;
+        border: 1px solid var(--nr-v3-line-soft);
+        border-radius: 11px;
+        background: #0a1521;
         list-style: none;
     }
     .container_left .app_menu{
         display: flex;
         align-items: center;
-        min-height: 38px;
-        margin: 0 0 6px;
+        min-height: 40px;
+        margin: 0;
         justify-content: space-between;
         gap: 7px;
-        padding: 0 9px;
+        padding: 0 14px;
         border: 1px solid transparent;
         border-radius: 8px;
         color: var(--nr-v3-muted);
-        font-size: 13px;
+        font-size: 14px;
         line-height: 1.2;
         white-space: nowrap;
         -webkit-background-clip: border-box !important;
@@ -16064,10 +16211,10 @@ patch_appcenter_card_polish_v3() {
     }
     .container_left .app_menu.menu_active{
         border-color: rgba(76,198,216,.28);
-        background: rgba(76,198,216,.10);
+        background: #183443;
         color: #e5fbff !important;
         -webkit-text-fill-color: #e5fbff !important;
-        box-shadow: inset 3px 0 0 var(--nr-v3-cyan);
+        box-shadow: 0 2px 5px rgba(0,0,0,.12);
     }
     .container_left .nr_menu_count{
         display: inline-flex;
@@ -16111,21 +16258,21 @@ patch_appcenter_card_polish_v3() {
         position: relative;
         display: grid;
         grid-template-columns: 52px minmax(0,1fr);
-        grid-template-rows: minmax(110px,1fr) auto;
+        grid-template-rows: auto minmax(44px,1fr) auto;
         column-gap: 12px;
         min-width: 0;
-        min-height: 210px;
+        min-height: 224px;
         width: 100% !important;
         max-width: none !important;
         height: auto !important;
         margin: 0 !important;
         float: none !important;
-        padding: 16px;
+        padding: 18px;
         overflow: hidden;
         border: 1px solid var(--nr-v3-line-soft);
-        border-radius: 12px;
+        border-radius: 14px;
         background: var(--nr-v3-panel);
-        box-shadow: 0 3px 10px rgba(0,0,0,.10);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 4px 12px rgba(0,0,0,.10);
         transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
         container-type: inline-size;
     }
@@ -16133,7 +16280,7 @@ patch_appcenter_card_polish_v3() {
     .container_right .app_box:focus-within{
         transform: none;
         border-color: var(--nr-v3-line-strong);
-        background: #183047;
+        background: #152a3e;
         box-shadow: 0 5px 14px rgba(0,0,0,.14);
     }
     .container_right .app_icon{
@@ -16177,7 +16324,7 @@ patch_appcenter_card_polish_v3() {
         gap: 5px 8px;
         align-items: start;
         align-content: start;
-        min-height: 48px;
+        min-height: 52px;
         min-width: 0;
     }
     .container_right .app_name{
@@ -16188,7 +16335,7 @@ patch_appcenter_card_polish_v3() {
         min-width: 0;
         overflow: hidden;
         color: var(--nr-v3-text);
-        font-size: 17px;
+        font-size: 18px;
         font-weight: 700;
         line-height: 1.4;
         text-overflow: ellipsis;
@@ -16205,7 +16352,7 @@ patch_appcenter_card_polish_v3() {
         height: auto;
         overflow: hidden;
         color: var(--nr-v3-muted);
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 400;
         font-variant-numeric: tabular-nums;
         line-height: 1.4;
@@ -16270,7 +16417,7 @@ patch_appcenter_card_polish_v3() {
         border-radius: 6px;
         background: rgba(128,157,184,.07);
         color: var(--nr-v3-text-soft);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 500;
         line-height: 19px;
         white-space: nowrap;
@@ -16286,23 +16433,35 @@ patch_appcenter_card_polish_v3() {
         color: #b9cad9;
     }
     .container_right .app_open_badge{
-        border-color: rgba(80,198,151,.30);
-        background: rgba(80,198,151,.09);
+        gap: 5px;
+        border-color: transparent;
+        background: rgba(80,198,151,.07);
         color: #b9efd8;
     }
+    .container_right .app_open_badge::before{
+        content: "";
+        width: 5px;
+        height: 5px;
+        flex: 0 0 5px;
+        border-radius: 50%;
+        background: var(--nr-v3-green);
+    }
+    .app_installed .app_state_1{ display: none; }
     .container_right .app_state_2{
         border-color: rgba(225,173,100,.32);
         background: rgba(225,173,100,.09);
         color: #f3d5a5;
     }
     .container_right .app_des{
+        grid-column: 1 / -1;
+        grid-row: 2;
         float: none;
         width: 100%;
         height: 44px;
-        margin: 12px 0 0;
+        margin: 16px 0 0;
         overflow: hidden;
-        color: #b5c5d4;
-        font-size: 13px;
+        color: #c0cedb;
+        font-size: 14px;
         font-weight: 400;
         line-height: 22px;
         display: -webkit-box;
@@ -16316,13 +16475,7 @@ patch_appcenter_card_polish_v3() {
         overflow: visible;
         overflow-wrap: anywhere;
     }
-    .appcontainer mark.nr_search_match{
-        padding: 0;
-        border-radius: 2px;
-        color: #effdff;
-        background: rgba(76,198,216,.24);
-    }
-    @container (max-width: 320px){
+    @container (max-width: 360px){
         .app_title{ grid-template-columns: 1fr !important; }
         .app_meta_row{
             grid-column: 1 !important;
@@ -16334,11 +16487,11 @@ patch_appcenter_card_polish_v3() {
     }
     .container_right .app_action{
         grid-column: 1 / -1;
-        grid-row: 2;
+        grid-row: 3;
         float: none;
         width: 100%;
         align-self: end;
-        margin: 14px 0 0;
+        margin: 10px 0 0;
         padding-top: 12px;
         border-top: 1px solid rgba(128,157,184,.10);
     }
@@ -16357,10 +16510,10 @@ patch_appcenter_card_polish_v3() {
         align-items: center;
         justify-content: center;
         min-width: 72px;
-        min-height: 38px;
+        min-height: 40px;
         padding: 0 14px;
         border: 1px solid rgba(128,157,184,.24);
-        border-radius: 8px;
+        border-radius: 9px;
         background: rgba(128,157,184,.055);
         color: var(--nr-v3-text-soft);
         font-size: 13px;
@@ -16383,10 +16536,10 @@ patch_appcenter_card_polish_v3() {
         background: var(--nr-v3-cyan);
     }
     .container_right .nr_action_open{
-        min-width: 76px;
-        border-color: rgba(76,198,216,.32);
-        color: #b9edf2;
-        background: #15333f;
+        min-width: 88px;
+        border-color: rgba(76,198,216,.42);
+        color: #d9f8fc;
+        background: #1b414e;
         box-shadow: none;
     }
     .container_right .nr_action_update{
@@ -16418,8 +16571,7 @@ patch_appcenter_card_polish_v3() {
         background: rgba(223,125,130,.09);
         color: #f2b8c0;
     }
-    .app_empty_state,
-    .nr_search_empty{
+    .app_empty_state{
         grid-column: 1 / -1;
         display: flex;
         flex-direction: column;
@@ -16433,8 +16585,7 @@ patch_appcenter_card_polish_v3() {
         color: var(--nr-v3-muted);
         text-align: center;
     }
-    .app_empty_state strong,
-    .nr_search_empty strong{
+    .app_empty_state strong{
         color: var(--nr-v3-text-soft);
         font-size: 14px;
     }
@@ -16445,23 +16596,10 @@ patch_appcenter_card_polish_v3() {
         color: var(--nr-v3-cyan);
         opacity: .68;
     }
-    .nr_search_empty::before{
-        content: "";
-        margin-bottom: 7px;
-        color: var(--nr-v3-cyan);
-        width: 20px;
-        height: 20px;
-        border: 2px solid currentColor;
-        border-radius: 50%;
-        line-height: 1;
-        opacity: .68;
-    }
-    .app_empty_state > span,
-    .nr_search_empty span{
+    .app_empty_state > span{
         margin-top: 4px;
         font-size: 12px;
     }
-    .nr_search_reset,
     .nr_browse_apps{
         min-height: 44px;
         margin-top: 12px;
@@ -16472,40 +16610,40 @@ patch_appcenter_card_polish_v3() {
         color: #c8f6fb;
         cursor: pointer;
     }
-    .nr_search_reset:hover,
     .nr_browse_apps:hover{
         background: rgba(76,198,216,.15);
         color: #e7fbff;
     }
-    .nr_search_reset:focus-visible,
     .nr_browse_apps:focus-visible{
         outline: 2px solid var(--nr-v3-cyan);
         outline-offset: 2px;
     }
     #app_status_mount{
-        grid-area: status;
+        grid-column: 1 / -1;
         position: static;
         min-width: 0;
     }
     .app_status_panel{
         display: grid;
-        grid-template-columns: 112px 180px repeat(auto-fit,minmax(130px,1fr));
-        gap: 8px;
+        grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+        gap: 10px;
         align-items: stretch;
-        padding: 10px 12px;
-        border: 1px solid var(--nr-v3-line-soft);
-        border-radius: 10px;
-        background: var(--nr-v3-panel-2);
+        padding: 12px 0 0;
+        border: 0;
+        border-top: 1px solid var(--nr-v3-line-soft);
+        border-radius: 0;
+        background: transparent;
         box-shadow: none;
     }
     .app_status_head{
+        grid-area: status;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
         justify-content: center;
         gap: 3px;
         margin: 0;
-        padding: 0 5px;
+        padding: 0;
     }
     .app_status_head span{
         color: var(--nr-v3-text);
@@ -16514,7 +16652,7 @@ patch_appcenter_card_polish_v3() {
     }
     .app_status_time{
         color: var(--nr-v3-muted);
-        font-size: 11px;
+        font-size: 12px;
         font-style: normal;
         font-variant-numeric: tabular-nums;
     }
@@ -16523,6 +16661,10 @@ patch_appcenter_card_polish_v3() {
         grid-template-columns: repeat(3,1fr);
         gap: 4px;
         margin: 0;
+        padding: 8px 4px;
+        border: 1px solid var(--nr-v3-line-soft);
+        border-radius: 10px;
+        background: #0b1927;
     }
     .app_status_tile{
         display: flex;
@@ -16552,11 +16694,10 @@ patch_appcenter_card_polish_v3() {
         justify-content: center;
         min-width: 0;
         margin: 0;
-        padding: 6px 8px;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        border-left: 1px solid rgba(128,157,184,.14);
+        padding: 12px;
+        border: 1px solid var(--nr-v3-line-soft);
+        border-radius: 10px;
+        background: #0b1927;
     }
     .app_status_metric_row{
         display: flex;
@@ -16610,62 +16751,40 @@ patch_appcenter_card_polish_v3() {
     .app_status_swap_bar{ background: linear-gradient(90deg,#9b8de3,#5f9eea); }
     .app_status_toggle{
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
         justify-content: center;
-        gap: 3px;
-        width: 100%;
-        padding: 0;
-        border: 0;
+        gap: 7px;
+        min-height: 44px;
+        width: auto;
+        padding: 7px 10px;
+        border: 1px solid var(--nr-v3-line);
+        border-radius: 8px;
         outline: 0;
-        background: transparent;
+        background: rgba(128,157,184,.04);
         color: inherit;
         font: inherit;
         cursor: pointer;
     }
     .app_status_toggle_text{
         color: var(--nr-v3-cyan);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 700;
     }
-    #app_status_mount.nr_status_collapsed .app_status_panel{
-        display: flex;
-        justify-content: flex-end;
-        padding: 0;
-        border: 0;
-        background: transparent;
-        box-shadow: none;
-    }
     #app_status_mount.nr_status_collapsed{
-        margin-top: -12px;
-    }
-    #app_status_mount.nr_status_collapsed .app_status_grid,
-    #app_status_mount.nr_status_collapsed .app_status_metric{
         display: none !important;
     }
-    #app_status_mount.nr_status_collapsed .app_status_head{
-        padding: 0;
-    }
-    #app_status_mount.nr_status_collapsed .app_status_toggle{
-        flex-direction: row;
-        width: auto;
-        padding: 7px 12px;
-        border: 1px solid rgba(76,198,216,.23);
-        border-radius: 8px;
-        background: #0f1d2b;
-        box-shadow: none;
-    }
-    #app_status_mount.nr_status_collapsed .app_status_toggle::before{
+    .app_status_toggle::before{
         content: "";
         width: 6px;
         height: 6px;
         border-radius: 50%;
         background: var(--nr-v3-muted);
     }
-    #app_status_mount.nr_status_ok .app_status_toggle::before{ background: var(--nr-v3-green); }
-    #app_status_mount.nr_status_busy .app_status_toggle::before{ background: var(--nr-v3-cyan); }
-    #app_status_mount.nr_status_error .app_status_toggle::before{ background: var(--nr-v3-amber); }
-    #app_status_mount.nr_status_error .app_status_time{ color: var(--nr-v3-amber); }
+    .app_status_head.nr_status_ok .app_status_toggle::before{ background: var(--nr-v3-green); }
+    .app_status_head.nr_status_busy .app_status_toggle::before{ background: var(--nr-v3-cyan); }
+    .app_status_head.nr_status_error .app_status_toggle::before{ background: var(--nr-v3-amber); }
+    .app_status_head.nr_status_error .app_status_time{ color: var(--nr-v3-amber); }
     .nr_dialog_result{
         padding: 18px;
         text-align: center;
@@ -16680,26 +16799,21 @@ patch_appcenter_card_polish_v3() {
     .nr_dialog_result_error .nr_dialog_result_icon{ color: #df7d82; }
     .nr_dialog_result .error_box{ text-align: left; }
     .nr_dialog_result strong{ display: block; margin-bottom: 8px; }
-    #app_status_mount.nr_status_collapsed .app_status_toggle:hover{
+    .app_status_toggle:hover{
         border-color: rgba(76,198,216,.46);
         background: #132334;
     }
     #app_top_menu .top_menu[role="button"]:focus-visible,
     #app_top_menu .top_menu_inner_icon:focus-visible,
-    .nr_app_search_clear:focus-visible,
     .app_btn_group .app_btn_class:focus-visible,
     .container_left .app_menu:focus-visible,
     .container_right .action_list_li:focus-visible,
     .container_right .app_des:focus-visible,
-    .nr_search_reset:focus-visible,
     #app_top_menu .nr_store_tab:focus-visible,
     .app_status_toggle:focus-visible{
         outline: 2px solid rgba(76,198,216,.72) !important;
         outline-offset: 2px;
         box-shadow: 0 0 0 4px rgba(76,198,216,.10);
-    }
-    .nr_app_filtered{
-        display: none !important;
     }
     .bootstrap-dialog-message #scan_loading.nr_dialog_loading{
         display: flex;
@@ -16966,6 +17080,23 @@ patch_appcenter_card_polish_v3() {
     .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle{
         display: flex !important;
         align-items: stretch;
+        min-height: 48px;
+        padding: 4px;
+        border: 1px dashed rgba(76,198,216,.40);
+        border-radius: 10px;
+        background: #112337;
+    }
+    .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle .btn{
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 8px 14px;
+        border: 1px solid rgba(76,198,216,.28);
+        border-radius: 7px;
+        background: #1b414e;
+        color: #d9f8fc;
+        font-size: 14px;
+        line-height: 1.4;
     }
     .modal.bootstrap-dialog.nr_import_dialog #import_box_file .bootstrap-filestyle .group-span-filestyle{
         flex: 0 0 auto;
@@ -16975,6 +17106,12 @@ patch_appcenter_card_polish_v3() {
         flex: 1 1 auto;
         width: 1% !important;
         min-width: 0 !important;
+        height: auto;
+        padding: 8px 10px;
+        border: 0;
+        background: transparent;
+        color: #c5d2de;
+        box-shadow: none;
     }
     .modal.bootstrap-dialog.nr_import_dialog #import_box_file .cbi-value{
         margin-bottom: 0;
@@ -16992,6 +17129,64 @@ patch_appcenter_card_polish_v3() {
     .modal.bootstrap-dialog.nr_import_dialog #import_box_file input.btn_save_stand_width:disabled{
         opacity: .5;
         cursor: not-allowed;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .modal-dialog{
+        width: 520px !important;
+        max-width: calc(100vw - 32px) !important;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .modal-header{
+        padding: 10px 16px !important;
+        background: #112235 !important;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .bootstrap-dialog-title{
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .bootstrap-dialog-close-button .close{
+        width: 44px;
+        height: 44px;
+        margin: 0;
+        padding: 0;
+        font-size: 24px;
+        line-height: 1;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .modal-body{
+        padding: 20px !important;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .bootstrap-dialog-message{
+        padding: 0 !important;
+        line-height: 1.6;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .nr_dialog_result,
+    .modal.bootstrap-dialog.nr_store_dialog .nr_store_confirm{
+        min-height: 128px;
+        padding: 16px 4px;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .modal-footer{
+        padding: 12px 20px;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog.nr_store_no_actions .modal-footer{
+        display: none !important;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog .modal-footer .btn,
+    .modal.bootstrap-dialog.nr_store_dialog #import_box_file input[type=submit]{
+        min-height: 44px;
+        min-width: 88px;
+        padding: 8px 16px;
+        border: 1px solid rgba(76,198,216,.48);
+        border-radius: 8px;
+        background: #1b424e;
+        color: #e4fbfd;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+    .modal.bootstrap-dialog.nr_store_dialog #import_box_file .note_info{
+        margin-top: 10px;
+        color: #9aaec0;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
     }
     .modal.bootstrap-dialog .bootstrap-dialog-close-button .close{
         display: inline-flex;
@@ -17020,55 +17215,49 @@ patch_appcenter_card_polish_v3() {
             top: 0;
             z-index: 6;
         }
-        .container_left{
-            top: calc(var(--nr-app-toolbar-height, 70px) + 12px);
+    }
+    @media (min-width: 1400px){
+        .container_right{
+            grid-template-columns: repeat(4,minmax(0,1fr));
         }
     }
     @media (max-width: 1180px){
+        .app_btn_box{
+            grid-template-columns: minmax(0,1fr) auto;
+            grid-template-areas: "storage storage" "status actions";
+        }
         .container_right{
             grid-template-columns: repeat(2,minmax(0,1fr));
-        }
-        .appcontainer{
-            grid-template-columns: 110px minmax(0,1fr);
-            grid-template-areas:
-                "toolbar toolbar"
-                "menu content"
-                "status status";
         }
     }
     @media (max-width: 860px){
         .app_btn_box{
             grid-template-columns: 1fr auto;
+            grid-template-areas:
+                "storage storage"
+                "status actions";
         }
-        .nr_app_search{
-            grid-column: 1 / -1;
-            grid-row: 2;
+        .app_status_head{
+            justify-content: flex-start;
         }
         .container_right{
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2,minmax(0,1fr));
         }
         .app_status_panel{
             grid-template-columns: 1fr 1fr;
         }
-        .app_status_head,
         .app_status_grid{
-            grid-column: span 1;
+            grid-column: 1 / -1;
         }
     }
     @media (max-width: 680px){
-        #app_top_menu{ padding: 4px 6px !important; gap: 5px; }
-        .nr_app_list_feedback{ height: 46px; }
+        #app_top_menu{ padding: 0 0 8px !important; margin-bottom: 12px !important; gap: 5px; }
+        .nr_app_list_feedback{ height: 44px; flex-basis: 100%; }
         .nr_app_list_retry{ min-height: 44px; }
         #app_top_menu .top_menu{ min-height: 44px; }
         #app_top_menu .nr_tabs_nav{ flex-basis: 44px; width: 44px; min-height: 44px; }
         #app_top_menu .nr_top_name{ max-width: 120px; }
-        .nr_app_search_clear{ width: 44px; height: 44px; right: 48px; }
         .app_status_toggle{ min-height: 44px; }
-        #nr_app_search_input{
-            height: 42px;
-            padding-right: 100px;
-            font-size: 16px;
-        }
         .app_btn_group .app_btn_class,
         .container_left .app_menu{
             min-height: 44px;
@@ -17083,8 +17272,7 @@ patch_appcenter_card_polish_v3() {
             line-height: 42px;
         }
         .app_status_metric{
-            border-left: 0;
-            padding: 8px;
+            padding: 10px;
         }
         #app_top_menu .top_menu_inner_icon,
         .modal.bootstrap-dialog .bootstrap-dialog-close-button .close{
@@ -17094,17 +17282,15 @@ patch_appcenter_card_polish_v3() {
         .modal.bootstrap-dialog .bootstrap-dialog-title{
             line-height: 40px;
         }
-        .appcontainer{
-            grid-template-columns: 1fr;
-            grid-template-areas:
-                "toolbar"
-                "menu"
-                "content"
-                "status";
-            gap: 11px;
-        }
+        .appcontainer{ gap: 11px; }
+        .container_right{ grid-template-columns: 1fr; }
         .app_btn_box{
             grid-template-columns: 1fr;
+            grid-template-areas:
+                "storage"
+                "status"
+                "actions";
+            gap: 12px;
             padding: 12px;
         }
         .app_btn_box .mem_track{
@@ -17115,10 +17301,6 @@ patch_appcenter_card_polish_v3() {
             display: grid;
             max-width: none;
         }
-        .nr_app_search{
-            grid-column: auto;
-            grid-row: auto;
-        }
         .app_btn_group{
             justify-content: stretch;
         }
@@ -17128,11 +17310,13 @@ patch_appcenter_card_polish_v3() {
             text-align: center;
         }
         .container_left{
-            position: static;
-            padding: 6px;
+            flex-wrap: wrap;
+            gap: 0;
+            padding: 0 0 4px;
         }
         .container_left ul{
             display: grid;
+            width: 100%;
             grid-template-columns: 1fr 1fr;
             gap: 6px;
         }
@@ -17141,16 +17325,18 @@ patch_appcenter_card_polish_v3() {
             margin: 0;
         }
         .container_left .app_menu.menu_active{
-            box-shadow: inset 0 -2px 0 var(--nr-v3-cyan);
+            box-shadow: 0 2px 5px rgba(0,0,0,.12);
         }
         .app_status_panel{
             grid-template-columns: 1fr 1fr;
-            padding: 11px;
+            padding: 12px 0 0;
         }
-        .app_status_head,
         .app_status_grid{
             grid-column: 1 / -1;
         }
+        .app_status_head{ justify-content: stretch; }
+        .app_status_toggle{ width: 100%; justify-content: space-between; }
+        .app_status_toggle::before{ flex: 0 0 6px; }
     }
     @media (max-width: 430px){
         .app_btn_box .nr-storage-track.nr-has-storage-expand{
@@ -17193,7 +17379,6 @@ patch_appcenter_card_polish_v3() {
         .app_status_panel{
             grid-template-columns: repeat(2,minmax(0,1fr));
         }
-        .app_status_head,
         .app_status_grid{
             grid-column: 1 / -1;
         }
@@ -17229,7 +17414,7 @@ patch_appcenter_card_polish_v3() {
         body.nr-appcenter-topnav #app_top_menu{
             min-height: 46px;
             margin-bottom: 10px !important;
-            padding: 4px 8px !important;
+            padding: 0 0 10px !important;
         }
         body.nr-appcenter-topnav .appcontainer{
             gap: 12px;
@@ -17238,8 +17423,8 @@ patch_appcenter_card_polish_v3() {
         body.nr-appcenter-topnav .app_btn_box{ padding: 9px 12px; }
         body.nr-appcenter-topnav .container_right{ gap: 12px; }
         body.nr-appcenter-topnav .container_right .app_box{
-            grid-template-rows: minmax(90px,1fr) auto;
-            min-height: 180px;
+            grid-template-rows: auto minmax(44px,1fr) auto;
+            min-height: 224px;
             padding: 14px;
         }
         body.nr-appcenter-topnav .container_right .app_des{ margin-top: 8px; }
@@ -17272,6 +17457,7 @@ EOF_APPCENTER_V3_CSS
     function nr_init_topnav_layout(){
         var main = $(".appcontainer").closest(".main")[0];
         if(!main) return;
+        document.body.classList.add("nr-appcenter-page");
         main.classList.add("nr-appcenter-main");
         if(!NR_APP_TOP_NAV) return;
         document.body.classList.add("nr-appcenter-topnav");
@@ -17323,17 +17509,6 @@ EOF_APPCENTER_V3_CSS
         });
     }
 
-    function nr_highlight_text(value, query){
-        var text = String(value || ""), lower = text.toLowerCase(), result = "", start = 0, found;
-        if(!query) return nr_escape_html(text);
-        while((found = lower.indexOf(query, start)) >= 0){
-            result += nr_escape_html(text.slice(start, found)) + '<mark class="nr_search_match">' +
-                nr_escape_html(text.slice(found, found + query.length)) + '</mark>';
-            start = found + query.length;
-        }
-        return result + nr_escape_html(text.slice(start));
-    }
-
     var NR_ACTIVE_APP_NAME = "";
     function nr_update_tab_edges(remeasure){
         var scroller = document.querySelector("#app_top_menu .nr_tabs_scroller");
@@ -17369,6 +17544,52 @@ EOF_APPCENTER_V3_CSS
         nr_update_tab_edges();
     }
 
+    function nr_sync_store_dialog(dialog){
+        if(!dialog) return;
+        var modal = dialog.getModal();
+        if(modal.hasClass("app_frame")) return;
+        modal.addClass("nr_store_dialog").toggleClass("nr_store_no_actions",
+            modal.find(".modal-footer .btn").not(".hide").length === 0);
+        modal.find(".bootstrap-dialog-close-button .close").attr({"aria-label":"关闭窗口", title:"关闭"});
+    }
+    function nr_store_dialog(options){
+        if((" "+(options.cssClass || "")+" ").indexOf(" app_frame ") >= 0) return BootstrapDialog.show(options);
+        options.cssClass = (options.cssClass || "")+" nr_store_dialog";
+        options.type = BootstrapDialog.TYPE_DEFAULT;
+        options.closable = true;
+        options.closeByBackdrop = false;
+        options.buttons = (options.buttons || []).filter(function(button){
+            var classes = " "+(button.cssClass || "")+" ";
+            return classes.indexOf(" btn-nradio-cancel ") < 0 &&
+                !(classes.indexOf(" btn-nradio-apply ") >= 0 && classes.indexOf(" hide ") >= 0);
+        });
+        var shown = options.onshown;
+        options.onshown = function(dialog){
+            if(shown) shown(dialog);
+            nr_sync_store_dialog(dialog);
+        };
+        return BootstrapDialog.show(options);
+    }
+    function nr_store_confirm(msg, title){
+        return nr_store_dialog({
+            title:title,
+            message:'<div class="nr_store_confirm">'+msg.message+'</div>',
+            onhide:msg.onhide,
+            buttons:[{label:msg.confirm, cssClass:"btn-primary", action:function(dialog){
+                dialog.setButtons([]);
+                nr_sync_store_dialog(dialog);
+                msg.callback();
+            }}]
+        });
+    }
+    function nr_store_uninstall_finish(dialog, ok, message){
+        if(dialog) dialog.close();
+        nr_store_dialog({
+            title:ok ? "卸载完成" : "卸载失败",
+            message:nr_result_markup(ok, nr_escape_html(message)),
+            onhidden:function(){ if(ok) refresh_data(); }
+        });
+    }
     function nr_operation_title(action, name){
         var verb = {install:"安装",uninstall:"卸载",update:"更新",open:"打开",close:"关闭",check:"检测版本"}[action] || "处理";
         return verb + (name ? " " + nr_appcenter_display_name(name) : "");
@@ -17389,8 +17610,10 @@ EOF_APPCENTER_V3_CSS
     function nr_appcenter_result(dialog, ok, action, name, message){
         if(!dialog) return;
         dialog.setTitle(nr_escape_html(nr_operation_title(action, name)) + (ok ? "完成" : "失败"));
-        dialog.setType(ok ? BootstrapDialog.TYPE_SUCCESS : BootstrapDialog.TYPE_DANGER);
+        dialog.setType(BootstrapDialog.TYPE_DEFAULT);
         dialog.setMessage(nr_result_markup(ok, message));
+        dialog.setButtons([]);
+        nr_sync_store_dialog(dialog);
     }
 
     var NR_APP_CHECK = null;
@@ -17409,7 +17632,7 @@ EOF_APPCENTER_V3_CSS
         var waiting = state === "waiting";
         var failed = state === "error";
         var icon = waiting ? '<span class="nr_dialog_spinner" aria-hidden="true"></span>' : failed ? '!' : '✓';
-        var buttons = [{label:"关闭", cssClass:"btn-default", action:function(dialog){ dialog.close(); }}];
+        var buttons = [];
         if(failed) buttons.push({label:"重新检测", cssClass:"btn-primary", action:function(){ nr_check_appstore_version(); }});
         job.dialog.setTitle("检测应用更新");
         job.dialog.setType(BootstrapDialog.TYPE_DEFAULT);
@@ -17417,6 +17640,7 @@ EOF_APPCENTER_V3_CSS
             '<span class="nr_update_check_icon" aria-hidden="true">'+icon+'</span><strong>'+nr_escape_html(title)+'</strong>'+
             (detail ? '<div class="nr_update_check_detail">'+nr_escape_html(detail)+'</div>' : '')+'</div>');
         job.dialog.setButtons(buttons);
+        nr_sync_store_dialog(job.dialog);
     }
 
     function nr_finish_appstore_check(job, code, message){
@@ -17502,6 +17726,8 @@ EOF_APPCENTER_V3_CSS
         if(key.indexOf("openclash") >= 0) return "代理规则、节点与网络分流管理";
         if(key.indexOf("adguard") >= 0) return "DNS 广告过滤与查询统计";
         if(key.indexOf("openvpn") >= 0) return "VPN 隧道连接与远程访问";
+        if(key.indexOf("qiyou") >= 0 || key.indexOf("奇游") >= 0) return "游戏联机加速与网络优化";
+        if(key.indexOf("leigod") >= 0 || key.indexOf("雷神") >= 0) return "游戏加速与线路优化";
         if(key.indexOf("zerotier") >= 0) return "异地组网与虚拟局域网";
         if(key.indexOf("ddns") >= 0) return "动态 DNS 解析与公网地址同步";
         if(key.indexOf("docker") >= 0) return "容器服务与应用运行环境";
@@ -17513,10 +17739,6 @@ EOF_APPCENTER_V3_CSS
         return '<div class="app_empty_state" role="status">'+icon+'<strong>'+nr_escape_html(title)+'</strong><span>'+
             (browse ? '前往全部应用，选择需要的工具' : '应用列表为空，可刷新后再试')+'</span>'+
             (browse ? '<button type="button" class="nr_browse_apps">浏览全部应用</button>' : '')+'</div>';
-    }
-
-    function nr_appcenter_search_empty(){
-        return '<div class="nr_search_empty" role="status"><strong>没有找到匹配应用</strong><span>换个名称、版本或功能关键词试试</span><button type="button" class="nr_search_reset">清空搜索</button></div>';
     }
 
     var NR_APP_LIST_BUSY = false;
@@ -17576,7 +17798,7 @@ EOF_APPCENTER_V3_CSS
         NR_APP_STATUS_STATE = state;
         var label = state === "error" ? "更新失败" : state === "busy" ? "刷新中" : state === "ok" ? "已更新" : "等待刷新";
         if(NR_APP_STATUS_UPDATED_AT && state !== "busy") label += " · " + NR_APP_STATUS_UPDATED_AT;
-        $("#app_status_mount").toggleClass("nr_status_ok", state === "ok")
+        $(".app_status_head").toggleClass("nr_status_ok", state === "ok")
             .toggleClass("nr_status_busy", state === "busy").toggleClass("nr_status_error", state === "error");
         $(".app_status_time").text(label).attr("title", NR_APP_STATUS_UPDATED_AT ? "上次更新 " + NR_APP_STATUS_UPDATED_AT : label);
     }
@@ -17602,10 +17824,9 @@ EOF_APPCENTER_V3_CSS
         }
         return ''+
         '<aside class="app_status_panel">'+
-        '  <div class="app_status_head"><button type="button" class="app_status_toggle" aria-expanded="false"><span>系统状态</span><em class="app_status_time">等待刷新</em><b class="app_status_toggle_text">展开</b></button></div>'+
         '  <div class="app_status_grid">'+
         '    <div class="app_status_tile"><strong>'+installed+'</strong><span>已安装</span></div>'+
-        '    <div class="app_status_tile"><strong>'+opened+'</strong><span>后台</span></div>'+
+        '    <div class="app_status_tile"><strong>'+opened+'</strong><span>页面已打开</span></div>'+
         '    <div class="app_status_tile"><strong>'+all+'</strong><span>全部</span></div>'+
         '  </div>'+
         '  <div class="app_status_metric"><div class="app_status_metric_row"><span>设备最高温度</span><strong class="app_status_temp">--</strong></div><div class="app_status_bar"><span class="app_status_temp_bar"></span></div></div>'+
@@ -17618,12 +17839,12 @@ EOF_APPCENTER_V3_CSS
     function nr_sync_status_panel_state(){
         var mount = $("#app_status_mount");
         mount.toggleClass("nr_status_collapsed", !NR_APP_STATUS_EXPANDED);
-        mount.find(".app_status_toggle").attr("aria-expanded", NR_APP_STATUS_EXPANDED ? "true" : "false");
-        mount.find(".app_status_toggle_text").text(NR_APP_STATUS_EXPANDED ? "收起" : "展开");
+        $(".app_status_toggle").attr("aria-expanded", NR_APP_STATUS_EXPANDED ? "true" : "false");
+        $(".app_status_toggle_text").text(NR_APP_STATUS_EXPANDED ? "收起" : "展开");
     }
 
     function nr_render_status_panel(data){
-        if(!$("#app_status_mount").length) $(".container_left").before('<div id="app_status_mount"></div>');
+        if(!$("#app_status_mount").length) $(".app_btn_box").append('<div id="app_status_mount"></div>');
         $("#app_status_mount").html(nr_build_status_panel(data));
         nr_sync_status_panel_state();
         if(NR_APP_STATUS_LAST) nr_update_status_panel(NR_APP_STATUS_LAST, true);
@@ -17675,6 +17896,7 @@ EOF_APPCENTER_V3_CSS
     }
 
     function nr_get_system_status(){
+        if(typeof nr_appcenter_polling_paused === "function" && nr_appcenter_polling_paused()) return;
         if(document.hidden || NR_APP_STATUS_BUSY) return;
         NR_APP_STATUS_BUSY = true;
         nr_status_feedback("busy");
@@ -17697,14 +17919,6 @@ EOF_APPCENTER_V3_CSS
         nr_get_system_status();
         if(NR_APP_STATUS_TIMER) window.clearInterval(NR_APP_STATUS_TIMER);
         NR_APP_STATUS_TIMER = window.setInterval(nr_get_system_status, NR_APP_STATUS_INTERVAL);
-    }
-
-    function nr_update_app_count(){
-        var active = $(".container_right:not(.hide)");
-        var total = active.find(".app_box").length;
-        var visible = active.find(".app_box:not(.nr_app_filtered)").length;
-        $("#nr_app_search_count").text(visible+" / "+total).attr("title", "当前显示 "+visible+" 个，共 "+total+" 个应用");
-        return {total:total, visible:visible};
     }
 
     function nr_update_menu_counts(data){
@@ -17735,24 +17949,6 @@ EOF_APPCENTER_V3_CSS
         });
     }
 
-    function nr_apply_app_search(){
-        var query = $.trim($("#nr_app_search_input").val() || "").toLowerCase();
-        var active = $(".container_right:not(.hide)");
-        active.find(".nr_search_empty").remove();
-        active.find(".app_box").each(function(){
-            var text = ($(this).attr("data-search") || $(this).text()).toLowerCase();
-            $(this).toggleClass("nr_app_filtered", query.length > 0 && text.indexOf(query) < 0);
-            $(this).find("[data-nr-text]").each(function(){
-                $(this).html(nr_highlight_text($(this).attr("data-nr-text"), query));
-            });
-        });
-        $(".nr_app_search").toggleClass("nr_searching", query.length > 0);
-        $("#nr_app_search_clear").attr("aria-hidden", query.length > 0 ? "false" : "true").attr("tabindex", query.length > 0 ? "0" : "-1");
-        var count = nr_update_app_count();
-        if(query.length > 0 && count.total > 0 && count.visible === 0) active.append(nr_appcenter_search_empty());
-        nr_mark_expandable_text();
-    }
-
     function show_app_data(data){
         data = data || {result:{applist:[]}};
         if(!data.result) data.result = {applist:[]};
@@ -17774,6 +17970,7 @@ EOF_APPCENTER_V3_CSS
             var display_version = nr_appcenter_display_version(db.name, db.version);
             var des_info = db.description_lng && db.description_lng.length ? db.description_lng :
                 (db.des && db.des.length ? db.des : nr_appcenter_desc_fallback(db.name));
+            if($.trim(des_info) === "应用功能与运行入口") des_info = nr_appcenter_desc_fallback(db.name);
             var status_label = "未知";
             var open_badge = "";
             var icon_fallback = "this.onerror=null;this.src='/luci-static/nradio/images/icon/app_default.png';";
@@ -17782,7 +17979,7 @@ EOF_APPCENTER_V3_CSS
                 if(db.name === active_name) active_index = index;
                 top_menu_ht += '<div class="top_menu_inner" data-app-name="'+nr_escape_html(db.name)+'"><span class="top_menu" role="button" tabindex="0" data-index="'+index+'" title="'+nr_escape_html(display_name)+'" onclick="'+nr_escape_html("callback("+JSON.stringify(String(index))+","+JSON.stringify(open_route)+")")+'"><img class="nr_top_icon" src="/luci-static/nradio/images/icon/'+nr_escape_html(icon_name)+'?v='+encodeURIComponent(NR_APP_ICON_CACHE_TAG)+'" alt="" onerror="'+nr_escape_html(icon_fallback)+'"><span class="nr_top_name">'+nr_escape_html(display_name)+'</span></span><button type="button" aria-label="'+nr_escape_html("关闭 "+display_name)+'" title="'+nr_escape_html("关闭 "+display_name)+'" onclick="'+nr_escape_html("app_action("+JSON.stringify(db.name)+",\"close\")")+'" class="top_menu_inner_icon">×</button></div>';
                 open_ht = '<li class="action_list_li nr_action_open" role="button" tabindex="0" onclick="callback(\''+index+'\',\''+open_route+'\')"><%:AppOpen%></li>';
-                open_badge = '<span class="app_open_badge">后台</span>';
+                open_badge = '<span class="app_open_badge">页面已打开</span>';
             }
             if(db.has_luci != 1) open_ht = '';
             if(db.status == APP_STATUS_APP_NEW){
@@ -17801,7 +17998,6 @@ EOF_APPCENTER_V3_CSS
                 version: nr_escape_html(db.version),
                 display_version: nr_escape_html(display_version),
                 des: nr_escape_html(des_info),
-                search_text: nr_escape_html([db.name,display_name,db.version,des_info].join(" ")),
                 icon: nr_escape_html(icon_name),
                 icon_cache_tag: NR_APP_ICON_CACHE_TAG,
                 icon_fallback: nr_escape_html(icon_fallback),
@@ -17826,20 +18022,14 @@ EOF_APPCENTER_V3_CSS
         nr_update_menu_counts(data);
         $(".container_left .app_menu, .app_btn_group .app_btn_class").attr("role", "button").attr("tabindex", "0");
         nr_render_status_panel(data);
-        nr_apply_app_search();
+        nr_mark_expandable_text();
     }
 
-    $(document).on("input", "#nr_app_search_input", nr_apply_app_search);
-    $(document).on("click", "#nr_app_search_clear, .nr_search_reset", function(){
-        $("#nr_app_search_input").val("").focus();
-        nr_apply_app_search();
-    });
     $(document).on("click", "#nr_app_list_feedback .nr_app_list_retry", nr_refresh_app_list);
     $(document).on("click", ".nr_browse_apps", function(){
-        $("#nr_app_search_input").val("");
         var all_menu = $(".container_left .app_menu").eq(1);
         all_menu.trigger("click").focus();
-        nr_apply_app_search();
+        nr_mark_expandable_text();
     });
     $(document).on("click", ".container_right .nr_text_expandable", function(){
         var expanded_class = this.classList.contains("app_des") ? "nr_desc_expanded" : "nr_text_expanded";
@@ -17859,17 +18049,10 @@ EOF_APPCENTER_V3_CSS
     });
     window.addEventListener("resize", function(){ nr_update_tab_edges(true); nr_mark_expandable_text(); });
     window.addEventListener("load", function(){ nr_update_tab_edges(true); nr_mark_expandable_text(); });
-    $(document).on("click", ".app_menu", function(){ window.setTimeout(nr_apply_app_search, 0); });
+    $(document).on("click", ".app_menu", function(){ window.setTimeout(nr_mark_expandable_text, 0); });
     $(document).on("click", ".app_status_toggle", function(){
         NR_APP_STATUS_EXPANDED = !NR_APP_STATUS_EXPANDED;
         nr_sync_status_panel_state();
-    });
-    $(document).on("keydown", "#nr_app_search_input", function(event){
-        if(event.key === "Escape"){
-            $(this).val("");
-            nr_apply_app_search();
-            event.preventDefault();
-        }
     });
     $(document).on("keydown", ".action_list_li, .app_menu, .app_btn_class, .app_des[role='button'], .nr_text_expandable, #app_top_menu .top_menu[role='button']", function(event){
         if(event.key === "Enter" || event.key === " "){
@@ -17916,6 +18099,8 @@ strip_style_from("    /* NRadio appcenter card polish: visual-only layer */")
 
 html = html:gsub("[ \t]*<div id=\"app_status_mount\"></div>\r\n", "")
 html = html:gsub("[ \t]*<div id=\"app_status_mount\"></div>\n", "")
+html = html:gsub("[ \t]*<div id=\"app_status_mount\" class=\"nr_status_collapsed\"></div>\r?\n", "")
+html = html:gsub("[ \t]*<div id=\"nr_app_status_head\".-</div>\r?\n", "")
 html = html:gsub("[ \t]*<div class=\"nr_app_search\">.-</div>\r\n", "")
 html = html:gsub("[ \t]*<div class=\"nr_app_search\">.-</div>\n", "")
 html = html:gsub("[ \t]*<div id=\"nr_app_list_feedback\".-</div>\r\n", "")
@@ -17951,21 +18136,20 @@ local storage_markup = [[        <div class="mem_track nr-storage-track">
 ]]
 html = html:sub(1, storage_pos - 1) .. storage_markup .. html:sub(toolbar_pos)
 toolbar_pos = assert(html:find(toolbar_anchor, storage_pos, true), "toolbar anchor not found after storage rebuild")
-local search_markup = '        <div class="nr_app_search"><input id="nr_app_search_input" type="search" autocomplete="off" aria-label="搜索应用" placeholder="搜索应用、版本或功能"><button id="nr_app_search_clear" class="nr_app_search_clear" type="button" aria-label="清除搜索" aria-hidden="true" tabindex="-1" title="清除搜索">×</button><span id="nr_app_search_count" class="nr_app_search_count" aria-live="polite">0 / 0</span></div>\n'
-html = html:sub(1, toolbar_pos - 1) .. search_markup .. html:sub(toolbar_pos)
-toolbar_pos = assert(html:find(toolbar_anchor, toolbar_pos, true), "toolbar anchor not found after search insertion")
 local toolbar_close = assert(html:find("\n    </div>\n", toolbar_pos, true), "toolbar close not found")
-local feedback_markup = '\n        <div id="nr_app_list_feedback" class="nr_app_list_feedback" role="status" aria-live="polite" hidden><span class="nr_app_list_message"></span><button type="button" class="nr_app_list_retry" hidden>重试</button></div>'
-html = html:sub(1, toolbar_close - 1) .. feedback_markup .. html:sub(toolbar_close)
+local status_markup = '\n        <div id="nr_app_status_head" class="app_status_head"><button type="button" class="app_status_toggle" aria-expanded="false" aria-controls="app_status_mount"><span>系统状态</span><em class="app_status_time">等待刷新</em><b class="app_status_toggle_text">展开</b></button></div>\n        <div id="app_status_mount" class="nr_status_collapsed"></div>'
+html = html:sub(1, toolbar_close - 1) .. status_markup .. html:sub(toolbar_close)
 
 local menu_anchor = '    <div class="container_left">'
 local menu_pos = assert(html:find(menu_anchor, 1, true), "menu anchor not found")
-html = html:sub(1, menu_pos - 1) .. '    <div id="app_status_mount"></div>\n' .. html:sub(menu_pos)
+local feedback_markup = '\n        <div id="nr_app_list_feedback" class="nr_app_list_feedback" role="status" aria-live="polite" hidden><span class="nr_app_list_message"></span><button type="button" class="nr_app_list_retry" hidden>重试</button></div>'
+menu_pos = menu_pos + #menu_anchor - 1
+html = html:sub(1, menu_pos) .. feedback_markup .. html:sub(menu_pos + 1)
 
 local row_start = assert(html:find("    var APPTableRow = ''+", 1, true), "APPTableRow start not found")
 local error_start = assert(html:find("    var APPErrorRow = ''+", row_start, true), "APPErrorRow start not found")
 local row = [[    var APPTableRow = ''+
-    '<div class="app_box app_item{{index}}" data-status="{{status}}" data-search="{{search_text}}">'+
+    '<div class="app_box app_item{{index}}" data-status="{{status}}">'+
         '    <div class="app_icon"><img class="app_icon_img" src="/luci-static/nradio/images/icon/{{icon}}?v={{icon_cache_tag}}" alt="" onerror="{{icon_fallback}}"></div>'+
         '    <div class="app_info">'+
         '        <div class="app_title">'+
@@ -17973,8 +18157,8 @@ local row = [[    var APPTableRow = ''+
         '            <div class="app_version" title="{{version}}" data-nr-text="{{display_version}}">{{display_version}}</div>'+
         '            <div class="app_meta_row"><span class="app_state_badge app_state_{{status}}">{{status_label}}</span>{{open_badge}}</div>'+
         '        </div>'+
-        '        <div class="app_des" title="{{des}}" data-nr-text="{{des}}">{{des}}</div>'+
         '    </div>'+
+        '    <div class="app_des" title="{{des}}" data-nr-text="{{des}}">{{des}}</div>'+
         '    <div class="app_action"><ul class="action_list">{{opt}}</ul></div>'+
         '</div>';
 
@@ -18014,8 +18198,16 @@ end
 
 polish_function("app_action", {
     {"message: loading_htm", "message: nr_appcenter_loading(action, app_name)"},
-    {"dialogDeal.setMessage(loading_htm);", "dialogDeal.setTitle(nr_escape_html(nr_operation_title(action, app_name))); dialogDeal.setMessage(nr_appcenter_loading(action, app_name));"}
+    {"dialogDeal.setMessage(loading_htm);", "dialogDeal.setTitle(nr_escape_html(nr_operation_title(action, app_name))); dialogDeal.setMessage(nr_appcenter_loading(action, app_name));"},
+    {"title: '',", "title: nr_escape_html(nr_operation_title(action, app_name)),"},
+    {"dialogDeal = confirm_box(msg);", "dialogDeal = nr_store_confirm(msg, nr_escape_html(nr_operation_title(action, app_name)));"}
 })
+polish_function("nradio_plugin_uninstall_action", {
+    {"dialogDeal = confirm_box(msg);", 'dialogDeal = nr_store_confirm(msg, nr_escape_html(nr_operation_title("uninstall", app_name)));'}
+})
+local uninstall_start = assert(html:find("    function nradio_plugin_uninstall_finish(", 1, true), "uninstall result start not found")
+local uninstall_end = assert(html:find("\n    function ", uninstall_start + 5, true), "uninstall result end not found")
+html = html:sub(1, uninstall_start - 1) .. "    function nradio_plugin_uninstall_finish(dialogDeal, ok, msg){ nr_store_uninstall_finish(dialogDeal, ok, msg); }\n" .. html:sub(uninstall_end)
 polish_function("import_pkg", {
     {"cssClass: 'list-dialog dialog_box',", "cssClass: 'list-dialog dialog_box nr_import_dialog',"},
     {'type="submit" value="<%:APPImportBTn%>"', 'type="submit" disabled="disabled" value="<%:APPImportBTn%>"'}
@@ -18053,6 +18245,12 @@ polish_function("show_error", {
     {'message:err_info,', 'message:nr_result_markup(result.code == APPCENTER_OK, err_info),'},
     {"title: '',", 'title: result.code == APPCENTER_OK ? "安装完成" : "安装失败",'}
 })
+polish_function("show_import_error", {
+    {"title: '',", 'title: result.code == 0 ? "正在安装软件包" : "软件包上传失败",'},
+    {"message:err_info,", 'message:result.code == 0 ? nr_appcenter_loading("install", result.file_name || "软件包") : nr_result_markup(false, nr_escape_html(err_info)),'}
+})
+html = replace_plain(html, '$(".modal-footer").css("display","none");', 'dialogDeal.getModalFooter().hide();')
+html = html:gsub("BootstrapDialog%.show%(%{", "nr_store_dialog({")
 
 local ready_count
 html, ready_count = html:gsub("        get_memory%(%)%;", "        get_memory();\n        nr_init_topnav_layout();\n        nr_init_sticky_toolbar();\n        nr_start_status_polling();", 1)
@@ -18070,17 +18268,13 @@ EOF_APPCENTER_V3_LUA
     chmod 644 "$TPL" 2>/dev/null || true
 
     grep -Fq 'NRadio appcenter v3: begin' "$TPL" 2>/dev/null || die "应用商店 V3 CSS 校验失败"
-    grep -Fq 'id="nr_app_search_input"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索框校验失败"
     grep -Fq 'function nr_start_status_polling()' "$TPL" 2>/dev/null || die "应用商店 V3 状态刷新校验失败"
     grep -Fq 'NR_APP_STATUS_INTERVAL = 5000' "$TPL" 2>/dev/null || die "应用商店 V3 采样间隔校验失败"
     grep -Fq 'NR_APP_STATUS_AUTO_EXPANDED = true' "$TPL" 2>/dev/null || die "应用商店 V3 C2000MAX / C2000Ultra 状态自动展开校验失败"
     grep -Fq '<span>Swap 虚拟内存</span>' "$TPL" 2>/dev/null || die "应用商店 V3 C2000MAX / C2000Ultra Swap 标签校验失败"
     grep -Fq 'app_state_badge app_state_{{status}}' "$TPL" 2>/dev/null || die "应用商店 V3 状态徽标校验失败"
-    grep -Fq 'function nr_apply_app_search()' "$TPL" 2>/dev/null || die "应用商店 V3 搜索逻辑校验失败"
-    grep -Fq 'id="nr_app_search_clear"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索清除按钮校验失败"
     grep -Fq 'cssClass: '"'"'list-dialog dialog_box nr_import_dialog'"'"'' "$TPL" 2>/dev/null || die "应用商店 V3 手动安装弹窗校验失败"
     grep -Fq 'icon_cache_tag: NR_APP_ICON_CACHE_TAG' "$TPL" 2>/dev/null || die "应用商店 V3 图标缓存参数校验失败"
-    grep -Fq 'class="nr_search_empty"' "$TPL" 2>/dev/null || die "应用商店 V3 搜索空状态校验失败"
     grep -Fq 'class="top_menu_inner_icon">×</button>' "$TPL" 2>/dev/null || die "应用商店 V3 顶部关闭按钮校验失败"
     grep -Fq 'class="mem_track nr-storage-track"' "$TPL" 2>/dev/null || die "应用商店 V3 双空间容器校验失败"
     grep -Fq 'id="storage_expand_memory_row"' "$TPL" 2>/dev/null || die "应用商店 V3 存储扩展条校验失败"
@@ -18141,7 +18335,7 @@ install_appcenter_polish() {
     patch_appcenter_card_polish_v3
     case "${CURRENT_DETECTED_MODEL:-}" in
         NRadio_C8-688|NRadio_C5800-650|NRadio_C5800-688|NRadio_NBCPE)
-            patch_appcenter_storage_expand_display
+            patch_appcenter_storage_expand_display keep-infocd
             ;;
     esac
 
@@ -18149,7 +18343,7 @@ install_appcenter_polish() {
     install_unified_appcenter_icons || die "应用商店统一图标写入失败"
 
     log_stage 4 5 "刷新 LuCI 与应用商店缓存"
-    refresh_luci_appcenter
+    refresh_luci_appcenter keep-infocd
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
 
     log_stage 5 5 "校验应用商店页面"
@@ -18258,7 +18452,9 @@ refresh_luci_appcenter() {
     fix_nradio_ai_has_ai_compat
     rm -f /tmp/luci-indexcache /tmp/infocd/cache/appcenter 2>/dev/null || true
     rm -f /tmp/luci-modulecache/* 2>/dev/null || true
-    /etc/init.d/infocd restart >/dev/null 2>&1 || true
+    if [ "${1:-}" != "keep-infocd" ]; then
+        /etc/init.d/infocd restart >/dev/null 2>&1 || true
+    fi
     /etc/init.d/appcenter restart >/dev/null 2>&1 || true
     sleep 2
 }
@@ -18327,6 +18523,12 @@ require_private_procfs_for_secret_argv() {
     }
 }
 
+luci_route_login_required() {
+    grep -Eqi '^X-LuCI-Login-Required:[[:space:]]*yes[[:space:]]*$' "$1" 2>/dev/null && return 0
+    grep -Eq "name=['\"]luci_username['\"]" "$2" 2>/dev/null &&
+        grep -Eq "name=['\"]luci_password['\"]" "$2" 2>/dev/null
+}
+
 verify_luci_route() {
     route="$1"
     expect="$2"
@@ -18335,7 +18537,7 @@ verify_luci_route() {
     route_probe_attempt=1
 
     while [ "$route_probe_attempt" -le 3 ]; do
-        code="$(curl -m 8 -s -o "$out" -w '%{http_code}' "http://127.0.0.1/cgi-bin/luci/$route" 2>/dev/null || true)"
+        code="$(curl -m 8 -s -D "$out.headers" -o "$out" -w '%{http_code}' "http://127.0.0.1/cgi-bin/luci/$route" 2>/dev/null || true)"
         case "$code" in
             200|302|403)
                 break
@@ -18364,6 +18566,14 @@ verify_luci_route() {
     if grep -Eq 'Failed to execute|error500|Runtime error|not found!|has no parent node|No page is registered at' "$out" 2>/dev/null; then
         log "错误: $expect LuCI 路由返回错误页: $route"
         return 1
+    fi
+
+    if [ "$code" = '403' ]; then
+        if luci_route_login_required "$out.headers" "$out"; then
+            log "提示: $expect LuCI 需要登录 (HTTP 403): $route"
+        else
+            log "警告: $expect LuCI 访问被拒绝 (HTTP 403): $route；继续安装，网页访问尚未验收"
+        fi
     fi
 
     return 0
@@ -18712,13 +18922,25 @@ selfcheck_print_service_state() {
 selfcheck_luci_route_ok() {
     route="$1"
     out="$WORKDIR/selfcheck.$(printf '%s' "$route" | tr '/.' '__').probe"
-    code="$(curl -m 8 -s -o "$out" -w '%{http_code}' "http://127.0.0.1/cgi-bin/luci/$route" 2>/dev/null || true)"
+    code="$(curl -m 8 -s -D "$out.headers" -o "$out" -w '%{http_code}' "http://127.0.0.1/cgi-bin/luci/$route" 2>/dev/null || true)"
+    LUCI_ROUTE_HTTP_CODE="${code:-000}"
+    LUCI_ROUTE_STATE='unavailable'
 
     case "$code" in
         200|302|403)
             if grep -Eq 'Failed to execute|error500|Runtime error|not found!|has no parent node|No page is registered at' "$out" 2>/dev/null; then
+                LUCI_ROUTE_STATE='error'
                 return 1
             fi
+            if [ "$code" = '403' ]; then
+                if luci_route_login_required "$out.headers" "$out"; then
+                    LUCI_ROUTE_STATE='login_required'
+                    return 0
+                fi
+                LUCI_ROUTE_STATE='forbidden'
+                return 1
+            fi
+            LUCI_ROUTE_STATE='ok'
             return 0
             ;;
     esac
@@ -18729,20 +18951,23 @@ selfcheck_luci_route_ok() {
 selfcheck_print_luci_route_state() {
     label="$1"
     route="$2"
-    out="$WORKDIR/selfcheck.$(printf '%s' "$route" | tr '/.' '__').html"
-    code="$(curl -m 8 -s -o "$out" -w '%{http_code}' "http://127.0.0.1/cgi-bin/luci/$route" 2>/dev/null || true)"
+    selfcheck_luci_route_ok "$route" || true
 
-    if selfcheck_luci_route_ok "$route"; then
-        log "路由:    $label = 正常 (HTTP ${code:-000})"
-        return 0
-    fi
-
-    case "$code" in
-        200|302|403)
-            log "路由:    $label = LuCI 错误页 (HTTP $code)"
+    case "$LUCI_ROUTE_STATE" in
+        ok)
+            log "路由:    $label = 正常 (HTTP $LUCI_ROUTE_HTTP_CODE)"
+            ;;
+        login_required)
+            log "路由:    $label = 需要登录 (HTTP $LUCI_ROUTE_HTTP_CODE)"
+            ;;
+        forbidden)
+            log "路由:    $label = 访问被拒绝 (HTTP $LUCI_ROUTE_HTTP_CODE)"
+            ;;
+        error)
+            log "路由:    $label = LuCI 错误页 (HTTP $LUCI_ROUTE_HTTP_CODE)"
             ;;
         *)
-            log "路由:    $label = 缺失 (HTTP ${code:-000})"
+            log "路由:    $label = 不可用 (HTTP $LUCI_ROUTE_HTTP_CODE)"
             ;;
     esac
 }
@@ -20572,7 +20797,7 @@ nradio_multiwan_install_assets() {
     mkdir -p /usr/libexec || return 1
     cat > /usr/libexec/nradio-multiwan.new <<'EOF_NRADIO_MULTIWAN'
 #!/bin/sh
-# NRadio IPv4/IPv6 multi-WAN, V3.2.0 (2026-09-14).
+# NRadio IPv4/IPv6 multi-WAN, native-policy repair (2026-10-20).
 # Reuse native WAN routing/NAT/health and the existing 0xff00 connmark mask.
 MW_RUN=/var/run/nradio-multiwan
 MW_HELPER=/usr/libexec/nradio-multiwan
@@ -20674,7 +20899,7 @@ mw_interfaces() {
 }
 
 mw_snapshot() {
-    local wanted="${1:-4}" selected iface row weight all seen=' ' family
+    local wanted="${1:-4}" selected iface row weight all seen=' ' family policy member
     selected=$(uci -q get nradio_multiwan.main.interfaces)
     all=$(mw_interfaces "$wanted")
     for iface in $selected; do
@@ -20686,9 +20911,31 @@ mw_snapshot() {
             family=$(uci -q get "mwan3.$iface.family")
             case "$wanted/$family" in 4/ipv6|6/ipv4) continue ;; *) return 1 ;; esac
         fi
-        weight=$(uci -q get "nradio_multiwan.l_$iface.weight")
+        weight=''
+        case "$wanted" in 6) policy=net6_switch ;; *) policy=net_switch ;; esac
+        for member in $(uci -q get "mwan3.$policy.use_member"); do
+            [ "$(uci -q get "mwan3.$member.interface")" = "$iface" ] || continue
+            weight=$(uci -q get "mwan3.$member.weight")
+            break
+        done
+        [ -n "$weight" ] || weight=$(uci -q get "nradio_multiwan.l_$iface.weight")
         mw_weight "$weight" || return 1
         printf '%s|%s\n' "$row" "$weight"
+    done
+}
+
+# Delegate only if every exit in the live native policy is selected and online.
+# An explicit subset retains its existing classifier and fail-closed behavior.
+mw_native_policy() {
+    local ipt="$1" policy="$2" marks mark id
+    MW_NATIVE_RULES=$($ipt -w 5 -t mangle -S "$policy" 2>/dev/null) || return 1
+    marks=$(printf '%s\n' "$MW_NATIVE_RULES" | awk '{for(i=1;i<NF;i++) if($i=="--set-xmark") print $(i+1)}')
+    [ -n "$marks" ] || return 1
+    for mark in $marks; do
+        case "$mark" in */0xff00) mark=${mark%/*} ;; *) return 1 ;; esac
+        case "$mark" in ''|*[!0-9a-fA-Fx]*) return 1 ;; esac
+        id=$((mark / 256))
+        printf '%s\n' "$MW_SNAPSHOT" | awk -F '|' -v id="$id" '$2==id && $4=="online" {ok=1} END {exit !ok}' || return 1
     done
 }
 
@@ -20728,6 +20975,13 @@ mw_render() {
     done <<EOF_RULES
 $MW_RULES
 EOF_RULES
+    # Explicit destination/source/port rules above keep their precedence.
+    # Unmatched traffic inherits LuCI's live weight, metric and mode.
+    if [ -n "$MW_NATIVE_POLICY" ]; then
+        printf -- '-A %s -m mark --mark 0/0xff00 -j %s\n' "$chain" "$MW_NATIVE_POLICY"
+        printf -- '-A %s -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00\n' "$chain"
+        return 0
+    fi
     while IFS='|' read -r iface id dev state weight; do
         [ "$state" = online ] || continue
         mark=$(printf '0x%x' "$((id * 256))")
@@ -20798,11 +21052,14 @@ mw_apply_family() {
     fi
     MW_RULES=$(mw_rule_rows "$af") || return 1
     rules=$($ipt -w 5 -t mangle -S mwan3_rules 2>/dev/null) || return 1
+    MW_NATIVE_POLICY=''
+    MW_NATIVE_RULES=''
+    if mw_native_policy "$ipt" "$policy"; then MW_NATIVE_POLICY="$policy"; fi
     position=$(printf '%s\n' "$rules" | awk -v rule="$default" -v policy="$policy" '
         /^-A / && !/--comment "?nr-multiwan"? / {n++; if($0 ~ "--comment \"?" rule "\"? " && $NF==policy) {print n; exit}}')
     [ -n "$position" ] || return 1
     target=$(printf '%s\n' "$rules" | awk '/--comment "?nr-multiwan"? / {print $NF; exit}')
-    signature=$(printf '%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position")
+    signature=$(printf 'native-policy-v1\n%s\n%s\n%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position" "$MW_NATIVE_POLICY" "$MW_NATIVE_RULES")
     if [ "$signature" = "$(cat "$MW_RUN/signature$af" 2>/dev/null)" ] &&
        $ipt -w 5 -t mangle -C mwan3_rules -m mark --mark 0/0xff00 -m comment --comment nr-multiwan -j "$target" 2>/dev/null &&
        $ipt -w 5 -t mangle -C "$target" -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00 2>/dev/null; then
@@ -22877,6 +23134,7 @@ unified_matrix_print_plugin() {
         if [ -n "$route_path" ]; then
             if selfcheck_luci_route_ok "$route_path"; then
                 route_state='正常'
+                [ "$LUCI_ROUTE_STATE" != 'login_required' ] || route_state='需要登录'
             else
                 route_state='异常'
                 UNIFIED_MATRIX_WARNINGS=$((UNIFIED_MATRIX_WARNINGS + 1))
@@ -23969,6 +24227,7 @@ openclash_copy_model_to_persistent() {
 }
 
 openclash_download_model_bin() {
+    require_c2000max_storage_ready
     model_tmp="$WORKDIR/openclash-repair/Model.bin"
     mkdir -p "$WORKDIR/openclash-repair"
     log "提示: 正在下载 $OPENCLASH_DISPLAY_NAME smart 模型 Model.bin..."
@@ -23978,6 +24237,7 @@ openclash_download_model_bin() {
 }
 
 openclash_download_asn_mmdb() {
+    require_c2000max_storage_ready
     asn_tmp="$WORKDIR/openclash-repair/GeoLite2-ASN.mmdb"
     mkdir -p "$WORKDIR/openclash-repair"
     log "提示: 正在下载 $OPENCLASH_DISPLAY_NAME ASN.mmdb..."
@@ -24026,6 +24286,7 @@ run_openclash_dependency_repair_check() {
 
     if [ -n "$missing_pkgs" ]; then
         if confirm_default_yes "检测到 $OPENCLASH_DISPLAY_NAME 依赖缺失:${missing_pkgs}，是否现在更新软件源并安装？"; then
+            require_c2000max_storage_ready
             ensure_opkg_update || die "opkg update 失败，已停止依赖修复"
             ensure_packages $missing_pkgs || die "$OPENCLASH_DISPLAY_NAME 依赖修复失败，仍有软件包缺失"
             repair_changed=1
@@ -24049,6 +24310,7 @@ run_openclash_dependency_repair_check() {
     else
         log "核心:   smart/meta = 缺失或异常"
         if confirm_default_yes "是否现在下载/修复 $OPENCLASH_SMART_DISPLAY_NAME 核心？"; then
+            require_c2000max_storage_ready
             openclash_ensure_storage_dir /etc/openclash "$OPENCLASH_DISPLAY_NAME 目录"
             openclash_ensure_storage_dir /etc/openclash/core "$OPENCLASH_DISPLAY_NAME 核心目录"
             install_openclash_smart_core
@@ -25536,6 +25798,63 @@ html.nr-openclash-oem-hidden .main-content{
 	overflow:visible!important;
 	box-sizing:border-box!important;
 }
+html.nr-openclash-oem-hidden #maincontent,
+html.nr-openclash-oem-hidden #content{
+	min-height:100vh!important;
+	height:auto!important;
+	overflow-y:visible!important;
+}
+html.nr-openclash-oem-hidden ul.cbi-tabmenu{
+	display:grid!important;
+	grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+	grid-auto-rows:1fr;
+	gap:10px!important;
+	align-items:stretch;
+	width:100%!important;
+	margin:20px 0 16px!important;
+	padding:0!important;
+	list-style:none!important;
+	box-sizing:border-box!important;
+}
+html.nr-openclash-oem-hidden ul.cbi-tabmenu:before,
+html.nr-openclash-oem-hidden ul.cbi-tabmenu:after{
+	display:none!important;
+}
+html.nr-openclash-oem-hidden ul.cbi-tabmenu > li{
+	float:none!important;
+	width:auto!important;
+	min-width:0!important;
+	margin:0!important;
+	padding:0!important;
+	box-sizing:border-box!important;
+}
+html.nr-openclash-oem-hidden ul.cbi-tabmenu > li > a{
+	display:flex!important;
+	align-items:center;
+	justify-content:center;
+	width:100%!important;
+	height:100%!important;
+	min-height:44px;
+	margin:0!important;
+	padding:10px 12px!important;
+	line-height:1.4!important;
+	text-align:center;
+	white-space:normal!important;
+	overflow-wrap:break-word;
+	box-sizing:border-box!important;
+}
+@media (max-width:640px){
+	html.nr-openclash-oem-hidden .container.body-container:not(.visible-xs-block){
+		padding:0 12px 16px!important;
+	}
+	html.nr-openclash-oem-hidden .main-content{
+		padding:16px 0 24px!important;
+	}
+	html.nr-openclash-oem-hidden ul.cbi-tabmenu{
+		grid-template-columns:repeat(2,minmax(0,1fr));
+		gap:8px!important;
+	}
+}
 .nr-openclash-original-tabs{
 	display:flex;
 	flex-wrap:wrap;
@@ -25595,125 +25914,62 @@ html.nr-openclash-embedded .nr-openclash-original-tabs{
 </style>
 <script type="text/javascript">//<![CDATA[
 (function(){
-	var hideSelectors = [
-		'header',
-		'.menu_mobile',
-		'.mobile_bg_color.container.body-container.visible-xs-block',
-		'.tail_wave',
-		'.footer',
-		'footer',
-		'.footer_container',
-		'.footer_container_body',
-		'.menu-top',
-		'.logo-nradio',
-		'.large_banner',
-		'.small_banner',
-		'.main-logo-size',
-		'.mobile-logo-size',
-		'.qmenu',
-		'.nradio-right-btn',
-		'.sub_icon_list',
-		'.menu-tab',
-		'#mainmenu',
-		'#modemenu',
-		'.navbar',
-		'.navbar-inner'
-	];
-	function hideOemHeader(){
-		if (document.documentElement.className.indexOf("nr-openclash-oem-hidden") === -1)
-			document.documentElement.className += " nr-openclash-oem-hidden";
-		for (var i = 0; i < hideSelectors.length; i++) {
-			var nodes = document.querySelectorAll(hideSelectors[i]);
-			for (var j = 0; j < nodes.length; j++)
-				nodes[j].style.display = 'none';
-		}
-	}
-	function expandOpenClashPage(){
-		var html = document.documentElement;
-		var body = document.body;
-		var targets = [
-			html,
-			body
-		];
-		var selectors = [
-			'.container.body-container:not(.visible-xs-block)',
-			'.main',
-			'.main-content',
-			'#maincontent',
-			'#content'
-		];
-		for (var i = 0; i < selectors.length; i++) {
-			var nodes = document.querySelectorAll(selectors[i]);
-			for (var j = 0; j < nodes.length; j++)
-				targets.push(nodes[j]);
-		}
-		for (var k = 0; k < targets.length; k++) {
-			if (!targets[k])
-				continue;
-			targets[k].style.height = 'auto';
-			targets[k].style.minHeight = '100vh';
-			targets[k].style.overflowY = 'visible';
-		}
-	}
+	var html = document.documentElement;
+	html.classList.add('nr-openclash-oem-hidden');
 	try {
 		if (window.self !== window.top)
-			document.documentElement.className += " nr-openclash-embedded";
+			html.classList.add('nr-openclash-embedded');
 	}
 	catch(e) {
-		document.documentElement.className += " nr-openclash-embedded";
+		html.classList.add('nr-openclash-embedded');
 	}
-	if (document.readyState === 'loading')
-		document.addEventListener('DOMContentLoaded', function(){
-			hideOemHeader();
-			expandOpenClashPage();
-		});
-	else {
-		hideOemHeader();
-		expandOpenClashPage();
-	}
-	setTimeout(hideOemHeader, 300);
-	setTimeout(hideOemHeader, 1200);
-	setTimeout(expandOpenClashPage, 300);
-	setTimeout(expandOpenClashPage, 1200);
 })();
 
-(function initDebugLogAdapter(){
-	function updateDebugHint(){
+(function(){
+	function initDebugLogAdapter(){
 		var rendered = document.getElementById('debug-rendered');
+		var wrapper = document.getElementById('debug-render-wrapper');
+		if (!rendered || !wrapper) return;
 		var debugLog = document.getElementById('debug_log');
-		if (!rendered) return;
-		var hasContent = rendered.innerHTML.replace(/\s/g,'') !== ''
-			|| (debugLog && debugLog.value && debugLog.value.replace(/\s/g,'') !== '');
 		var existing = document.getElementById('nr-debug-empty-hint');
-		if (!hasContent) {
-			if (!existing) {
-				var hint = document.createElement('div');
-				hint.id = 'nr-debug-empty-hint';
-				hint.innerHTML = 'No debug log generated yet.<br>Click <strong>Generate Logs</strong> below to create a diagnostic report.';
-				var wrapper = document.getElementById('debug-render-wrapper');
-				if (wrapper) {
-					wrapper.insertBefore(hint, rendered);
+		function updateDebugHint(){
+			var hasContent = rendered.innerHTML.replace(/\s/g,'') !== ''
+				|| (debugLog && debugLog.value && debugLog.value.replace(/\s/g,'') !== '');
+			if (!hasContent) {
+				if (!existing) {
+					existing = document.createElement('div');
+					existing.id = 'nr-debug-empty-hint';
+					existing.innerHTML = 'No debug log generated yet.<br>Click <strong>Generate Logs</strong> below to create a diagnostic report.';
+					wrapper.insertBefore(existing, rendered);
 				}
-			}
-		} else {
-			if (existing) {
+				existing.style.display = '';
+			} else if (existing) {
 				existing.style.display = 'none';
 			}
 		}
-	}
-	setTimeout(updateDebugHint, 1000);
-	setTimeout(updateDebugHint, 3000);
-	var genBtn = document.getElementById('gen_debug_button');
-	if (genBtn) {
-		genBtn.addEventListener('click', function(){
-			setTimeout(updateDebugHint, 3000);
-		});
-	}
-	var checkCount = 0;
-	var intervalId = setInterval(function(){
 		updateDebugHint();
-		if (++checkCount >= 5) clearInterval(intervalId);
-	}, 1500);
+		if (window.MutationObserver) {
+			new MutationObserver(updateDebugHint).observe(rendered, {
+				childList:true, subtree:true, characterData:true
+			});
+		}
+		if (debugLog) {
+			debugLog.addEventListener('input', updateDebugHint);
+			debugLog.addEventListener('change', updateDebugHint);
+		}
+		var genBtn = document.getElementById('gen_debug_button');
+		var pendingHint;
+		if (genBtn) {
+			genBtn.addEventListener('click', function(){
+				clearTimeout(pendingHint);
+				pendingHint = setTimeout(updateDebugHint, 3000);
+			});
+		}
+	}
+	if (document.readyState === 'loading')
+		document.addEventListener('DOMContentLoaded', initDebugLogAdapter);
+	else
+		initDebugLogAdapter();
 })();
 //]]></script>
 <div class="nr-openclash-original-tabs">
@@ -25749,7 +26005,335 @@ patch_openclash_model_tabs_file() {
     grep -q 'openclash/nradio_tabs' "$model_file" || die "OpenClash 原版页面标签注入失败: $model_file"
 }
 
+patch_openclash_page_performance() {
+    mkdir -p /usr/lib/lua/luci/model
+    cat > /usr/lib/lua/luci/model/nradio_openclash_perf.lua <<'EOF_OPENCLASH_PERF_MODULE'
+local fs = require "nixio.fs"
+local nixio = require "nixio"
+local M = {}
+
+local function write_state(path, data)
+    local tmp = path .. "." .. tostring(nixio.getpid())
+    if fs.writefile(tmp, data) then
+        fs.chmod(tmp, "0600")
+        if not fs.rename(tmp, path) then fs.remove(tmp) end
+    end
+end
+
+local function cached(name, key, ttl, probe, busy_value)
+    local path = "/tmp/nradio-oc-" .. name
+    local function read_cache()
+        local old_key, stamp, value = (fs.readfile(path) or ""):match("^([^\n]+)\n(%d+)\n([^\n]*)")
+        local age = os.time() - (tonumber(stamp) or 0)
+        if old_key == key and (ttl == 0 or (age >= 0 and age < ttl)) then return value end
+    end
+    local value = read_cache()
+    if value ~= nil then return value end
+    local lock = nixio.open(path .. ".lock", "w", "0600")
+    -- Partition capability must keep its real value while another CGI fills the cache.
+    local locked = lock and lock:lock("tlock")
+    if lock and not locked and busy_value == nil then locked = lock:lock("lock") end
+    if not locked then
+        if lock then lock:close() end
+        return read_cache() or busy_value or probe()
+    end
+    value = read_cache()
+    if value == nil then
+        local ok, result = pcall(probe)
+        if ok and result ~= nil then
+            value = tostring(result)
+            write_state(path, key .. "\n" .. os.time() .. "\n" .. value .. "\n")
+        end
+        lock:close()
+        if not ok then error(result) end
+    else
+        lock:close()
+    end
+    return value
+end
+
+function M.core_version(path, probe)
+    local st = fs.stat(path)
+    if not st then return "0" end
+    local key = table.concat({path, st.size or 0, st.mtime or 0, st.ctime or 0, st.ino or 0}, "|")
+    return cached("core-version", key, 0, function()
+        local value = probe()
+        if value and value ~= "" and value ~= "0" then return value end
+    end, "0") or "0"
+end
+
+function M.multisystem(probe)
+    local key = (fs.readfile("/tmp/sysinfo/board_name") or "unknown"):gsub("%s+", "")
+    key = key .. "|" .. tostring(fs.stat("/usr/bin/sysupgrade-opensource", "mtime") or 0)
+    return cached("multisystem", key, 60, function() return probe() and "1" or "0" end) == "1"
+end
+
+local function cpu_stat()
+    local raw = fs.readfile("/proc/stat") or ""
+    local values = raw:match("^cpu%s+([^\n]+)") or ""
+    local total, count = 0, 0
+    for value in values:gmatch("%d+") do
+        count = count + 1
+        if count <= 8 then total = total + tonumber(value) end
+    end
+    local _, cores = raw:gsub("\ncpu%d+%s", "")
+    return total, math.max(1, cores)
+end
+
+function M.system_load()
+    local raw = fs.readfile("/proc/loadavg") or ""
+    local _, cores = cpu_stat()
+    return tonumber(raw:match("^%S+%s+(%S+)")) or 0, cores
+end
+
+function M.process_usage(pid)
+    pid = tostring(pid or "")
+    if not pid:match("^%d+$") then return 0, "0" end
+    local status = fs.readfile("/proc/" .. pid .. "/status") or ""
+    local mem = tonumber(status:match("VmRSS:%s+(%d+)")) or 0
+    local raw = fs.readfile("/proc/" .. pid .. "/stat") or ""
+    local fields = {}
+    for value in (raw:match("^%d+ %(.+%) (.+)$") or ""):gmatch("%S+") do fields[#fields + 1] = value end
+    local ticks = (tonumber(fields[12]) or 0) + (tonumber(fields[13]) or 0)
+    local started = tonumber(fields[20])
+    local total = cpu_stat()
+    if not started or total == 0 then return mem, "0" end
+    local path = "/tmp/nradio-oc-cpu"
+    local old_pid, old_start, old_total, old_ticks, old_usage = (fs.readfile(path) or ""):match("^(%d+) (%d+) (%d+) (%d+) ([%d.]+)")
+    local usage = 0
+    if old_pid == pid and tonumber(old_start) == started then
+        local delta = total - tonumber(old_total)
+        if delta > 0 and ticks >= tonumber(old_ticks) then
+            usage = math.min(100, math.max(0, (ticks - tonumber(old_ticks)) * 100 / delta))
+        elseif delta == 0 then
+            return mem, old_usage
+        end
+    end
+    local text = string.format("%.1f", usage)
+    write_state(path, string.format("%s %d %d %d %s\n", pid, started, total, ticks, text))
+    return mem, text
+end
+
+return M
+EOF_OPENCLASH_PERF_MODULE
+
+    lua - <<'EOF_OPENCLASH_PERF_PATCH'
+local fs = require "nixio.fs"
+local nixio = require "nixio"
+local function replace_once(data, old, new)
+    local first, last = data:find(old, 1, true)
+    if not first then return data, false end
+    return data:sub(1, first - 1) .. new .. data:sub(last + 1), true
+end
+local function save(path, original, data)
+    if data == original then return end
+    if path:match("%.lua$") then assert(loadstring(data, "@" .. path)) end
+    local tmp = path .. ".nradio-perf-" .. tostring(nixio.getpid())
+    assert(fs.writefile(tmp, data))
+    assert(fs.chmod(tmp, "0644"))
+    assert(fs.rename(tmp, path))
+end
+
+local controller = "/usr/lib/lua/luci/controller/openclash.lua"
+local original = fs.readfile(controller)
+if original then
+    local data = original
+    if not data:find("nradio_openclash_perf", 1, true) then
+        local start = data:find("local function coremetacv()", 1, true)
+        local finish = start and data:find("\nfunction release_branch()", start, true)
+        if start and finish then
+            local version = data:sub(start, finish - 1):gsub("local function coremetacv%(%)", "local function nradio_coremetacv_read()", 1)
+            data = data:sub(1, start - 1) .. version .. [[
+
+local function coremetacv()
+    return require("luci.model.nradio_openclash_perf").core_version(meta_core_path, nradio_coremetacv_read)
+end
+]] .. data:sub(finish)
+        end
+    end
+    -- Both statistics endpoints keep their response fields; /proc replaces top/awk/grep.
+    local mem_start = data:find('\t\tmem = tonumber(SYS.exec(string.format("cat /proc/%s/status', 1, true)
+    local mem_end = mem_start and data:find("\n\t\tif mem and cpu then", mem_start, true)
+    if mem_start and mem_end then
+        data = data:sub(1, mem_start - 1) .. '\t\tmem, cpu = require("luci.model.nradio_openclash_perf").process_usage(pid)\n' .. data:sub(mem_end)
+    end
+    data = data:gsub('local cpu_count = SYS%.exec%("grep %-c %^processor /proc/cpuinfo 2>/dev/null"%):gsub%("\\n", ""%) or 1',
+        'local load_avg_value, cpu_count = require("luci.model.nradio_openclash_perf").system_load()')
+    data = data:gsub('load_avg = SYS%.exec%("awk %\'{print %$2; exit}%\' /proc/loadavg 2>/dev/null"%):gsub%("\\n", ""%) or "0"',
+        'load_avg, cpu_count = require("luci.model.nradio_openclash_perf").system_load()\n\t\tload_avg = tostring(load_avg)')
+    data = data:gsub('cpu_count = SYS%.exec%("grep %-c %^processor /proc/cpuinfo 2>/dev/null"%):gsub%("\\n", ""%) or 1',
+        'cpu_count = cpu_count or 1')
+    local top_pattern = 'cpu = SYS%.exec%(string%.format%(%[%[%s*top %-b %-n1.-%]%], pid%)%)'
+    data = data:gsub(top_pattern, 'cpu = select(2, require("luci.model.nradio_openclash_perf").process_usage(pid))')
+    save(controller, original, data)
+end
+
+local library = "/usr/lib/lua/luci/nradio.lua"
+original = fs.readfile(library)
+if original and not original:find("nr_oc_multisystem_probe", 1, true) then
+    local first = original:find("function support_multi_system()", 1, true)
+    local finish = first and original:find("\nfunction ", first + 1, true)
+    if first and finish then
+        local probe = original:sub(first, finish - 1):gsub("function support_multi_system%(%)", "local function nr_oc_multisystem_probe()", 1)
+        local data = original:sub(1, first - 1) .. probe .. [[
+
+function support_multi_system()
+    return require("luci.model.nradio_openclash_perf").multisystem(nr_oc_multisystem_probe)
+end
+]] .. original:sub(finish)
+        save(library, original, data)
+    end
+end
+
+local update = "/usr/lib/lua/luci/view/openclash/update.htm"
+original = fs.readfile(update)
+if original and not original:find("nrWatchVersionTab", 1, true) then
+    local data, changed = replace_once(original,
+        "var versionTabMode = document.getElementById('selectPopup').classList.contains('select-popup-tab');",
+        [[var versionTabMode = document.getElementById('selectPopup').classList.contains('select-popup-tab');
+    function nrVersionVisible() {
+        var panel = document.getElementById('selectPopup');
+        return !document.hidden && panel && panel.getClientRects().length > 0;
+    }
+    function nrWatchVersionTab() {
+        var started = false;
+        function updateVisibility() {
+            if (!nrVersionVisible()) { if (started) closeSelectPopup(); return; }
+            if (!started) { started = true; initAllData(); }
+            else if (!refreshTimer) {
+                fetchVersionHistory(false);
+                refreshAddrInfo();
+                refreshTimer = setInterval(refreshAddrInfo, ocRandomInterval(10000, 20000));
+            }
+        }
+        function watch() {
+            var panel = document.getElementById('selectPopup');
+            var observer = new MutationObserver(updateVisibility);
+            while (panel && panel.nodeType === 1) {
+                observer.observe(panel, {attributes:true, attributeFilter:['style','class','hidden']});
+                panel = panel.parentElement;
+            }
+            document.addEventListener('visibilitychange', updateVisibility);
+            window.addEventListener('beforeunload', function() { observer.disconnect(); closeSelectPopup(); });
+            updateVisibility();
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
+        else watch();
+    }]])
+    if changed then
+        data = data:gsub("if %(document%.getElementById%('selectPopup'%)%.classList%.contains%('hidden'%)%) return;", "if (!nrVersionVisible()) return;")
+        data = replace_once(data, "function fetchUpdateInfo(opts) {", "function fetchUpdateInfo(opts) {\n        if (!nrVersionVisible()) return;")
+        for _, timer in ipairs({"refreshTimer", "retryTimer", "versionRetryTimer"}) do
+            data = data:gsub("(" .. timer .. "%s*=%s*setInterval%b()%s*;)", function(assignment)
+                return "if (nrVersionVisible()) { if (" .. timer .. ") clearInterval(" .. timer .. "); " .. assignment .. " }"
+            end)
+        end
+        data = replace_once(data, "        resetDataStatus();\n        initAllData();\n    }", "        resetDataStatus();\n        nrWatchVersionTab();\n    }")
+        save(update, original, data)
+    end
+end
+
+local status = "/usr/lib/lua/luci/view/openclash/status.htm"
+original = fs.readfile(status)
+if original and not original:find("nrOpenClashStatusPoll", 1, true) then
+    local data, changed = replace_once(original, "    XHR.poll(5,", [[    function nrOpenClashStatusPoll(interval, url, params, callback) {
+        var timer = null, timeout = null, request = null, closed = false;
+        function cancelRequest() {
+            var current = request;
+            request = null;
+            if (timeout) { clearTimeout(timeout); timeout = null; }
+            if (current) { try { current.cancel(); } catch(e) {} }
+        }
+        function schedule() {
+            if (!closed && !document.hidden) timer = setTimeout(poll, interval * 1000);
+        }
+        function poll() {
+            if (timer) { clearTimeout(timer); timer = null; }
+            if (closed || document.hidden || request) return;
+            var current = request = new XHR();
+            timeout = setTimeout(function() { cancelRequest(); schedule(); }, 15000);
+            try {
+                current.get(url, params, function(x, data) {
+                    if (current !== request) return;
+                    request = null;
+                    if (timeout) { clearTimeout(timeout); timeout = null; }
+                    if (closed) return;
+                    try { if (!document.hidden) callback(x, data); }
+                    finally { schedule(); }
+                });
+            } catch(e) { cancelRequest(); schedule(); }
+        }
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (timer) { clearTimeout(timer); timer = null; }
+                cancelRequest();
+                SystemStatusManager.stop();
+                NetworkStatsManager.stop();
+            } else poll();
+        });
+        window.addEventListener('beforeunload', function() { closed = true; if (timer) clearTimeout(timer); cancelRequest(); });
+        poll();
+    }
+    nrOpenClashStatusPoll(10,]])
+    if changed then
+        data = data:gsub("if %(!this%.isEnabled%) return;\n\n            var self = this;", "if (!this.isEnabled || document.hidden || this.requestPending) return;\n            this.requestPending = true;\n            var self = this;")
+        data = data:gsub('(StateManager%.cachedXHRGet%([^\n]+"toolbar_show[^\n]+function%(x, status%) {)', "%1\n                self.requestPending = false;\n                if (!self.isEnabled || document.hidden) return;")
+        save(status, original, data)
+    end
+end
+EOF_OPENCLASH_PERF_PATCH
+}
+
+patch_openclash_dashboard_buttons() {
+    lua - <<'EOF_OPENCLASH_DASHBOARD_BUTTONS'
+local fs = require "nixio.fs"
+local path = "/usr/lib/lua/luci/view/openclash/status.htm"
+local original = assert(fs.readfile(path), "OpenClash 运行状态模板不存在")
+local marker = "nradio-openclash-dashboard-buttons-v2"
+if original:find('id="' .. marker .. '"', 1, true) then return end
+local ids = {
+    _web = true, _webm = true, _webz = true, _webo = true, _web_external = true,
+    _close_all_connection_btn = true, _reload_firewall_btn = true,
+    _flush_dns_cache_btn = true, _one_key_update_btn = true
+}
+local count = 0
+-- status.js fills these slots with input[type=button]. A button wrapper
+-- creates a second, unbound submit target around the real action button.
+local data = original:gsub("<button([^>]-)>(.-)</button>", function(attrs, body)
+    local id = attrs:match('%s+id="([^"]+)"') or attrs:match("%s+id='([^']+)'")
+    if not ids[id] then return "<button" .. attrs .. ">" .. body .. "</button>" end
+    count = count + 1
+    return '<div' .. attrs .. ' data-nradio-dashboard-slot="1">' .. body .. '</div>'
+end)
+if count == 0 then
+    io.stderr:write("OpenClash 面板按钮结构不匹配，未写入模板\n")
+    os.exit(1)
+end
+-- Upgrade the earlier dashboard-only patch without duplicating its style.
+data = data:gsub('<style id="nradio%-openclash%-dashboard%-buttons">.-</style>%s*', '')
+local style = [[<style id="nradio-openclash-dashboard-buttons-v2">
+.oc [data-nradio-dashboard-slot="1"] {
+    padding: 0 !important;
+}
+.oc [data-nradio-dashboard-slot="1"] > input[type="button"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 1 1 100% !important;
+    box-sizing: border-box !important;
+}
+</style>
+]]
+local inserted
+data, inserted = data:gsub("</head>", function() return style .. "</head>" end, 1)
+assert(inserted == 1, "OpenClash 模板缺少 head，未写入模板")
+assert(fs.writefile(path, data), "OpenClash 面板按钮模板写入失败")
+EOF_OPENCLASH_DASHBOARD_BUTTONS
+}
+
 patch_openclash_original_page_tabs() {
+    patch_openclash_dashboard_buttons || die "哈基米面板按钮修复失败"
+    patch_openclash_page_performance
     write_openclash_original_tabs_template
     tabs_model_count='0'
     for model_file in \
@@ -25813,6 +26397,7 @@ cleanup_c8_luci_compat_pollution() {
 }
 
 install_openclash() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     cleanup_c8_luci_compat_pollution || die "C8-688 luci-compat 污染清理失败，已停止安装"
 
@@ -25827,7 +26412,7 @@ install_openclash() {
 
     log_stage 2 7 "下载 $OPENCLASH_DISPLAY_NAME 元数据与安装包"
     log "提示: 正在下载 $OPENCLASH_DISPLAY_NAME 版本文件..."
-    download_from_mirrors "version" "$version_file" || die "无法从全部镜像获取 $OPENCLASH_DISPLAY_NAME 版本文件"
+    download_openclash_metadata "version" "$version_file" "$OPENCLASH_MIRRORS" package || die "无法从全部镜像获取 $OPENCLASH_DISPLAY_NAME 版本文件"
     mirror_base="$LAST_DOWNLOAD_SOURCE"
     last_ver="$(sed -n '1p' "$version_file" | sed 's/^v//g' | tr -d '\r\n')"
     [ -n "$last_ver" ] || die "无法解析 $OPENCLASH_DISPLAY_NAME 版本号"
@@ -25883,7 +26468,13 @@ install_openclash() {
     [ -n "${package_mirror_base:-}" ] && log "安装包来源: $package_mirror_base"
 
     log_stage 3 7 "刷新 opkg 软件源并检查依赖"
-    ensure_opkg_update || die "opkg update 失败，已停止 $OPENCLASH_DISPLAY_NAME 安装"
+    oc_missing_dependencies=''
+    for oc_dependency in dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-tun unzip; do
+        openclash_package_installed "$oc_dependency" || oc_missing_dependencies="$oc_missing_dependencies $oc_dependency"
+    done
+    if [ -n "$oc_missing_dependencies" ]; then
+        ensure_opkg_update || log "提示: 软件源刷新未完成，继续使用现有软件源安装缺少的依赖。"
+    fi
     ensure_packages dnsmasq-full bash curl ca-bundle ip-full ruby ruby-yaml kmod-tun unzip || die "$OPENCLASH_DISPLAY_NAME 依赖安装失败，已停止安装本体"
 
     log_stage 4 7 "重打包并安装 $OPENCLASH_DISPLAY_NAME"
@@ -25892,6 +26483,15 @@ install_openclash() {
     [ -f "$WORKDIR/openclash/pkg/data.tar.gz" ] || die "$OPENCLASH_DISPLAY_NAME 安装包缺少 data.tar.gz"
     [ -f "$WORKDIR/openclash/pkg/debian-binary" ] || die "$OPENCLASH_DISPLAY_NAME 安装包缺少 debian-binary"
     tar -xzf "$WORKDIR/openclash/pkg/control.tar.gz" -C "$WORKDIR/openclash/control"
+    oc_package_version="$(awk -F': ' '/^Version: / {print $2; exit}' "$WORKDIR/openclash/control/control" | tr -d '\r')"
+    if [ -n "$oc_package_version" ] && [ "$oc_package_version" != "$last_ver" ]; then
+        log "提示: 镜像安装包为 $oc_package_version，正在从官方源刷新 $last_ver..."
+        oc_package_official="https://raw.githubusercontent.com/vernesong/OpenClash/package/${OPENCLASH_BRANCH}/${package_rel}?nradio_version=${last_ver}&refresh=${TS}"
+        if download_file "$oc_package_official" "$raw_ipk"; then
+            extract_ipk_archive "$raw_ipk" "$WORKDIR/openclash/pkg"
+            tar -xzf "$WORKDIR/openclash/pkg/control.tar.gz" -C "$WORKDIR/openclash/control"
+        fi
+    fi
     sed -i \
         -e 's/, *luci-compat//g' \
         -e 's/luci-compat, *//g' \
@@ -25902,7 +26502,10 @@ install_openclash() {
     [ -s "$fixed_ipk" ] || die "无法重新打包 $OPENCLASH_DISPLAY_NAME 安装包"
 
     backup_file "$CFG"
-    if ! opkg install "$fixed_ipk" --force-reinstall >"$WORKDIR/openclash-install.log" 2>&1; then
+    oc_existing_version="$(get_installed_package_version luci-app-openclash 2>/dev/null || true)"
+    if [ "$oc_existing_version" = "$last_ver" ] && [ -f /usr/lib/lua/luci/controller/openclash.lua ] && [ -x /etc/init.d/openclash ]; then
+        log "插件:   已安装官方最新版本 $oc_existing_version，继续刷新应用商店接入和运行配置。"
+    elif ! opkg install "$fixed_ipk" --force-reinstall >"$WORKDIR/openclash-install.log" 2>&1; then
         if ! opkg install "$fixed_ipk" --force-reinstall --force-maintainer >"$WORKDIR/openclash-install.log" 2>&1; then
             sed -n '1,200p' "$WORKDIR/openclash-install.log" >&2
             log "提示: 使用脚本 5 > 1 查看日志"
@@ -25915,15 +26518,15 @@ install_openclash() {
 
     oc_ver="$(opkg status luci-app-openclash 2>/dev/null | awk -F': ' '/Version: /{print $2; exit}')"
     [ -n "$oc_ver" ] || oc_ver="$last_ver"
+    if [ "$oc_ver" != "$last_ver" ]; then
+        log "版本:   官方目标 $last_ver；当前安装 $oc_ver"
+    fi
     oc_size="$(wc -c < "$fixed_ipk" | tr -d ' ')"
     log_stage 5 7 "写入 LuCI、图标与应用商店接入"
     oc_icon_name=""
     if install_openclash_embedded_icon; then
         oc_icon_name="$OPENCLASH_ICON_NAME"
     fi
-    set_appcenter_entry "luci-app-openclash" "luci-app-openclash" "$oc_ver" "$oc_size" "/usr/lib/lua/luci/controller/openclash.lua" "admin/services/openclash" "$oc_icon_name"
-    uci commit appcenter
-
     fix_openclash_luci_compat
     write_openclash_switch_dashboard_template
     patch_openclash_switch_mode_template
@@ -25936,15 +26539,9 @@ install_openclash() {
     ensure_plugin_autostart_order
     log_stage 6 7 "检查并写入虚拟内存（swap）配置"
     ensure_openclash_swap_setup
-    reduce_openclash_memory_pressure
-    verify_appcenter_route "luci-app-openclash" "admin/services/openclash"
+    refresh_openclash_appcenter_entry "$oc_ver" "$oc_size" "$oc_icon_name"
     verify_file_exists /usr/lib/lua/luci/controller/openclash.lua "$OPENCLASH_DISPLAY_NAME"
-    verify_luci_route admin/services/openclash "$OPENCLASH_DISPLAY_NAME"
-    verify_luci_route admin/services/openclash/settings "$OPENCLASH_DISPLAY_NAME"
-    verify_luci_route admin/services/openclash/config-overwrite "$OPENCLASH_DISPLAY_NAME"
-    verify_luci_route admin/services/openclash/config-subscribe "$OPENCLASH_DISPLAY_NAME"
-    verify_luci_route admin/services/openclash/config "$OPENCLASH_DISPLAY_NAME"
-    verify_luci_route admin/services/openclash/log "$OPENCLASH_DISPLAY_NAME"
+    log "LuCI:   页面已接入应用商店，登录后可打开插件设置、覆写设置和配置管理。"
     verify_file_exists /usr/lib/lua/luci/view/openclash/nradio_tabs.htm "$OPENCLASH_DISPLAY_NAME 原版页面标签"
 
     log_stage 7 7 "可选下载 smart 内核并完成最终校验"
@@ -25960,7 +26557,8 @@ install_openclash() {
     fi
 
     # 哈基米 DNS 防泄露：fallback/节点域名/机场订阅域名改用加密 DNS 并持久化覆写
-    ensure_hakimi_dns_antileak || true
+    ensure_hakimi_dns_antileak || die "哈基米 DNS 覆写应用失败，请查看 /tmp/openclash.log"
+    repair_dnsmasq_empty_upstream || die "dnsmasq 上游修复失败"
 
     log "安装完成"
     log "插件:   $OPENCLASH_DISPLAY_NAME"
@@ -25975,6 +26573,784 @@ install_openclash() {
     fi
     log "下一步: 关闭应用商店弹窗后按 Ctrl+F5，再重新打开 $OPENCLASH_DISPLAY_NAME"
 }
+
+# 联合配置模块：基于独立预设 1.0.3；直接应用现有配置，不运行外网验收。
+apply_openclash_adguard_preset() (
+    log "正在应用 OpenClash + AdGuard 联合设置..."
+    mkdir -p /usr/libexec
+    cat > /usr/libexec/nradio-joint-preset.rb.new <<'NRADIO_JOINT_PRESET_RUBY'
+require 'yaml'
+
+class PresetError < StandardError; end
+
+module PresetData
+  module_function
+
+  def yaml(text)
+    # Go YAML writes bare IPv6 `::1/128`; Psych treats ':' as a Ruby Symbol.
+    # Mark only untagged colon/date scalars as strings, then use safe_load.
+    document = YAML.parse_stream(text)
+    return nil if document.children.empty?
+    raise PresetError, '仅支持单个 YAML 文档。' unless document.children.length == 1
+    visit = lambda do |node|
+      if node.is_a?(Psych::Nodes::Scalar) && node.tag.nil? && node.plain &&
+         (node.value.start_with?(':') || node.value.match?(/\A\d{4}-\d{2}-\d{2}(?:[Tt ]|\z)/))
+        node.tag = 'tag:yaml.org,2002:str'
+        node.plain = false
+        node.quoted = true
+        node.style = Psych::Nodes::Scalar::DOUBLE_QUOTED
+      end
+      Array(node.children).each { |child| visit.call(child) } if node.respond_to?(:children)
+    end
+    visit.call(document)
+    YAML.safe_load(document.to_yaml, permitted_classes: [], permitted_symbols: [], aliases: true)
+  rescue StandardError
+    raise PresetError, 'YAML/JSON 无法解析；请检查语法。'
+  end
+
+  # JSON is a YAML subset. OpenWrt often ships ruby-yaml without ruby-json.
+  def json(value)
+    case value
+    when Hash then '{' + value.map { |k, v| json(k.to_s) + ':' + json(v) }.join(',') + '}'
+    when Array then '[' + value.map { |v| json(v) }.join(',') + ']'
+    when String
+      '"' + value.gsub(/["\\\x00-\x1f]/) { |c| c == '"' ? '\\"' : c == '\\' ? '\\\\' : '\\u%04x' % c.ord } + '"'
+    when Integer then value.to_s
+    when TrueClass then 'true'
+    when FalseClass then 'false'
+    when NilClass then 'null'
+    else raise PresetError, 'JSON 参数类型不支持。'
+    end
+  end
+
+  def ipv4?(s)
+    s.is_a?(String) && s.match?(/\A\d{1,3}(?:\.\d{1,3}){3}\z/) && s.split('.').all? { |p| p.to_i <= 255 }
+  end
+
+  def wan_dns(dump, default_devices = [])
+    Array(dump['interface']).flat_map do |i|
+      next [] unless i['up'] && !Array(i['ipv4-address']).empty?
+      dev = i['l3_device'].to_s
+      next [] unless dev.match?(/\A[a-zA-Z0-9_.:-]+\z/)
+      next [] if dev.match?(/\A(?:tun\d|tap\d|wg\d|utun|clash|mihomo|tailscale|zt)/i)
+      next [] if %w[wireguard openvpn gre gretap vxlan].include?(i['proto'].to_s)
+      has_default = Array(i['route']).any? { |r| r['target'] == '0.0.0.0' && r['mask'].to_i == 0 }
+      next [] unless has_default || default_devices.include?(dev)
+      Array(i['dns-server']).select { |d| ipv4?(d) && d !~ /\A(?:127\.|0\.|198\.(?:18|19)\.)/ }.map do |d|
+        { 'interface' => i['interface'], 'device' => dev, 'dns' => d, 'zone' => i.fetch('data', {})['zone'] }
+      end
+    end.uniq { |i| [i['device'], i['dns']] }
+  end
+
+  def choose_group(config, requested = nil)
+    groups = Array(config['proxy-groups'])
+    by_name = groups.each_with_object({}) { |g, h| h[g['name']] = g }
+    proxies = Array(config['proxies']).each_with_object({}) { |p, h| h[p['name']] = p }
+    unsafe = lambda do |name, seen|
+      return true if %w[DIRECT REJECT REJECT-DROP PASS COMPATIBLE].include?(name)
+      return false if seen.include?(name)
+      p = proxies[name]
+      return true if p && %w[direct reject].include?(p['type'].to_s.downcase)
+      g = by_name[name]
+      return false unless g
+      if g['include-all']
+        filter = Regexp.new(g.fetch('filter', '.*'))
+        exclude = g['exclude-filter'] && Regexp.new(g['exclude-filter'])
+        return true if proxies.values.any? do |v|
+          %w[direct reject].include?(v['type'].to_s.downcase) && filter.match?(v['name']) &&
+            !(exclude && exclude.match?(v['name']))
+        end
+      end
+      Array(g['proxies']).any? { |n| unsafe.call(n, seen + [name]) }
+    end
+    eligible = groups.select do |g|
+      %w[url-test fallback load-balance select smart].include?(g['type']) &&
+        (g['include-all'] || g['include-all-providers'] || !Array(g['proxies']).empty? || !Array(g['use']).empty?) &&
+        !unsafe.call(g['name'], [])
+    end
+    if requested
+      found = eligible.find { |g| g['name'] == requested }
+      raise PresetError, '指定代理组不存在、为空或包含直连/拒绝出口。' unless found
+      return found['name']
+    end
+    preferred = eligible.find { |g| g['name'] == '所有-自动' }
+    preferred ||= eligible.find { |g| %w[url-test fallback smart].include?(g['type']) }
+    preferred ||= eligible.first
+    raise PresetError, '未找到可用代理组；请提供完整 YAML，或用 --proxy-group 指定代理组。' unless preferred
+    preferred['name']
+  rescue RegexpError
+    raise PresetError, '代理组过滤表达式无法校验；请使用可验证的代理组。'
+  end
+
+  def module_hash(dns_port)
+    # Only the local DNS listener belongs to this integration. Rules, upstream
+    # policies, Fake-IP exceptions and sniffer options remain user-owned.
+    { 'dns' => { 'enable' => true, 'listen' => '0.0.0.0:' + dns_port.to_s } }
+  end
+
+  def module_yaml(config)
+    # Older OpenClash embeds this block in a double-quoted shell command.
+    # Single-quoted YAML scalars keep wildcard strings quoted through that path.
+    document = YAML.parse_stream(YAML.dump(config))
+    visit = lambda do |node|
+      if node.is_a?(Psych::Nodes::Scalar) && node.style == Psych::Nodes::Scalar::DOUBLE_QUOTED
+        node.style = Psych::Nodes::Scalar::SINGLE_QUOTED
+      end
+      Array(node.children).each { |child| visit.call(child) } if node.respond_to?(:children)
+    end
+    visit.call(document)
+    document.to_yaml.sub(/\A---\s*\n/, '')
+  end
+
+  def adguard_hash(config, dns_port = 554, upstream_port = 7874)
+    c = yaml(YAML.dump(config))
+    d = c['dns'] ||= {}
+    d.merge!('bind_hosts' => ['127.0.0.1'], 'port' => dns_port,
+             'upstream_dns' => ['127.0.0.1:' + upstream_port.to_s], 'upstream_dns_file' => '',
+             'bootstrap_dns' => [], 'fallback_dns' => [])
+    c
+  end
+
+  def scoped_dns_servers(values)
+    values.select do |value|
+      # Preserve explicit split-DNS exceptions, never a catch-all upstream.
+      value.match?(%r{\A/(?:[a-zA-Z0-9_*.-]+/)+[^/\s]+\z}) &&
+        value.split('/')[1...-1].none? { |domain| %w[* .].include?(domain) }
+    end.uniq
+  end
+
+  def clean_legacy_hook(text)
+    first = text.index(/^# nradio-dns-antileak:begin\s*$/)
+    return text unless first
+    last = text.index(/^# nradio-dns-antileak:end\s*$/, first)
+    raise PresetError, '旧 DNS 覆写块没有结束标记，需先修正该文件。' unless last
+    finish = text.index("\n", last) || text.length
+    text[0...first] + text[[finish + 1, text.length].min..-1].to_s
+  end
+end
+
+class NRadioPreset
+  MODULE_NAME = 'nradio-postinstall-dns'.freeze
+  MODULE_SECTION = 'nradio_postinstall_dns'.freeze
+  DNS_PROBE = <<'DNS_PROBE_LUA'
+local n = require "nixio"
+local s = n.socket("inet", "dgram")
+if not s then os.exit(1) end
+s:setsockopt("socket", "rcvtimeo", 3)
+if not s:connect(arg[2] or "127.0.0.1", tonumber(arg[1])) then s:close(); os.exit(1) end
+local q = string.char(78,82,1,0,0,1,0,0,0,0,0,0,3).."www"..
+          string.char(5).."baidu"..string.char(3).."com"..string.char(0,0,1,0,1)
+s:send(q)
+local r = s:recv(4096)
+s:close()
+if not r or #r < 12 or r:byte(1) ~= 78 or r:byte(2) ~= 82 or
+   r:byte(3) < 128 or r:byte(4) % 16 ~= 0 or r:byte(7) * 256 + r:byte(8) == 0 then
+  os.exit(1)
+end
+io.write("ready")
+DNS_PROBE_LUA
+
+  def initialize(args)
+    @options = { mode: 'apply', timeout: 180 }
+    while (arg = args.shift)
+      case arg
+      when '--apply' then @options[:mode] = 'apply'
+      when '--refresh-cpe-dns' then @options[:mode] = 'refresh-cpe-dns'
+      when '--install-mwan' then @options[:mode] = 'install-mwan'
+      when '--refresh-mwan' then @options[:mode] = 'refresh-mwan'
+      when '--mwan-status' then @options[:mode] = 'mwan-status'
+      when '--yaml', '--password-file', '--adguard-user', '--lan-zone', '--timeout'
+        value = args.shift
+        raise PresetError, arg + ' 缺少参数。' if value.nil? || value.start_with?('--')
+        key = { '--yaml' => :yaml, '--password-file' => :password,
+                '--adguard-user' => :user, '--lan-zone' => :lan,
+                '--timeout' => :timeout }[arg]
+        @options[key] = value
+      else raise PresetError, '未知参数：' + arg
+      end
+    end
+    value = @options[:timeout].to_s
+    raise PresetError, '--timeout 范围为 30–600 秒。' unless value.match?(/\A\d+\z/) && (30..600).include?(value.to_i)
+    @options[:timeout] = value.to_i
+    @stage = '读取当前配置'
+    @changed = false
+  end
+
+  def capture(*argv, input: nil)
+    output = if input
+      IO.popen(argv, 'r+', err: File::NULL) do |io|
+        io.write(input)
+        io.close_write
+        io.read
+      end
+    else
+      IO.popen(argv, 'r', err: File::NULL, &:read)
+    end
+    [output, $?.success?]
+  rescue SystemCallError
+    ['', false]
+  end
+
+  def command(*argv)
+    if argv.first.start_with?('/etc/init.d/')
+      ok = system(*argv, out: File::NULL, err: File::NULL)
+      raise PresetError, '服务命令失败：' + argv.first + ' ' + argv[1].to_s unless ok
+      return ''
+    end
+    out, ok = capture(*argv)
+    raise PresetError, '命令失败：' + argv.first.to_s unless ok
+    out
+  end
+
+  def get(key, fallback = '')
+    out, ok = capture('uci', '-q', 'get', key)
+    ok ? out.strip : fallback
+  end
+
+  def set(key, value)
+    command('uci', 'set', key + '=' + value.to_s)
+  end
+
+  def delete(key)
+    capture('uci', '-q', 'delete', key)
+  end
+
+  def list(key, values)
+    delete(key)
+    values.each { |v| command('uci', 'add_list', key + '=' + v.to_s) }
+  end
+
+  def sections(package, type)
+    command('uci', '-q', 'show', package).lines.filter_map do |line|
+      m = line.strip.match(/\A([^=]+)=#{Regexp.escape(type)}\z/)
+      m && m[1]
+    end
+  end
+
+  def http(url, method: 'GET', data: nil, auth: nil, timeout: 12, cookie: nil, headers: false)
+    args = ['curl', '-sS', '--noproxy', '*', '--connect-timeout', '5', '--max-time', timeout.to_s,
+            '-X', method, '-w', "\n%{http_code}"]
+    args += ['-H', 'Authorization: Bearer ' + auth] if auth && !auth.empty?
+    args += ['-H', 'Cookie: ' + cookie] if cookie && !cookie.empty?
+    args << '-i' if headers
+    args += ['-H', 'Content-Type: application/json', '--data-binary', '@-'] if data
+    args << url
+    out, ok = capture(*args, input: data && PresetData.json(data))
+    body, _, status = out.rpartition("\n")
+    [status.to_i, body, ok]
+  end
+
+  def api(path)
+    code, body, ok = http('http://127.0.0.1:' + @api_port.to_s + path, auth: @api_secret)
+    raise PresetError, 'Mihomo API 未就绪或认证失败。' unless ok && code == 200
+    PresetData.yaml(body)
+  end
+
+  def dns_ready(port, host = '127.0.0.1')
+    out, ok = capture('lua', '-', port.to_s, host, input: DNS_PROBE)
+    ok && out == 'ready'
+  end
+
+  def verify_adguard_account
+    url = 'http://127.0.0.1:' + @adg_http_port.to_s + '/control/'
+    code, response, ok = http(url + 'login', method: 'POST', headers: true,
+                              data: { 'name' => @options[:user], 'password' => @password })
+    raise PresetError, 'AdGuard 仪表盘登录失败，请核对后台账号密码。' unless ok && code == 200
+    cookie = response.lines.filter_map { |line| line[/\ASet-Cookie:\s*([^;\r\n]+)/i, 1] }.join('; ')
+    raise PresetError, 'AdGuard 登录未返回会话。' if cookie.empty?
+    %w[status stats].each do |path|
+      code, body, ok = http(url + path, cookie: cookie)
+      raise PresetError, 'AdGuard ' + path + ' 接口读取失败。' unless ok && code == 200 && PresetData.yaml(body).is_a?(Hash)
+    end
+    set(@adg + '.dashboard_user', @options[:user])
+    set(@adg + '.dashboard_password', @password)
+    command('uci', 'commit', 'AdGuardHome')
+    @password.clear
+    log 'AdGuard 仪表盘认证与统计接口已验证，后台账号已同步。'
+  end
+
+  def recover_dns
+    return if dns_ready(53)
+    candidates = [['127.0.0.1', @oc_dns_port], ['127.0.0.1', @adg_dns_port]]
+    candidates += Array(@servers).map { |s| [s['dns'], 53] }
+    target = candidates.uniq.find { |host, port| dns_ready(port, host) }
+    unless target
+      warn '[DNS] 未找到可用解析上游，请按原始错误检查核心或 WAN。'
+      return
+    end
+    upstream = target[0] + '#' + target[1].to_s
+    d = @dnsmasq.first
+    list(d + '.server', [upstream] + PresetData.scoped_dns_servers(@dnsmasq_servers))
+    set(d + '.port', 53)
+    set(d + '.noresolv', 1)
+    command('uci', 'commit', 'dhcp')
+    command('/etc/init.d/dnsmasq', 'restart')
+    warn(dns_ready(53) ? '[DNS] 已恢复可用解析上游：' + upstream : '[DNS] 上游可响应，但 dnsmasq 恢复验证失败。')
+  rescue PresetError, SystemCallError, IOError => e
+    warn '[DNS] 恢复失败：' + e.message
+  end
+
+  def wait_for(label)
+    limit = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @options[:timeout]
+    loop do
+      begin
+        return if yield
+      rescue PresetError
+        # Recheck only readiness, without mutating settings or retrying installs.
+      end
+      raise PresetError, label + ' 等待超时。' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= limit
+      sleep 2
+    end
+  end
+
+  def log(message)
+    puts '[预设] ' + message
+    $stdout.flush
+  end
+
+  def path_within?(path, root)
+    path == root || path.start_with?(root + '/')
+  end
+
+  def storage_plan
+    @new_workdir = @workdir
+  end
+
+  def vpn_dns_servers(current, servers)
+    domains = sections('openvpn', 'openvpn').flat_map do |section|
+      next [] if get(section + '.enabled') == '0'
+      hosts = get(section + '.remote').split
+      path = get(section + '.config')
+      if File.file?(path)
+        hosts += File.read(path).scan(/^\s*remote\s+([^\s#;]+)/).flatten
+      end
+      hosts.map { |host| host.delete('"\'') }.select do |host|
+        host.match?(/\A[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z][a-zA-Z0-9-]*\z/)
+      end
+    end.uniq
+    return current if domains.empty?
+    kept = current.filter_map do |server|
+      next server unless server.start_with?('/')
+      parts = server.split('/')
+      names = parts[1...-1] - domains
+      '/' + names.join('/') + '/' + parts.last unless names.empty?
+    end
+    (kept + domains.flat_map { |domain| servers.map { |s| '/' + domain + '/' + s['dns'] } }).uniq
+  end
+
+  def refresh_cpe_dns
+    # Compatibility for a hotplug process launched before the installer update.
+    # DNS policies now follow the active user configuration, not an old snapshot.
+    log '联合设置沿用当前配置的 DNS 策略。'
+  end
+
+  def configure_cpe_refresh
+    path = '/etc/hotplug.d/iface/99-nradio-joint-dns'
+    if File.file?(path) && File.read(path).include?('nradio-joint-preset.rb --refresh-cpe-dns')
+      File.unlink(path)
+    end
+  end
+
+  # NROS re-originates intercepted traffic under Mihomo's UID/GID. The native
+  # mwan3_ifaces_out chain pins that traffic by the main-route source address,
+  # before mwan3_rules can apply the selected priority/weight/destination policy.
+  # Only the OUTPUT owner hook may use xt_owner: mwan3_hook is also reachable
+  # from PREROUTING. Reuse the live native rules and connmark mask, not WAN names.
+  def mwan_state
+    raw, present = capture('uci', '-q', 'show', 'mwan3')
+    dump, ok = capture('ubus', 'call', 'network.interface', 'dump')
+    interfaces = ok ? Array(PresetData.yaml(dump)['interface']) : []
+    routes, = capture('ip', '-4', 'route', 'show', 'table', 'all')
+    default_devices = routes.lines.filter_map do |line|
+      f = line.split
+      d = f.index('dev')
+      f[d + 1] if f.first == 'default' && d
+    end
+    names = raw.lines.filter_map { |l| l[/\Amwan3\.([^=]+)=interface\s*\z/, 1] }
+    ports = names.filter_map do |name|
+      next if get('mwan3.' + name + '.enabled', '1') != '1'
+      next if get('mwan3.' + name + '.family', 'ipv4') != 'ipv4'
+      item = interfaces.find { |i| i['interface'] == name }
+      next unless item && item['up'] && !Array(item['ipv4-address']).empty?
+      device = item['l3_device'].to_s
+      next unless default_devices.include?(device)
+      state_path = '/var/run/mwan3/iface_state/' + name
+      next if File.file?(state_path) && File.read(state_path).strip != 'online'
+      { 'interface' => name, 'device' => device }
+    end.uniq { |p| p['device'] }
+    # Older/single-WAN firmware may not install mwan3 at all.
+    unless present
+      ports = interfaces.filter_map do |i|
+        dev = i['l3_device'].to_s
+        next unless i['up'] && default_devices.include?(dev) && !Array(i['ipv4-address']).empty?
+        next if dev.match?(/\A(?:tun|tap|wg|utun|clash|mihomo|tailscale|zt)/i)
+        { 'interface' => i['interface'], 'device' => dev }
+      end.uniq { |p| p['device'] }
+    end
+    kind = get('network.globals.net_kind')
+    mode = { 'Priority' => '备份', 'Dividing' => '分流', 'Overlap' => '叠加' }[kind]
+    mode ||= present ? '固件当前策略' : '单线默认路由'
+    { 'present' => present, 'mode' => mode, 'ports' => ports,
+      'client_split' => kind == 'Dividing' && get('network.globals.dividing') == 'client' }
+  end
+
+  def report_mwan(state)
+    ports = state['ports']
+    label = ports.length == 1 ? '单出口' : ports.length == 2 ? '双出口' : ports.length.to_s + ' 个出口'
+    log '上网模式：' + state['mode'] + '；在线 IPv4 ' + label + '：' + ports.map { |p| p['interface'] + '/' + p['device'] }.join('、')
+    log '客户端/MAC 分流需单独适配：Mihomo 重建连接不携带原客户端 MAC，不能据此宣称原客户端固定出口生效。' if state['client_split']
+  end
+
+  def refresh_mwan
+    lock = File.open('/var/run/nradio-openclash-mwan.lock', File::RDWR | File::CREAT, 0600)
+    return unless lock.flock(File::LOCK_EX | File::LOCK_NB)
+    state = mwan_state
+    output, iptables_ok = capture('iptables', '-w', '5', '-t', 'mangle', '-S', 'OUTPUT')
+    report_mwan(state)
+    return unless iptables_ok
+    rules = output.lines.map(&:strip).select { |l| l.start_with?('-A OUTPUT ') }
+    ours = rules.select { |l| l.end_with?(' -j nradio_clash_mwan') }
+    native, native_ok = capture('iptables', '-w', '5', '-t', 'mangle', '-S', 'mwan3_hook')
+    mask = native[/--restore-mark --nfmask (0x[0-9a-f]+) --ctmask \1\b/i, 1]
+    _, connected_ok = capture('iptables', '-w', '5', '-t', 'mangle', '-S', 'mwan3_connected')
+    _, policy_ok = capture('iptables', '-w', '5', '-t', 'mangle', '-S', 'mwan3_rules')
+    oc = capture('uci', '-q', 'show', 'openclash').first.lines.filter_map { |l| l[/\A([^=]+)=openclash\s*\z/, 1] }.first
+    pids, = capture('pidof', 'clash', 'clash_meta', 'mihomo')
+    owner = pids.split.filter_map do |pid|
+      next unless pid.match?(/\A\d+\z/)
+      exe = File.readlink('/proc/' + pid + '/exe') rescue ''
+      next unless exe.include?('/openclash/')
+      status = File.read('/proc/' + pid + '/status') rescue ''
+      uid = status[/^Uid:\s+\d+\s+(\d+)/, 1]
+      gid = status[/^Gid:\s+\d+\s+(\d+)/, 1]
+      [uid, gid] if uid && gid && gid != '0'
+    end.first
+    position = rules.reject { |l| ours.include?(l) }.index { |l| l.end_with?(' -j mwan3_hook') }
+    enabled = state['present'] && native_ok && connected_ok && policy_ok && mask && position && owner && oc && get(oc + '.enable') == '1'
+    unless enabled
+      unless ours.empty?
+        text = "*mangle\n" + ours.map { |l| l.sub(/\A-A /, '-D ') }.join("\n") + "\nCOMMIT\n"
+        raise PresetError, '多线出口旧接入移除失败。' unless capture('iptables-restore', '-w', '5', '--noflush', input: text)[1]
+      end
+      log '出口适配：当前没有可接入的 IPv4 mwan3/Mihomo 链，沿用系统路由。'
+      return
+    end
+    chain = [
+      '-A nradio_clash_mwan -j CONNMARK --restore-mark --nfmask ' + mask + ' --ctmask ' + mask,
+      '-A nradio_clash_mwan -m mark --mark 0x0/' + mask + ' -j mwan3_connected',
+      '-A nradio_clash_mwan -m mark --mark 0x0/' + mask + ' -j mwan3_rules',
+      '-A nradio_clash_mwan -j CONNMARK --save-mark --nfmask ' + mask + ' --ctmask ' + mask
+    ]
+    # Established packets already recover their WAN mark in native mwan3_hook.
+    # Avoid repeating CONNMARK restore/save for every bulk-transfer packet.
+    jump = '-m conntrack --ctstate NEW -m owner --uid-owner ' + owner[0] + ' --gid-owner ' + owner[1] + ' -m comment --comment nradio-openclash-mwan -j nradio_clash_mwan'
+    installed, = capture('iptables', '-w', '5', '-t', 'mangle', '-S', 'nradio_clash_mwan')
+    installed_rules = installed.lines.map(&:strip).select { |l| l.start_with?('-A ') }
+    if ours == ['-A OUTPUT ' + jump] && rules.index(ours.first) == position && installed_rules == chain
+      log '出口适配：已接入当前 mwan3 策略；已有连接保持原出口。'
+      return
+    end
+    text = ["*mangle", ':nradio_clash_mwan - [0:0]', '-F nradio_clash_mwan'] + chain
+    text += ours.map { |l| l.sub(/\A-A /, '-D ') }
+    text += ['-I OUTPUT ' + (position + 1).to_s + ' ' + jump, 'COMMIT']
+    raise PresetError, 'Mihomo 多线出口规则写入失败。' unless capture('iptables-restore', '-w', '5', '--noflush', input: text.join("\n") + "\n")[1]
+    log '出口适配：Mihomo 新连接已接入固件当前策略，权重与优先级由 LuCI 设置。'
+  ensure
+    lock.close if lock
+  end
+
+  def install_mwan
+    write_file('/usr/libexec/nradio-openclash-mwan-watch', <<'MWAN_WATCH', 0700)
+#!/bin/sh
+# Re-evaluate only when LuCI config, native policy, routes or core PID changes.
+last=''
+while :; do
+    current=$({
+        cat /etc/config/network /etc/config/mwan3 /etc/config/dividing /etc/config/openclash 2>/dev/null
+        ip -4 route show table all 2>/dev/null
+        iptables -w 2 -t mangle -S OUTPUT 2>/dev/null
+        iptables -w 2 -t mangle -S mwan3_rules 2>/dev/null
+        cat /var/run/mwan3/iface_state/* 2>/dev/null
+        pidof clash clash_meta mihomo 2>/dev/null
+    })
+    if [ "$current" != "$last" ]; then
+        result=$(ruby /usr/libexec/nradio-joint-preset.rb --refresh-mwan 2>&1)
+        if [ "$?" = 0 ]; then last=$current; fi
+        logger -t nradio-clash-mwan "$result"
+    fi
+    sleep 10
+done
+MWAN_WATCH
+    write_file('/etc/init.d/nradio-openclash-mwan', <<'MWAN_INIT', 0755)
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/libexec/nradio-openclash-mwan-watch
+    procd_set_param respawn 3600 5 5
+    procd_close_instance
+}
+service_triggers() {
+    procd_add_reload_trigger network mwan3 dividing openclash
+}
+reload_service() {
+    ruby /usr/libexec/nradio-joint-preset.rb --refresh-mwan
+}
+MWAN_INIT
+    refresh_mwan
+    command('/etc/init.d/nradio-openclash-mwan', 'enable')
+    command('/etc/init.d/nradio-openclash-mwan', 'restart')
+    log '自动适配已启用：LuCI 保存模式/权重、线路上下线或防火墙重建后，最长约 10 秒重新识别。'
+  end
+
+  def preflight
+    raise PresetError, '请以 root 运行。' unless Process.uid == 0
+    %w[uci ubus curl ip lua netstat].each do |tool|
+      raise PresetError, '缺少依赖：' + tool unless capture('sh', '-c', 'command -v "$1"', 'check', tool)[1]
+    end
+    %w[openclash AdGuardHome dnsmasq firewall].each do |s|
+      raise PresetError, '服务未完整安装：' + s unless File.executable?('/etc/init.d/' + s)
+    end
+    raise PresetError, 'OpenClash 内核缺失。' unless File.executable?('/etc/openclash/core/clash_meta')
+    @oc = sections('openclash', 'openclash').first
+    @adg = sections('AdGuardHome', 'AdGuardHome').first
+    raise PresetError, '插件 UCI 配置不完整。' unless @oc && @adg
+    @adg_path = File.expand_path(get(@adg + '.configpath', '/etc/AdGuardHome.yaml'))
+    @workdir = File.expand_path(get(@adg + '.workdir', '/usr/bin/AdGuardHome'))
+    binpath = get(@adg + '.binpath', '/usr/bin/AdGuardHome/AdGuardHome')
+    raise PresetError, 'AdGuard 内核缺失。' unless File.executable?(binpath)
+    raise PresetError, 'AdGuard 工作目录不存在。' unless File.directory?(@workdir)
+    raise PresetError, 'AdGuard 配置目录不存在。' unless File.directory?(File.dirname(@adg_path))
+    @source = File.expand_path(@options[:yaml] || get(@oc + '.config_path'))
+    raise PresetError, '未找到 YAML；使用 --yaml 指定路径。' unless File.file?(@source)
+    @config = PresetData.yaml(File.read(@source))
+    raise PresetError, '需要包含分流规则的完整 Mihomo YAML。' unless @config.is_a?(Hash) && @config['rules'].is_a?(Array) && !@config['rules'].empty?
+    unless !Array(@config['proxies']).empty? || (@config['proxy-providers'].is_a?(Hash) && !@config['proxy-providers'].empty?)
+      raise PresetError, 'YAML 缺少节点或节点订阅。'
+    end
+    dump = PresetData.yaml(command('ubus', 'call', 'network.interface', 'dump'))
+    default_devices = command('ip', '-4', 'route', 'show', 'table', 'all').lines.filter_map do |line|
+      fields = line.split
+      index = fields.index('dev')
+      fields[index + 1] if fields.first == 'default' && index
+    end
+    @servers = PresetData.wan_dns(dump, default_devices)
+    @oc_dns_port = get(@oc + '.dns_port', '7874').to_i
+    raise PresetError, 'OpenClash DNS 端口无效或与 dnsmasq 冲突。' unless (1..65535).include?(@oc_dns_port) && @oc_dns_port != 53
+    @adg_dns_port = 554
+    raise PresetError, 'OpenClash 与 AdGuard DNS 端口冲突。' if @oc_dns_port == @adg_dns_port
+    @module = PresetData.module_hash(@oc_dns_port)
+    raise PresetError, '缺少 LuCI nixio DNS 探测模块。' unless capture('lua', '-e', 'require "nixio"')[1]
+    listeners = command('netstat', '-lnp').lines
+    [[@oc_dns_port, /clash|mihomo/i], [@adg_dns_port, /AdGuardHome/i]].each do |port, owner|
+      conflict = listeners.any? do |line|
+        fields = line.split
+        fields[0].to_s.match?(/\A(?:tcp|udp)/) && fields[3].to_s.end_with?(':' + port.to_s) && !fields.last.to_s.match?(owner)
+      end
+      raise PresetError, 'DNS 端口 ' + port.to_s + ' 被其他进程占用。' if conflict
+    end
+    @dnsmasq = sections('dhcp', 'dnsmasq')
+    raise PresetError, '需要且仅支持一个主 dnsmasq 实例。' unless @dnsmasq.length == 1
+    @dnsmasq_servers = ['127.0.0.1#' + @adg_dns_port.to_s] + PresetData.scoped_dns_servers(get(@dnsmasq.first + '.server').split)
+    @lan_interface = get('dhcp.lan.interface', 'lan')
+    zones = sections('firewall', 'zone').map { |z| [get(z + '.name'), get(z + '.network').split] }
+    @lan = @options[:lan] || (zones.find { |_, networks| networks.include?(@lan_interface) } || []).first
+    raise PresetError, '无法识别 LAN 防火墙区域；用 --lan-zone 指定。' unless zones.any? { |n, _| n == @lan }
+    raise PresetError, '防火墙区域名含不支持的字符。' unless @lan.match?(/\A[a-zA-Z0-9_-]+\z/)
+    @hook = '/etc/openclash/custom/openclash_custom_overwrite.sh'
+    @hook_text = File.file?(@hook) ? File.read(@hook) : nil
+    @clean_hook = @hook_text && PresetData.clean_legacy_hook(@hook_text)
+    @adg_config = File.file?(@adg_path) ? PresetData.yaml(File.read(@adg_path)) : {}
+    raise PresetError, 'AdGuard YAML 格式不完整。' unless @adg_config.is_a?(Hash)
+    @initialized = Array(@adg_config['users']).any? { |u| u.is_a?(Hash) && !u['password'].to_s.empty? }
+    @password = ENV['ADGUARD_PASSWORD'].to_s
+    pass_file = @options[:password] || ENV['ADGUARD_PASSWORD_FILE']
+    @password = File.read(pass_file).sub(/\r?\n\z/, '') if pass_file
+    @password = get(@adg + '.dashboard_password') if @password.empty?
+    @options[:user] ||= get(@adg + '.dashboard_user', 'admin')
+    @options[:user] = 'admin' if @options[:user].empty?
+    raise PresetError, '请先在 AdGuard 页面填写仪表盘账号密码，或用 --password-file 提供密码。' if @password.empty?
+    storage_plan
+    @target = '/etc/openclash/config/' + File.basename(@source)
+    raise PresetError, '配置文件名须以 .yaml 或 .yml 结尾。' unless @target.match?(/\.ya?ml\z/i)
+    @api_port = get(@oc + '.cn_port', '9090').to_i
+    @api_port = 9090 if @api_port <= 0
+    @api_secret = get(@oc + '.dashboard_password')
+    @adg_http_port = get(@adg + '.httpport', '3000').to_i
+    @adg_http_port = 3000 if @adg_http_port <= 0
+    log 'YAML：' + @source
+    log '链路：dnsmasq :53 → AdGuard :' + @adg_dns_port.to_s + ' → Mihomo :' + @oc_dns_port.to_s
+    log '分流规则、上游 DNS、嗅探、运行模式与 IPv6：沿用用户设置'
+    log 'AdGuard 数据目录：' + @new_workdir
+    log 'AdGuard 过滤列表、缓存与日志策略：沿用用户设置'
+    @dnsmasq_servers.drop(1).each { |server| log '保留域名 DNS：' + server }
+    log(@initialized ? 'AdGuard 已有账户与过滤列表保留。' : 'AdGuard 将通过首次初始化接口创建账户。')
+  end
+
+  def write_file(path, text, mode = 0o600)
+    return if File.file?(path) && File.read(path) == text
+    # New output is staged, never a copy of the old config. No backups are made.
+    tmp = File.join(File.dirname(path), '.nradio-new-' + Process.pid.to_s)
+    raise PresetError, '配置暂存文件已存在。' if File.exist?(tmp) || File.symlink?(tmp)
+    begin
+      File.open(tmp, File::WRONLY | File::CREAT | File::EXCL, mode) { |f| f.write(text); f.flush; f.fsync }
+      File.rename(tmp, path)
+    ensure
+      File.unlink(tmp) if File.file?(tmp)
+    end
+  end
+
+  def configure_openclash
+    command('mkdir', '-p', '/etc/openclash/config', '/etc/openclash/overwrite')
+    write_file(@target, File.read(@source)) unless File.expand_path(@source) == @target
+    # UCI and the YAML block already carry these switches. Legacy [General]
+    # evaluation misinterprets anonymous UCI section names as shell assignments.
+    header = "[YAML]\n"
+    write_file('/etc/openclash/overwrite/' + MODULE_NAME, header + PresetData.module_yaml(@module))
+    write_file(@hook, @clean_hook, File.stat(@hook).mode & 0o777) if @hook_text && @hook_text != @clean_hook
+    # Retire only the earlier preset module; unrelated modules remain registered.
+    if get('openclash.nradio_stable_dns.name') == 'nradio-stable-dns'
+      set('openclash.nradio_stable_dns.enable', '0')
+    end
+    set('openclash.' + MODULE_SECTION, 'config_overwrite')
+    section = 'openclash.' + MODULE_SECTION
+    set(section + '.name', MODULE_NAME)
+    set(section + '.type', 'file')
+    set(section + '.enable', '1')
+    set(section + '.order', '-10000')
+    # A listener-only module remains valid when the user switches subscriptions.
+    list(section + '.config', ['all'])
+    { 'enable' => 1, 'config_path' => @target, 'dns_port' => @oc_dns_port,
+      'enable_redirect_dns' => 0, 'redirect_dns' => 0 }.each { |k, v| set(@oc + '.' + k, v) }
+    command('uci', 'commit', 'openclash')
+  end
+
+  def start_openclash
+    command('/etc/init.d/openclash', 'enable')
+    command('/etc/init.d/openclash', 'restart')
+    wait_for('OpenClash 启动') do
+      @api_port = get(@oc + '.cn_port', @api_port.to_s).to_i
+      @api_secret = get(@oc + '.dashboard_password', @api_secret)
+      api('/version').is_a?(Hash) && dns_ready(@oc_dns_port)
+    end
+  end
+
+  def bootstrap_adguard
+    set(@adg + '.enabled', '1')
+    set(@adg + '.redirect', 'none')
+    set(@adg + '.waitonboot', '0')
+    # Empty option prevents legacy init scripts from copying data on stop.
+    set(@adg + '.backupfile', '')
+    set(@adg + '.logfile', '/tmp/AdGuardHome.log')
+    command('uci', 'commit', 'AdGuardHome')
+    return if @initialized
+    command('/etc/init.d/AdGuardHome', 'start')
+    url = 'http://127.0.0.1:' + @adg_http_port.to_s + '/control/install/'
+    wait_for('AdGuard 首次初始化接口') { code, _, ok = http(url + 'get_addresses'); ok && code == 200 }
+    initial = { 'web' => { 'ip' => '0.0.0.0', 'port' => @adg_http_port },
+                'dns' => { 'ip' => '127.0.0.1', 'port' => @adg_dns_port },
+                'username' => @options[:user], 'password' => @password }
+    code, _, ok = http(url + 'configure', method: 'POST', data: initial)
+    raise PresetError, 'AdGuard 首次初始化失败，HTTP ' + code.to_s unless ok && code == 200
+    wait_for('AdGuard 账户写入') do
+      File.file?(@adg_path) && Array(PresetData.yaml(File.read(@adg_path))['users']).any? { |u| !u['password'].to_s.empty? }
+    end
+  end
+
+  def configure_adguard
+    command('/etc/init.d/AdGuardHome', 'stop')
+    config = PresetData.yaml(File.read(@adg_path))
+    write_file(@adg_path, YAML.dump(PresetData.adguard_hash(config, @adg_dns_port, @oc_dns_port)))
+    command('uci', 'commit', 'AdGuardHome')
+    command('/etc/init.d/AdGuardHome', 'enable')
+    command('/etc/init.d/AdGuardHome', 'start')
+  end
+
+  def firewall_section(name, type, values)
+    section = 'firewall.' + name
+    delete(section)
+    set(section, type)
+    values.each { |k, v| v.is_a?(Array) ? list(section + '.' + k, v) : set(section + '.' + k, v) }
+  end
+
+  def cutover
+    sections('firewall', 'rule').each do |s|
+      delete(s) if s.match?(/\Afirewall\.nradio_(?:dot_block|ipv6_bypass)(?:_\d+)?\z/)
+    end
+    firewall_section('nradio_dns_capture', 'redirect',
+                     'name' => 'NRadio DNS to AdGuard', 'src' => @lan, 'src_dport' => '53',
+                     'dest_port' => '53', 'proto' => ['tcp', 'udp'], 'target' => 'DNAT', 'family' => 'ipv4')
+    d = @dnsmasq.first
+    list(d + '.server', @dnsmasq_servers)
+    set(d + '.noresolv', 1)
+    set(d + '.localuse', 1)
+    set(d + '.port', 53)
+    set(@oc + '.dnsmasq_server', @dnsmasq_servers.join(' '))
+    set(@oc + '.dnsmasq_noresolv', 1)
+    command('uci', 'commit', 'openclash')
+    command('uci', 'commit', 'dhcp')
+    command('uci', 'commit', 'firewall')
+    command('/etc/init.d/firewall', 'reload')
+    command('/etc/init.d/dnsmasq', 'restart')
+  end
+
+  def apply
+    @changed = true
+    @stage = 'OpenClash 配置与启动'
+    log @stage
+    configure_openclash
+    start_openclash
+    @stage = 'AdGuard 配置与启动'
+    log @stage
+    bootstrap_adguard
+    configure_adguard
+    wait_for('AdGuard DNS 解析') { dns_ready(@adg_dns_port) }
+    verify_adguard_account
+    @stage = 'DNS 与防火墙切换'
+    log @stage
+    cutover
+    wait_for('dnsmasq 联合解析链') { dns_ready(53) }
+    configure_cpe_refresh
+    install_mwan
+    log '完成：OpenClash + AdGuard DNS 链已接通，解析与统计接口已验证。'
+  end
+
+  def run
+    if %w[install-mwan refresh-mwan mwan-status].include?(@options[:mode])
+      raise PresetError, '请以 root 运行。' unless Process.uid == 0
+      case @options[:mode]
+      when 'install-mwan' then install_mwan
+      when 'refresh-mwan' then refresh_mwan
+      when 'mwan-status' then report_mwan(mwan_state)
+      end
+      return
+    end
+    if @options[:mode] == 'refresh-cpe-dns'
+      refresh_cpe_dns
+      return
+    end
+    preflight
+    apply
+  rescue PresetError, SystemCallError, IOError => e
+    warn '[失败] ' + @stage + '：' + e.message
+    recover_dns if @changed
+    warn '[状态] 已有配置写入；当前阶段未完成，请按报错处理后重新执行。' if @changed
+    exit 1
+  end
+end
+
+begin
+  NRadioPreset.new(ARGV).run
+rescue PresetError => e
+  warn '[失败] ' + e.message
+  exit 1
+end
+NRADIO_JOINT_PRESET_RUBY
+    chmod 700 /usr/libexec/nradio-joint-preset.rb.new
+    mv -f /usr/libexec/nradio-joint-preset.rb.new /usr/libexec/nradio-joint-preset.rb
+    ruby /usr/libexec/nradio-joint-preset.rb --apply "$@"
+)
 
 write_adguard_wrapper_files() {
     mkdir -p /usr/lib/lua/luci/controller /usr/lib/lua/luci/view/AdGuardHome /usr/lib/lua/luci/model/cbi/AdGuardHome
@@ -26086,8 +27462,9 @@ local httpport = uci:get("AdGuardHome", "AdGuardHome", "httpport") or "3000"
 local user = uci:get("AdGuardHome", "AdGuardHome", "dashboard_user") or ""
 local pass = uci:get("AdGuardHome", "AdGuardHome", "dashboard_password") or ""
 local dashboard_base
-local cookiefile
-local data
+local cookiefile = "/var/run/adg_dashboard_cookie"
+local contextfile = "/var/run/adg_dashboard_context"
+local cooldown = "/var/run/adg_dashboard_lastfail"
 
 if not tostring(httpport):match("^%d+$") then
 httpport = "3000"
@@ -26104,78 +27481,91 @@ if pass == "" then
 return nil, "未填写仪表盘认证密码"
 end
 
-local cooldown = "/var/run/adg_dashboard_lastfail"
+local context = httpport .. "\n" .. user .. "\n" .. tostring(fs.stat("/etc/config/AdGuardHome", "mtime") or 0)
+if fs.readfile(contextfile) ~= context then
+fs.unlink(cookiefile)
+fs.unlink(cooldown)
+if not fs.writefile(contextfile, context) then return nil, "无法写入仪表盘会话状态" end
+fs.chmod(contextfile, "0600")
+end
+
+local function request(api_path, body)
+local body_file
+local cmd = "curl --noproxy '*' -sS --connect-timeout 2 --max-time 7 --retry 0" ..
+" -b " .. adg_shell_quote(cookiefile) .. " -c " .. adg_shell_quote(cookiefile) ..
+" -w " .. adg_shell_quote("\n%{http_code}")
+if body then
+body_file = sys.exec("mktemp /tmp/adg_dashboard_login.XXXXXX 2>/dev/null"):gsub("%s+$", "")
+if body_file == "" then return nil, 0 end
+fs.chmod(body_file, "0600")
+if not fs.writefile(body_file, body) then fs.unlink(body_file); return nil, 0 end
+cmd = cmd .. " --header " .. adg_shell_quote("Content-Type: application/json") ..
+" --data-binary " .. adg_shell_quote("@" .. body_file)
+end
+-- curl 创建的会话文件只允许 root 读取。
+local out = sys.exec("umask 077; " .. cmd .. " " .. adg_shell_quote(dashboard_base .. api_path) .. " 2>/dev/null") or ""
+if body_file then fs.unlink(body_file) end
+local payload, code = out:match("^(.*)\n(%d%d%d)$")
+return payload, tonumber(code) or 0
+end
+
+local function request_error(code)
+if code == 0 then return "仪表盘连接失败或超时，请检查核心运行状态与管理端口" end
+if code == 401 or code == 403 then
+fs.writefile(cooldown, tostring(os.time()))
+return "仪表盘账号或密码不正确，请在基础设置填写与原版仪表盘一致的账号密码"
+end
+if code == 429 then
+fs.writefile(cooldown, tostring(os.time()))
+return "仪表盘暂时限制登录，稍后自动重试"
+end
+return "仪表盘请求失败（HTTP " .. tostring(code) .. "）"
+end
+
+if fs.access(cookiefile) then
+local data, code = request(path)
+if code == 200 and data and data ~= "" then fs.unlink(cooldown); return data end
+if code ~= 401 and code ~= 403 then return nil, request_error(code) end
+fs.unlink(cookiefile)
+end
+
 local cooldown_ts = tonumber((fs.readfile(cooldown) or ""):match("^(%d+)")) or 0
 if os.time() - cooldown_ts < 60 then
-return nil, "3000 仪表盘登录失败，为避免连续失败被临时限制，稍后自动重试"
+return nil, "仪表盘认证失败后暂停重试；修改账号密码并保存后立即重试"
 end
 
-local function adg_try_login(login_user, login_pass)
-local body = '{"name":"' .. adg_json_escape(login_user) .. '","password":"' .. adg_json_escape(login_pass) .. '"}'
-local body_file = sys.exec("mktemp /tmp/adg_dashboard_login.XXXXXX 2>/dev/null"):gsub("%s+$", "")
-if body_file == "" then
-return false
+local body = '{"name":"' .. adg_json_escape(user) .. '","password":"' .. adg_json_escape(pass) .. '"}'
+local result, code = request("/control/login", body)
+if code ~= 200 then fs.unlink(cookiefile); return nil, request_error(code) end
+if not result or not result:find("OK", 1, true) then
+fs.unlink(cookiefile)
+return nil, "仪表盘登录响应异常"
 end
-if not fs.writefile(body_file, body) then
-sys.exec("rm -f " .. adg_shell_quote(body_file))
-return false
-end
-fs.chmod(body_file, "0600")
-local cmd = "rm -f " .. adg_shell_quote(cookiefile) ..
-	" ; wget -q --save-cookies=" .. adg_shell_quote(cookiefile) ..
-	" --keep-session-cookies --header=" .. adg_shell_quote("Content-Type: application/json") ..
-	" --post-file=" .. adg_shell_quote(body_file) ..
-	" -O - " .. adg_shell_quote(dashboard_base .. "/control/login") .. " 2>/dev/null"
-local out = sys.exec(cmd)
-sys.exec("rm -f " .. adg_shell_quote(body_file))
-if out == nil or not out:find("OK", 1, true) then
-sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return false
-end
-return true
-end
-
-cookiefile = sys.exec("mktemp /tmp/adg_dashboard_cookie.XXXXXX 2>/dev/null"):gsub("%s+$", "")
-if cookiefile == "" then
-return nil, "无法安全创建仪表盘会话文件"
-end
-
-if not adg_try_login(user, pass) then
-fs.writefile(cooldown, tostring(os.time()))
-sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-return nil, "3000 仪表盘登录失败：账号密码与 3000 不一致，请重新运行 1 > 4 引导设置账号密码，或在基础设置页填写与 3000 登录页一致的账号密码"
-end
-
-data = sys.exec(
-	"wget -q --load-cookies=" .. adg_shell_quote(cookiefile) ..
-	" -O - " .. adg_shell_quote(dashboard_base .. path) .. " 2>/dev/null"
-)
-sys.exec("rm -f " .. adg_shell_quote(cookiefile))
-
-if data == nil or data == "" then
-return nil, "仪表盘数据读取失败"
-end
-
--- 读取成功后清除失败冷却标记，避免残留的"稍后自动重试"提示
-fs.unlink("/var/run/adg_dashboard_lastfail")
-
+fs.unlink(cooldown)
+local data, status = request(path)
+if status ~= 200 then return nil, request_error(status) end
+if not data or data == "" then return nil, "仪表盘数据为空" end
 return data
 end
 function get_template_config()
 local b
 local d=""
-local rf=io.open("/tmp/resolv.conf.auto", "r")
-if rf then
+local seen={}
 local lan_ip = uci:get("network", "lan", "ipaddr") or ""
+for _, resolvpath in ipairs({"/tmp/resolv.conf.d/resolv.conf.auto", "/tmp/resolv.conf.auto"}) do
+local rf=io.open(resolvpath, "r")
+if rf then
 for cnt in rf:lines() do
 b=string.match (cnt,"^[^#]*nameserver%s+([^%s]+)$")
-if (b~=nil) and not b:match("^127%.") and b ~= "0.0.0.0" and b ~= "::1" and b ~= lan_ip then
+if (b~=nil) and not seen[b] and not b:match("^127%.") and b ~= "0.0.0.0" and b ~= "::" and b ~= "::1" and b ~= lan_ip then
 d=d.."  - "..b.."\n"
+seen[b]=true
 end
 end
 rf:close()
 end
-local f=io.open("/usr/share/AdGuardHome/AdGuardHome_template.yaml", "r+")
+end
+local f=io.open("/usr/share/AdGuardHome/AdGuardHome_template.yaml", "r")
 if not f then
 http.prepare_content("text/plain; charset=utf-8")
 http.write("")
@@ -26317,14 +27707,17 @@ http.write("no log available\n")
 return
 end
 local stat=fs.stat(logfile)
-if not stat or tonumber(stat.size or 0) > 1048576 then
-http.write("log unavailable or larger than 1 MiB\n")
+if not stat then
+http.write("log unavailable\n")
 return
 end
 local handle=io.open(logfile,"rb")
 if not handle then http.write("can't open log file\n"); return end
+local offset=math.max(0, tonumber(stat.size or 0) - 1048576)
+if offset > 0 then handle:seek("set", offset) end
 local data=handle:read(1048576) or ""
 handle:close()
+if offset > 0 then data=data:gsub("^[^\n]*\n", "", 1) end
 http.write(data)
 end
 function do_dellog()
@@ -27646,16 +29039,38 @@ function adgApplyPageSkin() {
 
 var adgRefreshTimer = null;
 var adgRefreshBusy = false;
+function adgGetJson(url, callback) {
+	var request = new XMLHttpRequest();
+	var finished = false;
+	function finish(error) {
+		if (finished) return;
+		finished = true;
+		var data = null;
+		if (!error && request.status === 200) {
+			try { data = JSON.parse(request.responseText); } catch (e) { error = "响应格式错误"; }
+		} else if (!error) {
+			error = request.status === 403 ? "登录已过期，请重新登录" : "请求失败（HTTP " + request.status + "）";
+		}
+		callback(data || { ok: false, error: error || "数据为空" });
+	}
+	request.open('GET', url + '?_=' + Date.now(), true);
+	request.timeout = 25000;
+	request.onload = function() { finish(); };
+	request.onerror = function() { finish("连接失败"); };
+	request.ontimeout = function() { finish("读取超时，稍后自动重试"); };
+	request.onabort = function() { finish("请求已取消"); };
+	try { request.send(null); } catch (e) { finish("无法发送请求"); }
+}
 function adgRefreshAll() {
 	if (adgRefreshBusy) return;
 	if (adgRefreshTimer) window.clearTimeout(adgRefreshTimer);
 	adgRefreshBusy = true;
 	adgSetRefreshState(true);
-	XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtime]])%>', { _: Date.now() }, function(x, runtime) {
-		XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', { _: Date.now() }, function(y, status) {
+	adgGetJson('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_runtime]])%>', function(runtime) {
+		adgGetJson('<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', function(status) {
 			adgApplyRuntime(runtime || {}, status || {});
 			adgApplyPageSkin();
-			XHR.get('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', { _: Date.now() }, function(z, data) {
+			adgGetJson('<%=url([[admin]], [[services]], [[AdGuardHome]], [[dashboard_stats]])%>', function(data) {
 				adgApplyDashboardStats(data);
 				adgApplyPageSkin();
 				adgSetRefreshState(false);
@@ -31803,15 +33218,21 @@ local function shellquote(value)
 end
 local function adg_read_dns_port(path)
 	local data = fs.readfile(path) or ""
-	local line
+	local in_dns = false
 	for line in data:gmatch("[^\r\n]+") do
-		local port = line:match("^%s*port:%s*(%d+)")
-		if port then
-			return port
+		if line:match("^dns:%s*$") then
+			in_dns = true
+		elseif in_dns and line:match("^[^%s#]") then
+			break
+		elseif in_dns then
+			local port = line:match("^%s+port:%s*(%d+)")
+			if port then return port end
 		end
 	end
 	return "?"
 end
+local adg_original_options = uci:get_all("AdGuardHome", "AdGuardHome") or {}
+local adg_skip_service_apply = false
 local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
 local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
 local httpport=uci:get("AdGuardHome","AdGuardHome","httpport") or "3000"
@@ -32094,12 +33515,39 @@ o.write = function(self, section, value)
 end
 fs.writefile("/var/run/lucilogpos","0")
 function m.on_commit(map)
-	local enabled=uci:get("AdGuardHome","AdGuardHome","enabled")
+	-- 仪表盘认证只用于读取统计；保存认证信息不重启 DNS 核心。
+	local current = map.uci:get_all("AdGuardHome", "AdGuardHome") or {}
+	local auth_changed = current.dashboard_user ~= adg_original_options.dashboard_user or
+		current.dashboard_password ~= adg_original_options.dashboard_password or
+		current.httpport ~= adg_original_options.httpport
+	if auth_changed then
+		fs.unlink("/var/run/adg_dashboard_cookie")
+		fs.unlink("/var/run/adg_dashboard_context")
+		fs.unlink("/var/run/adg_dashboard_lastfail")
+	end
+	local restart_keys = {"enabled", "httpport", "binpath", "configpath", "workdir", "logfile", "verbose", "redirect", "hashpass", "gfwupstream", "crontab"}
+	local changed = false
+	for _, key in ipairs(restart_keys) do
+		local before, after = adg_original_options[key], current[key]
+		if type(before) == "table" then before = table.concat(before, "\n") end
+		if type(after) == "table" then after = table.concat(after, "\n") end
+		if (before or "") ~= (after or "") then changed = true; break end
+	end
+	adg_skip_service_apply = not changed
+	if not changed then return end
+	local enabled=current.enabled
 	if enabled=="1" then
 		io.popen("/etc/init.d/AdGuardHome enable >/dev/null 2>&1; /etc/init.d/AdGuardHome restart >/dev/null 2>&1 &")
 	else
 		io.popen("/etc/init.d/AdGuardHome disable >/dev/null 2>&1; /etc/init.d/AdGuardHome stop >/dev/null 2>&1 &")
 	end
+end
+local adg_parse = m.parse
+function m.parse(self, ...)
+	local result = adg_parse(self, ...)
+	-- 提交完成后阻止 dispatcher 为纯仪表盘设置再次调用 ucitrack。
+	if adg_skip_service_apply then self.apply_needed = false end
+	return result
 end
 return m
 EOF_ADG_BASE
@@ -32364,36 +33812,8 @@ EOF_ADG_LOG
 }
 
 patch_adguard_enable_hook() {
-    base_lua="/usr/lib/lua/luci/model/cbi/AdGuardHome/base.lua"
-    [ -f "$base_lua" ] || return 0
-    grep -q '/etc/init.d/AdGuardHome enable >/dev/null 2>&1; /etc/init.d/AdGuardHome restart >/dev/null 2>&1 &' "$base_lua" 2>/dev/null && return 0
-
-    backup_file "$base_lua"
-    mkdir -p "$WORKDIR/adguardhome"
-    tmp_file="$WORKDIR/adguardhome/base.lua"
-    awk '
-        BEGIN { in_hook = 0 }
-        /^function m\.on_commit\(map\)$/ {
-            in_hook = 1
-            print "function m.on_commit(map)"
-            print "\tlocal enabled=uci:get(\"AdGuardHome\",\"AdGuardHome\",\"enabled\")"
-            print "\tif enabled==\"1\" then"
-            print "\t\tio.popen(\"/etc/init.d/AdGuardHome enable >/dev/null 2>&1; /etc/init.d/AdGuardHome restart >/dev/null 2>&1 &\")"
-            print "\telse"
-            print "\t\tio.popen(\"/etc/init.d/AdGuardHome disable >/dev/null 2>&1; /etc/init.d/AdGuardHome stop >/dev/null 2>&1 &\")"
-            print "\tend"
-            next
-        }
-        in_hook {
-            if ($0 ~ /^return m$/) {
-                in_hook = 0
-                print "end"
-                print
-            }
-            next
-        }
-        { print }
-    ' "$base_lua" > "$tmp_file" && mv "$tmp_file" "$base_lua"
+    # 保存钩子由 write_adguard_wrapper_files 统一生成。
+    return 0
 }
 
 get_adguard_configpath() {
@@ -32853,6 +34273,7 @@ restore_dnsmasq_system_dns_when_adguard_unready() {
 }
 
 restore_adguard_dns_transaction() {
+    [ "${NRADIO_ADG_NO_BACKUP:-0}" = '1' ] && return 1
     [ -n "${adg_dns_txn_dir:-}" ] || return 1
 
     if [ -f "$adg_dns_txn_dir/dhcp.present" ]; then
@@ -32880,6 +34301,7 @@ restore_adguard_dns_transaction() {
 
 ensure_adguard_openclash_dns_chain() {
     command -v uci >/dev/null 2>&1 || return 0
+    [ "$(uci -q get openclash.nradio_postinstall_dns.enable 2>/dev/null || true)" != '1' ] || return 0
 
     lan_ip="$(uci -q get network.lan.ipaddr 2>/dev/null || true)"
     case "$lan_ip" in
@@ -32902,19 +34324,19 @@ ensure_adguard_openclash_dns_chain() {
     adg_dns_txn_dir="$WORKDIR/adguard-dns-transaction.$$"
     rm -rf "$adg_dns_txn_dir" >/dev/null 2>&1 || return 1
     mkdir -p "$adg_dns_txn_dir" >/dev/null 2>&1 || return 1
-    if [ -f /etc/config/dhcp ]; then
+    if [ "${NRADIO_ADG_NO_BACKUP:-0}" != '1' ] && [ -f /etc/config/dhcp ]; then
         cp /etc/config/dhcp "$adg_dns_txn_dir/dhcp" >/dev/null 2>&1 || return 1
         : > "$adg_dns_txn_dir/dhcp.present"
     fi
-    if [ -f /etc/config/AdGuardHome ]; then
+    if [ "${NRADIO_ADG_NO_BACKUP:-0}" != '1' ] && [ -f /etc/config/AdGuardHome ]; then
         cp /etc/config/AdGuardHome "$adg_dns_txn_dir/adguard-uci" >/dev/null 2>&1 || return 1
         : > "$adg_dns_txn_dir/adguard-uci.present"
     fi
-    if [ -f "$configpath" ]; then
+    if [ "${NRADIO_ADG_NO_BACKUP:-0}" != '1' ] && [ -f "$configpath" ]; then
         cp "$configpath" "$adg_dns_txn_dir/adguard-yaml" >/dev/null 2>&1 || return 1
         : > "$adg_dns_txn_dir/adguard-yaml.present"
     fi
-    if [ -f "$template_yaml" ]; then
+    if [ "${NRADIO_ADG_NO_BACKUP:-0}" != '1' ] && [ -f "$template_yaml" ]; then
         cp "$template_yaml" "$adg_dns_txn_dir/adguard-template" >/dev/null 2>&1 || return 1
         : > "$adg_dns_txn_dir/adguard-template.present"
     fi
@@ -33061,6 +34483,7 @@ ensure_adguard_openclash_dns_chain() {
 # 并通过 openclash 自定义覆写脚本持久化（订阅重载后自动重新应用）。
 ensure_hakimi_dns_antileak() {
     local hook_path config_path tmp_hook
+    [ "$(uci -q get openclash.nradio_postinstall_dns.enable 2>/dev/null || true)" != '1' ] || return 0
     hook_path='/etc/openclash/custom/openclash_custom_overwrite.sh'
     [ -x /etc/init.d/openclash ] || return 0
     [ -f "$hook_path" ] || return 0
@@ -33111,13 +34534,19 @@ EOF_NRADIO_DNS_ANTILEAK
     rm -f "$tmp_hook"
     log "DNS:    已写入哈基米 DNS 防泄露覆写（fallback/节点/机场域名改用加密 DNS）"
 
-    config_path='/etc/openclash/clash-all-smart.yaml'
-    [ -f "$config_path" ] || return 0
-    if ! ruby -ryaml -e 'c=YAML.load_file(ARGV[0])["dns"]; fb=c["fallback"]; pn=c["proxy-server-nameserver"]; exit((fb && fb.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) && (pn && pn.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) ? 0 : 1)' "$config_path" 2>/dev/null; then
-        sh "$hook_path" "$config_path" >> /tmp/openclash.log 2>&1
-        log "DNS:    已把运行配置的明文 DNS 替换为加密 DNS，正在重载哈基米核心..."
-        /etc/init.d/openclash restart >/dev/null 2>&1
-        log "DNS:    哈基米 DNS 防泄露已生效"
+    config_path="$(uci -q get openclash.config.config_path 2>/dev/null || true)"
+    if [ -z "$config_path" ] || ! is_openclash_runtime_present; then
+        log "DNS:    覆写将在导入配置并启动哈基米后应用"
+        return 0
+    fi
+    config_path="/etc/openclash/${config_path##*/}"
+    [ -f "$config_path" ] || { log "DNS:    当前运行配置尚未生成，覆写将在下次启动应用"; return 0; }
+    if ! ruby -ryaml -e 'c=YAML.load_file(ARGV[0])["dns"]; fb=c["fallback"]; pn=c["proxy-server-nameserver"]; exit((fb && !fb.empty? && fb.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) && (pn && !pn.empty? && pn.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) ? 0 : 1)' "$config_path" 2>/dev/null; then
+        log "DNS:    正在对当前配置 ${config_path##*/} 应用加密 DNS 覆写..."
+        /etc/init.d/openclash restart >/dev/null 2>&1 || return 1
+        is_openclash_runtime_present || return 1
+        ruby -ryaml -e 'c=YAML.load_file(ARGV[0])["dns"]; fb=c["fallback"]; pn=c["proxy-server-nameserver"]; exit((fb && !fb.empty? && fb.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) && (pn && !pn.empty? && pn.all?{|s| s.to_s =~ /\A(https|tls|quic):/}) ? 0 : 1)' "$config_path" 2>/dev/null || return 1
+        log "DNS:    当前运行配置的加密 DNS 覆写已生效"
     else
         log "DNS:    哈基米 DNS 防泄露配置已生效，无需重载"
     fi
@@ -33516,7 +34945,7 @@ fix_adguard_runtime_if_possible() {
 get_adguardhome_core_arch() { get_core_arch; }
 
 download_adguardhome_core() {
-    optimize_adguardhome_cdn_order
+    optimize_adguardhome_cdn_order core
     core_arch="$(get_adguardhome_core_arch 2>/dev/null || true)"
     [ -n "$core_arch" ] || die "无法识别 AdGuardHome 核心架构"
 
@@ -33526,7 +34955,7 @@ download_adguardhome_core() {
     core_bin="/usr/bin/AdGuardHome/AdGuardHome"
 
     log "提示: 正在从 CDN 下载 AdGuardHome 核心..."
-    download_from_mirrors "AdGuardHome_linux_${core_arch}.tar.gz" "$core_tar" "$ADGUARDHOME_CORE_MIRRORS" || die "无法从全部 CDN 镜像获取 AdGuardHome 核心"
+    download_from_mirrors "AdGuardHome_linux_${core_arch}.tar.gz" "$core_tar" "$ADGUARDHOME_CORE_MIRRORS" http-ranked || die "无法从全部 CDN 镜像获取 AdGuardHome 核心"
     [ -s "$core_tar" ] || die "AdGuardHome 核心下载失败"
 
     for existing in "$core_bin"; do
@@ -33543,14 +34972,16 @@ download_adguardhome_core() {
     done
     [ -n "$core_src" ] || die "无法定位解压后的 AdGuardHome 核心二进制"
 
-    cp "$core_src" "$core_bin"
-    chmod 755 "$core_bin" 2>/dev/null || true
-    uci set AdGuardHome.AdGuardHome.coreversion='latest' >/dev/null 2>&1 || true
+    cp "$core_src" "$core_bin.new" || die "AdGuardHome 核心写入失败"
+    chmod 755 "$core_bin.new" || die "AdGuardHome 核心执行权限设置失败"
+    adg_downloaded_version="$("$core_bin.new" --version 2>/dev/null)" || die "下载的 AdGuardHome 核心无法在当前设备运行"
+    mv -f "$core_bin.new" "$core_bin" || die "AdGuardHome 核心替换失败"
+    uci set "AdGuardHome.AdGuardHome.coreversion=$adg_downloaded_version" >/dev/null 2>&1 || true
     uci commit AdGuardHome >/dev/null 2>&1 || true
 
     log "核心安装完成"
     log "核心:     AdGuardHome"
-    log "版本:  latest"
+    log "版本:  $adg_downloaded_version"
     log "arch:     $core_arch"
     log "path:     $core_bin"
 }
@@ -36471,7 +37902,7 @@ EOF_STORAGE_EXPAND_APPCENTER_PATCH
     grep -q 'local function nradio_appcenter_read_swap_memory()' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态 swap 采样恢复失败"
     grep -q 'swap_total = swap_total' "$APPCENTER_CONTROLLER" 2>/dev/null || die "应用商店系统状态 swap 字段恢复失败"
     grep -q 'storage_expand_memory_row' "$TPL" 2>/dev/null || die "应用商店双空间显示补丁写入失败"
-    refresh_luci_appcenter
+    refresh_luci_appcenter "${1:-}"
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
     log "已写入应用商店空间显示补丁：始终显示 /overlay，扩展启用时追加 $ROOTFS_2ND_STORAGE_MOUNT_POINT"
     log "已清理 LuCI 控制器缓存并重载 uhttpd"
@@ -36621,20 +38052,31 @@ ensure_swapfile_boot() {
     ensure_swapfile_boot_config "${1:-/overlay/swapfile}" || return 0
 }
 
-reduce_openclash_memory_pressure() {
-    [ -f /etc/config/openclash ] || return 0
+repair_dnsmasq_empty_upstream() {
+    local dns_target='' resolv_path
+    [ "$(uci -q get 'dhcp.@dnsmasq[0].noresolv' 2>/dev/null || true)" = '1' ] || return 0
+    [ -z "$(uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null || true)" ] || return 0
 
-    uci set openclash.config.smart_collect='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_meta_sniffer='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_meta_sniffer_pure_ip='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_meta_sniffer_custom='0' >/dev/null 2>&1 || true
-    uci set openclash.config.smart_enable_lgbm='0' >/dev/null 2>&1 || true
-    uci set openclash.config.auto_smart_switch='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_tcp_concurrent='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_unified_delay='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_custom_dns='0' >/dev/null 2>&1 || true
-    uci set openclash.config.enable_respect_rules='0' >/dev/null 2>&1 || true
-    uci commit openclash >/dev/null 2>&1 || true
+    if pgrep -x AdGuardHome >/dev/null 2>&1 && is_local_port_listening "${ADGUARDHOME_DNS_PORT:-554}"; then
+        dns_target="127.0.0.1#${ADGUARDHOME_DNS_PORT:-554}"
+    elif is_openclash_runtime_present && is_local_port_listening "${OPENCLASH_DNS_UPSTREAM_PORT:-7874}"; then
+        dns_target="127.0.0.1#${OPENCLASH_DNS_UPSTREAM_PORT:-7874}"
+    fi
+    if [ -n "$dns_target" ]; then
+        uci add_list "dhcp.@dnsmasq[0].server=$dns_target" >/dev/null 2>&1 || return 1
+    else
+        resolv_path="$(uci -q get 'dhcp.@dnsmasq[0].resolvfile' 2>/dev/null || true)"
+        [ -n "$resolv_path" ] || resolv_path='/tmp/resolv.conf.d/resolv.conf.auto'
+        grep -q '^nameserver[[:space:]]' "$resolv_path" 2>/dev/null || {
+            log "DNS:    dnsmasq 没有上游，且未发现可用本地核心或系统解析服务器"
+            return 1
+        }
+        uci set 'dhcp.@dnsmasq[0].noresolv=0' >/dev/null 2>&1 || return 1
+        dns_target="系统上游 $resolv_path"
+    fi
+    uci commit dhcp >/dev/null 2>&1 || return 1
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1 || return 1
+    log "DNS:    已修复 dnsmasq 禁用系统解析但没有上游的问题，接入 $dns_target"
 }
 
 fix_adguard_start_order() {
@@ -36679,7 +38121,46 @@ ensure_adguard_autostart() {
     log "AdGuardHome 开机启动已启用（S99AdGuardHome）"
 }
 
+install_adguardhome_core_only() {
+    require_c2000max_storage_ready
+    require_nradio_oem_appcenter
+    [ -f /etc/config/AdGuardHome ] && [ -x /etc/init.d/AdGuardHome ] &&
+        [ -f /usr/lib/lua/luci/controller/AdGuardHome.lua ] ||
+        die "请先选择 1 > 4 > 1 完整安装 AdGuardHome"
+    mkdir -p "$WORKDIR/adguardhome"
+    log_stage 1 3 "下载并安装 AdGuardHome 核心"
+    download_adguardhome_core
+    verify_file_exists /usr/bin/AdGuardHome/AdGuardHome "AdGuardHome core"
+    log_stage 2 3 "检查配置并完成账号引导"
+    fix_adguard_runtime_if_possible
+    ensure_adguard_openclash_dns_chain || die "AdGuardHome 核心已安装，DNS 接入失败"
+    guide_adguard_dashboard_account || die "AdGuardHome 核心已安装，仪表盘账号设置未完成"
+    log_stage 3 3 "完成启动设置"
+    if [ -s "$(get_adguard_configpath)" ]; then
+        ensure_adguard_autostart || die "AdGuardHome 开机启动设置失败"
+    fi
+    log "AdGuardHome 核心补装完成"
+}
+
+adguardhome_install_menu() {
+    print_menu_header '主菜单 > 常用插件 > AdGuardHome'
+    print_menu_item 1 '完整安装 AdGuardHome' '安装 LuCI 页面、应用商店接入与核心'
+    print_menu_item 2 '单独安装 AdGuardHome 核心' '适用于插件已安装、核心下载失败'
+    print_menu_item 0 '返回上级'
+    print_menu_prompt '0-2'
+    read_category_choice
+    case "$UI_READ_RESULT" in
+        0) return 0 ;;
+        1) run_recorded_menu_feature "1 > 4 > 1" "AdGuardHome 完整安装" install_adguardhome ;;
+        2) run_recorded_menu_feature "1 > 4 > 2" "AdGuardHome 核心补装" install_adguardhome_core_only ;;
+        *) die_menu_input_issue "$UI_READ_RESULT" ;;
+    esac
+    MENU_ACTION_COMPLETED='1'
+    print_support_page_hint
+}
+
 install_adguardhome() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
 
     mkdir -p "$WORKDIR/adguardhome"
@@ -36700,14 +38181,14 @@ install_adguardhome() {
         adg_download_keep_partial_saved="${DOWNLOAD_KEEP_PARTIAL:-0}"
         DOWNLOAD_KEEP_PARTIAL=1
         adg_download_url=""
-        if download_from_urls "$adg_ipk" $ADGUARDHOME_IPK_URLS; then
+        if download_from_urls "$adg_ipk" --http-ranked $ADGUARDHOME_IPK_URLS; then
             adg_download_url="$LAST_DOWNLOAD_SOURCE"
         fi
         if [ -z "$adg_download_url" ]; then
             log "提示: 首轮 AdGuardHome 安装包下载未完成，正在放宽速度阈值后重试..."
             DOWNLOAD_STALL_TIME="$DOWNLOAD_PARTIAL_RETRY_STALL_TIME"
             DOWNLOAD_STALL_SPEED="$DOWNLOAD_PARTIAL_RETRY_STALL_SPEED"
-            if download_from_urls "$adg_ipk" $ADGUARDHOME_IPK_URLS; then
+            if download_from_urls "$adg_ipk" --http-ranked $ADGUARDHOME_IPK_URLS; then
                 adg_download_url="$LAST_DOWNLOAD_SOURCE"
             else
                 adg_download_url=""
@@ -36745,7 +38226,7 @@ install_adguardhome() {
     normalize_adguard_yaml_defaults "$(get_adguard_configpath)"
     cleanup_adguard_placeholder_config
     ensure_adguard_dashboard_auth_defaults
-    ensure_adguard_openclash_dns_chain || die "AdGuardHome DNS 链事务失败，已恢复原配置"
+    repair_dnsmasq_empty_upstream || die "dnsmasq 上游修复失败"
 
     adg_ver="$(opkg status luci-app-adguardhome 2>/dev/null | awk -F': ' '/Version: /{print $2; exit}')"
     [ -n "$adg_ver" ] || adg_ver="$ADGUARDHOME_VERSION"
@@ -36765,7 +38246,6 @@ install_adguardhome() {
     refresh_luci_appcenter
     ensure_plugin_autostart_order
     fix_adguard_runtime_if_possible
-    ensure_adguard_openclash_dns_chain || die "AdGuardHome DNS 链事务失败，已恢复原配置"
     ensure_existing_swap_access "AdGuardHome"
     verify_appcenter_route "luci-app-adguardhome" "admin/services/AdGuardHome"
     verify_file_exists /usr/lib/lua/luci/controller/AdGuardHome.lua "AdGuardHome"
@@ -36777,17 +38257,12 @@ install_adguardhome() {
     verify_luci_route admin/services/AdGuardHome/manual "AdGuardHome"
     verify_luci_route admin/services/AdGuardHome/log "AdGuardHome"
 
-    log_stage 5 5 "可选下载核心并完成最终校验"
-    adg_core_downloaded='0'
-    if confirm_default_yes "是否现在下载 AdGuardHome 核心（CDN）？"; then
-        download_adguardhome_core
-        adg_core_downloaded='1'
-        verify_file_exists /usr/bin/AdGuardHome/AdGuardHome "AdGuardHome core"
-        fix_adguard_runtime_if_possible
-        ensure_adguard_openclash_dns_chain || die "AdGuardHome DNS 链事务失败，已恢复原配置"
-    else
-        log "备注:     已跳过 AdGuardHome 核心下载"
-    fi
+    log_stage 5 5 "安装核心并完成最终校验"
+    download_adguardhome_core
+    adg_core_downloaded='1'
+    verify_file_exists /usr/bin/AdGuardHome/AdGuardHome "AdGuardHome core"
+    fix_adguard_runtime_if_possible
+    ensure_adguard_openclash_dns_chain || die "AdGuardHome DNS 链事务失败，已恢复原配置"
 
     # 安装内核后引导设置仪表盘账号密码（账号默认 admin，除非用户设置）
     guide_adguard_dashboard_account || die "AdGuardHome 已安装，但 3000 仪表盘账号密码未设置成功；请检查上方错误后重跑 1 > 4"
@@ -36804,7 +38279,7 @@ install_adguardhome() {
     log "路由:    admin/services/AdGuardHome"
     if [ "$adg_core_downloaded" = '1' ]; then
         log "核心:     AdGuardHome"
-        log "核心版本: latest"
+        log "核心版本: $adg_downloaded_version"
         log "核心路径: /usr/bin/AdGuardHome/AdGuardHome"
     elif [ "$adg_luci_reused" = '1' ]; then
         log "备注:     LuCI 安装包已是目标版本，仅刷新包装页和运行时检查"
@@ -37904,6 +39379,7 @@ download_mosdns_core() {
 }
 
 install_mosdns() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     case "${MOSDNS_PORT:-553}" in
         ''|*[!0-9]*|0) MOSDNS_PORT='553' ;;
@@ -38148,6 +39624,7 @@ EOF_MOSDNS_VIEW
 }
 
 install_ddnsgo() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     ensure_default_feeds
 
@@ -39122,6 +40599,7 @@ install_mt5700_webui() {
         log "网速: CPE / CPE1 独立实时上报，暂停按页面隔离，零速率按实际显示"
         return 0
     fi
+    require_c2000max_storage_ready
     mt5700_artifact="$mt5700_workdir/$MT5700_ARTIFACT_NAME"
     mt5700_unpack="$mt5700_workdir/unpack"
     mt5700_ipk=''
@@ -39595,6 +41073,7 @@ EOF_OPENBOX_ICON
 
 install_openbox() {
     local root archive libc_work core_running=0 version=0.1.184
+    require_c2000max_storage_ready
     resolve_openbox_storage_paths
     root="$OPENBOX_INSTALL_ROOT"
     archive="$root/open-box-download.tar.gz"
@@ -39656,6 +41135,7 @@ generate_openlist_admin_password() {
 }
 
 install_openlist() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
 
     openlist_asset_name="$OPENLIST_ASSET_NAME"
@@ -40015,6 +41495,7 @@ EOF_ZEROTIER_UCI
 }
 
 install_zerotier() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     ensure_default_feeds
     mkdir -p "$WORKDIR/zerotier"
@@ -40127,6 +41608,7 @@ install_zerotier() {
 }
 
 install_easytier() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     ensure_default_feeds
 
@@ -40462,12 +41944,14 @@ end
 
 function action_get_temperature()
     local fs = require "nixio.fs"
+    local sys = require "luci.sys"
     local data = {}
     local uci = require "luci.model.uci".cursor()
 
     data.mode = uci:get("fanctrl", "fanctrl", "mode") or "4"
     data.config_mode = data.mode
     data.enabled = uci:get("fanctrl", "fanctrl", "enabled") or "0"
+    data.service_running = sys.call("/etc/init.d/fanctrl running >/dev/null 2>&1") == 0 and "1" or "0"
     data.temp_source = uci:get("fanctrl", "fanctrl", "tempsource") or "max"
     data.temp_source_label = temp_source_label(data.temp_source)
     data.interval = uci:get("fanctrl", "fanctrl", "interval") or "12"
@@ -40495,7 +41979,17 @@ function action_get_temperature()
     local cpu_temp = read_int_file("/sys/class/thermal/thermal_zone0/temp", 1000)
     local cpe_temp = read_cpe_temp()
     local temp_num = choose_temp(data.temp_source, cpu_temp, cpe_temp)
-    local pwm_num = tonumber((pwm_raw:gsub("%s+", "")) or "") or 0
+    local pwm_num = tonumber((pwm_raw:gsub("%s+", "")) or "")
+    local gpio = gpio_raw:gsub("%s+", "")
+
+    if temp_num <= 0 then
+        data.temp_source_label = "温度不可用"
+    elseif data.temp_source == "cpe" and cpe_temp <= 0 then
+        data.temp_source_label = "CPU（CPE 无数据，已回退）"
+    elseif data.temp_source == "max" then
+        data.temp_source_label = cpe_temp > cpu_temp and "CPE（当前较高）" or "CPU（当前较高）"
+        if cpe_temp <= 0 then data.temp_source_label = "CPU（CPE 无数据，已回退）" end
+    end
 
     if temp_num > 0 then
         data.temp = tostring(temp_num)
@@ -40505,10 +41999,11 @@ function action_get_temperature()
 
     data.cpu_temp = cpu_temp > 0 and tostring(cpu_temp) or ""
     data.cpe_temp = cpe_temp > 0 and tostring(cpe_temp) or ""
-    data.pwm = pwm_num > 0 and tostring(pwm_num) or "0"
-    data.gpio = (gpio_raw:gsub("%s+", "")) or ""
-    data.fan = pwm_to_percent(pwm_num)
-    data.protect_active = (data.enabled == "1" and temp_num >= (tonumber(data.protecttemp) or 85) and data.fan == "100") and "1" or "0"
+    data.pwm = pwm_num and tostring(pwm_num) or ""
+    data.gpio = gpio
+    data.output_available = (pwm_num ~= nil and (gpio == "0" or gpio == "1")) and "1" or "0"
+    data.fan = gpio == "0" and "0" or pwm_to_percent(pwm_num or 0)
+    data.protect_active = (data.enabled == "1" and data.service_running == "1" and temp_num > 0 and temp_num >= (tonumber(data.protecttemp) or 85) and data.output_available == "1" and data.fan == "100") and "1" or "0"
     if data.protect_active == "1" then data.mode_label = "过热保护" end
 
     luci.nradio.luci_call_result(data)
@@ -40517,7 +42012,7 @@ EOF_FANCTRL_CONTROLLER
 
     # Overlay the ROM CBI: MAX firmware comments out every control except the master switch.
     cat > "$FANCTRL_CBI" <<'EOF_FANCTRL_CBI'
-m = Map("fanctrl", translate("FanSetting"))
+m = Map("fanctrl", translate("风扇控制"))
 
 s = m:section(NamedSection, "fanctrl", "service")
 
@@ -40572,27 +42067,40 @@ smartmin:value("30", translate("30%"))
 smartmin:value("50", translate("50%"))
 smartmin.default = "30"
 smartmin:depends({ enabled = "1", mode = "4" })
+smartmin:depends({ enabled = "1", schedule_enabled = "1", schedule_mode = "4" })
 smartmin.description = translate("低于首个温度阈值时维持的最低风速。")
 
 smarttemp_low = s:option(Value, "smarttemp_low", translate("Smart 30% 温度"))
 smarttemp_low.default = "50"
 smarttemp_low.datatype = "range(20,100)"
 smarttemp_low:depends({ enabled = "1", mode = "4" })
+smarttemp_low:depends({ enabled = "1", schedule_enabled = "1", schedule_mode = "4" })
 
 smarttemp_mid = s:option(Value, "smarttemp_mid", translate("Smart 50% 温度"))
 smarttemp_mid.default = "60"
 smarttemp_mid.datatype = "range(20,105)"
 smarttemp_mid:depends({ enabled = "1", mode = "4" })
+smarttemp_mid:depends({ enabled = "1", schedule_enabled = "1", schedule_mode = "4" })
 
 smarttemp_high = s:option(Value, "smarttemp_high", translate("Smart 80% 温度"))
 smarttemp_high.default = "70"
 smarttemp_high.datatype = "range(20,110)"
 smarttemp_high:depends({ enabled = "1", mode = "4" })
+smarttemp_high:depends({ enabled = "1", schedule_enabled = "1", schedule_mode = "4" })
 
 smarttemp_full = s:option(Value, "smarttemp_full", translate("Smart 100% 温度"))
 smarttemp_full.default = "80"
 smarttemp_full.datatype = "range(20,115)"
 smarttemp_full:depends({ enabled = "1", mode = "4" })
+smarttemp_full:depends({ enabled = "1", schedule_enabled = "1", schedule_mode = "4" })
+
+for _, option in ipairs({ smarttemp_low, smarttemp_mid, smarttemp_high, smarttemp_full }) do
+    function option.parse(self, section, novld)
+        if self:formvalue(section) ~= nil then
+            Value.parse(self, section, novld)
+        end
+    end
+end
 
 protecttemp = s:option(Value, "protecttemp", translate("过热保护温度"))
 protecttemp.default = "85"
@@ -40637,11 +42145,26 @@ schedule_mode:value("4", translate("Smart 智能温控"))
 schedule_mode.default = "1"
 schedule_mode:depends({ enabled = "1", schedule_enabled = "1" })
 
+local polish = Template("nradio_fanctrl/polish")
+function m.on_after_save(map)
+    polish.notice = translate("配置已暂存；请点击保存并应用，完成持久保存和服务重启。")
+    polish.notice_kind = "warning"
+end
 function m.on_after_commit(map)
-    os.execute("/etc/init.d/fanctrl restart >/dev/null 2>&1")
+    local sys = require "luci.sys"
+    if sys.call("/etc/init.d/fanctrl restart >/dev/null 2>&1") ~= 0 then
+        polish.notice = translate("配置已保存，但风扇服务重启失败。请查看服务状态后重试。")
+        polish.notice_kind = "error"
+    elseif sys.call("/etc/init.d/fanctrl running >/dev/null 2>&1") ~= 0 then
+        polish.notice = translate("配置已保存，重启命令已完成，服务尚未运行。请查看下方实时状态。")
+        polish.notice_kind = "warning"
+    else
+        polish.notice = translate("配置已保存，风扇服务已启动。实际输出以下方实时读数为准。")
+        polish.notice_kind = "success"
+    end
 end
 
-m:append(Template("nradio_fanctrl/polish"))
+m:append(polish)
 
 return m
 EOF_FANCTRL_CBI
@@ -40680,37 +42203,146 @@ body{background:var(--nr-fan-bg)!important;color:var(--nr-fan-text)!important}
 .nr-fan-state{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:6px 10px;border:1px solid rgba(32,227,178,.22);border-radius:999px;background:rgba(32,227,178,.08);color:#8bf5dc;font-size:11px;font-weight:800}.nr-fan-state:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}.nr-fan-dashboard[data-enabled="0"] .nr-fan-state{border-color:rgba(144,166,194,.18);background:rgba(144,166,194,.07);color:#9caabc}.nr-fan-safety{display:flex;align-items:flex-start;gap:10px;margin-top:10px;padding:10px 13px;border:1px solid rgba(255,173,66,.15);border-radius:12px;background:rgba(255,173,66,.055);color:#c5ced9;font-size:11px;line-height:1.55}.nr-fan-safety b{color:#ffd48d}.nr-fan-safety-mark{flex:0 0 auto;color:var(--nr-fan-warm);font-weight:900}
 @media(max-width:920px){.nr-fan-hero{grid-template-columns:1fr}.nr-fan-copy p{max-width:none}.cbi-section-node{grid-template-columns:1fr!important}}
 @media(max-width:560px){.cbi-map{padding:11px!important;border-radius:16px!important}.nr-fan-hero{padding:15px;border-radius:15px}.nr-fan-intro{align-items:flex-start}.nr-fan-gauge{flex-basis:104px;width:104px;height:104px}.nr-fan-gauge-value strong{font-size:26px}.nr-fan-copy h3{font-size:19px}.nr-fan-live{grid-template-columns:1fr}.cbi-value{grid-template-columns:1fr;gap:9px;min-height:0;padding:13px!important}.cbi-value-title{padding:0!important}.cbi-value-field{text-align:left!important}.cbi-value-field>select,.cbi-value-field>.cbi-input-text{max-width:none!important;margin-left:0!important}.nr-fan-group-title{display:block}.nr-fan-group-title span{display:block;margin-top:3px;text-align:left}.nr-fan-safety{font-size:10px}}
+.nr-fan-metric-copy strong{white-space:normal;overflow:visible;overflow-wrap:anywhere;line-height:1.5}
+.nr-fan-sensors,.nr-fan-refresh{margin-top:10px;color:var(--nr-fan-muted);font-size:12px;line-height:1.6}
+.nr-fan-refresh{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.nr-fan-refresh button,.nr-fan-advanced-toggle{padding:8px 12px;border:1px solid var(--nr-fan-line);border-radius:9px;background:#101925;color:var(--nr-fan-text);cursor:pointer}
+.nr-fan-refresh button:disabled{opacity:.5;cursor:wait}.nr-fan-refresh button:focus-visible,.nr-fan-advanced-toggle:focus-visible{outline:2px solid var(--nr-fan-cyan);outline-offset:2px}
+.nr-fan-dashboard[data-state="error"] .nr-fan-state{color:#ff9ca4;border-color:rgba(255,98,110,.4);background:rgba(255,98,110,.1)}
+.nr-fan-dashboard[data-state="warning"] .nr-fan-state{color:#ffd48d;border-color:rgba(255,173,66,.4);background:rgba(255,173,66,.1)}
+.nr-fan-dashboard[data-stale="1"] .nr-fan-rotor{animation-play-state:paused;opacity:.35}.nr-fan-dashboard[data-stale="1"] .nr-fan-gauge{opacity:.5}
+.nr-fan-dashboard[data-stale="1"] #nr-fan-curve-point{display:none}
+.nr-fan-notice{margin-bottom:12px;padding:12px;border:1px solid var(--nr-fan-line);border-radius:10px;color:var(--nr-fan-text);line-height:1.6}
+.nr-fan-notice[data-kind="error"]{border-color:var(--nr-fan-hot)}.nr-fan-notice[data-kind="warning"]{border-color:var(--nr-fan-warm)}
+.nr-fan-curve{margin-top:14px;padding:14px;border:1px solid var(--nr-fan-line);border-radius:13px;background:var(--nr-fan-panel-2)}
+.nr-fan-curve h4{margin:0 0 6px;color:var(--nr-fan-text);font-size:14px}.nr-fan-curve p{margin:6px 0 0;font-size:12px;line-height:1.6;color:var(--nr-fan-muted)}
+.nr-fan-curve svg{display:block;width:100%;height:auto;max-height:220px}.nr-fan-curve text{fill:var(--nr-fan-muted);font-size:12px}
+.nr-fan-curve [data-invalid="1"]{color:var(--nr-fan-hot)}
+#cbi-fanctrl .nr-fan-advanced-toggle{grid-column:1/-1;text-align:left}
+#cbi-fanctrl:not(.nr-fan-advanced-open) .nr-fan-advanced{display:none!important}
+#cbi-fanctrl [hidden]{display:none!important}
+.nr-fan-edit-state{display:block;margin-bottom:10px;font-size:12px;color:var(--nr-fan-muted)}.nr-fan-edit-state[data-dirty="1"]{color:var(--nr-fan-warm)}
+@media(max-width:560px){.nr-fan-live{grid-template-columns:repeat(2,minmax(0,1fr))}.nr-fan-metric{padding:10px;gap:7px;align-items:flex-start}.nr-fan-metric-icon{flex-basis:26px;width:26px;height:26px}.nr-fan-metric-icon svg{width:20px;height:20px}.nr-fan-copy p{display:none}.nr-fan-gauge{flex-basis:90px;width:90px;height:90px}.nr-fan-state{line-height:1.5}.nr-fan-safety{font-size:12px}.nr-fan-curve{padding:10px}}
+@media(prefers-reduced-motion:reduce){.nr-fan-rotor{animation:none}.cbi-value,.cbi-button{transition:none}}
 </style>
 <div id="nr-fan-dashboard" class="nr-fan-dashboard" data-enabled="0" data-fan="off">
+  <% if self.notice then %><div class="nr-fan-notice" data-kind="<%=self.notice_kind%>" role="status"><%=luci.util.pcdata(self.notice)%></div><% end %>
   <section class="nr-fan-hero" aria-label="风扇实时状态">
     <div>
       <div class="nr-fan-intro">
         <div id="nr-fan-gauge" class="nr-fan-gauge" aria-label="当前温度">
-          <div class="nr-fan-gauge-value"><strong id="nr-fan-temp">--</strong><span>temperature</span></div>
+          <div class="nr-fan-gauge-value"><strong id="nr-fan-temp">--</strong><span>当前温度</span></div>
         </div>
         <div class="nr-fan-copy">
-          <div class="nr-fan-eyebrow">Thermal cockpit</div>
+          <div class="nr-fan-eyebrow">温度与散热</div>
           <h3>智能散热控制</h3>
-          <p>实时联动 CPU 与 CPE 温度，按曲线自动调速。配置保存后风扇服务会立即重载。</p>
+          <p>查看实际输出与当前策略；Smart 曲线可随参数调整即时预览。</p>
           <div id="nr-fan-state" class="nr-fan-state" aria-live="polite">正在读取运行状态</div>
         </div>
       </div>
-      <div class="nr-fan-safety"><span class="nr-fan-safety-mark">◆</span><span><b>安全优先：</b>达到过热保护温度时强制 100% 风速，不受手动模式和静音时段限制。</span></div>
+      <div id="nr-fan-sensors" class="nr-fan-sensors">CPU -- · CPE --</div>
+      <div class="nr-fan-safety"><span class="nr-fan-safety-mark">◆</span><span id="nr-fan-protection">过热保护需要总开关开启、服务运行及有效温度，正在读取状态。</span></div>
     </div>
     <div class="nr-fan-live">
       <div class="nr-fan-metric">
         <span class="nr-fan-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><g class="nr-fan-rotor"><path d="M12 10.2c-1.6-2.5-.9-6.7 1.7-7.2 2.2-.4 3.5 2.2 2.7 4.2-.7 1.7-2.4 2.7-4.4 3Z"/><path d="M13.8 12c2.5-1.6 6.7-.9 7.2 1.7.4 2.2-2.2 3.5-4.2 2.7-1.7-.7-2.7-2.4-3-4.4Z"/><path d="M12 13.8c1.6 2.5.9 6.7-1.7 7.2-2.2.4-3.5-2.2-2.7-4.2.7-1.7 2.4-2.7 4.4-3Z"/><path d="M10.2 12c-2.5 1.6-6.7.9-7.2-1.7-.4-2.2 2.2-3.5 4.2-2.7 1.7.7 2.7 2.4 3 4.4Z"/></g><circle cx="12" cy="12" r="1.8"/></svg></span>
-        <div class="nr-fan-metric-copy"><span>Fan output</span><strong id="nr-fan-speed">--</strong></div>
+        <div class="nr-fan-metric-copy"><span>实际输出</span><strong id="nr-fan-speed">--</strong></div>
       </div>
-      <div class="nr-fan-metric"><span class="nr-fan-metric-icon" aria-hidden="true">◈</span><div class="nr-fan-metric-copy"><span>Active mode</span><strong id="nr-fan-mode">--</strong></div></div>
-      <div class="nr-fan-metric"><span class="nr-fan-metric-icon" aria-hidden="true">◎</span><div class="nr-fan-metric-copy"><span>Temperature source</span><strong id="nr-fan-source">--</strong></div></div>
-      <div class="nr-fan-metric"><span class="nr-fan-metric-icon" aria-hidden="true">◷</span><div class="nr-fan-metric-copy"><span>Quiet schedule</span><strong id="nr-fan-schedule">--</strong></div></div>
+      <div class="nr-fan-metric"><span class="nr-fan-metric-icon" aria-hidden="true">◈</span><div class="nr-fan-metric-copy"><span>当前策略</span><strong id="nr-fan-mode">--</strong></div></div>
+      <div class="nr-fan-metric"><span class="nr-fan-metric-icon" aria-hidden="true">◎</span><div class="nr-fan-metric-copy"><span>实际温度来源</span><strong id="nr-fan-source">--</strong></div></div>
+      <div class="nr-fan-metric"><span class="nr-fan-metric-icon" aria-hidden="true">◷</span><div class="nr-fan-metric-copy"><span>定时策略</span><strong id="nr-fan-schedule">--</strong></div></div>
     </div>
+  </section>
+  <div class="nr-fan-refresh"><span id="nr-fan-freshness" role="status">等待首次刷新</span><button id="nr-fan-refresh" type="button">刷新状态</button></div>
+  <section id="nr-fan-curve" class="nr-fan-curve" aria-label="Smart 温控曲线预览">
+    <h4>Smart 温控曲线预览</h4>
+    <svg viewBox="0 0 520 166" role="img" aria-label="温度升高时的风扇输出阶梯图">
+      <path d="M34 18V130H494" fill="none" stroke="currentColor" opacity=".3"/>
+      <text x="0" y="22">100%</text><text x="8" y="134">0%</text>
+      <polyline id="nr-fan-curve-line" fill="none" stroke="var(--nr-fan-cyan)" stroke-width="3"/>
+      <line id="nr-fan-curve-protect" y1="18" y2="130" stroke="var(--nr-fan-hot)" stroke-dasharray="4 4"/>
+      <circle id="nr-fan-curve-point" r="5" fill="var(--nr-fan-warm)"/>
+      <g id="nr-fan-curve-labels"></g>
+    </svg>
+    <p id="nr-fan-curve-summary"></p><p>曲线使用表单参数预览；橙点表示最近读取的实际温度与输出，红线表示预览保护阈值。保存后生效。</p>
   </section>
 </div>
 <script type="text/javascript">//<![CDATA[
 (function(){
+  var nrFanLastData=null,nrFanDirty=false,nrFanFields={};
   function nrFanText(id,value){var el=document.getElementById(id);if(el)el.textContent=value;}
+  function nrFanField(name){
+    var el=document.getElementById('cbid.fanctrl.fanctrl.'+name);
+    if(el)nrFanFields[name]=el;
+    return el||nrFanFields[name];
+  }
+  function nrFanValue(name,fallback){
+    var el=nrFanField(name);
+    if(!el)return fallback;
+    return el.type==='checkbox'?(el.checked?'1':'0'):el.value;
+  }
+  function nrFanCurve(){
+    var panel=document.getElementById('nr-fan-curve');
+    if(!panel)return;
+    var smart=nrFanValue('enabled','0')==='1'&&(nrFanValue('mode','')==='4'||(nrFanValue('schedule_enabled','0')==='1'&&nrFanValue('schedule_mode','')==='4'));
+    panel.hidden=!smart;
+    var group=document.getElementById('cbi-fanctrl-fanctrl-smartmin-group');
+    if(group)group.hidden=!smart;
+    if(!smart)return;
+    var keys=['smarttemp_low','smarttemp_mid','smarttemp_high','smarttemp_full'];
+    var limits=[100,105,110,115],temps=[],valid=true;
+    for(var i=0;i<keys.length;i++){
+      var raw=nrFanValue(keys[i],'');
+      var n=Number(raw);
+      if(!/^\d+$/.test(raw)||n<20||n>limits[i]||(i&&n<=temps[i-1]))valid=false;
+      temps.push(n);
+    }
+    var summary=document.getElementById('nr-fan-curve-summary');
+    summary.setAttribute('data-invalid',valid?'0':'1');
+    panel.querySelector('svg').style.display=valid?'block':'none';
+    if(!valid){summary.textContent='请输入范围内的整数温度，并保持 30% < 50% < 80% < 100%。';return;}
+    var minimum=Number(nrFanValue('smartmin','0'));
+    var protect=Number(nrFanValue('protecttemp',''));
+    var hasProtect=isFinite(protect)&&protect>=40&&protect<=120;
+    var upper=Math.max(100,temps[3]+5,hasProtect?protect+5:0),lower=20;
+    function x(t){return 34+460*(Math.max(lower,Math.min(upper,t))-lower)/(upper-lower);}
+    function y(p){return 130-Math.max(0,Math.min(100,p))*1.12;}
+    var events=[],levels=[30,50,80,100],points=['34,'+y(minimum)],level=minimum;
+    for(i=0;i<4;i++)events.push({temp:temps[i],level:Math.max(minimum,levels[i])});
+    if(hasProtect)events.push({temp:protect,level:100});
+    events.sort(function(a,b){return a.temp-b.temp||a.level-b.level;});
+    for(i=0;i<events.length;i++){
+      points.push(x(events[i].temp)+','+y(level));
+      level=Math.max(level,events[i].level);
+      points.push(x(events[i].temp)+','+y(level));
+    }
+    points.push('494,'+y(level));
+    document.getElementById('nr-fan-curve-line').setAttribute('points',points.join(' '));
+    var protection=document.getElementById('nr-fan-curve-protect');
+    protection.style.display=hasProtect?'':'none';
+    if(hasProtect){protection.setAttribute('x1',x(protect));protection.setAttribute('x2',x(protect));}
+    var labels=document.getElementById('nr-fan-curve-labels');
+    while(labels.firstChild)labels.removeChild(labels.firstChild);
+    for(i=0;i<4;i++){
+      var label=document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('x',34+i*153);label.setAttribute('y','157');
+      label.setAttribute('text-anchor',i===0?'start':(i===3?'end':'middle'));
+      label.textContent=temps[i]+'°C / '+levels[i]+'%';labels.appendChild(label);
+    }
+    var point=document.getElementById('nr-fan-curve-point');
+    var current=nrFanLastData&&Number(nrFanLastData.temp);
+    var output=nrFanLastData&&Number(nrFanLastData.fan);
+    var showPoint=nrFanLastData&&String(nrFanLastData.output_available)==='1'&&current>0&&isFinite(output);
+    point.style.display=showPoint?'':'none';
+    if(showPoint){point.setAttribute('cx',x(current));point.setAttribute('cy',y(output));}
+    summary.textContent='最低输出 '+minimum+'% · '+(hasProtect?'保护阈值 '+protect+'°C':'保护阈值待填写')+(nrFanDirty?' · 当前为未保存预览':' · 当前表单参数');
+  }
+  function nrFanEditState(){
+    nrFanText('nr-fan-edit-state',nrFanDirty?'有未保存的修改；实时状态仍显示设备当前读数。':'修改参数后，请保存应用。');
+    var state=document.getElementById('nr-fan-edit-state');
+    if(state)state.setAttribute('data-dirty',nrFanDirty?'1':'0');
+    nrFanCurve();
+  }
   function nrFanGroup(beforeId,title,description){
     var target=document.getElementById(beforeId);
     if(!target||document.getElementById(beforeId+'-group'))return;
@@ -40721,38 +42353,109 @@ body{background:var(--nr-fan-bg)!important;color:var(--nr-fan-text)!important}
   }
   function nrFanLayout(){
     var dashboard=document.getElementById('nr-fan-dashboard');
-    var map=document.querySelector('.cbi-map');
+    var map=document.getElementById('cbi-fanctrl');
     var heading=map&&map.querySelector('h2');
     if(dashboard&&map&&dashboard.parentNode!==map){
       if(heading&&heading.nextSibling)map.insertBefore(dashboard,heading.nextSibling);else map.insertBefore(dashboard,map.firstChild);
     }
-    nrFanGroup('cbi-fanctrl-fanctrl-enabled','运行控制','总开关、模式、温度来源、保护阈值与检测周期');
+    nrFanGroup('cbi-fanctrl-fanctrl-enabled','运行控制','总开关与常规运行模式');
     nrFanGroup('cbi-fanctrl-fanctrl-smartmin','Smart 温控曲线','从最低风速到 100% 的四段升温曲线');
-    nrFanGroup('cbi-fanctrl-fanctrl-schedule_enabled','静音时段','跨午夜时间段可临时切换到更安静的运行模式');
+    nrFanGroup('cbi-fanctrl-fanctrl-schedule_enabled','定时策略','支持跨午夜；可选择固定档位或 Smart');
+    if(!map)return;
+    var advanced=['tempsource','protecttemp','interval'],first=null;
+    for(var i=0;i<advanced.length;i++){
+      var row=document.getElementById('cbi-fanctrl-fanctrl-'+advanced[i]);
+      nrFanField(advanced[i]);
+      if(row){row.classList.add('nr-fan-advanced');if(!first)first=row;}
+    }
+    if(first&&!document.getElementById('nr-fan-advanced-toggle')){
+      var toggle=document.createElement('button');
+      toggle.type='button';toggle.id='nr-fan-advanced-toggle';toggle.className='nr-fan-advanced-toggle';
+      toggle.setAttribute('aria-expanded','false');toggle.textContent='展开高级参数：温度来源、保护温度、检测间隔';
+      toggle.onclick=function(){
+        var open=map.classList.toggle('nr-fan-advanced-open');
+        this.setAttribute('aria-expanded',open?'true':'false');
+        this.textContent=(open?'收起':'展开')+'高级参数：温度来源、保护温度、检测间隔';
+      };
+      first.parentNode.insertBefore(toggle,first);
+    }
+    var advancedButton=document.getElementById('nr-fan-advanced-toggle');
+    if(advancedButton)advancedButton.hidden=nrFanValue('enabled','0')!=='1';
+    var scheduleGroup=document.getElementById('cbi-fanctrl-fanctrl-schedule_enabled-group');
+    if(scheduleGroup)scheduleGroup.hidden=nrFanValue('enabled','0')!=='1';
+    if(!map.nrFanBound){
+      map.nrFanBound=true;
+      var form=map.closest?map.closest('form'):document.querySelector('form');
+      var actions=form&&form.querySelector('.cbi-page-actions');
+      if(actions){
+        var state=document.createElement('span');state.id='nr-fan-edit-state';state.className='nr-fan-edit-state';state.setAttribute('role','status');
+        actions.insertBefore(state,actions.firstChild);
+      }
+      function changed(event){
+        if(!event.target||!/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName))return;
+        nrFanDirty=true;window.setTimeout(nrFanLayout,0);
+      }
+      map.addEventListener('input',changed);map.addEventListener('change',changed);
+      if(form)form.addEventListener('reset',function(){window.setTimeout(function(){nrFanDirty=false;nrFanLayout();},0);});
+      var refresh=document.getElementById('nr-fan-refresh');
+      if(refresh)refresh.onclick=function(){if(window.nradioFanRefresh)window.nradioFanRefresh();};
+      if(map.querySelector('.cbi-value-error')){
+        nrFanDirty=true;
+        var advancedToggle=document.getElementById('nr-fan-advanced-toggle');
+        if(advancedToggle&&!map.classList.contains('nr-fan-advanced-open'))advancedToggle.click();
+      }
+    }
+    nrFanEditState();
   }
   window.nradioFanDashboardUpdate=function(data){
     data=data||{};
     var dashboard=document.getElementById('nr-fan-dashboard');
     var gauge=document.getElementById('nr-fan-gauge');
     if(!dashboard||!gauge)return;
+    nrFanLastData=data;
     var enabled=String(data.enabled||'0')==='1';
+    var running=String(data.service_running||'0')==='1';
+    var available=String(data.output_available||'0')==='1';
     var temp=parseInt(data.temp,10);if(!isFinite(temp))temp=0;
     var fan=parseInt(data.fan,10);if(!isFinite(fan))fan=0;
-    var color=temp>=75?'var(--nr-fan-hot)':(temp>=60?'var(--nr-fan-warm)':'var(--nr-fan-cyan)');
-    gauge.style.setProperty('--nr-temp-angle',(Math.max(0,Math.min(100,temp))*3.6)+'deg');
+    var protect=Number(data.protecttemp)||85;
+    var color=temp>=protect?'var(--nr-fan-hot)':(temp>=protect-10?'var(--nr-fan-warm)':'var(--nr-fan-cyan)');
+    gauge.style.setProperty('--nr-temp-angle',(Math.max(0,Math.min(1,temp/protect))*360)+'deg');
     gauge.style.setProperty('--nr-temp-color',color);
     nrFanText('nr-fan-temp',temp>0?(temp+'°C'):'--');
-    nrFanText('nr-fan-speed',enabled?(fan>0?fan+'%':'关闭'):'已关闭');
-    nrFanText('nr-fan-mode',enabled?(data.mode_label||'Smart 智能温控'):'停止');
+    nrFanText('nr-fan-speed',available?(fan>0?fan+'%':'0% · 停止输出'):'输出不可用');
+    nrFanText('nr-fan-mode',enabled?((running?'':'配置：')+(data.mode_label||'Smart 智能温控')):'总开关关闭');
     nrFanText('nr-fan-source',data.temp_source_label||'--');
     var schedule=String(data.schedule_enabled||'0')==='1';
     var active=String(data.schedule_active||'0')==='1';
-    nrFanText('nr-fan-schedule',schedule?((active?'生效中 · ':'已启用 · ')+(data.schedule_start||'--')+'–'+(data.schedule_end||'--')):'未启用');
-    nrFanText('nr-fan-state',enabled?('风扇服务运行中 · '+(data.mode_label||'Smart')):'风扇控制已关闭');
+    nrFanText('nr-fan-schedule',schedule?((!enabled?'总开关关闭 · ':(!running?'服务未运行 · ':(active?'时段内 · ':'待时段 · ')))+(data.schedule_start||'--')+'–'+(data.schedule_end||'--')):'未启用');
+    nrFanText('nr-fan-sensors','CPU '+(data.cpu_temp?data.cpu_temp+'°C':'无数据')+' · CPE '+(data.cpe_temp?data.cpe_temp+'°C':'无数据'));
+    var state=enabled?(running?'总开关开启 · 服务运行中':'总开关开启 · 服务未运行'):'总开关关闭'+(running?' · 服务待机':' · 服务未运行');
+    var severity=enabled&&!running?'error':'normal';
+    if(!available){state+=' · 输出读取失败';severity='warning';}
+    else if(!enabled&&fan>0){state+=' · 仍有输出';severity='warning';}
+    var protection='保护阈值 '+protect+'°C；达到后优先输出 100%。';
+    if(!enabled)protection='总开关关闭，过热保护未启用。';
+    else if(!running)protection='服务未运行，过热保护未生效。';
+    else if(temp<=0){protection='温度不可用，无法判断过热保护状态。';severity='warning';}
+    else if(String(data.protect_active)==='1'){protection='过热保护已触发 · 阈值 '+protect+'°C · 当前输出 100%。';severity='warning';}
+    else if(temp>=protect){protection='已达到保护阈值 '+protect+'°C，尚未确认 100% 输出。';severity='error';}
+    nrFanText('nr-fan-protection',protection);
+    nrFanText('nr-fan-state',state);
     dashboard.setAttribute('data-enabled',enabled?'1':'0');
-    dashboard.setAttribute('data-fan',enabled&&fan>0?'on':'off');
+    dashboard.setAttribute('data-state',severity);
+    dashboard.setAttribute('data-stale','0');
+    dashboard.setAttribute('data-fan',available&&fan>0?'on':'off');
     var rotor=dashboard.querySelector('.nr-fan-rotor');
     if(rotor)rotor.style.animationDuration=Math.max(.5,2.7-(fan/100)*2.1)+'s';
+    nrFanCurve();
+  };
+  window.nradioFanDashboardStale=function(message,lastGood){
+    var dashboard=document.getElementById('nr-fan-dashboard');
+    if(dashboard){dashboard.setAttribute('data-stale','1');dashboard.setAttribute('data-state','warning');}
+    nrFanText('nr-fan-state',lastGood?'数据已过期 · 显示上次读数':'运行状态暂不可用');
+    nrFanText('nr-fan-protection','数据未更新，当前过热保护状态尚未确认。');
+    nrFanText('nr-fan-freshness',message+(lastGood?' · 最后更新 '+new Date(lastGood).toLocaleTimeString():''));
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',nrFanLayout);else nrFanLayout();
   window.setTimeout(nrFanLayout,100);
@@ -40769,35 +42472,59 @@ EOF_FANCTRL_POLISH
 		if (s) s.innerHTML = value;
 	}
 
-	XHR.poll(5, '<%=url('nradioadv/system/fanctrl/temperature')%>', null,
-		function(x, rv)
-		{
-			if (!(rv && rv.result))
-				return;
-
-			var temp = rv.result.temp || '';
-			var fan = rv.result.fan || '0';
-			var mode = rv.result.mode || '4';
-			var modeLabel = rv.result.mode_label || 'Smart';
-			var enabled = rv.result.enabled || '0';
-			var sourceLabel = rv.result.temp_source_label || '';
-
-			var tempLabel = temp ? (temp + ' °C' + (sourceLabel ? (' / ' + sourceLabel) : '')) : '<em>暂无数据</em>';
-			var fanLabel = '关闭';
-
-			if (enabled === '1') {
-				if (fan === '0')
-					fanLabel = '关闭';
-				else
-					fanLabel = fan + '% / ' + modeLabel;
-			}
-
-			update_fanctrl_value('tempdesdevice-temperature-status', tempLabel);
-			update_fanctrl_value('fandesdevice-temperature-status', fanLabel);
-			if (typeof window.nradioFanDashboardUpdate === 'function')
-				window.nradioFanDashboardUpdate(rv.result);
+	(function(){
+		var timer=null,pending=null,lastGood=0,closed=false;
+		function buttonBusy(busy){
+			var button=document.getElementById('nr-fan-refresh');
+			if(button){button.disabled=busy;button.textContent=busy?'刷新中…':'刷新状态';}
 		}
-	);
+		function refresh(){
+			if(closed||document.hidden||pending)return;
+			window.clearTimeout(timer);
+			var request=new XMLHttpRequest(),finished=false;
+			pending=request;buttonBusy(true);
+			function finish(message,rv){
+				if(finished)return;
+				finished=true;pending=null;buttonBusy(false);
+				if(rv&&rv.result){
+					lastGood=Date.now();
+					update_fanctrl_value('tempdesdevice-temperature-status',rv.result.temp?rv.result.temp+' °C':'暂无数据');
+					update_fanctrl_value('fandesdevice-temperature-status',rv.result.output_available==='1'?rv.result.fan+'%':'输出不可用');
+					if(typeof window.nradioFanDashboardUpdate==='function')window.nradioFanDashboardUpdate(rv.result);
+					var freshness=document.getElementById('nr-fan-freshness');
+					if(freshness)freshness.textContent='更新于 '+new Date(lastGood).toLocaleTimeString()+' · 每轮完成后 5 秒刷新';
+				}else if(typeof window.nradioFanDashboardStale==='function'){
+					window.nradioFanDashboardStale(message,lastGood);
+				}
+				if(!closed&&!document.hidden)timer=window.setTimeout(refresh,5000);
+			}
+			request.open('GET','<%=url('nradioadv/system/fanctrl/temperature')%>',true);
+			request.timeout=12000;
+			request.setRequestHeader('Cache-Control','no-cache');
+			request.onload=function(){
+				var rv=null;
+				if(request.status===200){try{rv=JSON.parse(request.responseText);}catch(ignore){}}
+				if(rv&&rv.result&&typeof rv.result==='object'&&typeof rv.result.enabled!=='undefined'){
+					finish('',rv);
+				}else{
+					finish(request.status===200?'状态数据无效，请重试':'状态请求失败（HTTP '+request.status+'），请重试');
+				}
+			};
+			request.onerror=function(){finish('连接失败，请重试');};
+			request.ontimeout=function(){finish('读取超时，请重试');};
+			request.onabort=function(){finish('刷新已暂停');};
+			try{request.send(null);}catch(error){finish('状态请求未能发送，请重试');}
+		}
+		window.nradioFanRefresh=refresh;
+		document.addEventListener('visibilitychange',function(){
+			window.clearTimeout(timer);
+			if(document.hidden){if(pending)pending.abort();}
+			else refresh();
+		});
+		window.addEventListener('pagehide',function(){closed=true;window.clearTimeout(timer);if(pending)pending.abort();});
+		window.addEventListener('pageshow',function(){closed=false;refresh();});
+		if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',refresh);else refresh();
+	}());
 
 	$("#cbi-fanctrl-fanctrl-tempdes").css("display", "none");
 	$("#cbi-fanctrl-fanctrl-tempdesdevice").css("display", "none");
@@ -41188,7 +42915,7 @@ install_fanctrl() {
             ;;
     esac
 
-    log_stage 1 5 "NRadio 增强风扇控制页面安装规划"
+    log_stage 1 4 "NRadio 增强风扇控制页面安装规划"
     log "提示: 当前机型已识别为 ${current_model}，将增强“更多-风扇”页面并保留现有风扇配置"
     case "$current_model" in
         NRadio_C8-688)
@@ -41203,10 +42930,10 @@ install_fanctrl() {
     esac
     confirm_or_exit "确认继续安装 ${FANCTRL_DISPLAY_NAME} 并修改系统吗？"
 
-    log_stage 2 5 "写入增强风扇控制页面与后台脚本"
+    log_stage 2 4 "写入增强风扇控制页面与后台脚本"
     write_fanctrl_plugin_files "$current_model"
 
-    log_stage 3 5 "启用风扇控制服务并写入缺失配置"
+    log_stage 3 4 "启用风扇控制服务并写入缺失配置"
     case "$current_model" in
         NRadio_C8-688)
             log "启用适配: C8-688 风扇策略已写入 fanctrl 配置"
@@ -41218,29 +42945,15 @@ install_fanctrl() {
             log "启用适配: C8-788 soc_thermal 风扇策略已写入 fanctrl 配置"
             ;;
     esac
-    enable_init_service_strict "$FANCTRL_INIT_FILE" "$FANCTRL_DISPLAY_NAME" || die "$FANCTRL_DISPLAY_NAME 开机启动配置失败"
-    restart_init_service_strict "$FANCTRL_INIT_FILE" "$FANCTRL_DISPLAY_NAME" || die "$FANCTRL_DISPLAY_NAME 启动失败"
-    sleep 1
-    pgrep -f '/usr/bin/fanctrl.sh' >/dev/null 2>&1 || die "$FANCTRL_DISPLAY_NAME 启动后未发现运行进程"
+    "$FANCTRL_INIT_FILE" enable >/dev/null 2>&1 || die "$FANCTRL_DISPLAY_NAME 开机启动配置失败"
+    "$FANCTRL_INIT_FILE" restart >/dev/null 2>&1 || die "$FANCTRL_DISPLAY_NAME 启动失败"
 
-    log_stage 4 5 "刷新原厂更多-风扇入口"
+    log_stage 4 4 "刷新原厂更多-风扇入口"
     backup_file "$CFG"
     cleanup_appcenter_entry "$FANCTRL_DISPLAY_NAME" "$FANCTRL_PACKAGE_NAME" "$FANCTRL_ROUTE"
     rm -f /tmp/appcenter/luci/nradioadv.system.fanctrl 2>/dev/null || true
     refresh_luci_appcenter
     /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
-
-    log_stage 5 5 "校验原厂更多-风扇页面"
-    verify_file_exists "$FANCTRL_CONTROLLER" "$FANCTRL_DISPLAY_NAME"
-    verify_file_exists "$FANCTRL_CBI" "$FANCTRL_DISPLAY_NAME"
-    verify_file_exists "$FANCTRL_VIEW_DIR/polish.htm" "$FANCTRL_DISPLAY_NAME 页面美化"
-    verify_file_exists "$FANCTRL_BIN_PATH" "$FANCTRL_DISPLAY_NAME"
-    verify_file_exists "$FANCTRL_INIT_FILE" "$FANCTRL_DISPLAY_NAME"
-    verify_file_exists "$FANCTRL_CONFIG_FILE" "$FANCTRL_DISPLAY_NAME"
-    grep -Fq 'NRadio FanControl cockpit visual layer v2' "$FANCTRL_VIEW_DIR/polish.htm" || die "$FANCTRL_DISPLAY_NAME 页面视觉层校验失败"
-    grep -Fq 'window.nradioFanDashboardUpdate(rv.result)' "$FANCTRL_TEMP_AJAX_VIEW" || die "$FANCTRL_DISPLAY_NAME 实时联动校验失败"
-    grep -Fq 'schedule_enabled = s:option' "$FANCTRL_CBI" || die "$FANCTRL_DISPLAY_NAME 完整控制项校验失败"
-    verify_luci_route "$FANCTRL_ROUTE" "$FANCTRL_DISPLAY_NAME"
 
     log "安装完成"
     log "插件:   $FANCTRL_DISPLAY_NAME"
@@ -49734,6 +51447,7 @@ install_openvpn_core() {
 }
 
 install_openvpn() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     cleanup_c8_luci_compat_pollution || die "C8-688 luci-compat 污染清理失败，已停止安装"
 
@@ -50826,6 +52540,7 @@ set_webssh_shortcut_icon() {
 }
 
 install_ttyd_webssh() {
+    require_c2000max_storage_ready
     require_nradio_oem_appcenter
     confirm_or_exit "确认继续安装 ttyd / Web SSH 并修改系统吗？"
 
@@ -55059,8213 +56774,588 @@ require_nradio_cpe_monitoring_supported_model() {
 
 nradio_cpeopt_require_capabilities() {
     require_nradio_cpe_monitoring_supported_model
-    command -v lua >/dev/null 2>&1 || die "系统缺少 Lua，无法安装 5G 连接监听页面"
-
-    for cpeopt_required in \
-        /usr/bin/cpetools.sh \
-        /usr/bin/cpesel.sh \
-        /etc/cpetools/generic.sh \
-        /etc/cpetools/huawei.sh \
-        /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua \
-        /usr/lib/lua/luci/view/nradio_adv/index.htm; do
-        [ -f "$cpeopt_required" ] || die "当前 NROS 缺少 5G 连接监听所需组件：$cpeopt_required"
-    done
+    command -v lua >/dev/null 2>&1 || die "系统缺少 Lua，无法安装基站时段监听"
+    [ -d /tmp/infocd/cache ] || die "系统观测缓存不可用，不能启动基站时段监听"
 }
 
 extract_nradio_cpeopt_payload() {
     cpeopt_payload_root="$WORKDIR/nradio-cpeopt-$NRADIO_CPEOPT_VERSION"
-
-    rm -rf "$cpeopt_payload_root" 2>/dev/null || true
-    mkdir -p \
-        "$cpeopt_payload_root/usr/bin" \
-        "$cpeopt_payload_root/etc/cpetools" \
-        "$cpeopt_payload_root/usr/lib/lua/luci/model/cbi/nradio_cpecfg" \
-        "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv" \
+    mkdir -p "$cpeopt_payload_root/usr/libexec" "$cpeopt_payload_root/etc/init.d" \
         "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv" \
-        "$cpeopt_payload_root/usr/libexec" \
-        "$cpeopt_payload_root/etc/init.d" \
-        "$cpeopt_payload_root/www/luci-static/nradio/images/icon" || die "创建 5G 连接监听释放目录失败"
-
-    cat > "$cpeopt_payload_root/usr/bin/cpetools.sh" <<'EOF_NRADIO_CPEOPT_CPETOOLS'
-#!/bin/ash
-
-. /usr/share/libubox/jshn.sh
-. /lib/functions.sh
-include /etc/cpetools
-. /lib/netifd/netifd-proto.sh
-readonly GPIO_EXPORT_DIR="/sys/class/gpio"
-readonly CPE_DEV_CONF_PATH="/lib/network/wwan/"
-readonly CPE_SIM_CTRL_DIR="$GPIO_EXPORT_DIR"
-readonly COMGT_EXE_SCRIPT="/etc/gcom/nradio/exe.gcom"
-readonly COMGT_RUN_SCRIPT="/etc/gcom/nradio/run.gcom"
-readonly AT_GENERIC_PREFIX="AT+"
-readonly AT_PRIVATE_PREFIX="AT^"
-readonly CPE_LOCK_PATH="/var/run"
-readonly TTY_CTRL_COMMAND="/usr/bin/comgt"
-readonly CPESEL_PATH="/var/run/cpesel"
-readonly CPETOOLS_PATH="/var/run/cpetools"
-readonly ATSD_POWER_TAG="/var/run/atsd"
-
-CPESEL_FS=
-CPESEL_AT_OK=
-CPESEL_GPIO_CHANGE=
-CPE_SIM_SEL_PID=
-CPE_USIM_FIRST_DELAY=
-dNet=$(uci -q get network.globals.default_cellular)
-[ -z "$dNet" ] && dNet="cpe"
-dType=2
-gName="cpetools"
-gNet="$dNet"
-gNetDefault=1
-gNetGp="$gNet"
-gReset=
-gDown=
-gUp=
-gType="$dType"
-gCmd=
-gSim=
-gSimgpio=0
-gUpdate=
-gMode=
-gIndex=
-gExternalParam=""
-gFreqLock=""
-gFreqLockPeak=""
-gProcess=""
-gAction=""
-gLogMode=$(uci -q get logservice.root.mode)
-
-record_dial_log() {
-	local _log_file="/var/log/nradio-cpe-dial.log"
-	local _log_size=0
-
-	[ -f "$_log_file" ] && _log_size=$(wc -c < "$_log_file" 2>/dev/null)
-	case "$_log_size" in
-		''|*[!0-9]*) _log_size=0 ;;
-	esac
-	[ "$_log_size" -ge 262144 ] && mv -f "$_log_file" "${_log_file}.1"
-	printf '%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "cpetools.sh" "$gNet" "$*" >> "$_log_file"
-}
-
-usage() {
-	cat <<-EOF
-		usage: $0 OPTION...
-		CPE control tool.
-
-		  -i      network interface, $dNet as default
-		  -r      reset cpe power.Reset all cpex-pwr,as no '-i' setted.Reset certain cpe,with '-i' setted
-		  -d      down cpe power.Down all cpex-pwr,as no '-i' setted.Down certain cpe,with '-i' setted
-		  -k      keep cpe power.Up all cpex-pwr,as no '-i' setted.Up certain cpe,with '-i' setted
-		  -c      command
-		  -t      command type, 0: AT-COMMAND, 1: AT-COMMAND script, 2: function, $dType as default
-		  -s      switch to specified sim card number
-		  -S      switch to specified sim card number only gpio
-		  -u      update cpe settings
-		  -m      update cpe mode custom
-		  -l      freq lock trigger for cellular_freqtime,0 force unlock,1 force use cpecfg freq cfg
-		  -L      freq lock trigger for PeakHour Assurance,0 follow the system,1 force use LTE
-		  -f      which process using at tools
-		  -a      at tools used way,mutual exclusion or share. relate to -f 
-	EOF
-}
-
-log_info() {
-	record_dial_log "$*"
-	logger -t "$gName $$" "$*"
-	if [ "$gLogMode" == "1" ] ;then
-		logclient -i "$gName $$"  -l 6 -m "$*"
-	fi
-}
-
-block_atsd_send(){
-	[ ! -d "${ATSD_POWER_TAG}/${gNet}" ] && mkdir -p "${ATSD_POWER_TAG}/${gNet}"
-	touch "${ATSD_POWER_TAG}/${gNet}/block_at"
-	sleep 3
-}
-
-recovery_atsd_send(){
-	sleep 2
-	rm "${ATSD_POWER_TAG}/${gNet}/block_at"
-}
-
-rst_power_once(){
-	local _f=
-
-	log_info "apply $1 power reset!"
-	_f="$GPIO_EXPORT_DIR/${1}/value"
-	if [ -f "$_f" ]; then
-		block_atsd_send
-		log_info "apply $gNet power down!"
-		echo "0" > "$_f"
-		sleep 1
-		log_info "apply $gNet power on!"
-		echo "1" > "$_f"
-		recovery_atsd_send
-	fi
-}
-
-rst_power(){
-	local force="$1"
-	local _f=
-	local _vendor
-	local work_mode
-
-	_vendor=$(check_soc_vendor)
-
-	work_mode=$(uci -q get "network.$gNet.mode")
-	if [ "$force" != "2" -a "$work_mode" = "odu" ];then
-		log_info "apply $gNet power reset!"
-		run_command "$gNet" reboot "2"
-		block_atsd_send
-		recovery_atsd_send
-		return 0
-	fi
-
-	if [ "${_vendor}" = "nradio" -o "${_vendor}" = "simcom" ]; then
-		if [ $gNetDefault -eq 0 ];then
-			rst_power_once "$gNet-pwr"
-			return
-		fi
-		ls "$GPIO_EXPORT_DIR"|while read -r line;do
-			if echo "$line" |grep -qs "\-pwr";then
-				rst_power_once "$line"
-			fi
-		done
-	else
-		if [ "$_vendor" == "quectel_opsdk" ]; then
-			/etc/init.d/qlatc.init restart
-		else
-			run_command "$gNet" cfun_c "2"
-			run_command "$gNet" cfun_o "2"
-		fi
-	fi
-}
-
-ctl_power_once(){
-	_f="$GPIO_EXPORT_DIR/${1}/value"
-	if [ -f "$_f" ]; then
-		if [ "$2" = "down" ];then
-			log_info "apply $gNet power down!"
-			echo "0" > "$_f"
-		else
-			log_info "apply $gNet power on!"
-			echo "1" > "$_f"
-		fi
-	fi
-}
-
-ctl_power_core(){
-	local _f=
-	if [ $gNetDefault -eq 0 ];then
-		ctl_power_once "$gNet-pwr" "$1"
-		return
-	fi
-	ls "$GPIO_EXPORT_DIR"|while read -r line;do
-		if echo "$line" |grep -qs "\-pwr";then
-			ctl_power_once "$line" "$1"
-		fi
-	done
-}
-shutdown_power() {
-	ctl_power_core "down"
-}
-
-keep_power() {
-	ctl_power_core "up"
-}
-
-rstsim() {
-	if run_command "$gNet" rstsim "2"; then
-		return 0
-	fi
-	return 1
-}
-
-get_sim_gpio_val() {
-	local _sum="$1"
-	local _gval=
-
-	_gval=$(uci -q get cpesel.sim${gIndex}.gval)
-
-	[ -z "$_gval" ] && _gval="01,10,11"
-
-	echo "$_gval"|cut -d, -f "$_sum"
-}
-
-set_sim_num() {
-	local _gval="$1"
-	local _gnum=
-	local _val=
-	local _tmp=
-
-	_gnum=${#_gval}
-	_gnum=$((_gnum-1))
-
-	for _i in $(seq 0 "$_gnum"); do
-		echo "${_gval:$((_gnum-_i)):1}" > "$CPE_SIM_CTRL_DIR/${gNetGp}-sel${_i}/value"
-	done
-}
-
-set_usim() {
-	local _uval="$1"
-	local _tries=0
-	local _max_tries=15
-
-	[ -z "$_uval" ] && return 0
-
-	while [ "$_tries" -lt "$_max_tries" ]; do
-		if run_command "$gNet" usim_set "2" "$_uval"; then
-			return 0
-		fi
-		_tries=$((_tries+1))
-		sleep 1
-	done
-
-	log_info "set usim timeout: $_uval"
-	return 1
-}
-
-save_sim_num() {
-	local _val=$1
-	local _old=""
-	_old=$(uci -q get cpesel.sim${gIndex}.cur)
-
-	if [ "$_val" != "$_old" ];then
-		uci -q set cpesel.sim${gIndex}.cur="$_val"
-		uci commit cpesel.sim${gIndex}
-		
-		if [ -z "$gIndex" ];then
-			log_info "notice kpcped.event"
-			ubus send kpcped.event
-		fi
-	fi
-}
-
-chk_sim_num() {
-	local _gval="$1"
-	local _gnum=
-	local _val=
-	local _tmp=
-	local gpio_num=0
-	local odu=$(uci -q get network.${gNet}.mode)
-
-	[ "$odu" == "odu" ] && return 0
-	_gnum=${#_gval}
-	_gnum=$((_gnum-1))
-
-	for _i in $(seq 0 "$_gnum"); do
-		if [ -f "$CPE_SIM_CTRL_DIR/${gNetGp}-sel${_i}/value" ];then
-			_tmp=$(cat "$CPE_SIM_CTRL_DIR/${gNetGp}-sel${_i}/value")
-			_val="$_tmp$_val"
-			gpio_num=$((gpio_num+1))
-		fi
-	done
-	[ $gpio_num -eq 0 ] && return 0
-	[ "$_val" = "$_gval" ]
-}
-
-reset_special_usim(){
-	run_command "$gNet" usim_reset "2"
-	return 0
-}
-
-chk_usim() {
-	local _uval="$1"
-	local _val
-	local _tries=0
-	local _max_tries=30
-	[ -f "$CPESEL_AT_OK" ] && rm "$CPESEL_AT_OK"
-	[ -z "$_uval" ] && reset_special_usim && return 0
-	[ ! -f "$CPE_USIM_FIRST_DELAY" ] && log_info "$CPE_USIM_FIRST_DELAY not exsit"
-	log_info "chk_usim"
-	[ ! -f "$CPE_USIM_FIRST_DELAY" ] && sleep 15 && log_info "usim first delay start 15s"
-	log_info "touch $CPE_USIM_FIRST_DELAY"
-	touch "$CPE_USIM_FIRST_DELAY"
-	while [ "$_tries" -lt "$_max_tries" ]; do
-		version=$(uci -q get "cellular_init.$gNet.version")
-		if echo "$version" |grep -sq "RW" ;then
-			return 0
-		fi
-		_val=$(run_command "$gNet" usim_get "2"|xargs -r printf)
-		[ -n "$_val" -a "$_val" != "none" ] && touch "$CPESEL_AT_OK" && break
-		_tries=$((_tries+1))
-		sleep 1
-	done
-	[ -z "$_val" -o "$_val" = "none" ] && log_info "get usim timeout" && return 1
-
-	[ "$_val" = "$_uval" ]
-}
-
-_switch_sim_tdtech() {
-	local _simnum="$1"
-	local _val
-	local _simval
-	local _cursim
-
-	_val=$(get_sim_gpio_val "$_simnum")
-
-	if [ "$_val" = "1" ]; then
-		_simval="usim"
-	elif [ "$_val" = "2" ]; then
-		_simval="esim1"
-	elif [ "$_val" = "3" ]; then
-		_simval="esim2"
-	else
-		log_info "unknown sim $_val"
-		return 1
-	fi
-
-	_cursim=$(ubus call atserver get '{"mod": "switchcard"}'|jsonfilter -e '$["data"]["card"]')
-	[ "$_cursim" = "$_simval" ] && return 0
-
-	uci -q set network.cpe.sim=${_simval}
-	uci -q commit network
-	uci -q set cpesel.sim.cur=${_simnum}
-	uci -q commit cpesel
-	ubus call atserver set "{\"mod\":\"switchcard\",\"card\":\"${_simval}\"}"
-}
-
-_switch_sim_nradio() {
-	local _simnum="$1"
-	local _val=
-	local _gval=
-	local _uval=
-	local _usimset=0
-	local reset=0
-
-	local vendor=$(check_soc_vendor)
-	if [ "$vendor" = "quectel_opsdk" ]; then
-		local hardware_version="$(uci get oem.board.hardware_version)"
-		local open_hot="0"
-		if [ -n "$hardware_version" -a "$hardware_version" != "1.0" ] ;then
-			open_hot="1"
-		fi
-		command_quectel_checkdet2 "$1" "$open_hot"
-	fi
-
-	_val=$(get_sim_gpio_val "$_simnum")
-	_gval=$(echo "$_val"|awk -F'-' '{print $1}')
-	_uval=$(echo "$_val"|awk -F'-' '{print $2}')
-
-	if ! chk_sim_num "$_gval"; then
-		touch $CPESEL_GPIO_CHANGE
-		set_sim_num "$_gval"
-	fi
-
-	[ -n "$_uval" -a "$gSimgpio" -eq 1 ] && return 0
-	if [ $gSimgpio -eq 0 ] && ! chk_usim "$_uval"; then
-		_usimset=1
-		if ! set_usim "$_uval"; then
-			log_info "switch sim failed: unable to select usim $_uval"
-			return 1
-		fi
-	fi
-	save_sim_num "$_simnum"
-
-	if [ -f $CPESEL_GPIO_CHANGE ] || [ "$_usimset" -eq 1 ]; then
-		if [ "$_usimset" -eq 0 ]; then
-			reset=1
-			touch $CPESEL_FS
-			rstsim || rst_power
-			log_info "model reset"
-		fi
-		proto_set_available "$gNet" 1
-		if [ ! -f "/bin/serial_atcmd" ]; then
-			log_info "ifup $gNet as for switch_sim $_simnum"
-			ifup "$gNet"
-		else
-			log_info "switch sim done"
-			# /etc/init.d/quec_diagd restart
-			# sleep 5
-			# ubus call quec_diagd set_wan "{'action':'down'}"
-			# sleep 1
-			# ubus call quec_diagd set_wan "{'action':'up'}"
-		fi
-		[ -f $CPESEL_GPIO_CHANGE ] && rm $CPESEL_GPIO_CHANGE
-	fi
-	
-	keep_power
-	return 0
-}
-
-switch_sim() {
-	local _vendor
-	local _func
-	local _rc
-
-	_vendor=$(check_soc_vendor)
-	_func="_switch_sim_${_vendor}"
-
-	if type "$_func" 2>/dev/null | grep -qs function; then
-		$_func "$1"
-	else
-		_switch_sim_nradio "$1"
-	fi
-	_rc=$?
-	log_info "switch sim exit: $_rc"
-	return "$_rc"
-}
-
-get_conf() {
-	local _file=
-
-	for _file in $(lsusb|awk '{print $6}'|sed "s|^|$CPE_DEV_CONF_PATH|"); do
-		if [ -f "$_file" ]; then
-			echo "$_file"
-			return 0
-		fi
-	done
-
-	return 1
-}
-
-lock_freq() {
-	local _freq=$1
-	local _info=
-	local _file=
-	local _msg=
-	local _cmd=
-	local _val=
-	local _def=
-
-	_file=$(get_conf) || return 2
-
-	_info=$(cat "$_file")
-
-	for _i in $(seq 0 10); do
-		_msg=$(echo "$_info" | jsonfilter -e '$["lock_freq"]' | jsonfilter -e "\$[$_i]") || break
-
-		_cmd=$(echo "$_msg" | jsonfilter -e '$["command"]')
-		_val=$(echo "$_msg" | jsonfilter -e "\$['freqlist']['$_freq']")
-		_def=$(echo "$_msg" | jsonfilter -e "\$['freqlist']['DEFAULT']")
-
-		if ! atsd_cli -i "$gNet" -c "${_cmd}${_val:-$_def}"; then
-			return 1
-		fi
-	done
-
-	return 0
-}
-
-run_command() {
-	local _net=
-	local _cmd=
-	local _type=
-	local _ctl=
-	local _info=
-	local _vendor=
-	local _cmdset=
-	local _func=
-
-	_net="$1"
-	_cmd="$2"
-	_type="$3"
-	_param="$4"
-	_param_index=4
-	_vendor=$(check_soc_vendor)
-	
-	local process_status=$(cat $CPETOOLS_PATH/${gNet}/exclusive 2>/dev/null)
-	if [ -n "$process_status" -a "$gProcess" != "$process_status" ];then
-		return 1
-	fi
-
-	if [ "$_type" = "0" ]; then
-		_command_exec_raw "$_ctl" "$_cmd" "$4"
-	elif [ "$_type" = "1" ]; then
-		res=$(_command_exec_raw "$_ctl" "$_cmd"	"5")
-		if echo "$res"|grep -qsw "OK" ;then
-			return 0
-		else
-			return 1
-		fi
-	else
-		if [ "$_vendor" = "quectel_ysdk" ]; then
-			_info=$(cat "/var/run/infocd/cache/${_net}_dev" |jsonfilter -e '$["parameter"]')
-		else
-			_info=$(cat "/tmp/infocd/cache/${_net}_dev" |jsonfilter -e '$["parameter"]')
-		fi
-
-		[ -n "$_info" ] || {
-			echo "$_net usb not ready"
-			return 1
-		}
-		if [ -n "$_param" ];then
-			_param_f="$_param"
-		else
-			_param_f="$_info"
-		fi
-
-		_vendor=$(echo "$_info"|jsonfilter -e '$["vendor"]')
-		_cmdset=$(echo "$_info"|jsonfilter -e '$["cmdset"]')
-		_vendor="${_vendor:-generic}"
-
-		_func="command_${_vendor}_${_cmd}${_cmdset}"
-		if [ "$#" -gt "$_param_index" ]; then
-			shift $_param_index
-		else
-			shift $#
-		fi
-		if type "$_func" 2>/dev/null | grep -qs function; then
-			if $_func "$_ctl" "$_param_f" "$@"; then
-				return 0
-			else
-				return 1
-			fi
-		elif [ "$_vendor" != "generic" ]; then
-			_func="command_generic_${_cmd}"
-			if type "$_func" 2>/dev/null | grep -qs function; then
-				if $_func "$_ctl" "$_param_f" "$@"; then
-					return 0
-				else
-					return 1
-				fi
-			fi
-		fi
-		echo "$_net does not support function $_cmd"
-		return 2
-	fi
-
-	return 0
-}
-
-run_command_retry() {
-	local _attempt=1
-	local _max_attempts=5
-	local _rc=1
-
-	while [ "$_attempt" -le "$_max_attempts" ]; do
-		run_command "$@"
-		_rc=$?
-		[ "$_rc" -eq 0 ] && return 0
-		[ "$_attempt" -lt "$_max_attempts" ] && sleep 1
-		_attempt=$((_attempt+1))
-	done
-
-	log_info "command retry exhausted: net=$1 cmd=$2 rc=$_rc"
-	return "$_rc"
-}
-
-validate_freq_data() {
-	local _freq="$1"
-	local _item
-	local _label
-	local _data
-	local _has_band=0
-
-	[ -n "$_freq" ] || return 1
-	case "$_freq" in
-		,*|*,|*,,*|*[!a-z0-9:,_-]*) return 1 ;;
-	esac
-
-	for _item in ${_freq//,/ }; do
-		_label=${_item%%-*}
-		_data=${_item#*-}
-		[ "$_data" != "$_item" ] || return 1
-		case "$_label" in
-			nr|sa|nsa|lte|wcdma) ;;
-			*) return 1 ;;
-		esac
-		[ -z "$_data" ] && continue
-		case "$_data" in
-			:*|*:|*::*|*[!0-9:]*) return 1 ;;
-		esac
-		_has_band=1
-	done
-
-	[ "$_has_band" -eq 1 ]
-}
-
-format_freq_data(){
-	local freq_all="$1"
-	local key="$2"
-	local freq_mult="$3"
-	local freq_tmp=""
-	local freqArray=${freq_all//,/ }
-	for freq_item in $freqArray
-	do
-		local freq_data=${freq_item//-/ }
-		top_key=$(echo "$freq_data"|awk -F' ' '{print $1}'|xargs -r printf)
-		data=$(echo "$freq_data"|awk -F' ' '{print $2}'|xargs -r printf)
-
-		if [ "$top_key" = "$key" ];then
-			if [ -n "$data" ];then
-				freq_tmp="${data}"
-			else
-				if [ "$freq_mult" == "0" ];then
-					freq_tmp="0"
-				fi
-			fi
-			break
-		fi
-
-	done
-	[ -z "$freq_tmp" -a "$freq_mult" == "0" ] && freq_tmp="0"
-	echo "$freq_tmp"
-}
-
-combine_band_data(){
-	local cur_data="$1"
-	local combine_data="$2"
-
-	[ -z "$combine_data" ] && echo "$cur_data" && return
-	[ -z "$cur_data" ] && echo "$combine_data" && return
-
-	local bandArray=${cur_data//:/ }
-	local combine_bandArray=${combine_data//:/ }
-	for combine_band_item in $combine_bandArray
-	do
-		local same_band=0
-		for band_item in $bandArray
-		do
-			if [ "$band_item" == "$combine_band_item" ];then
-				same_band=1
-				break
-			fi
-		done
-		if [ $same_band -eq 0 ];then
-			cur_data="$cur_data:$combine_band_item"
-		fi
-	done
-	echo "$cur_data"
-}
-
-skip_band_data(){
-	local freq_item="$1"
-	local skip_band="$2"
-	local target_band=""
-
-	[ -z "$skip_band" ] && echo "$freq_item" && return
-
-	local bandArray=${freq_item//:/ }
-	local skip_bandArray=${skip_band//:/ }
-	for band_item in $bandArray
-	do
-		local same_band=0
-		for skip_band_item in $skip_bandArray
-		do
-			if [ "$band_item" == "$skip_band_item" ];then
-				same_band=1
-				break
-			fi
-		done
-		if [ $same_band -eq 0 ];then
-			target_band=${target_band:+${target_band}:}${band_item}
-		fi
-	done
-	echo  "$target_band"
-}
-
-get_freq_info(){
-	local freq_open=0
-	local sim_id="$1"
-	local mode=$(uci -q get "cpecfg.${gNet}sim$sim_id.mode")
-	local custom_freq=$(uci -q get "cpecfg.${gNet}sim$sim_id.custom_freq")
-	local custom_earfcn5=$(uci -q get "cpecfg.${gNet}sim$sim_id.custom_earfcn5")
-	local custom_earfcn4=$(uci -q get "cpecfg.${gNet}sim$sim_id.custom_earfcn4")
-
-	local peakhour_status=$(cat $CPETOOLS_PATH/${gNet}/peakhour_$sim_id 2>/dev/null)
-
-	if [ "$peakhour_status" == "1" ];then
-		log_info "[time lock]lock ${gNet}-sim$sim_id because peakhour"
-		log_info "[time lock] don't unlock ${gNet}-sim$sim_id when peakhour, return 0"
-		return $freq_open
-	fi
-
-	if [ -n "$mode" -a "$mode" != "auto" ];then
-		freq_open=1
-	elif [ "$custom_freq" == "1" ] ;then
-		freq_open=1
-	elif [ "$custom_earfcn5" == "1" ] ;then
-		freq_open=1
-	elif [ "$custom_earfcn4" == "1" ] ;then
-		freq_open=1
-	fi
-	return $freq_open
-}
-unlock_freq(){
-	local sim_id="$1"
-
-	freq_status=$(cat $CPETOOLS_PATH/${gNet}/$sim_id 2>/dev/null)
-	peakhour_status=$(cat $CPETOOLS_PATH/${gNet}/peakhour_$sim_id 2>/dev/null)
-
-	if [ "$peakhour_status" == "1" ];then
-		log_info "[time lock]lock ${gNet}-sim$sim_id because peakhour"
-		return 2
-	elif [ "$freq_status" == "0" ] && ! get_freq_info "$sim_id";then
-		log_info "[time lock]unlock ${gNet}-sim$sim_id"
-		return 0
-	fi
-
-	return 1
-}
-freq_lock_change(){
-	local sim_id="$1"
-	local status="$2"
-	if ! get_freq_info "$sim_id";then
-		log_info "[time lock]change ${gNet}-sim$sim_id to $status"
-		return 0
-	fi
-
-	return 1
-}
-update_freq_lock(){
-	local sim_id="$1"
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	local support_nr="$(uci -q get network.${gNet}.nrcap)"
-	[ -z "$support_nr" ] && return 1
-
-	local status="$gFreqLock"
-	[ ! -d "$CPETOOLS_PATH/${gNet}" ] && mkdir -p $CPETOOLS_PATH/${gNet}
-	local old_status=$(cat $CPETOOLS_PATH/${gNet}/$sim_id 2>/dev/null) 
-	[ -z "$old_status" ] && old_status="1"
-	echo -n $status > $CPETOOLS_PATH/${gNet}/$sim_id
-	log_info "[time lock]update ${gNet}-sim${sim_id} $status"
-
-	[ "$sim_id" != "$simIndex" ] && return 1
-	if [ "$old_status" != "$status" ] && freq_lock_change "$sim_id" "$status" ;then
-		ifup ${gNet}
-	fi
-}
-
-update_peakhour_freq_lock(){
-	local sim_id="$1"
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	local support_nr="$(uci -q get network.${gNet}.nrcap)"
-	[ -z "$support_nr" ] && return 1
-
-	local peakhour_status="$gFreqLockPeak"
-	[ ! -d "$CPETOOLS_PATH/${gNet}" ] && mkdir -p $CPETOOLS_PATH/${gNet}
-	local old_peakhour_status=$(cat $CPETOOLS_PATH/${gNet}/peakhour_$sim_id 2>/dev/null)
-	[ -z "$old_peakhour_status" ] && old_peakhour_status="1"
-	echo -n $peakhour_status > $CPETOOLS_PATH/${gNet}/peakhour_$sim_id
-	log_info "[time lock]peakhour update ${gNet}-sim${sim_id} $peakhour_status"
-
-	[ "$sim_id" != "$simIndex" ] && return 1
-	if [ "$old_peakhour_status" != "$peakhour_status" ] ;then
-		ifup ${gNet}
-	fi
-}
-
-sort_band_data(){
-	local _ori="$1"
-	local _new="$2"
-	local result=""
-	_ori=$(echo "$_ori"| tr ':' ' ')
-	_new=$(echo "$_new"| tr ':' ' ')
-	for item in $_ori; do
-		case " $_new " in
-			*" $item "*) result="$result $item" ;;
-		esac
-	done
-	result=${result# }
-	result=$(echo "$result"| tr ' ' ':')
-	echo "$result"
-}
-
-update_settings() {
-	local _mode
-	local prefer_do=0
-	local _vendor=$(check_soc_vendor)
-
-	if [ -z "$gMode" ];then
-		[ ! -f "/etc/config/cpecfg" ] && return 0
-		_mode=$(uci -q get "cpecfg.config.mode")
-	else
-		_mode="$gMode"
-	fi
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	[ -z "$simIndex" ] && simIndex="1"
-	echo "sim:$simIndex"
-	local roaming=$(uci -q get "cpecfg.${gNet}sim$simIndex.roaming")
-
-	local compatibility=$(uci -q get "cpecfg.${gNet}sim$simIndex.compatibility")
-	local freq=$(uci -q get "cpecfg.${gNet}sim$simIndex.freq")
-	local custom_freq=$(uci -q get "cpecfg.${gNet}sim$simIndex.custom_freq")
-
-	local custom_earfcn5=$(uci -q get "cpecfg.${gNet}sim$simIndex.custom_earfcn5")
-	local earfcn5=$(uci -q get "cpecfg.${gNet}sim$simIndex.earfcn5")
-	local pci5=$(uci -q get "cpecfg.${gNet}sim$simIndex.pci5")
-	local band5=$(uci -q get "cpecfg.${gNet}sim$simIndex.band5")
-
-	local custom_earfcn4=$(uci -q get "cpecfg.${gNet}sim$simIndex.custom_earfcn4")
-	local earfcn4=$(uci -q get "cpecfg.${gNet}sim$simIndex.earfcn4")
-	local pci4=$(uci -q get "cpecfg.${gNet}sim$simIndex.pci4")
-	local band4=$(uci -q get "cpecfg.${gNet}sim$simIndex.band4")
-	local earfreq_mode=$(uci -q get "cpecfg.${gNet}sim$simIndex.earfreq_mode")
-
-	local command_equal=$(uci -q get "network.${gNet}.command_equal")
-	local freq_all=$(uci -q get "network.${gNet}.freq_val")
-	local freq_multi=$(uci -q get "network.${gNet}.freq_multi")
-	local compatibility_work=$(uci -q get "network.${gNet}.compatibility")
-	local blacklist_band=$(uci -q get "network.${gNet}.blacklist_band")
-	local freqfree=$(uci -q get "system.basic.freqfree")
-	local support_mobility=$(uci -q get "network.${gNet}.mobility")
-	local mobility=$(uci -q get "cpecfg.${gNet}sim$simIndex.mobility")
-	if [ "$support_mobility" == "1" ]; then
-		if [ "$freqfree" == "1" ]; then
-			[ -z "$mobility" ] && mobility="2"
-		else
-			[ -z "$mobility" ] && mobility="0"
-		fi
-	else
-		mobility=""
-	fi
-	echo "blacklist_band:$blacklist_band compatibility_work:$compatibility_work"
-	if [ "$_vendor" = "quectel_ysdk" ]; then
-		_info=$(cat "/var/run/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	else
-		_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	fi
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	[ -z "$roaming" ] && roaming="0"
-	[ -z "$compatibility" ] && compatibility="0"
-
-	unlock_freq "$simIndex"
-	local lock_status=$?
-	if [ $lock_status -eq 0 ]; then
-		custom_freq="0"
-		custom_earfcn4="0"
-		custom_earfcn5="0"
-		_mode="auto"
-	elif [ $lock_status -eq 2 ]; then
-		custom_freq="0"
-		custom_earfcn4="0"
-		custom_earfcn5="0"
-		_mode="lte"
-	fi
-	if [ "$custom_freq" = "1" ] && ! validate_freq_data "$freq"; then
-		echo "invalid custom freq:$freq"
-		log_info "reject invalid custom freq for ${gNet}sim${simIndex}: $freq"
-		return 1
-	fi
-
-	if [ "$custom_freq" = "0" -a "$custom_earfcn5" != "1" ];then
-		if [ "$_alias" != "mt5700" -a  "$_alias" != "redcap" ];then
-			run_command "$gNet" "freq_unlock" "2"
-			if [ $? = "0" ];then
-				prefer_do=1
-				echo "freq_unlock"
-			fi
-		fi
-	fi
-	_mode=${_mode:-auto}
-	if [ "$_mode" = "auto" ]; then
-		run_command_retry "$gNet" "allmode" "2" || return 1
-	elif [ "$_mode" = "lte" ]; then
-		run_command_retry "$gNet" "nroff" "2" || return 1
-	elif [ "$_mode" = "nsa" ]; then
-		run_command_retry "$gNet" "modensa" "2" || return 1
-	elif [ "$_mode" = "sa" ]; then
-		run_command_retry "$gNet" "modesa" "2" || return 1
-	elif [ "$_mode" = "sa_only" ]; then
-		run_command_retry "$gNet" "modesa_only" "2" || return 1
-	elif [ "$_mode" = "nsa_only" ]; then
-		run_command_retry "$gNet" "modensa_only" "2" || return 1
-	elif [ "$_mode" = "wcdma" ]; then
-		run_command_retry "$gNet" "modewcdma" "2" || return 1
-	fi
-	run_command "$gNet" "roam" "2" "$roaming" || echo "roam setting error"
-
-	if [ "$compatibility_work" == "1" ];then
-		run_command "$gNet" "compatibility" "2" "" "$compatibility" "$blacklist_band"
-	else
-		run_command "$gNet" "compatibility" "2" "" "1"
-	fi
-
-	if [ "$custom_earfcn5" == "1" -a -n "$earfcn5" ] || [  "$custom_earfcn4" == "1" -a -n "$earfcn4"  ];then
-
-		_res=$(_command_private_exec "$1" "NRFREQLOCK" "?")
-		[ -z "$_res" ] && {
-			if [ -n "$freq_all" ];then
-				#if [ "$command_equal" = "1" ];then
-				#	freq_all="nr-0,lte-0"
-				#fi
-				echo "band lock all"
-				run_command_retry "$gNet" "freq" "2" "$freq_all" || {
-					echo "freq setting error"
-					return 1
-				}
-			fi
-		}
-
-		if [ -z "$earfreq_mode" ];then
-			if [ "$custom_earfcn5" == "1" ];then
-				echo "earfcn5 lock earfcn5:$earfcn5 pci5:$pci5 band5:$band5"
-				run_command "$gNet" "earfcn" "2" "" "NR" "$earfcn5" "$pci5" "$band5"|| echo "earfcn setting error"
-			else
-				echo "earfcn5 unlock"
-				run_command "$gNet" "earfcn" "2" "" "NR" "0"
-			fi
-
-			if [ "$custom_earfcn4" == "1" ];then
-				echo "earfcn4 lock earfcn4:$earfcn4 pci4:$pci4 band4:$band4"
-				run_command "$gNet" "earfcn" "2" "" "LTE" "$earfcn4" "$pci4" "$band4"|| echo "earfcn setting error"
-			else
-				echo "earfcn4 unlock"
-				run_command "$gNet" "earfcn" "2" "" "LTE" "0"
-			fi
-		else
-			if [ "$earfreq_mode" == "earfcn5"  ];then
-				if [ "$custom_earfcn4" == "1" ];then
-					echo "earfcn4 lock earfcn4:$earfcn4 pci4:$pci4 band4:$band4"
-					run_command "$gNet" "earfcn" "2" "" "LTE" "$earfcn4" "$pci4" "$band4"|| echo "earfcn setting error"
-				else
-					echo "earfcn4 unlock"
-					run_command "$gNet" "earfcn" "2" "" "LTE" "0"
-				fi
-				if [ "$custom_earfcn5" == "1" ];then
-					echo "earfcn5 lock earfcn5:$earfcn5 pci5:$pci5 band5:$band5"
-					run_command "$gNet" "earfcn" "2" "" "NR" "$earfcn5" "$pci5" "$band5"|| echo "earfcn setting error"
-				else
-					echo "earfcn5 unlock"
-					run_command "$gNet" "earfcn" "2" "" "NR" "0"
-				fi
-			fi
-			if [ "$earfreq_mode" == "earfcn4"  ];then
-				if [ "$custom_earfcn4" == "1" ];then
-					echo "earfcn4 lock earfcn4:$earfcn4 pci4:$pci4 band4:$band4"
-					run_command "$gNet" "earfcn" "2" "" "LTE" "$earfcn4" "$pci4" "$band4"|| echo "earfcn setting error"
-				else
-					echo "earfcn4 unlock"
-					run_command "$gNet" "earfcn" "2" "" "LTE" "0"
-				fi
-			fi
-		fi
-	else
-		_res=$(_command_private_exec "$1" "NRFREQLOCK" "?")
-		[ -z "$_res" -o "$earfreq_mode" != "band" ] && {
-			if [ "$_alias" != "mt5700" -a  "$_alias" != "redcap" ];then
-				echo "earfcn5 unlock"
-				run_command "$gNet" "earfcn" "2" "" "NR" "0"
-			fi
-		}
-
-		if [ "$_alias" != "mt5700" -a  "$_alias" != "redcap" ];then
-			echo "earfcn4 unlock"
-			run_command "$gNet" "earfcn" "2" "" "LTE" "0"
-		fi
-
-		local skip_band="$blacklist_band"
-		local freq_target=""
-
-		if [ "$custom_freq" = "0" ];then
-			freq=""
-		fi
-		local freqArray=${freq_all//,/ }
-		local nr_data=""
-		for freq_item in $freqArray
-		do
-			local freq_data=${freq_item//-/ }
-			local freq_tmp=""
-			key=$(echo "$freq_data"|awk -F' ' '{print $1}'|xargs -r printf)
-			data=$(echo "$freq_data"|awk -F' ' '{print $2}'|xargs -r printf)
-
-			freq_tmp=$(format_freq_data "$freq" "$key" "$freq_multi")
-			if [ -z "$freq_tmp" ] ;then				
-				if [ "$mobility" == "2" ];then
-					freq_tmp="${key}-"
-				elif [ "$compatibility_work" == "1" ] && [ "$compatibility" == "0" ] && [ "$key" == "nr" -o "$key" == "sa" -o "$key" == "nsa" ];then
-					freq_tmp="$key"-"$(skip_band_data "${data}" "$skip_band")"
-				else					
-					freq_tmp="$freq_item"
-				fi
-			else
-				local cur_band="$freq_tmp"
-				if [ "$freq_tmp" != "0" ];then
-					cur_band="$(sort_band_data "$data" "$freq_tmp")"
-				fi
-				freq_tmp="${key}-${cur_band}"
-			fi
-
-			freq_target=${freq_target:+${freq_target},}${freq_tmp}
-		done
-
-		echo "freq_band:$freq_target"
-		if [ $prefer_do != "1" -o "$freq_target" != "nr-0" ];then
-			[ -z "$freq_target" ] && return 0
-			run_command_retry "$gNet" "freq" "2" "$freq_target" || {
-				echo "freq setting error"
-				return 1
-			}
-		fi
-	fi
-	return 0
-}
-
-while getopts "i:rRdkc:t:m:s:l:L:a:f:uhS" opt; do
-	case "${opt}" in
-		i)
-			gNet=${OPTARG}
-			gNetDefault=0
-			;;
-		r)
-			gReset=1
-			;;
-		R)
-			gReset=2
-			;;
-		d)
-			gDown=1
-			;;
-		k)
-			gUp=1
-			;;
-		c)
-			gCmd=${OPTARG}
-			;;
-		t)
-			gType=${OPTARG}
-			;;
-		s)
-			gSim=${OPTARG}
-			;;
-		S)
-			gSimgpio=1
-			;;
-		u)
-			gUpdate=1
-			;;
-		m)
-			gMode=${OPTARG}
-			;;
-		l)
-			gFreqLock=${OPTARG}
-			;;
-		L)
-			gFreqLockPeak=${OPTARG}
-			;;
-		f)
-			gProcess=${OPTARG}
-			;;
-		a)
-			gAction=${OPTARG}
-			;;			
-		h)
-			usage
-			exit
-			;;
-		\?)
-			usage >&2
-			exit 1
-			;;
-	esac
-done
-
-shift $((OPTIND-1))
-gExternalParam="$@"
-
-if [ "$(check_soc_vendor)" = "quectel_opsdk" ]; then
-	gNetGp="cpe"
-else
-	gNetGp="$gNet"
-fi
-
-gIndex=${gNet##*[A-Za-z]}
-
-if [ "$gIndex" == "0" ];then
-	gIndex=""
-fi
-if [ -n "$gDown" ]; then
-	shutdown_power
-	exit 0
-fi
-if [ -n "$gUp" ]; then
-	keep_power
-	exit 0
-fi
-
-if [ -n "$gReset" ]; then
-	rst_power "$gReset"
-	exit 0
-fi
-
-[ ! -d "$CPESEL_PATH" ] && mkdir -p $CPESEL_PATH
-
-CPESEL_FS="${CPESEL_PATH}/cpesel_fs_${gNet}"
-CPESEL_AT_OK="${CPESEL_PATH}/cpesel_at_ok_${gNet}"
-CPESEL_GPIO_CHANGE="${CPESEL_PATH}/cpesel_gpio_change_${gNet}"
-CPE_USIM_FIRST_DELAY="${CPESEL_PATH}/cpesel_usim_fdelay_${gNet}"
-
-if [ -n "$gAction" -a  -n "$gProcess" ]; then
-	[ ! -d "$CPETOOLS_PATH/${gNet}" ] && mkdir -p $CPETOOLS_PATH/${gNet}	
-	if [ "$gAction" == "exclusive" ];then
-		echo -n $gProcess > $CPETOOLS_PATH/${gNet}/exclusive
-	else
-		rm $CPETOOLS_PATH/${gNet}/exclusive
-	fi
-	log_info "[process lock]update ${gNet}-${gProcess} $gAction"
-	exit 0
-fi
-
-sim_lock_starttime() {
-	case "$1" in ''|*[!0-9]*) return 1 ;; esac
-	[ -r "/proc/$1/stat" ] || return 1
-	sed 's/^.*) //' "/proc/$1/stat" 2>/dev/null | awk '{print $20}'
-}
-
-sim_lock_release() {
-	local _try
-	[ "$(cat "$CPE_SIM_SEL_LOCK/pid" 2>/dev/null)" = "$$" ] || return 0
-	[ "$(cat "$CPE_SIM_SEL_LOCK/starttime" 2>/dev/null)" = "$CPE_SIM_SEL_START" ] || return 0
-	[ "$(cat "$CPE_SIM_SEL_PID" 2>/dev/null)" != "$$" ] || rm -f "$CPE_SIM_SEL_PID"
-	rm -f "$CPE_SIM_SEL_LOCK/pid" "$CPE_SIM_SEL_LOCK/starttime"
-	for _try in 1 2 3; do
-		rmdir "$CPE_SIM_SEL_LOCK" 2>/dev/null && return 0
-		sleep 1
-	done
-	return 1
-}
-
-sim_lock_acquire() {
-	local _pid _start _current
-	CPE_SIM_SEL_START="$(sim_lock_starttime "$$")"
-	[ -n "$CPE_SIM_SEL_START" ] || return 1
-	if ! mkdir "$CPE_SIM_SEL_LOCK" 2>/dev/null; then
-		[ -d "$CPE_SIM_SEL_LOCK" ] && [ ! -L "$CPE_SIM_SEL_LOCK" ] || return 1
-		_pid="$(cat "$CPE_SIM_SEL_LOCK/pid" 2>/dev/null)"
-		_start="$(cat "$CPE_SIM_SEL_LOCK/starttime" 2>/dev/null)"
-		case "$_pid:$_start" in *[!0-9:]*|:*|*:) return 1 ;; esac
-		_current="$(sim_lock_starttime "$_pid")"
-		[ "$_start" != "$_current" ] || ! kill -0 "$_pid" 2>/dev/null || return 1
-		mkdir "$CPE_SIM_SEL_LOCK/reap" 2>/dev/null || return 1
-		if [ "$(cat "$CPE_SIM_SEL_LOCK/pid" 2>/dev/null)" != "$_pid" ] ||
-		   [ "$(cat "$CPE_SIM_SEL_LOCK/starttime" 2>/dev/null)" != "$_start" ] ||
-		   { [ "$(sim_lock_starttime "$_pid")" = "$_start" ] && kill -0 "$_pid" 2>/dev/null; }; then
-			rmdir "$CPE_SIM_SEL_LOCK/reap" 2>/dev/null
-			return 1
-		fi
-		rm -f "$CPE_SIM_SEL_LOCK/pid" "$CPE_SIM_SEL_LOCK/starttime"
-		rmdir "$CPE_SIM_SEL_LOCK/reap" 2>/dev/null || return 1
-		rmdir "$CPE_SIM_SEL_LOCK" 2>/dev/null || return 1
-		mkdir "$CPE_SIM_SEL_LOCK" 2>/dev/null || return 1
-	fi
-	if ! { chmod 700 "$CPE_SIM_SEL_LOCK" &&
-	       printf '%s\n' "$CPE_SIM_SEL_START" > "$CPE_SIM_SEL_LOCK/starttime" &&
-	       printf '%s\n' "$$" > "$CPE_SIM_SEL_LOCK/pid"; }; then
-		rm -f "$CPE_SIM_SEL_LOCK/starttime" "$CPE_SIM_SEL_LOCK/pid"
-		rmdir "$CPE_SIM_SEL_LOCK" 2>/dev/null
-		return 1
-	fi
-	trap sim_lock_release EXIT
-	trap 'exit 1' HUP INT TERM
-	# 保留旧版 cpesel 读取的 PID 文件，但切卡互斥由原子目录锁负责。
-	_pid="$(cat "$CPE_SIM_SEL_PID" 2>/dev/null)"
-	case "$_pid" in
-		''|*[!0-9]*) ;;
-		*) [ ! -d "/proc/$_pid" ] || return 1 ;;
-	esac
-	printf '%s\n' "$$" > "$CPE_SIM_SEL_PID"
-}
-
-if [ -n "$gSim" ]; then
-	CPE_SIM_SEL_PID="/var/run/${gNet}_sim_sel.pid"
-	CPE_SIM_SEL_LOCK="${CPE_SIM_SEL_PID}.lock"
-	case "$gSim" in
-		''|0|*[!0-9]*)
-			log_info "invalid sim number: $gSim"
-			exit 1
-			;;
-	esac
-	sim_lock_acquire || { log_info "switch sim busy or lock incomplete"; exit 1; }
-	log_info "switch sim running: $$"
-	switch_sim "$gSim"
-	_switch_rc=$?
-	exit "$_switch_rc"
-fi
-
-if [ -n "$gCmd" ]; then
-	run_command "$gNet" "$gCmd" "$gType" $@ || exit $?
-	exit 0
-fi
-
-if [ -n "$gUpdate" ]; then
-	update_settings || exit 1
-	exit 0
-fi
-
-if [ -n "$gFreqLock" ]; then
-	update_freq_lock "$gExternalParam" || exit 1
-	exit 0
-fi
-
-if [ -n "$gFreqLockPeak" ]; then
-	update_peakhour_freq_lock "$gExternalParam" || exit 1
-	exit 0
-fi
-EOF_NRADIO_CPEOPT_CPETOOLS
-
-    cat > "$cpeopt_payload_root/usr/bin/cpesel.sh" <<'EOF_NRADIO_CPEOPT_CPESEL'
-#!/bin/ash
-. /lib/netifd/netifd-proto.sh
-gName="cpesel"
-gWait=15
-gMax=
-gCur=
-gModel=
-gMode=
-gIndex=
-gCpeSoc=0
-gRcnt=0
-gDownTimes=4
-gVDownTimes=8
-gVRcnt=0
-gCellularRule=""
-gSimStat=1
-gRegisterCache=0
-
-trap "SimStatus=nocard" USR1
-trap "SimStatus=insert" USR2
-
-usage() {
-	cat <<-EOF
-		usage: $0 OPTION...
-		cpe auto select daemon
-
-		  -w      wait period, use '$gWait' seconds as default
-		  -m      max sim card number
-		  -M      sim switch mode
-		  -b      cpe model block
-		  -c      current sim card number
-	EOF
-}
-gLogMode=$(uci -q get logservice.root.mode)
-
-record_dial_log() {
-	local _log_file="/var/log/nradio-cpe-dial.log"
-	local _log_size=0
-
-	[ -f "$_log_file" ] && _log_size=$(wc -c < "$_log_file" 2>/dev/null)
-	case "$_log_size" in
-		''|*[!0-9]*) _log_size=0 ;;
-	esac
-	[ "$_log_size" -ge 262144 ] && mv -f "$_log_file" "${_log_file}.1"
-	printf '%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "cpesel.sh" "$gCellularRule" "$*" >> "$_log_file"
-}
-
-log_info() {
-	record_dial_log "$*"
-	logger -t "$gName Model ${gIndex}" "$*"
-	if [ "$gLogMode" == "1" ] ;then
-		logclient -i $gName  -l 6 -m "$*"
-	fi
-}
-
-WANCHK_STATUS_DIR="/var/run/wanchk"
-get_wanchk_state()
-{
-	local _iface=
-	_iface=$(uci -q get "network.$1.network_ifname")
-	[ -z "$_iface" ] && _iface="$1"
-
-	status=$(cat $WANCHK_STATUS_DIR/iface_state/$_iface 2>/dev/null)
-
-	if [ "$status" == "down" ];then
-		if [ -f "$WANCHK_STATUS_DIR/iface_state/${_iface}_6" ];then
-			status=$(cat $WANCHK_STATUS_DIR/iface_state/${_iface}_6 2>/dev/null)
-		fi
-	fi
-	
-	echo "$status"
-}
-
-async_sleep() {
-	sleep "$1" &
-	wait $!
-}
-
-is_integer() {
-	local _number="$1"
-	case "$_number" in
-		-*) _number=${_number#-} ;;
-	esac
-	case "$_number" in
-		''|*[!0-9]*) return 1 ;;
-	esac
-	return 0
-}
-
-sim_switch_running() {
-	local _pid_file="/var/run/${gCellularRule}_sim_sel.pid"
-	local _pid
-
-	[ -f "$_pid_file" ] || return 1
-	_pid=$(cat "$_pid_file" 2>/dev/null)
-	case "$_pid" in
-		''|*[!0-9]*) return 1 ;;
-	esac
-	[ -d "/proc/$_pid" ]
-}
-
-get_signal() {
-	local _iface="${gCellularRule}"
-	local _status_data
-	_status_data=$(ubus call infocd cpestatus 2>/dev/null |jsonfilter -e '@.*[@.status.name="'${_iface}'"]')
-	[ -n "$_status_data" ] || return 1
-	json_init
-	json_load "$_status_data" || return 1
-	json_get_vars up uptime
-	json_select "status"
-	json_get_vars rsrp
-	if [ "$up" = "0" ] && is_integer "$uptime" && [ "$uptime" -gt 0 ] && is_integer "$rsrp"; then
-		echo "$rsrp"
-	fi	
-}
-check_threshold(){
-	local _sim=$1
-	local _next=$2
-	enabled=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.enabled)
-	[ "$enabled" == "0" ] && log_info "sim:${_sim} disabled skip,switch" &&  return 1
-	threshold_type=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_type)
-	threshold_data=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_data)
-	threshold_date=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_date)
-	threshold_smds=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_smds)
-	threshold_cds=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_cds)
-	threshold_enabled=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_enabled)
-	threshold_percent=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.threshold_percent)
-	cross_flow=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.cross_flow)
-	cross_datetime=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.cross_datetime)
-	
-	signal=$(uci -q get cpecfg.${gCellularRule}sim${_sim}.signal)
-
-	if [ "$threshold_enabled" != "0" ];then
-		[ -z "$threshold_cds" ] && threshold_cds=0
-		[ -z "$threshold_smds" ] && threshold_smds=0
-
-		if [ "$threshold_type" == "1" ];then	
-			if [ "$cross_datetime" == "1" ];then
-				log_info "sim:${_sim} threshold_date[$threshold_date] cross datetime skip,switch"
-				return 1
-			fi
-			if is_integer "$threshold_data";then
-				if [ "$threshold_data" -gt 0 -a "$cross_flow" = "1" ];then
-					log_info "sim:${_sim} threshold_cds[$threshold_cds][$threshold_data][$threshold_percent%] overflow skip,switch"
-					return 1
-				fi
-			fi
-		else
-			if is_integer "$threshold_data";then
-				if [ "$threshold_data" -gt 0 -a "$cross_flow" = "1" ];then
-					log_info "sim:${_sim} threshold_smds[$threshold_smds][$threshold_data][$threshold_percent%] overflow skip,switch"
-					return 1
-				fi
-			fi
-		fi
-	fi
-	if is_integer "$signal" && [ "$signal" -lt 0 ];then
-		[ "$_next" == "1" ] && return 0
-		_sig=$(get_signal)
-		if ! is_integer "$_sig" || [ "$_sig" -ge 0 ]; then
-			return 0
-		fi
-		if [ "$_sig" -gt "$signal" ];then
-			return 0
-		else
-			log_info "sig:$_sig,signal:$signal,sig is little then signal,switch"
-			return 1
-		fi
-	fi
-	return 0
-}
-check_sim() {
-	local _sim=$1
-	local _next=$2
-	local threshold=
-	local _sig=
-	local _cnt=0
-
-	if check_threshold "$_sim" "$_next" ;then
-		return 0
-	fi
-	return 1
-}
-
-get_next() {
-	local _max=$1
-	local _cur=$2
-	local _i=
-	local error_sim=0
-
-	for _i in $(seq "$((_cur+1))" "$_max") $(seq 1 "$_cur"); do
-		if check_sim "$_i" "1"; then
-			break
-		else
-			error_sim=$((error_sim+1))
-		fi
-	done
-
-	echo "$_i"
-}
-get_register_info(){
-	_info=$(cat "/tmp/infocd/cache/${gCellularRule}_dev" 2>/dev/null |jsonfilter -e '$["parameter"]["vendor"]')
-	if [ -n "$_info" ];then
-		_regstat=$(ubus call infocd cpeinfo "{'name':'$gCellularRule'}")
-		json_load "$_regstat" || return 0
-		json_get_vars STAT MODE SIM name CACHE
-		if [ "$CACHE" == "1" ];then
-			gRegisterCache=1
-		elif [ "$CACHE" == "0" ];then
-			gRegisterCache=0
-		fi
-		if [ "$SIM" == "error" ]; then
-			return 1			
-		elif [ "$STAT" == "unregister" ];then
-			return 2
-		fi
-		return 3
-	fi
-	return 0
-}
-sel_sim() {
-	local _max=$1
-	local _cur=$2
-	local _chkst=$3
-	local _stat=
-	local _stat_f=
-	local _next=
-	local tip_error=0
-	local regiser_err=0
-	local sim_err=0
-	local sim_max=5
-	local regiser_max=10
-	local sleepTime=3
-	local nocard=0
-	if sim_switch_running; then
-		log_info "sim switch busy, skip selection"
-		return 1
-	fi
-	if [ "$_chkst" == "1" ];then
-		if hotplug_check "$_cur" ;then
-			nocard=1
-		fi
-		_stat=$(get_wanchk_state "${gCellularRule}")
-		
-		if [ "$_stat" = "up" ];then
-			gRcnt=0
-		else		
-			while true;do
-				get_register_info
-				result=$?
-				if [ $gRegisterCache -eq 1 ];then
-					sleepTime=10
-					regiser_max=4
-					sim_max=3
-				fi
-				
-				err_max=0
-				if [ $result -eq 1 ];then
-					sim_err=$((sim_err+1))
-					err_max=$sim_max
-					regiser_err=0
-					err_cnt=$sim_err
-					if [ $nocard -eq 1 ];then
-						err_cnt=$err_max
-					fi
-				elif [ $result -eq 2 ];then
-					sim_err=0
-					regiser_err=$((regiser_err+1))
-					err_max=$regiser_max
-					err_cnt=$regiser_err
-				else
-					break
-				fi
-				
-				if [ $err_cnt -ge $err_max ];then
-					tip_error=1
-					_stat_f="down"
-					gRcnt=0
-					if [ $sim_err -gt 0 ];then
-						ubus call cpesel${gIndex} set "{'simno':'sim${_cur}', 'iccid':'none'}" > /dev/null
-						log_info "sim error,check down"
-					else
-						log_info "register error,check down"
-					fi
-					
-					break
-				fi
-				async_sleep $sleepTime
-			done
-			if [ $tip_error -eq 0 -a "$_stat" = "down" ];then
-				gRcnt=$((gRcnt+1))
-				log_info "down times,$gRcnt"
-				if [ $gRcnt -ge $gDownTimes ]; then
-					_stat_f="down"
-					gRcnt=0
-					log_info "check down"
-				fi
-			fi
-		fi
-	fi
-	
-	if (! check_sim "$_cur") || [ "$_chkst" = "1" -a "$_stat_f" = "down" ]; then
-		_next=$(get_next "$_max" "$_cur")
-		gCur="${_next:-${_max}}"
-		if [ "$_cur" = "$gCur" ];then
-			if ! check_sim "$_cur"; then
-				log_info "no valid SIM avaliable"
-			else
-				log_info "restart CPE at SIM$_cur"
-				if [ "$gCpeSoc" = "1" ]; then
-					ubus call quec_diagd set_wan "{'action':'down'}"
-					sleep 2
-					ubus call quec_diagd set_wan "{'action':'up'}"
-				else
-					proto_set_available "${gCellularRule}" 1
-					log_info "proto_set_available true"
-					ifup "${gCellularRule}"
-				fi
-			fi
-			return 1
-		fi
-		log_info "switch from $_cur to $gCur"
-		if ! cpetools.sh -s "$gCur" -i "${gCellularRule}"; then
-			log_info "switch from $_cur to $gCur failed"
-			gCur="$_cur"
-			return 1
-		fi
-		uci -q set cpesel.$gModel.cur="$gCur"
-		uci -q commit cpesel
-		if [ -z "$cellularIndex" -o "$cellularIndex" == "0" ];then
-			log_info "notice kpcped.event"
-			ubus send kpcped.event
-		fi
-		logclient -i custom -m "[module] sim switch to $gCur"
-		return 0
-	fi
-	return 1
-}
-restart_tgt(){
-	log_info "clean 4ginfo"
-	[ -f "/tmp/4ginfo" ] && rm "/tmp/4ginfo"
-}
-
-sel_vsim() {
-	local _sim="$1"
-	local _stat=
-	local _stat_f=
-	local _next=
-	local _vsim=
-	local auto=0
-	local set_data="1"
-	nettype=$(uci -q get "network.${gCellularRule}.nettype")
-	vsim_support=$(uci -q get network.${gCellularRule}.vsim)
-	if [ "$vsim_support" != "1" -o "$nettype" != "cpe" ]; then
-		return 0
-	fi
-
-	_vsim=$(uci -q get cpesel.$gModel.vsim)
-	if [ "$_vsim" == "2" ];then
-		auto=1
-	elif [ "$_vsim" == "1" ];then
-		set_data="0"
-	else
-		set_data="1"
-	fi
-	_vsimstatus=$(cat "/etc/vsim")
-	[ -z "$_vsimstatus" ] && _vsimstatus="1" && echo -n "1" > "/etc/vsim" && restart_tgt
-	if [ $auto -eq 1 ];then
-		set_data="$_vsimstatus"
-		_stat=$(get_wanchk_state "${gCellularRule}")
-		if [ "$_stat" = "down" ];then
-			gVRcnt=$((gVRcnt+1))
-			log_info "down times,$gVRcnt"
-			if [ $gVRcnt -ge $gVDownTimes ]; then
-				_stat_f="down"
-				gVRcnt=0
-				log_info "check down"
-			fi
-		elif [ "$_stat" = "up" ];then
-			gVRcnt=0
-		fi
-
-		if [ "$_stat_f" = "down" ]; then
-			if [ "$_vsimstatus" == "0" ];then
-				set_data="1"
-				log_info "change to Physical SIM"
-			elif [ "$_vsimstatus" == "1" ];then
-				log_info "change to VSIM"
-				set_data="0"
-			fi
-		fi
-	fi
-	if [ "$_vsimstatus" != "$set_data" ];then
-		echo -n "$set_data" > "/etc/vsim"
-		log_info "change to $set_data"
-		restart_tgt
-	fi	
-}
-while getopts "w:c:b:m:M:h" opt; do
-	case "${opt}" in
-		w)
-			gWait=${OPTARG}
-			;;
-		m)
-			gMax=${OPTARG}
-			;;
-		M)
-			gMode=${OPTARG}
-			;;
-		c)
-			gCur=${OPTARG}
-			;;
-		b)
-			gModel=${OPTARG}
-			;;
-		h)
-			usage
-			exit
-			;;
-		\?)
-			usage >&2
-			exit 1
-			;;
-	esac
-done
-shift $((OPTIND-1))
-log_info "service start..."
-
-[ -n "$gModel" ] || gModel="sim"
-gIndex=${gModel##*[A-Za-z]}
-[ -f "/bin/serial_atcmd" ] && gCpeSoc=1
-
-cellular=$(uci -q get network.globals.default_cellular)
-[ -z "$cellular" ] && cellular="cpe"
-cellularIndex=${cellular##*[A-Za-z]}
-if [ "$cellularIndex" == "0" -a -n "$gIndex" ];then
-	gCellularRule="${cellular%%[0-9]*}$gIndex"
-else
-	gCellularRule="${cellular}$gIndex"
-fi
-
-gval=$(uci -q get cpesel.$gModel.gval)
-[ -n "$gCur" ] || gCur=$(uci -q get cpesel.$gModel.cur)
-[ -n "$gCur" ] || gCur="1"
-if [ -n "$gval" ] && ! cpetools.sh -s "$gCur" -i "$gCellularRule"; then
-	log_info "initial sim selection failed: sim$gCur"
-fi
-
-get_sim_gpio_val() {
-	local _sum="$1"
-	local _gval=
-
-	_gval=$(uci -q get cpesel.sim${gIndex}.gval)
-
-	[ -z "$_gval" ] && _gval="01,10,11"
-
-	echo "$_gval"|cut -d, -f "$_sum"
-}
-hotplug_check(){
-	local _cur="$1"
-	if [ "$SimStatus" == "nocard" ];then		
-		async_sleep 1
-	fi
-	if [ "$SimStatus" == "insert" ];then
-		SimStatus=""
-		log_info "hotplug found sim${_cur} insert"
-	elif [ "$SimStatus" == "nocard" ];then
-		SimStatus=""
-		log_info "hotplug found sim${_cur} no card"
-		return 0
-	fi
-	return 1 
-}
-reset_sim(){
-	local _cur="$1"
-	if sim_switch_running; then
-		log_info "sim switch busy, skip reset"
-		return 0
-	fi
-	if hotplug_check "$_cur" ;then
-		cpetools.sh -i "$gCellularRule" -c rstsim
-	fi
-	get_register_info
-	result=$?
-	if [ $result -eq 1 ];then
-		ubus call cpesel${gIndex} set "{'simno':'sim${_cur}', 'iccid':'none'}" > /dev/null
-		cpetools.sh -i "$gCellularRule" -c rstsim
-		if [ $gSimStat -eq 1 ];then
-			gSimStat=0
-			log_info "sim${_cur} no card,ifup $gCellularRule"
-			ifup "$gCellularRule"
-		fi
-	elif [ $result -ne 0 ];then
-		if [ $gSimStat -eq 0 ];then
-			gSimStat=1
-			log_info "sim${_cur} ready,ifup $gCellularRule"
-			ifup "$gCellularRule"
-		fi
-	fi
-}
-
-if [ -z "$gMax" -o "$gMode" == "1" ]; then
-	while true; do
-		check_threshold "$gCur"		
-		sel_vsim "$gCur"
-		reset_sim "$gCur"
-		async_sleep "$gWait"
-	done
-fi
-
-sel_sim "$gMax" "$gCur" "0"
-
-sel_sim_res=1
-while true; do
-	if [ $sel_sim_res -eq 1 ];then 
-		async_sleep "$gWait"
-	else
-		async_sleep "3"
-	fi
-	
-	sel_sim "$gMax" "$gCur" "1"
-	sel_sim_res=$?
-done
-EOF_NRADIO_CPEOPT_CPESEL
-
-    cat > "$cpeopt_payload_root/etc/cpetools/generic.sh" <<'EOF_NRADIO_CPEOPT_GENERIC'
-#!/bin/ash
-
-waitfor=0
-sleep_pid="/tmp/cpetools_tmp_wait_pid"
-subwait(){
-	sleep $waitfor &
-	commandwaitpid=$!
-	echo "$commandwaitpid" > $sleep_pid
-	commandpid=$1
-	wait $commandwaitpid
-	[ -d "/proc/$commandpid" ] && kill -9 $commandpid >/dev/null 2>&1
-}
-
-do_job(){
-	local _lockf="${CPE_LOCK_PATH}/${gName}_${gNet}.lock"
-	lock "$_lockf"
-	$command &
-	commandpid=$!
-	$(subwait "$commandpid")&
-	wait $commandpid >/dev/null 2>&1
-	commandwaitpid=$(cat $sleep_pid)
-	[ -n "$commandwaitpid" -a -d "/proc/$commandwaitpid" ] && kill -9 $commandwaitpid  >/dev/null 2>&1
-	rm  $sleep_pid
-	lock -u "$_lockf"
-}
-
-job_timeout()
-{
-	command=$*
-	echo_str=$(do_job)
-	echo "$echo_str"
-}
-
-check_soc_vendor() {
-	if [ -f "/usr/sbin/atcmd" ]; then
-		echo "tdtech"
-	elif [ -f "/bin/serial_atcmd" ]; then
-		echo "quectel_ysdk"
-	elif [ -f "/usr/bin/qlnet" ]; then
-		echo "quectel_opsdk"
-	else
-		mode=$(uci -q get network.$gNet.mode)
-		if [ "$mode" == "cloud" ];then
-			echo "simcom"
-		else
-			echo "nradio"
-		fi
-	fi
-}
-
-_command_atcmd_nradio() {
-	/usr/sbin/atsd_cli -i "$1" -c "$2" ${3:+-w "$3"} ${4:+-W "$4"} -L 1
-}
-
-_command_atcmd_quectel() {
-	atsd_cli -i "$1" -c "$2" ${3:+-w "$3"} ${4:+-W "$4"}
-	# local _cmds="$2"
-	# local _cmd
-
-	# for _cmd in $(echo "$_cmds"|sed 's/|/ /g'); do
-	# 	/bin/serial_atcmd "$_cmd"
-	# done
-}
-
-_command_atcmd_tdtech() {
-	local _cmds="$2"
-	local _timeout="$3"
-	local _cmd
-
-	for _cmd in $(echo "$_cmds"|sed 's/|/ /g'); do
-		if [ -n "$_timeout" ];then
-			ubus -t$_timeout call atcmd exec "{\"atcmd\": \"$_cmd\",\"timeout\": $_timeout}" | jsonfilter -e '@.result'
-		else
-			atsh "$_cmd"
-		fi
-	done
-
-}
-
-_command_atcmd_simcom() {
-	if ! echo "$2"|grep -E "^AT+"; then
-		/usr/sbin/simcom_http_cli -i "$1" -c "$2" ${3:+-p "$3"}
-	fi
-}
-
-_command_exec_raw() {
-	local _tty
-	local _cmd
-	local _res
-	local _exec
-	local _vendor
-
-	_tty="$1"
-	_cmd="$2"
-	_lto="$3"
-	_block="$4"
-
-	_vendor=$(check_soc_vendor)
-	_exec="_command_atcmd_${_vendor%%_*}"
-
-	if [ -n "$_lto" ]; then
-		if [ "$_vendor" == "tdtech" ];then
-			_res=$("$_exec" "$gNet" "$_cmd" $_lto "$_block")
-		else
-			if [ "$_vendor" == "simcom" ];then
-				_res=$("$_exec" "$gNet" "$_cmd" "$_lto")
-			else
-				_res=$("$_exec" "$gNet" "$_cmd" $((_lto*1000)) "$_block")
-			fi
-		fi
-	else
-		local odu_model=$(uci -q get network.${gNet}.odu_model)
-		if [ "$odu_model" != "NRFAMILY" ];then
-			_res=$("$_exec" "$gNet" "$_cmd" "" "$_block")
-		fi
-	fi
-
-	echo "$_res"|tr -s '\n\n' '\r\n'|tr -s '\r\n\r\n' '\r\n'
-}
-
-_command_exec() {
-	if [ -n "$5" ];then
-		_command_exec_raw "$1" "$3$2$4" "$6"| grep "$5"
-	else
-		_command_exec_raw "$1" "$3$2$4" "$6"| grep "$2:"
-	fi
-}
-
-
-_command_generic_exec_expect() {
-	_command_exec "$1" "$2" "$AT_GENERIC_PREFIX" "$3" "$4"
-}
-
-_command_generic_exec() {
-	_command_exec "$1" "$2" "$AT_GENERIC_PREFIX" "$3" "" "$5"
-}
-
-_command_private_exec() {
-	_command_exec "$1" "$2" "$AT_PRIVATE_PREFIX" "$3"
-}
-
-_command_private_generic_exec() {
-	_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}$2$3" | grep "OK"
-}
-
-_command_convert_rssi() {
-	local _rssi="$1"
-
-	if [ "$_rssi" -eq 99 ]; then
-		echo "Unknown"
-	else
-		echo $((-113+_rssi*2))
-	fi
-}
-
-_command_convert_access_technology() {
-	local _act="$1"
-
-	if [ "$_act" -lt 4 ]; then
-		echo "GSM"
-	elif [ "$_act" -lt 7 ]; then
-		echo "WCDMA"
-	elif [ "$_act" -eq 7 ]; then
-		echo "LTE"
-	elif [ "$_act" -eq 13 ]; then
-		echo "NR"
-	else
-		echo "Unknown"
-	fi
-}
-
-_command_convert_ber() {
-	echo "$1"
-}
-
-_command_generic_cereg() {
-	local _ctl="$1"
-	local _info="$2"
-	local _n _stat _act
-
-	[ -z "$_info" ] && echo "{}" && return 0
-	_n="$(echo "$_info"|cut -d, -f1|xargs -r printf)"
-	_stat="$(echo "$_info"|cut -d, -f2|xargs -r printf)"
-
-	if [ "$_n" != "2" ]; then
-		_command_generic_exec "$_ctl" "CEREG" "=2"
-	fi
-
-	json_init
-	if [ "$_stat" = "1" ] || [ "$_stat" = "5" ] || [ "$_stat" = "4" ]; then
-		json_add_string "STAT" "register"
-		if [ "$_stat" != "4" ]; then
-			_act="$(echo "$_info"|cut -d, -f5)"
-			if [ "$_act" -ge 10 ] && [ "$_act" -lt 15 ]; then
-				json_add_string "MODE" "NR"
-			elif [ "$_act" -ge 4 ] && [ "$_act" -le 7 ] || [ "$_act" -ge 15 ]; then
-				json_add_string "MODE" "LTE"
-			fi
-		fi
-	else
-		json_add_string "STAT" "unregister"
-	fi
-	json_dump
-	json_cleanup
-}
-
-_command_generic_c5greg() {
-	local _info="$1"
-	local _stat _act
-
-	[ -z "$_info" ] && echo "{}" && return 0
-	_stat="$(echo "$_info"|cut -d, -f2|xargs -r printf)"
-
-	json_init
-	if [ "$_stat" = "1" ] || [ "$_stat" = "5" ]; then
-		json_add_string "STAT" "register"
-	else
-		json_add_string "STAT" "unregister"
-	fi
-	json_dump
-	json_cleanup
-}
-
-generic_convert_csq() {
-	local _info="$1"
-
-	json_init
-	json_add_string "RSSI" "$(_command_convert_rssi "$(echo "$_info"|cut -d, -f1)")"
-	json_add_string "BER" "$(_command_convert_ber "$(echo "$_info"|cut -d, -f2)")"
-	json_dump
-	json_cleanup
-}
-
-generic_convert_cops() {
-	local _info="$1"
-
-	json_init
-	json_add_string "OPER" "$(echo "$_info"|cut -d, -f3|tr -d '"')"
-	json_add_string "ACT" "$(_command_convert_access_technology "$(echo "$_info"|cut -d, -f4)")"
-	json_dump
-	json_cleanup
-}
-
-command_generic_signal() {
-	local _res _info
-
-	_res=$(_command_generic_exec "$1" "CSQ")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F: '{print $2}')"
-
-	generic_convert_csq "$_info"
-}
-
-command_generic_number() {
-	local _res _info
-
-	_res=$(_command_generic_exec "$1" "CNUM")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F: '{print $2}')"
-
-	echo "$_info"|cut -d, -f2|sed 's/"//g'
-}
-
-
-command_generic_network() {
-	local _res _info
-
-	_res=$(_command_generic_exec "$1" "COPS" "?")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F: '{print $2}')"
-
-	json_init
-	json_add_int "CONTROL" "$(echo "$_info"|cut -d, -f1)"
-	json_add_int "FORMAT" "$(echo "$_info"|cut -d, -f2)"
-	json_add_string "INFO" "$(echo "$_info"|cut -d, -f3)"
-	json_add_int "MODE" "$(echo "$_info"|cut -d, -f4)"
-	json_dump
-	json_cleanup
-}
-
-generic_validate_number_len() {
-	local _str=$1
-	local _min=$2
-	local _max=$3
-
-	if ! echo "$_str"|grep -E "^[0-9]{$_min,$_max}$"; then
-		echo "none"
-	fi
-}
-
-generic_validate_char_len() {
-	local _str=$1
-	local _min=$2
-	local _max=$3
-
-	if ! echo "$_str"|grep -m1 -E "^[0-9A-Za-z]{$_min,$_max}$"; then
-		echo "none"
-	fi
-}
-
-generic_validate_imsi() {
-	generic_validate_number_len "$1" 14 15
-}
-
-generic_validate_imei() {
-	generic_validate_number_len "$1" 15 15
-}
-
-generic_validate_iccid() {
-	generic_validate_char_len "$1" 19 22
-}
-
-command_generic_imsi() {
-	local _res
-
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CIMI")
-	[ -z "$_res" ] && return 1
-
-	echo "$_res"|grep "CIMI" -A2|grep -E '^[0-9].*$'|xargs -r printf
-}
-
-command_generic_imei() {
-	local _res
-
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGSN")
-	[ -z "$_res" ] && return 1
-
-	echo "$_res"|grep "CGSN" -A2|grep -E '^[0-9].*$'|xargs -r printf
-}
-
-command_generic_iccid() {
-	local _res _info
-
-	_res=$(_command_generic_exec "$1" "ICCID")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F: '{print $2}')"
-
-	echo "$_info"|xargs -r printf
-}
-
-command_generic_imsfmt(){
-	local _ctl="$1"
-	local _data
-	local _res
-	local _val_cmgf="0"
-
-	_res=$(_command_generic_exec "$_ctl" "CMGF" "?")
-	if [ -n "$_res" ];then
-		_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-		if [ -n "$_data" ];then
-			echo  "get CMGF :$_data"
-			if [ "$_data" != "$_val_cmgf" ]; then
-				echo  "CMGF :set"
-				_command_generic_exec "$_ctl" "CMGF" "=$_val_cmgf"
-				return 0
-			fi
-		fi
-	fi
-	return 1
-}
-
-command_generic_imsreport(){
-	local _ctl="$1"
-	local _data
-	local _res
-	local _val_cmgf="2,1,2,2,0"
-
-	_res=$(_command_generic_exec "$_ctl" "CNMI" "?")
-	if [ -n "$_res" ];then
-		_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-		if [ -n "$_data" ];then
-			echo  "get CNMI :$_data"
-			if [ "$_data" != "$_val_cmgf" ]; then
-				echo  "CNMI :set $_val_cmgf"
-				_command_generic_exec "$_ctl" "CNMI" "=$_val_cmgf"
-				return 0
-			fi
-		fi
-	fi
-	return 1
-}
-
-command_generic_imssetstorage(){
-	local _ctl="$1"
-	local _data
-	local _res
-	local _val_cmgf="\"ME\",\"ME\",\"ME\""
-	local max_try=5
-	local error_response=0
-	while true;do
-		_res=$(_command_generic_exec "$_ctl" "CPMS" "?")
-		if [ -n "$_res" ];then
-			_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-			if [ -n "$_data" ];then
-				echo  "get CPMS :$_data"
-				if echo "$_data" |grep -qEw "SM"; then
-					echo  "CPMS :set $_val_cmgf"
-					_res=$(_command_generic_exec "$_ctl" "CPMS" "=$_val_cmgf")
-					if [ -n "$_res" ];then
-						return 0
-					fi
-				fi
-			fi
-			break
-		fi
-		echo  "CPMS :get error $error_response"
-		error_response=$((error_response+1))
-		if [ $error_response -gt $max_try ];then
-			break
-		fi
-		sleep 1
-	done
-
-	return 1
-}
-
-command_generic_cleanims(){
-	local _ctl="$1"
-	local _data
-	local _res
-	local _val_cmgf="\"ME\",\"ME\",\"ME\""
-
-	_res=$(_command_generic_exec "$_ctl" "CPMS" "?")
-	if [ -n "$_res" ];then
-		_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-		if [ -n "$_data" ];then
-			echo  "get CPMS :$_data"
-			if echo "$_data" |grep -qEw "SM"; then
-				echo  "CPMS :set $_val_cmgf"
-				_res=$(_command_generic_exec "$_ctl" "CPMS" "=$_val_cmgf")
-			fi
-			_res=$(_command_generic_exec "$_ctl" "CMGD" "=1,4")
-		fi
-	fi
-	return 0
-}
-
-command_generic_cleancurims(){
-	local _res
-	local _code=-2
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMGD=1,4")
-	if echo "$_res"|grep -qEw "OK"; then
-		_code=0
-	fi
-
-	json_init
-	json_add_int "code" $_code
-
-	json_dump
-	json_cleanup
-	return $_code
-}
-
-_check_simslot(){
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	local simStype=$(uci -q get "cpesel.sim${gIndex}.stype")
-	local _force_ims=$(uci -q get cpecfg.${gNet}sim${simIndex}.force_ims)
-	local _stype="0"
-
-	if [ -n "$simStype" ];then
-		_stype=$(echo "$simStype"|cut -d, -f "$simIndex")
-	fi
-	echo  "simtype:$_stype,_force_ims:$_force_ims"
-	if [ "$_stype" == "0" ];then
-		if [ "$_force_ims" == "1" ];then
-			return 0
-		elif [ "$_force_ims" == "0" ];then
-			return 1
-		fi
-
-		return 1
-	fi
-	return 1
-}
-
-command_generic_smsnum() {
-	local _res _info
-
-	_res=$(_command_generic_exec "$1" "CSCA" "?")
-	[ -z "$_res" ] && return 1
-	_info="$(echo "$_res"|awk -F: '{print $2}'|xargs -r printf)"
-	_info="$(echo "$_info"|awk -F',' '{print $1}'|sed -e 's/\"//g'|sed -e 's/ //g')"
-
-	echo -n "$_info"
-}
-
-command_generic_smsstorage() {
-	local _res _info
-	json_init
-
-	_res=$(_command_generic_exec "$1" "CPMS" "?")
-	if [ -n "$_res" ];then
-		_info="$(echo "$_res"|awk -F: '{print $2}'|xargs -r printf)"
-		_type="$(echo "$_info"|awk -F',' '{print $1}'|sed -e 's/\"//g'|sed -e 's/ //g')"
-		_used="$(echo "$_info"|awk -F',' '{print $2}')"
-		_total="$(echo "$_info"|awk -F',' '{print $3}'|sed -e 's/\"//g'|sed -e 's/ //g')"
-		if [ "$_type" == "ME" -o "$_type" == "MT" ];then
-			_type="ME"
-		fi
-		json_add_string "type" "$_type"
-		json_add_string "used" "$_used"
-		json_add_string "total" "$_total"
-	fi
-
-	json_dump
-	json_cleanup
-	return 0
-}
-
-command_generic_sms_send(){
-	local _ctl="$1"
-	local _sendmsg_len="$2"
-	local _sendmsg="$3"
-	local _raw_res=""
-	local _index=""
-	local _code=1
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_driver=$(echo "$_info"|jsonfilter -e '$["driver"]')
-	_revision="$(uci -q get "cellular_init.$gNet.version")"
-	json_init
-	#send immediately
-	#_command_generic_exec "$1" "CMGS" "=$_sendmsg_len>$_sendmsg"
-
-	#write ,then send
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ] || [ "$_alias" == "mt5700" -a "$_driver" != "odu" ] || [ "$_alias" == "mt5700" -a "$_revision" != "21C20B563S000C000" ];then
-		_raw_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMGW=$_sendmsg_len\r$_sendmsg")
-	else
-		_raw_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMGW=$_sendmsg_len>$_sendmsg")
-	fi
-	[ -n "$_raw_res" ] && {
-		if echo "$_raw_res"|grep -qEw "322"; then
-			_code=2
-		else
-			if echo "$_raw_res"|grep -qEw "OK"; then
-				_index=$(echo "$_raw_res"|awk -F: '{print $2}'|xargs -r printf)
-			fi
-		fi
-	}
-	if [ -n "$_index" ];then
-		_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMSS=$_index")
-		if echo "$_res"|grep -qEw "OK"; then
-			_code=0
-		fi
-	fi
-	json_add_int "code" $_code
-	json_add_string "index" "$_index"
-	json_dump
-	json_cleanup
-}
-
-command_generic_sms_sendm(){
-	local _ctl="$1"
-	local _sendid="$2"
-	local _res=""
-	local _code=1
-
-	json_init
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMSS=$_sendid")
-	if echo "$_res"|grep -qEw "OK"; then
-		_code=0
-	fi
-
-	json_add_string "index" "$_sendid"
-	json_add_int "code" $_code
-
-	json_dump
-	json_cleanup
-}
-
-command_generic_sms_del(){
-	local _ctl="$1"
-	local _del_file="$2"
-	local _res=""
-	local _code=0
-
-	json_init
-	json_add_array "smsdel"
-	local _del_ids=$(cat $_del_file)
-	local _del_ids_array=${_del_ids//,/ }
-	for id in $_del_ids_array
-	do
-		local code=1
-		if [ -n "$id" ];then
-			_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMGD=$id")
-			if echo "$_res"|grep -qEw "OK"; then
-				code=0
-			elif echo "$_res"|grep -qEw "321"; then
-				code=2
-			else
-				_code=1
-			fi
-			json_add_object
-			json_add_string "index" "$id"
-			json_add_int "code" $code
-			json_close_object
-		fi
-	done
-	json_close_array
-	json_add_int "code" $_code
-
-	json_dump
-	json_cleanup
-
-	return 0
-}
-
-command_generic_sms_read(){
-	local _ctl="$1"
-	local _read_ids="$2"
-	local _res=""
-
-	json_init
-	json_add_array "smsread"
-	local _read_ids_array=${_read_ids//,/ }
-	for _id in $_read_ids_array
-	do
-		if [ -n "$_id" ];then
-			_raw_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMGR=$_id")
-			_cnt=$(echo "$_raw_res"|wc -l)
-			i=0
-
-			while [ $i -lt $_cnt ];do
-				i=$((i+1))
-				line=$(echo "$_raw_res" |sed -n "${i}p")
-				if [ -n "$line" ];then
-					if echo "$line"|grep -q "+CMGR:" ;then
-						i=$((i+1))
-						sms_info="$(echo "$line"|awk -F: '{print $2}')"
-						stat="$(echo "$sms_info"|awk -F, '{print $1}'|sed 's/ //g')"
-						alpha="$(echo "$sms_info"|awk -F, '{print $2}'|sed 's/ //g')"
-						length="$(echo "$sms_info"|awk -F, '{print $3}'|sed 's/ //g'|xargs -r printf)"
-						sms_data=$(echo "$_raw_res" |sed -n "${i}p"|xargs -r printf)
-						json_add_object
-						json_add_string "index" "$_id"
-						json_add_string "stat" "$stat"
-						json_add_string "length" "$length"
-						json_add_string "sms_data" "$sms_data"
-						json_close_object
-					fi
-				fi
-			done
-		fi
-	done
-	json_close_array
-	json_dump
-	json_cleanup
-
-	return 0
-}
-
-_command_generic_sms(){
-	local _ctl="$1"
-	local _raw_res=""
-	local type="$2"
-	local _code=-1
-
-	json_init
-
-	_raw_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CMGL=$type" 8)
-
-	_cnt=$(echo "$_raw_res"|wc -l)
-	if echo "$_raw_res"|grep -q "OK" ;then
-		_code=0
-	fi
-
-	json_add_array "smslist"
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_raw_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			if echo "$line"|grep -q "+CMGL:" ;then
-				i=$((i+1))
-				sms_info="$(echo "$line"|awk -F: '{print $2}')"
-				index="$(echo "$sms_info"|awk -F, '{print $1}'|sed 's/ //g')"
-				stat="$(echo "$sms_info"|awk -F, '{print $2}'|sed 's/ //g')"
-				alpha="$(echo "$sms_info"|awk -F, '{print $3}'|sed 's/ //g')"
-				length="$(echo "$sms_info"|awk -F, '{print $4}'|sed 's/ //g'|xargs -r printf)"
-				sms_data=$(echo "$_raw_res" |sed -n "${i}p"|xargs -r printf)
-				if [ -z "$sms_data" ];then
-					i=$((i+1))
-					sms_data=$(echo "$_raw_res" |sed -n "${i}p"|xargs -r printf)
-				fi
-				_code=0
-				json_add_object
-				json_add_string "index" "$index"
-				json_add_string "stat" "$stat"
-				json_add_string "length" "$length"
-				json_add_string "sms_data" "$sms_data"
-				json_close_object
-			fi
-		fi
-	done
-
-	json_close_array
-	json_add_int "code" $_code
-	json_dump
-	json_cleanup
-	return 0
-}
-
-command_generic_sms_new(){
-	local _ctl="$1"
-	_command_generic_sms "$_ctl" "0"
-}
-
-command_generic_sms(){
-	local _ctl="$1"
-	_command_generic_sms "$_ctl" "4"
-}
-
-command_generic_basic() {
-	local _ctl="$1"
-	local _info="$2"
-	local _res _imei _imsi _iccid _mode _model _revision
-	local _cmd
-
-	_model="$(uci -q get "cellular_init.$gNet.model")"
-	_revision="$(uci -q get "cellular_init.$gNet.version")"
-	_imei="$(uci -q get "cellular_init.$gNet.imei")"
-
-	_cmd="${AT_GENERIC_PREFIX}CIMI|${AT_GENERIC_PREFIX}ICCID"
-
-	_res=$(_command_exec_raw "$_ctl" "$_cmd")
-	[ -z "$_res" ] && return 1
-	_imsi="$(echo "$_res"|grep 'CIMI' -A2|sed -n '2p'|xargs -r printf)"
-	_iccid="$(echo "$_res"|grep 'ICCID:'|awk -F' ' '{print $2}')"
-
-
-	json_init
-	json_add_string "MODE" "$_mode"
-	json_add_string "IMEI" "$_imei"
-	json_add_string "IMSI" "$_imsi"
-	json_add_string "ICCID" "$_iccid"
-	json_add_string "MODEL" "$_model"
-	json_add_string "REVISION" "$_revision"
-	json_dump
-	json_cleanup
-}
-
-command_generic_nroff() {
-	return 0
-}
-
-command_generic_allmode() {
-	return 0
-}
-
-command_generic_register() {
-	local _ctl="$1"
-	local _res _cereg _c5greg
-	local _cmd
-
-	_res=$(command_generic_cpin "$_ctl")
-	if echo "$_res"|grep -qEw "3"; then
-		echo "SIM NOT READY"
-		return 1
-	fi
-
-	_cmd="${AT_GENERIC_PREFIX}CEREG?|${AT_GENERIC_PREFIX}C5GREG?"
-
-	_res=$(_command_exec_raw "$_ctl" "$_cmd")
-	[ -z "$_res" ] && return 1
-
-	_cereg="$(_command_generic_cereg "$_ctl" "$(echo "$_res"|grep "CEREG:"|awk -F: '{print $2}')")"
-	_c5greg="$(_command_generic_c5greg "$(echo "$_res"|grep "C5GREG:"|awk -F: '{print $2}')")"
-
-	if [ "$(echo "$_c5greg"|jsonfilter -e "\$['STAT']")" = "register" ]; then
-		echo "register, NR"
-	elif [ "$(echo "$_cereg"|jsonfilter -e "\$['MODE']")" = "NR" ]; then
-		echo "register, NR"
-	elif [ "$(echo "$_cereg"|jsonfilter -e "\$['MODE']")" = "LTE" ]; then
-		echo "register, LTE"
-	else
-		echo "unregister"
-	fi
-
-	return 0
-}
-
-command_generic_cpin() {
-	local _res
-	local _code
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CPIN?" "1")
-	[ -z "$_res" ] && return 1
-
-	echo "$_res" |while read line
-	do
-		if echo "$line" |grep -q "READY" ;then
-			echo 0
-		elif echo "$line"  |grep -q "SIM PIN" ;then
-			echo 1
-		elif echo "$line"  |grep -q "SIM PUK" ;then
-			echo 2
-		elif echo "$line"  |grep -q "ERROR" ; then
-			_code=$(echo "$line" |awk -F ' ' '{print $3}')
-			echo "3 $_code"
-		fi
-	done
-}
-
-command_generic_qpinc() {
-	local _res
-	local _pin_left
-	local _puk_left
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}QPINC?")
-	[ -z "$_res" ] && return 1
-
-	echo "$_res" |while read line
-	do
-		if echo "$line" |grep -q "SC" ;then
-			_pin_left=$(echo "$line" |awk -F ',' '{print $2}')
-			_puk_left=$(echo "$line" |awk -F ',' '{print $3}')
-			echo "$_pin_left $_puk_left"
-		fi
-	done
-}
-
-command_generic_clck() {
-	local _res _info
-	_res=$(_command_generic_exec "$1" "CLCK" "=\"SC\",2")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F: '{print $2}')"
-	echo $_info
-}
-
-command_generic_preinit() {
-    return 0
-}
-
-command_generic_pdptype(){
-	local cid="$2"
-	local pdptype="$3"
-	[ -z "$cid" ] && return
-	[ -z "$pdptype" ] && return
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT?")
-	[ -z "$_res" ] && return 1
-	pdptype=$(echo $pdptype | tr 'a-z' 'A-Z')
-	echo "$_res" |while read line
-	do
-		if echo "$line" |grep -q "+CGDCONT:" ;then
-			_info="$(echo "$line"|awk -F: '{print $2}')"
-			_cur_cid="$(echo "$_info"|awk -F, '{print $1}'|sed 's/ //g')"
-			_cur_pdptype="$(echo "$_info"|awk -F, '{print $2}'|sed 's/"//g')"
-			_cur_pdptype=$(echo $_cur_pdptype | tr 'a-z' 'A-Z')
-			if [ "$cid" == "$_cur_cid" ];then
-				if [ "$_cur_pdptype" != "$pdptype" ];then
-					_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT=$cid,\"$pdptype\""
-					command_generic_reset "$1"
-				fi
-				break
-			fi
-		fi
-	done
-}
-_command_format_ip(){
-	_ip="$1"
-	_ip_len=0
-	[ -n "$_ip" ] && _ip_len=${#_ip}
-
-	if [ $_ip_len -gt 15 ] && echo "$_ip"|grep -sq "\.";then
-		local ipArray=${_ip//./ }
-		for ip_item in $ipArray
-		do
-			_odd=$((_odd+1))
-			if [ -n "$ip_hex" -a $((_odd%2)) -eq 1 ];then
-				ip_hex="${ip_hex}:$(printf %x $ip_item)"
-			else
-				ip_hex="${ip_hex}$(printf %02x $ip_item)"
-			fi
-		done	
-		_ip="$ip_hex"
-	fi
-	echo "$_ip"
-}
-command_generic_ipaddr(){
-	local cid="$2"
-	[ -z "$cid" ] && return 1
-
-	_res=$(_command_generic_exec "$1" "CGPADDR" "=$cid")
-	[ -z "$_res" ] && return 1
-
-	_ip=$(echo "$_res"|awk -F, '{print $2}'|sed 's/\"//g'|xargs -r printf)
-	_ip6=$(echo "$_res"|awk -F, '{print $3}'|sed 's/\"//g'|xargs -r printf)
-	
-	_odd=0
-	ip_hex=""
-	
-	_ip=$(_command_format_ip "$_ip")
-	_ip6=$(_command_format_ip "$_ip6")
-	if echo "$_ip"|grep -sq ":";then
-		_ip6="$_ip"
-		_ip=""
-	fi
-	json_init
-	json_add_string "IPV4" "$_ip"
-	json_add_string "IPV6" "$_ip6"
-	json_dump
-	json_cleanup
-	return 0
-}
-command_generic_ips(){
-	local _ctl="$1"
-	echo $(command_generic_ipaddr "$_ctl" "1")
-}
-
-command_generic_cimi() {
-	local _res
-	local _code=0
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CIMI")
-	[ -z "$_res" ] && return 1
-	echo "$_res" |while read line
-	do
-		if echo "$line" |grep -q "CIMI" ;then
-			_code=$((_code+1))
-		elif [ $_code -gt 0 ];then
-			echo $line
-			break
-		fi
-	done
-}
-
-command_generic_reboot(){
-	_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=1,1" 2
-}
-
-command_generic_wait_ok(){
-	local _ctl="$1" _cmd="$2" _attempt=0 _res
-	while [ "$_attempt" -lt 10 ]; do
-		_attempt=$((_attempt+1))
-		sleep 1
-		_res=$(_command_exec_raw "$_ctl" "$_cmd" 2)
-		echo "$_res"
-		echo "$_res" | grep -qsw "OK" && return 0
-	done
-	return 1
-}
-
-command_generic_reset(){
-	sleep 1
-	_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=0" 7
-	command_generic_cfun_o "$1"
-}
-
-command_generic_ate1(){
-	command_generic_wait_ok "$1" "ATE1"
-}
-command_generic_cfun_c(){
-	sleep 1
-	_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CFUN=0" 2
-}
-
-command_generic_cfun_o(){
-	if command_generic_wait_ok "$1" "${AT_GENERIC_PREFIX}CFUN=1"; then
-		return 0
-	fi
-	cpetools.sh -R -i "$gNet"
-	return 1
-}
-
-command_generic_get_cfun(){
-	local _res _info
-	_res=$(_command_generic_exec "$1" "CFUN" "?")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F: '{print $2}'|sed 's/ //g'|xargs -r printf)"
-	echo $_info
-	return 0
-}
-
-
-command_generic_version(){
-	local _ctl="$1"
-	local _model
-	local _res
-	local _cmd="ATI"
-
-	_res=$(_command_exec_raw "$_ctl" "$_cmd")
-	[ -z "$_res" ] && return 1
-	_revision="$(echo "$_res"|grep 'Revision:'|awk -F' ' '{print $2}')"
-
-	echo "$_revision"
-}
-command_generic_recovery_cops(){
-	local res="" control _attempt=0
-	while [ "$_attempt" -lt 10 ]; do
-		_attempt=$((_attempt+1))
-		res=$(command_generic_network "$1")
-		if [ -n "$res" ];then
-			control=$(echo "$res"|jsonfilter -e "\$['CONTROL']")
-			if [ "$control" != "0" ];then
-				_command_generic_exec "$1" "COPS" "=0"
-			else
-				return 0
-			fi
-		fi
-		sleep 1
-	done
-	return 1
-}
-
-check_apn_disable()
-{
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	[ -z "$simIndex" ] && simIndex="1"
-	local apn_cfg=$(uci -q get "cpecfg.${gNet}sim$simIndex.apn_cfg")
-	if [ -n "$apn_cfg" ];then
-		local custom_apn=$(uci -q get "apn.$apn_cfg.custom_apn")
-		if [ "$custom_apn" != "1" ];then
-			return 0
-		fi
-	else
-		local custom_apn=$(uci -q get "cpecfg.${gNet}sim$simIndex.custom_apn")
-		local apn=$(uci -q get "cpecfg.${gNet}sim$simIndex.apn")
-		if [ "$custom_apn" != "1" -a -n "$apn" ];then
-			return 0
-		fi
-		if [ -f "/tmp/${gNet}sim${simIndex}_remove_apn" ];then
-			rm "/tmp/${gNet}sim${simIndex}_remove_apn"
-			return 0
-		fi
-	fi
-	return 1
-}
-
-_command_check_plmn_equal(){
-	local _isp="$1"
-	local _isp2="$2"
-	_cmp_info=$(ubus call infocd plmn_cmp "{\"plmn1\":\"$_isp\",\"plmn2\":\"$_isp2\"}")
-	_equal=$(echo "$_cmp_info"|jsonfilter -e '$["equal"]')
-
-	if [ "$_equal" == "1" ];then
-		return 0
-	fi
-	return 1
-}
-EOF_NRADIO_CPEOPT_GENERIC
-
-    cat > "$cpeopt_payload_root/etc/cpetools/huawei.sh" <<'EOF_NRADIO_CPEOPT_HUAWEI'
-#!/bin/ash
-
-_command_huawei_mode_convert() {
-	local _mode _res
-	_mode="$1"
-	_res="Unknown"
-	case "$_mode" in
-		"1")
-			_res="GSM"
-			;;
-		"2")
-			_res="CDMA"
-			;;
-		"3")
-			_res="WCDMA"
-			;;
-		"4")
-			_res="TD-SCDMA"
-			;;
-		"6")
-			_res="LTE"
-			;;
-		"7")
-			_res="NR"
-			;;
-	esac
-	echo "$_res"
-}
-
-_command_huawei_rsrp_convert() {
-	local _val
-	_val="$1"
-	[ "$_val" -eq 255 ] && echo -n "255" && return
-	[ "$_val" -gt 97 ] && echo -n "-44" && return
-	[ "$_val" -eq 0 ] && echo -n "-140" && return
-	echo "$_val"|awk '{print -44-(97-$1)}'
-}
-
-_command_huawei_sinr_convert() {
-	local _val
-	_val="$1"
-	[ "$_val" -eq 255 ] && echo -n "255" && return
-	[ "$_val" -gt 251 ] && echo -n "30" && return
-	[ "$_val" -eq 0 ] && echo -n "-20" && return
-	echo "$_val"|awk '{print 30-(251-$1)*0.2}'
-}
-
-_command_huawei_rsrq_convert() {
-	local _val
-	_val="$1"
-	[ "$_val" -eq 255 ] && echo -n "255" && return
-	[ "$_val" -gt 34 ] && echo -n "-3" && return
-	[ "$_val" -eq 0 ] && echo -n "-19.5" && return
-	echo "$_val"|awk '{print -3-(34-$1)*0.5}'
-}
-
-_command_huawei_rssi_convert() {
-	local _val
-	_val="$1"
-	[ "$_val" -eq 255 ] && echo -n "255" && return
-	[ "$_val" -gt 96 ] && echo -n "-25" && return
-	[ "$_val" -eq 0 ] && echo -n "-120" && return
-	echo "$_val"|awk '{print -25-(96-$1)}'
-}
-
-_command_huawei_ecio_convert() {
-	local _val
-	_val="$1"
-	[ "$_val" -eq 255 ] && echo -n "255" && return
-	[ "$_val" -gt 65 ] && echo -n "0" && return
-	[ "$_val" -eq 0 ] && echo -n "-32" && return
-	echo "$_val"|awk '{print 0-(65-$1)*0.5}'
-}
-
-_command_huawei_rscp_convert() {
-	local _val
-	_val="$1"
-	[ "$_val" -eq 255 ] && echo -n "255" && return
-	[ "$_val" -gt 96 ] && echo -n "-25" && return
-	[ "$_val" -eq 0 ] && echo -n "-120" && return
-	echo "$_val"|awk '{print -25-(96-$1)}'
-}
-
-_command_huawei_hfreqinfo() {
-	local _hfreq _sysmode
-	local nr_index=0
-	local nr_buffer=""
-	local basic_index=3
-	local step=7
-	_hfreq="$1"
-
-	_cnt=$(echo "$_hfreq"|wc -l)
-	json_init
-	for _line in $_hfreq; do
-		local loop=0
-
-		nr_buffer=""
-		_sysmode="$(echo "$_line"|cut -d, -f2)"
-		_mode=$(_command_huawei_mode_convert "$_sysmode")
-
-		if [ $nr_index -ge 1 -a "$_mode" == "NR" ];then
-			nr_buffer="$nr_index"
-		fi
-
-		while true;do
-			local next_index=$((basic_index+step*loop))
-			local band_index=$((next_index))
-			local band="$(echo "$_line"|cut -d, -f$band_index)"
-
-			[ -z "$band" ] && break
-			local dlearfcn_index=$((next_index+1))
-			local dlfreq_index=$((next_index+2))
-			local dlbandwidth_index=$((next_index+3))
-			local ulearfcn_index=$((next_index+4))
-			local ulfreq_index=$((next_index+5))
-			local ulbandwidth_index=$((next_index+6))
-
-			if [ $loop -ge 1 ];then
-				nr_index=$((nr_index+1))
-				nr_buffer="$nr_index"
-			fi
-
-			json_add_object "${_mode}${nr_buffer}"
-			json_add_string "BAND" "$band"
-			json_add_int "EARFCN" "$(echo "$_line"|cut -d, -f$dlearfcn_index)"
-			json_add_int "DL_FREQ" "$(echo "$_line"|cut -d, -f$dlfreq_index)"
-			json_add_int "DL_BANDWIDTH" "$(echo "$_line"|cut -d, -f$dlbandwidth_index)"
-			json_add_int "UL_FCN" "$(echo "$_line"|cut -d, -f$ulearfcn_index)"
-			json_add_int "UL_FREQ" "$(echo "$_line"|cut -d, -f$ulfreq_index)"
-			json_add_int "UL_BANDWIDTH" "$(echo "$_line"|cut -d, -f$ulbandwidth_index)"
-			json_close_object
-			loop=$((loop+1))
-		done
-
-		if [ "$_mode" == "NR" ];then
-			nr_index=$((nr_index+1))
-		fi
-
-	done
-	json_add_int nr_count $nr_index
-	json_dump
-	json_cleanup
-}
-
-_command_huawei_hcsq() {
-	local _hcsq _val
-	_hcsq="$1"
-	_monsc="$3"
-	_hfreq="$4"
-
-	json_init
-	for _line in $_hcsq; do
-		_mode="$(echo "$_line"|cut -d, -f1|sed 's/\"//g')"
-		if [ "$_mode" = "GSM" ]; then
-			json_add_object "$_mode"
-			_val="$(echo "$_line"|cut -d, -f2)"
-			json_add_int "RSSI" "$(_command_huawei_rssi_convert "$_val")"
-		elif [ "$_mode" = "WCDMA" ]; then
-			json_add_object "$_mode"
-			_val="$(echo "$_line"|cut -d, -f2)"
-			json_add_int "RSSI" "$(_command_huawei_rssi_convert "$_val")"
-			_val="$(echo "$_line"|cut -d, -f3)"
-			json_add_int "RSCP" "$(_command_huawei_rscp_convert "$_val")"
-			_val="$(echo "$_line"|cut -d, -f4)"
-			json_add_int "ECIO" "$(_command_huawei_ecio_convert "$_val")"
-		elif [ "$_mode" = "LTE" ]; then
-			json_add_object "$_mode"
-			_val="$(echo "$_line"|cut -d, -f2)"
-			json_add_int "RSSI" "$(_command_huawei_rssi_convert "$_val")"
-			_val="$(echo "$_line"|cut -d, -f3)"
-			rsrp="$(_command_huawei_rsrp_convert "$_val")"
-			_val="$(echo "$_line"|cut -d, -f4)"
-			sinr="$(_command_huawei_sinr_convert "$_val")"
-			if [ "$_alias" == "mt5700" ];then
-				ant_signal="$(_command_huawei_signal_ant "$_ctl")"
-				ant_rsrp="$(echo "$ant_signal"|jsonfilter -e '$["RSRP"]')"
-				ant_sinr="$(echo "$ant_signal"|jsonfilter -e '$["SINR"]')"
-				if [ -n "$rsrp" -a -n "$ant_rsrp" ];then
-					if [ $ant_rsrp -gt $rsrp ];then
-						rsrp="$ant_rsrp"
-					fi
-				fi
-				if [ -n "$sinr" -a -n "$ant_sinr" ];then
-					if [ $ant_sinr -gt $sinr ];then
-						sinr="$ant_sinr"
-					fi
-				fi
-			fi
-			json_add_int "RSRP" "$rsrp"
-			json_add_int "SINR" "$sinr"
-			_val="$(echo "$_line"|cut -d, -f5)"
-			json_add_int "RSRQ" "$(_command_huawei_rsrq_convert "$_val")"
-			if [ -n "$_monsc" ];then
-				json_add_string "CELL" "$(echo "$_monsc"|jsonfilter -e '$["CELL"]')"
-				json_add_string "PCI" "$(echo "$_monsc"|jsonfilter -e '$["PCI"]')"
-				json_add_string "TAC" "$(echo "$_monsc"|jsonfilter -e '$["TAC"]')"
-				json_add_string "EARFCN" "$(echo "$_monsc"|jsonfilter -e '$["EARFCN"]')"
-			fi
-			if [ -n "$_hfreq" ]; then
-				json_add_string "BAND" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['BAND']")"
-			fi
-		elif [ "$_mode" = "NR" ]; then
-			json_add_object "$_mode"
-			_val="$(echo "$_line"|cut -d, -f2)"
-			rsrp="$(_command_huawei_rsrp_convert "$_val")"
-			_val="$(echo "$_line"|cut -d, -f3)"
-			sinr="$(_command_huawei_sinr_convert "$_val")"
-
-			if [ "$_alias" == "mt5700" ];then
-				ant_signal="$(_command_huawei_signal_ant "$_ctl")"
-				ant_rsrp="$(echo "$ant_signal"|jsonfilter -e '$["RSRP"]')"
-				ant_sinr="$(echo "$ant_signal"|jsonfilter -e '$["SINR"]')"
-				if [ -n "$rsrp" -a -n "$ant_rsrp" ];then
-					if [ $ant_rsrp -gt $rsrp ];then
-						rsrp="$ant_rsrp"
-					fi
-				fi
-				if [ -n "$sinr" -a -n "$ant_sinr" ];then
-					if [ $ant_sinr -gt $sinr ];then
-						sinr="$ant_sinr"
-					fi
-				fi
-			fi
-			json_add_int "RSRP" "$rsrp"
-			json_add_int "SINR" "$sinr"
-			_val="$(echo "$_line"|cut -d, -f4)"
-			json_add_int "RSRQ" "$(_command_huawei_rsrq_convert "$_val")"
-			if [ -n "$_monsc" ];then
-				json_add_string "CELL" "$(echo "$_monsc"|jsonfilter -e '$["CELL"]')"
-				json_add_string "PCI" "$(echo "$_monsc"|jsonfilter -e '$["PCI"]')"
-				json_add_string "TAC" "$(echo "$_monsc"|jsonfilter -e '$["TAC"]')"
-				json_add_string "EARFCN" "$(echo "$_monsc"|jsonfilter -e '$["EARFCN"]')"
-			fi
-			if [ -n "$_hfreq" ]; then
-				json_add_string "BAND" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['BAND']")"
-			fi
-		else
-			continue
-		fi
-		json_close_object
-	done
-	json_add_string "MODE" "$_mode"
-	json_dump
-	json_cleanup
-}
-
-_command_huawei_monsc() {
-	local _monsc
-	_monsc="$1"
-
-	json_init
-	_mode="$(echo "$_monsc"|cut -d, -f1|sed 's/ //g')"
-	_isp="$(echo "$_monsc"|cut -d, -f2)$(echo "$_monsc"|cut -d, -f3)"
-	json_add_string "ISP" "$_isp"
-	json_add_string "MODE" "$_mode"
-	if [ "$_mode" = "LTE" ]; then
-		json_add_string "CELL" "$(echo "$_monsc"|cut -d, -f5)"
-		pci="$(echo "$_monsc"|cut -d, -f6)"
-		pci=$(printf %d 0x$pci)
-		json_add_string "PCI" "$pci"
-		json_add_string "TAC" "$(echo "$_monsc"|cut -d, -f7)"
-		json_add_int "RSRP" "$(echo "$_monsc"|cut -d, -f8)"
-		json_add_int "RSRQ" "$(echo "$_monsc"|cut -d, -f9)"
-		json_add_int "RXLEV" "$(echo "$_monsc"|cut -d, -f10)"
-		json_add_int "EARFCN" "$(echo "$_monsc"|cut -d, -f4)"
-	elif [ "$_mode" = "WCDMA" ]; then
-		json_add_string "CELL" "$(echo "$_monsc"|cut -d, -f6)"
-		json_add_string "LAC" "$(echo "$_monsc"|cut -d, -f7)"
-		json_add_int "RSCP" "$(echo "$_monsc"|cut -d, -f8)"
-		json_add_int "RXLEV" "$(echo "$_monsc"|cut -d, -f9)"
-		json_add_int "ECNO" "$(echo "$_monsc"|cut -d, -f10)"
-	elif [ "$_mode" = "TD-SCDMA" ]; then
-		json_add_string "CELL" "$(echo "$_monsc"|cut -d, -f7)"
-		json_add_string "LAC" "$(echo "$_monsc"|cut -d, -f8)"
-		json_add_int "RSCP" "$(echo "$_monsc"|cut -d, -f9)"
-		json_add_string "RAC" "$(echo "$_monsc"|cut -d, -f11)"
-	elif [ "$_mode" = "GSM" ]; then
-		json_add_int "BAND" "$(echo "$_monsc"|cut -d, -f4)"
-		json_add_string "CELL" "$(echo "$_monsc"|cut -d, -f7)"
-		json_add_string "LAC" "$(echo "$_monsc"|cut -d, -f8)"
-		json_add_int "RXLEV" "$(echo "$_monsc"|cut -d, -f9)"
-		json_add_int "RXQUALITY" "$(echo "$_monsc"|cut -d, -f10)"
-	elif [ "$_mode" = "NR" ]; then
-		pci=$(echo "$_monsc"|cut -d, -f7)
-		pci=$(printf %d 0x$pci)
-		json_add_string "CELL" "$(echo "$_monsc"|cut -d, -f6)"
-		json_add_string "PCI" "$pci"
-		json_add_string "TAC" "$(echo "$_monsc"|cut -d, -f8)"
-		json_add_int "RSRP" "$(echo "$_monsc"|cut -d, -f9)"
-		json_add_int "RSRQ" "$(echo "$_monsc"|cut -d, -f10)"
-		json_add_int "SINR" "$(echo "$_monsc"|cut -d, -f11)"
-		json_add_int "EARFCN" "$(echo "$_monsc"|cut -d, -f4)"
-	fi
-	json_dump
-	json_cleanup
-}
-
-_command_huawei_syscfgex_get() {
-	local _res _info
-
-	_res=$(_command_private_exec "$1" "SYSCFGEX" "?")
-	[ -z "$_res" ] && return 1
-
-	_info=$(echo "$_res"|awk -F: '{print $2}')
-	json_init
-	json_add_string "ACQORDER" "$(echo "$_info"|awk -F, '{print $1}'|awk '$1= $1')"
-	json_add_string "BAND" "$(echo "$_info"|awk -F, '{print $2}')"
-	json_add_string "ROAM" "$(echo "$_info"|awk -F, '{print $3}')"
-	json_add_string "SRVDOMAIN" "$(echo "$_info"|awk -F, '{print $4}')"
-	json_add_string "LTEBAND" "$(echo "$_info"|awk -F, '{print $5}'|xargs -r printf)"
-	json_dump
-	json_cleanup
-}
-
-_command_huawei_syscfgex_set() {
-	local _ctl="$1"
-	local _syscfgex="$2"
-	local _key="$3"
-	local _val="$4"
-	local _param _tmp
-	local _keys="ACQORDER BAND ROAM SRVDOMAIN LTEBAND"
-
-	[ -n "$_syscfgex" ] || _syscfgex='{}'
-	json_load "$_syscfgex" || return 1
-	json_add_string "$_key" "$_val"
-	for _key in $_keys; do
-		json_get_var _tmp "$_key"
-		_param="$_param$_tmp,"
-	done
-	json_cleanup
-	_param="$_param,"
-	_tmp=$(_command_private_exec "$_ctl" "SYSCFGEX" "=$_param")
-	echo "$_tmp"
-	echo "$_tmp" | grep -qsw "OK"
-}
-
-_command_huawei_syscfgex_set_acqorder() {
-	local _ctl="$1"
-	local _val="$2"
-
-	_command_private_exec "$_ctl" "SYSCFGEX=" "$_val"
-}
-
-
-_command_huawei_c5goption() {
-	local _ctl="$1"
-	local _val="$2"
-	local _option
-	local _res
-
-
-	_res=$(_command_private_exec "$_ctl" "C5GOPTION" "?")
-	[ -z "$_res" ] && return 1
-
-	_option=$(echo "$_res"|awk -F' ' '{print $2}')
-	echo  "get C5GOPTION :$_option"
-	if [ "$_option" = "$_val" ]; then
-		return 2
-	fi
-
-	echo "do set C5GOPTION $_val"
-	_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}C5GOPTION=$_val")
-	echo "$_res"
-	echo "$_res" | grep -qsw "OK"
-}
-
-_command_huawei_mode() {
-	local _ctl="$1"
-	local _val="$2"
-	local _nrcap="$3"
-	local _alias="$4"
-	local _syscfg
-	local _acqorder
-	local max=3
-	local i=0
-
-	if [ "$_nrcap" = "1" ];then
-		while true;do
-			_syscfg=$(_command_huawei_syscfgex_get "$_ctl")
-			_acqorder=$(echo "$_syscfg"|jsonfilter -e '$["ACQORDER"]')
-			echo  "get acqorder:$_acqorder"
-			[ -z "$_acqorder" ] && return 1
-
-			if [ "$_acqorder" = "\"$_val\"" ]; then
-				if [ $i -gt 0 ];then
-					return 0
-				else
-					return 2
-				fi
-			fi
-			echo "do set syscfg $_val,$i"
-			if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-				_command_huawei_syscfgex_set "$_ctl" "$_syscfg" "ACQORDER" "\"$_val\""
-			else
-				_command_huawei_syscfgex_set_acqorder "$_ctl" "\"$_val\""
-			fi
-
-			i=$((i+1))
-			if [ $i -ge $max ];then
-				echo  "set syscfg error"
-				return 1
-			fi
-			sleep 1
-		done
-	else
-		_syscfg=$(_command_huawei_syscfgex_get "$_ctl")
-		_acqorder=$(echo "$_syscfg"|jsonfilter -e '$["ACQORDER"]')
-		[ -z "$_acqorder" ] && return 1
-		if [ "$_acqorder" = "\"$_val\"" ]; then
-			return 2
-		fi
-		_command_huawei_syscfgex_set "$_ctl" "$_syscfg" "ACQORDER" "\"$_val\"" || return 1
-	fi
-
-	return 0
-}
-
-command_huawei_signal() {
-	local _res _mode _hcsq
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	local _alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	_cmd="${AT_PRIVATE_PREFIX}MONSC|${AT_PRIVATE_PREFIX}HFREQINFO?|${AT_PRIVATE_PREFIX}HCSQ?"
-	_res=$(_command_exec_raw "$_ctl" "$_cmd")
-	[ -z "$_res" ] && return 1
-	_monsc="$(echo "$_res"|grep 'MONSC:'|awk -F: '{print $2}')"
-	_hfreq="$(echo "$_res"|grep 'HFREQINFO:'|awk -F: '{print $2}')"
-	_hcsq="$(echo "$_res"|grep 'HCSQ:'|awk -F: '{print $2}')"
-
-	_monsc="$(_command_huawei_monsc "$_monsc")"
-	_hfreq="$(_command_huawei_hfreqinfo "$_hfreq")"
-	_command_huawei_hcsq "$_hcsq" "$_alias" "$_monsc" "$_hfreq"
-}
-
-_command_huawei_caculate_band(){
-	local band=$1
-	local len=${#band}
-	local index=0
-	local base_all=0
-	while [ $index -lt $len ];do
-		bit=${band:$index:1}
-		bit_int=$(printf %d 0x$bit)
-		[ $bit_int -gt 0 ] && {
-			last_bit=1
-			while [ $((bit_int/2)) -ge 1 ];do
-				last_bit=$((last_bit+1))
-				bit_int=$((bit_int/2))
-			done
-			base=$((4*(len-1)))
-			base_all=$((base+last_bit+base_all))
-		}
-
-		index=$((index+1))
-	done
-	echo $base_all
-}
-
-_common_huawei_scan4g(){
-	local _ctl="$1"
-	local scan_param="$2"
-	local _model
-	local _res
-	local _data
-
-	json_init
-	json_add_array "scanlist"
-	_res=$(_command_exec_raw "$_ctl" "AT^MONNC" 20|grep "\^MONNC:")
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			_info="$(echo "$line"|awk -F: '{print $2}')"
-			if [ "$scan_param" == "2" ];then
-					json_add_object
-					json_add_string "MODE" "LTE"
-					json_add_string "EARFCN" "$(echo "$_info"|awk -F, '{print $2}'|sed -e 's/ //g')"
-					json_add_string "PCI" "$(echo "$_info"|awk -F, '{print $3}')"
-					json_add_string "RSRP" "$(echo "$_info"|awk -F, '{print $4}')"
-					json_add_string "RSRQ" "$(echo "$_info"|awk -F, '{print $5}')"
-					json_add_object "lockneed"
-					json_add_string "MODE" "1"
-					json_add_string "EARFCN" "1"
-					json_add_string "PCI" "0"
-					json_close_object
-					json_close_object
-
-			elif [ "$scan_param" == "1" ];then
-					json_add_object
-					json_add_string "MODE" "WCDMA"
-					json_add_string "EARFCN" "$(echo "$_info"|awk -F, '{print $2}'|sed -e 's/ //g')"
-					json_add_string "RSCP" "$(echo "$_info"|awk -F, '{print $4}')"
-					json_add_string "ECNO" "$(echo "$_info"|awk -F, '{print $5}')"
-					json_close_object
-			fi
-		fi
-	done
-
-	json_close_array
-	json_dump
-	json_cleanup
-	return 0
-}
-_common_huawei_scannr(){
-	local _ctl="$1"
-	local scan_param="$2"
-	local _res=""
-
-	_res_cimi=$(command_generic_imsi "$_ctl")
-	
-	json_init
-	json_add_array "scanlist"
-
-	if  [ "$scan_param" == "3" ];then
-		_res=$(_command_exec_raw "$_ctl" "AT^NETSCAN=8,-120,$scan_param" 120)
-		if echo "$_res" |grep -qs "ERROR" ;then
-			_res=$(_command_exec_raw "$_ctl" "AT^NETSCAN=8,-120,4" 120|grep "\^NETSCAN:")
-		fi
-	else
-		_res=$(_command_exec_raw "$_ctl" "AT^NETSCAN=8,-120,$scan_param" 120|grep "\^NETSCAN:")
-	fi
-
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			_info="$(echo "$line"|awk -F: '{print $2}')"
-			_rxlev="$(echo "$_info"|awk -F, '{print $8}'|xargs -r printf)"
-			_isp=$(echo "$_info"|awk -F, '{print $5}')$(echo "$_info"|awk -F, '{print $6}')
-			_band=$(_command_huawei_caculate_band "$(echo "$_info"|awk -F, '{print $10}')")
-			[ -z "$_rxlev" ] && continue
-
-			if [ -n "$_res_cimi" ];then
-				_isp_len=${#_isp}
-				isp=${_res_cimi:0:$_isp_len}
-				if ! _command_check_plmn_equal "$_isp" "$isp";then
-					continue
-				fi
-			fi
-
-			if [ "$scan_param" == "3" -o "$scan_param" == "4"  ];then
-					json_add_object
-					json_add_string "MODE" "NR"
-					json_add_string "EARFCN" "$(echo "$_info"|awk -F, '{print $1}'|sed -e 's/ //g')"
-					json_add_string "LAC" "$(echo "$_info"|awk -F, '{print $4}')"
-					json_add_string "ISP" "$_isp"
-					json_add_string "CELL" "$(echo "$_info"|awk -F, '{print $9}')"
-					json_add_string "BAND" "$_band"
-					json_add_string "PCI" "$(echo "$_info"|awk -F, '{print $12}')"
-					json_add_string "RSRP" "$(echo "$_info"|awk -F, '{print $14}')"
-					json_add_string "RSRQ" "$(echo "$_info"|awk -F, '{print $15}')"
-					json_add_string "SINR" "$(echo "$_info"|awk -F, '{print $16}')"
-
-					json_add_object "lockneed"
-					json_add_string "MODE" "1"
-					json_add_string "EARFCN" "1"
-					json_add_string "BAND" "1"
-					json_add_string "PCI" "0"
-					json_close_object
-
-					json_close_object
-			elif [ "$scan_param" == "2" ];then
-					json_add_object
-					json_add_string "MODE" "LTE"
-					json_add_string "EARFCN" "$(echo "$_info"|awk -F, '{print $1}'|sed -e 's/ //g')"
-					json_add_string "LAC" "$(echo "$_info"|awk -F, '{print $4}')"
-					json_add_string "ISP" "$_isp"
-					json_add_string "RXLEV" "$(echo "$_info"|awk -F, '{print $8}')"
-					json_add_string "CELL" "$(echo "$_info"|awk -F, '{print $9}')"
-					json_add_string "BAND" "$_band"
-					json_add_string "PCI" "$(echo "$_info"|awk -F, '{print $12}')"
-
-					json_add_object "lockneed"
-					json_add_string "MODE" "1"
-					json_add_string "EARFCN" "1"
-					json_add_string "PCI" "0"
-					json_close_object
-
-					json_close_object
-
-			elif [ "$scan_param" == "1" ];then
-					json_add_object
-					json_add_string "MODE" "WCDMA"
-					json_add_string "EARFCN" "$(echo "$_info"|awk -F, '{print $1}'|sed -e 's/ //g')"
-					json_add_string "LAC" "$(echo "$_info"|awk -F, '{print $4}')"
-					json_add_string "ISP" "$_isp"
-					json_add_string "RXLEV" "$(echo "$_info"|awk -F, '{print $8}')"
-					json_add_string "CELL" "$(echo "$_info"|awk -F, '{print $9}')"
-					json_add_string "BAND" "$_band"
-					json_add_string "PCI" "$(echo "$_info"|awk -F, '{print $12}')"
-					json_close_object
-			fi
-		fi
-	done
-
-	json_close_array
-	json_dump
-	json_cleanup
-
-}
-
-_format_nr_freq(){
-    local _freq="$1"
-    local _freq_g=5
-    local _freq_off=0
-    local _nfreq_off=0
-    if [ $_freq -lt 3000000 ];then
-        _freq_g=0.005
-        _freq_off=0
-        _nfreq_off=0
-    elif [ $_freq -lt 24250000 ];then
-        _freq_g=0.015
-        _freq_off=3000
-        _nfreq_off=600000
-    elif [ $_freq -lt 100000000 ];then
-        _freq_g=0.06
-        _freq_off=24250.08
-        _nfreq_off=2016667
-    fi
-	earfcn=$(echo $_freq $_freq_off $_freq_g $_nfreq_off|awk '{printf "%d",($1-$2*1000)/($3*1000)+$4}')
-    echo "$earfcn"
-}
-
-_format_lte_freq(){
-    local _freq="$1"
-    local _band="$2"
-    local _freq_dl=2110
-    local _nfreq_dl=0
-    if [ "$_band" == "1" ];then
-        _freq_dl=2110
-        _nfreq_dl=0
-    elif [ "$_band" == "3" ];then
-        _freq_dl=1805
-        _nfreq_dl=1200
-    elif [ "$_band" == "5" ];then
-        _freq_dl=869
-        _nfreq_dl=2400
-    elif [ "$_band" == "8" ];then
-        _freq_dl=925
-        _nfreq_dl=3450
-    elif [ "$_band" == "34" ];then
-        _freq_dl=2010
-        _nfreq_dl=36200
-    elif [ "$_band" == "38" ];then
-        _freq_dl=2570
-        _nfreq_dl=37750
-    elif [ "$_band" == "39" ];then
-        _freq_dl=1880
-        _nfreq_dl=38250
-    elif [ "$_band" == "40" ];then
-        _freq_dl=2300
-        _nfreq_dl=38650
-    elif [ "$_band" == "41" ];then
-        _freq_dl=2496
-        _nfreq_dl=39650
-    elif [ "$_band" == "59" ];then
-        _freq_dl=1785
-        _nfreq_dl=54200
-    elif [ "$_band" == "62" ];then
-        _freq_dl=1785
-        _nfreq_dl=64736
-    fi
-	earfcn=$(echo $_freq $_freq_dl $_nfreq_dl|awk '{printf "%d",($1-$2*10)+$3}')
-    echo "$earfcn"
-}
-_common_huawei_scan_redcap(){
-	local _ctl="$1"
-	local scan_param="$2"
-	local _res=""
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_res_cimi=$(command_generic_imsi "$_ctl")
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=0" 2 > /dev/null
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0" 2 > /dev/null
-	json_init
-	json_add_array "scanlist"
-	if [ "$_alias" == "redcap" ];then
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NDISDUP=1,0" 2 > /dev/null
-		sleep 12
-	elif [ "$_alias" == "mt5700" ];then
-		_command_exec_raw "$_ctl" "${AT_GENERIC_PREFIX}CGATT=0" 2 > /dev/null
-		sleep 8
-	else
-		ubus call atserver set '{"mod": "switchdata", "enabled": false}' > /dev/null
-		sleep 15
-	fi
-
-	_res=$(_command_exec_raw "$_ctl" "AT^CELLSCAN=$scan_param" 120|grep "\^CELLSCAN:")
-
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			##^CELLSCAN: <rat>,<plmn>,<freq>,[pci],<band>,<lac>,<cid>,[rxlev],[bsic],[psc],[5GSCS], [5GRSRP],[5GRSRQ],[5GSINR],[5GREDCAP],[LTERSINR]
-			_info="$(echo "$line"|awk -F: '{print $2}')"
-
-			_rat=$(echo "$_info"|awk -F, '{print $1}'|sed 's/ //g')
-			_isp=$(echo "$_info"|awk -F, '{print $2}'|sed 's/"//g')
-			_freq=$(echo "$_info"|awk -F, '{print $3}'|sed 's/"//g')
-			_pci=$(echo "$_info"|awk -F, '{print $4}')
-			_band="$(echo "$_info"|awk -F, '{print $5}')"
-			[ -n "$_band" ] && _band=$(printf %d 0x$_band)
-			_lac=$(echo "$_info"|awk -F, '{print $6}')
-			_cid=$(echo "$_info"|awk -F, '{print $7}')
-			_rxlev=$(echo "$_info"|awk -F, '{print $8}')
-			_rsrp=$(echo "$_info"|awk -F, '{print $12}')
-			_rsrq=$(echo "$_info"|awk -F, '{print $13}')
-			[ -n "$_rsrq" ] && _rsrq=$((_rsrq/2))
-			_sinr=$(echo "$_info"|awk -F, '{print $14}')
-			[ -n "$_sinr" ] && _sinr=$((_sinr/2))
-			if [ "$_alias" == "mt5700" ];then
-				_ltesinr=$(echo "$_info"|awk -F, '{print $15}')
-			else
-				_nrredcap=$(echo "$_info"|awk -F, '{print $15}')
-				_ltesinr=$(echo "$_info"|awk -F, '{print $16}')
-			fi
-			if [ -n "$_ltesinr" ] && [ "$_alias" != "redcap" ];then
-				_ltesinr=$((_ltesinr/8))
-			fi
-
-			if [ -n "$_res_cimi" ];then
-				_isp_len=${#_isp}
-				isp=${_res_cimi:0:$_isp_len}
-				if ! _command_check_plmn_equal "$_isp" "$isp";then
-					continue
-				fi
-			fi
-
-			if [ "$_rat" == "3" ];then
-				[ "$_nrredcap" == "1" ] && continue
-				if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-					_earfcn=$(_format_nr_freq "$_freq")
-				else
-					_param_cnt=$(echo "$_info"|grep -o ','|wc -l)
-					_param_cnt=$((_param_cnt+1))
-					_earfcn=$(echo "$_info"|awk -F, '{print $'$_param_cnt'}'|xargs -r printf)
-				fi
-				json_add_object
-				json_add_string "MODE" "NR"
-				json_add_string "EARFCN" "$_earfcn"
-				json_add_string "LAC" "$_lac"
-				json_add_string "ISP" "$_isp"
-				json_add_string "CELL" "$_cid"
-				json_add_string "BAND" "$_band"
-				json_add_string "PCI" "$_pci"
-				json_add_string "RSRP" "$_rsrp"
-				json_add_string "RSRQ" "$_rsrq"
-				json_add_string "SINR" "$_sinr"
-				json_add_object "lockneed"
-				json_add_string "MODE" "2"
-				json_add_string "EARFCN" "1"
-				json_add_string "BAND" "1"
-				json_add_string "PCI" "1"
-				json_close_object
-				json_close_object
-			elif [ "$_rat" == "2" ];then
-
-				if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-					_earfcn=$(_format_lte_freq "$_freq" "$_band")
-				else
-					_param_cnt=$(echo "$_info"|grep -o ','|wc -l)
-					_param_cnt=$((_param_cnt+1))
-					_earfcn=$(echo "$_info"|awk -F, '{print $'$_param_cnt'}'|xargs -r printf)
-				fi
-
-				json_add_object
-				json_add_string "MODE" "LTE"
-				json_add_string "EARFCN" "$_earfcn"
-				json_add_string "LAC" "$_lac"
-				json_add_string "ISP" "$_isp"
-				json_add_string "CELL" "$_cid"
-				json_add_string "BAND" "$_band"
-				json_add_string "PCI" "$_pci"
-				json_add_string "SINR" "$_ltesinr"
-				json_add_string "RSRP" "$_rxlev"
-
-				json_add_object "lockneed"
-				json_add_string "MODE" "2"
-				json_add_string "EARFCN" "1"
-				json_add_string "PCI" "1"
-				json_close_object
-				json_close_object
-			fi
-		fi
-	done
-
-	json_close_array
-	json_dump
-	json_cleanup
-	if [ "$_alias" == "redcap" ];then
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NDISDUP=1,1" 2 > /dev/null
-	elif [ "$_alias" == "mt5700" ];then
-		local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-		[ -z "$simIndex" ] && simIndex="1"
-		local mode=$(uci -q get "cpecfg.${gNet}sim$simIndex.mode")
-		cpetools.sh -i "$gNet" -u -m "$mode" > /dev/null
-		command_generic_reset "$1" > /dev/null
-	else
-		ubus call atserver set '{"mod": "switchdata", "enabled": true}' > /dev/null
-	fi
-}
-command_huawei_scan(){
-	local _ctl="$1"
-	local _info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	local _model
-	local _res
-	local _data
-	local mode="$2"
-	local isp=""
-	local scan_param="3"
-
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	[ -z "$simIndex" ] && simIndex="1"
-	local nr_support=$(uci -q get "network.${gNet}.nrcap")
-	local odu_model=$(uci -q get "network.${gNet}.mode")
-	[ -z "$mode" ] && mode=$(uci -q get "cpecfg.${gNet}sim$simIndex.mode")
-	if [ "$nr_support" == "1" ];then
-		if [ "$mode" == "lte" ];then
-			scan_param="2"
-		fi
-		_vendor=$(check_soc_vendor)
-		if [ "$odu_model" == "odu" ];then
-			$(touch /tmp/odu_scan_${gNet})
-		fi
-	
-		if [ "$_vendor" == "tdtech" ];then
-			_common_huawei_scan_redcap "$_ctl" "$scan_param"
-		else
-			_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-			if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-				_common_huawei_scan_redcap "$_ctl" "$scan_param"
-			else
-				_common_huawei_scannr "$_ctl" "$scan_param"
-			fi
-		fi
-		
-		if [ "$odu_model" == "odu" ];then
-			$(rm /tmp/odu_scan_${gNet})
-		fi
-	else
-		if [ "$mode" == "wcdma" ];then
-			scan_param="1"
-		else
-			scan_param="2"
-		fi
-		_common_huawei_scan4g "$_ctl" "$scan_param"
-	fi
-
-	return 0
-}
-command_huawei_neighbour(){
-	local _ctl="$1"
-	local _res _info _mode _earfcn _pci _rsrp _rsrq _sinr _cnt i line
-
-	_res=$(_command_private_exec "$1" "MONNC")
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	json_init
-	json_add_array "neighbour"
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			##LTE ^MONNC: <ARFCN>,<PCI>,<RSRP>,<RXLEV>
-			##NR  ^MONNC: <ARFCN>,<PCI>,<RSRP>,<SINR>
-			_info="$(echo "$line"|awk -F: '{print $2}')"
-			_rsrp=$(echo "$_info"|awk -F, '{print $4}')
-			if [ -z "$_rsrp" -o "$_rsrp" -lt "-120" ];then
-				continue
-			fi
-			_mode=$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf)
-			_earfcn=$(echo "$_info"|awk -F, '{print $2}')
-			_pci=$(echo "$_info"|awk -F, '{print $3}')
-			[ -n "$_pci" ] && _pci=$(printf %d 0x$_pci)
-			
-			_rsrq=$(echo "$_info"|awk -F, '{print $5}')
-			_sinr=$(echo "$_info"|awk -F, '{print $6}')
-
-			if [ "$_mode" == "NR" ];then
-				json_add_object
-				json_add_string "MODE" "NR"
-				json_add_string "EARFCN" "$_earfcn"
-				json_add_string "BAND" ""
-				json_add_string "PCI" "$_pci"
-				json_add_string "RSRP" "$_rsrp"
-				json_add_string "RSRQ" "$_rsrq"
-				json_add_string "SINR" "$_sinr"
-				# MONNC does not provide a band; do not issue an incomplete NR lock.
-				json_add_string "lock_unavailable" "邻区未提供频段，请在高级设置选择频段后锁定"
-				json_close_object
-			elif [ "$_mode" == "LTE" ];then
-				json_add_object
-				json_add_string "MODE" "LTE"
-				json_add_string "EARFCN" "$_earfcn"
-				json_add_string "BAND" ""
-				json_add_string "PCI" "$_pci"
-				json_add_string "SINR" "$_sinr"
-				json_add_string "RSRP" "$_rsrp"
-				json_add_string "RSRQ" "$_rsrq"
-				json_add_object "lockneed"
-				json_add_string "MODE" "2"
-				json_add_string "EARFCN" "1"
-				json_add_string "PCI" "1"
-				json_close_object
-				json_close_object
-			fi
-		fi
-	done
-
-	json_close_array
-	json_dump
-	json_cleanup
-	return 0
-}
-
-command_huawei_cellinfo() {
-	local _res _monsc _hfreq _hcsq _nsa
-
-	_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}MONSC|${AT_PRIVATE_PREFIX}HFREQINFO?|${AT_PRIVATE_PREFIX}HCSQ?")
-	[ -z "$_res" ] && return 1
-
-	_monsc="$(echo "$_res"|grep 'MONSC:'|awk -F: '{print $2}')"
-	_hfreq="$(echo "$_res"|grep 'HFREQINFO:'|awk -F: '{print $2}')"
-	_hcsq="$(echo "$_res"|grep 'HCSQ:'|awk -F: '{print $2}')"
-	_monsc="$(_command_huawei_monsc "$_monsc")"
-	_mode_cur="$(echo "$_monsc"|jsonfilter -e '$["MODE"]')"
-	_earfcn="$(echo "$_monsc"|jsonfilter -e '$["EARFCN"]')"
-	_hfreq="$(_command_huawei_hfreqinfo "$_hfreq")"
-	_hcsq="$(_command_huawei_hcsq "$_hcsq")"
-
-	if echo "$_hfreq"|jsonfilter -e '$["NR"]' > /dev/null && echo "$_hfreq"|jsonfilter -e '$["LTE"]' > /dev/null; then
-		_nsa=1
-	else
-		_nsa=0
-	fi
-
-	if [ "$_nsa" -eq 0 ]; then
-		echo "$_monsc"
-		return
-	fi
-
-	json_init
-	json_add_string "MODE" "NR NSA"
-	json_add_string "ISP" "$(echo "$_monsc"|jsonfilter -e '$["ISP"]')"
-	json_add_string "CELL" "$(echo "$_monsc"|jsonfilter -e '$["CELL"]')"
-	json_add_string "PCI" "$(echo "$_monsc"|jsonfilter -e '$["PCI"]')"
-	json_add_string "TAC" "$(echo "$_monsc"|jsonfilter -e '$["TAC"]')"
-	json_add_string "RSRP" "$(echo "$_hcsq"|jsonfilter -e '$["NR"]["RSRP"]')"
-	json_add_string "SINR" "$(echo "$_hcsq"|jsonfilter -e '$["NR"]["SINR"]')"
-	json_add_string "RSRQ" "$(echo "$_hcsq"|jsonfilter -e '$["NR"]["RSRQ"]')"
-	json_add_string "BAND" "$(echo "$_hfreq"|jsonfilter -e '$["NR"]["BAND"]')"
-	json_add_string "EARFCN" "$(echo "$_hfreq"|jsonfilter -e '$["NR"]["EARFCN"]')"
-	json_add_string "DL_FREQ" "$(echo "$_hfreq"|jsonfilter -e '$["NR"]["DL_FREQ"]')"
-	json_dump
-	json_cleanup
-}
-
-_command_huawei_signal_ant() {
-	local _res _info
-
-	_res=$(_command_private_exec "$1" "ANTRSSI" "?")
-	[ -z "$_res" ] && return 1
-	_info=$(echo "$_res"|awk -F: '{print $2}')
-	_mode=$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf)
-	_num=$(echo "$_info"|awk -F, '{print $2}')
-	[ -z "$_num" -o -z "$_mode" ] && return
-	if [ "$_mode" == "0" ];then
-		_mode="GSM"
-	elif [ "$_mode" == "1" ];then
-		_mode="WCDMA"
-	elif [ "$_mode" == "2" ];then
-		_mode="LTE"
-	elif [ "$_mode" == "6" ];then
-		_mode="NR"
-	else
-		return
-	fi
-
-	_base_index=2
-	_rsrp=0
-	_sinr=0
-	i=0
-	while [ $i -lt $_num ];do
-		local tmp_rsrp=""
-		local tmp_sinr=""
-		i=$((i+1))
-		local index=$((_base_index+i))
-		local index_sinr=$((_base_index+i+4))
-		tmp_rsrp=$(echo "$_info"|awk -F, '{print $'$index'}')
-		tmp_sinr=$(echo "$_info"|awk -F, '{print $'$index_sinr'}')
-		if [ -n "$tmp_rsrp" -a "$tmp_rsrp" != "0x7fff" -a "$tmp_rsrp" != "32767" ];then
-			[ $_rsrp -lt $tmp_rsrp -o $_rsrp -eq 0  ] && _rsrp=$tmp_rsrp
-		fi
-		if [ -n "$tmp_sinr" -a "$tmp_sinr" != "0x7fff" -a "$tmp_sinr" != "32767" ];then
-			[ $_sinr -lt $tmp_sinr -o $_sinr -eq 0 ] && _sinr=$tmp_sinr
-		fi
-	done
-	_rsrp=$((_rsrp/8))
-	_sinr=$((_sinr/8))
-	json_init
-	json_add_string "MODE" "$_mode"
-	json_add_string "RSRP" "$_rsrp"
-	json_add_string "SINR" "$_sinr"
-
-	json_dump
-	json_cleanup
-}
-command_huawei_basic() {
-	local _ctl="$1"
-	local _info="$2"
-	local _res _imei _imsi _iccid _monsc _hfreq _hcsq _mode _model _revision _cpin
-	local _cmd
-	local cid="2"
-	local qci=""
-	local nr5g_ambr_dl=""
-	local nr5g_ambr_ul=""
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-
-	local apn="$(command_huawei_apn "$_ctl" "$_info"|jsonfilter -e "\$['APN']")"
-	_cmd="${AT_PRIVATE_PREFIX}MONSC|${AT_PRIVATE_PREFIX}HFREQINFO?|${AT_PRIVATE_PREFIX}HCSQ?|${AT_PRIVATE_PREFIX}ICCID?"
-	_res=$(_command_exec_raw "$_ctl" "$_cmd")
-	[ -z "$_res" ] && return 1
-
-	_monsc="$(echo "$_res"|grep 'MONSC:'|awk -F: '{print $2}')"
-	_hfreq="$(echo "$_res"|grep 'HFREQINFO:'|awk -F: '{print $2}')"
-	_hcsq="$(echo "$_res"|grep 'HCSQ:'|awk -F: '{print $2}')"
-	_iccid="$(echo "$_res"|grep 'ICCID:'|awk -F' ' '{print $2}')"
-
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CIMI" 5)
-	[ -n "$_res" ] && _imsi="$(echo "$_res"|grep 'CIMI' -A2|grep -E '^[0-9].*$'|xargs -r printf)"
-
-	_monsc="$(_command_huawei_monsc "$_monsc")"
-	_mode_cur="$(echo "$_monsc"|jsonfilter -e '$["MODE"]')"
-	_earfcn="$(echo "$_monsc"|jsonfilter -e '$["EARFCN"]')"
-
-	_imei="$(uci -q get "cellular_init.$gNet.imei")"
-	_model="$(uci -q get "cellular_init.$gNet.model")"
-	_revision="$(uci -q get "cellular_init.$gNet.version")"
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_hfreq="$(_command_huawei_hfreqinfo "$_hfreq")"
-	_hcsq="$(_command_huawei_hcsq "$_hcsq" "$_alias")"
-	
-	_isp="$(echo "$_monsc"|jsonfilter -e '$["ISP"]')"
-	if [ "$_isp" != "000000" ];then
-		_isp="$(echo "$_isp"|awk '$1= $1')"
-	fi
-	_temp="$(command_huawei_temp "$_ctl")"
-	_cpin="$(command_generic_cpin "$_ctl")"
-	json_init
-	if [ -n "$_temp" ];then
-		json_add_string "MODEL_TEMP" "$_temp"
-	fi
-	json_add_string "ISP" "$_isp"
-	json_add_string "CELL" "$(echo "$_monsc"|jsonfilter -e '$["CELL"]')"
-	json_add_string "PCI" "$(echo "$_monsc"|jsonfilter -e '$["PCI"]')"
-	json_add_string "TAC" "$(echo "$_monsc"|jsonfilter -e '$["TAC"]')"
-
-	
-
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		cid="7"
-	else
-		[ "$_alias" == "redcap" ] && cid=1
-		[ "$_alias" == "mt5700" ] && cid=8
-		[ "$_alias" == "mt5700" ] && [ -z "$dver" ] && cid=1
-	fi
-
-	if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-		_res=$(_command_private_exec "$1" "DSAMBR" "=$cid")
-		if [ -n "$_res" ];then
-			nr5g_ambr_dl=$(echo "$_res"|awk -F',' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-			nr5g_ambr_ul=$(echo "$_res"|awk -F',' '{print $3}'|xargs -r printf|sed -e 's/ //g')
-		fi
-
-		_res=$(_command_generic_exec "$1" "CGEQOSRDP" "=$cid")
-		if [ -n "$_res" ];then
-			qci=$(echo "$_res"|awk -F',' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-		fi
-		if [ -z "$qci" ];then
-			_res=$(_command_generic_exec "$1" "C5GQOSRDP" "=$cid")
-			if [ -n "$_res" ];then
-				qci=$(echo "$_res"|awk -F',' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-			fi
-		fi
-	elif [ "$_vendor" == "tdtech" ];then
-		_res=$(_command_generic_exec "$1" "C5GQOSRDP" "=$cid")
-		if [ -n "$_res" ];then
-			qci=$(echo "$_res"|awk -F',' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-			nr5g_ambr_dl=$(echo "$_res"|awk -F',' '{print $7}'|xargs -r printf|sed -e 's/ //g')
-			nr5g_ambr_ul=$(echo "$_res"|awk -F',' '{print $8}'|xargs -r printf|sed -e 's/ //g')
-		fi
-	fi
-	if echo "$_hfreq"|jsonfilter -e '$["NR"]' > /dev/null; then
-		_mode="NR"
-		nr_count="$(echo "$_hfreq"|jsonfilter -e '$["nr_count"]')"
-		i=0
-		while [ $i -lt $nr_count ];do
-			index=""
-			if [ $i -gt 0 ];then
-				index="$i"
-			fi
-			if echo "$_hfreq"|jsonfilter -e '$["NR'$index'"]' > /dev/null; then
-				[ $i -gt 0 ] && json_add_string "BAND$index" "$(echo "$_hfreq"|jsonfilter -e "\$['NR$index']['BAND']")"
-				json_add_string "DL_FCN$index" "$(echo "$_hfreq"|jsonfilter -e "\$['NR$index']['EARFCN']")"
-				json_add_string "UL_FCN$index" "$(echo "$_hfreq"|jsonfilter -e "\$['NR$index']['UL_FCN']")"
-				json_add_string "DLBW$index" "$(echo "$_hfreq"|jsonfilter -e "\$['NR$index']['DL_BANDWIDTH']")"
-				json_add_string "ULBW$index" "$(echo "$_hfreq"|jsonfilter -e "\$['NR$index']['UL_BANDWIDTH']")"
-			fi
-			i=$((i+1))
-		done
-
-		if echo "$_hfreq"|jsonfilter -e '$["LTE"]' > /dev/null; then
-			json_add_string "MODE" "NR NSA"
-			json_add_string "BAND1" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['BAND']")"
-			json_add_string "DL_FCN1" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['EARFCN']")"
-			json_add_string "UL_FCN1" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['UL_FCN']")"
-			json_add_string "DLBW1" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['DL_BANDWIDTH']")"
-			json_add_string "ULBW1" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['UL_BANDWIDTH']")"
-			json_add_string "dl_mode1" "LTE"
-		else
-			json_add_string "MODE" "NR SA"
-		fi
-
-		if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-			json_add_string "EARFCN" "$(echo "$_monsc"|jsonfilter -e '$["EARFCN"]')"
-		else
-			json_add_string "EARFCN" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['EARFCN']")"
-		fi
-		json_add_string "DL_FREQ" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['DL_FREQ']")"
-	elif echo "$_hfreq"|jsonfilter -e '$["LTE"]' > /dev/null; then
-		_mode="LTE"
-		json_add_string "MODE" "$_mode"
-		json_add_string "EARFCN" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['EARFCN']")"
-		json_add_string "DL_FREQ" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['DL_FREQ']")"
-		json_add_string "DLBW" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['DL_BANDWIDTH']")"
-		json_add_string "ULBW" "$(echo "$_hfreq"|jsonfilter -e "\$['LTE']['UL_BANDWIDTH']")"
-	else
-		_mode="$(echo "$_monsc"|jsonfilter -e '$["MODE"]')"
-		json_add_string "MODE" "$_mode"
-		json_add_string "EARFCN" "$(echo "$_monsc"|jsonfilter -e '$["EARFCN"]')"
-		json_add_string "DL_FREQ" "$(echo "$_monsc"|jsonfilter -e '$["DL_FREQ"]')"
-	fi
-
-	if [ "$_mode" = "NR" ] || [ "$_mode" = "LTE" ]; then
-		json_add_string "BAND" "$(echo "$_hfreq"|jsonfilter -e "\$['$_mode']['BAND']")"
-	else
-		json_add_string "BAND" "$(echo "$_monsc"|jsonfilter -e "\$['$_mode']['BAND']")"
-	fi
-	rsrp="$(echo "$_hcsq"|jsonfilter -e "\$['$_mode']['RSRP']")"
-	sinr="$(echo "$_hcsq"|jsonfilter -e "\$['$_mode']['SINR']")"
-
-	json_add_string "RSRP" "$rsrp"
-	json_add_string "SINR" "$sinr"
-	json_add_string "RSRQ" "$(echo "$_hcsq"|jsonfilter -e "\$['$_mode']['RSRQ']")"
-	json_add_string "RSSI" "$(echo "$_hcsq"|jsonfilter -e "\$['$_mode']['RSSI']")"
-	json_add_string "RSCP" "$(echo "$_hcsq"|jsonfilter -e "\$['$_mode']['RSCP']")"
-	json_add_string "IMEI" "$(generic_validate_imei "$_imei")"
-	json_add_string "IMSI" "$(generic_validate_imsi "$_imsi")"
-	json_add_string "ICCID" "$(generic_validate_iccid "$_iccid")"
-	json_add_string "MODEL" "$_model"
-	json_add_string "REVISION" "$_revision"
-	json_add_string "SIMNUMBER" "$(command_generic_number "$1")"
-	json_add_string "APN" "$apn"
-	json_add_string "CPIN" "$_cpin"
-	if [ -n "$qci" ];then
-		json_add_string "CQI" "$qci"
-	fi
-	json_add_string "NR5G_AMBR_DL" "$nr5g_ambr_dl"
-	json_add_string "NR5G_AMBR_UL" "$nr5g_ambr_ul"
-	json_dump
-	json_cleanup
-}
-
-command_huawei_apply_mode_profile() {
-	local _ctl="$1" _info="$2" _mode="$3" _option="$4"
-	local _nrcap _alias _rc _changed=0
-	_nrcap=$(echo "$_info" | jsonfilter -e '$["nrcap"]')
-	_alias=$(echo "$_info" | jsonfilter -e '$["alias"]')
-	[ -n "$_option" ] || _nrcap=""
-	if [ "$_mode" = "auto" ]; then
-		if [ "$_alias" = "mt5700" ]; then _mode="080302"; else _mode="00"; fi
-	fi
-	if [ "$_mode" = "08" ] && [ "$_nrcap" = "1" ]; then
-		_command_huawei_c5goption "$_ctl" "$_option"
-		_rc=$?
-		case "$_rc" in 0) _changed=1 ;; 2) ;; *) return "$_rc" ;; esac
-	fi
-	_command_huawei_mode "$_ctl" "$_mode" "$_nrcap" "$_alias"
-	_rc=$?
-	case "$_rc" in 0) _changed=1 ;; 2) ;; *) return "$_rc" ;; esac
-	if [ "$_mode" != "08" ] && [ "$_nrcap" = "1" ] && [ -n "$_option" ]; then
-		_command_huawei_c5goption "$_ctl" "$_option"
-		_rc=$?
-		case "$_rc" in 0) _changed=1 ;; 2) ;; *) return "$_rc" ;; esac
-	fi
-	[ "$_changed" = "1" ] || return 0
-	command_generic_reset "$_ctl"
-}
-command_huawei_nroff() { command_huawei_apply_mode_profile "$1" "$2" "03" ""; }
-command_huawei_modewcdma() { command_huawei_apply_mode_profile "$1" "$2" "02" ""; }
-command_huawei_allmode() { command_huawei_apply_mode_profile "$1" "$2" "auto" "1,1,1"; }
-command_huawei_modesa() { command_huawei_apply_mode_profile "$1" "$2" "auto" "1,0,1"; }
-command_huawei_modensa() { command_huawei_apply_mode_profile "$1" "$2" "auto" "0,1,0"; }
-command_huawei_modesa_only() { command_huawei_apply_mode_profile "$1" "$2" "08" "1,1,1"; }
-command_huawei_modensa_only() { command_huawei_modensa "$1" "$2"; }
-
-_command_huawei_freq_get() {
-	local _res _info
-
-	_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}NRFREQLOCK?")
-	nrfreq=$(echo "$_res" | grep "NRFREQLOCK:")
-	[ -z "$nrfreq" ] && return 1
-
-	_info=$(echo "$nrfreq"|awk -F: '{print $2}')
-	_change_info=$(echo "$_info"|xargs -r printf)
-
-	json_init
-	if [ "$_change_info" = "0" ];then
-		json_add_string "enable" "$_change_info"
-	else
-		json_add_string "enable" "$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf|awk '$1= $1')"
-	fi
-
-	if [ "$_change_info" == "2" -o  "$_change_info" == "1" -o "$_change_info" == "3"  ];then
-		_info=$(echo "$_res"|sed -n "4p")
-		_flag=$(echo "$_res"|sed -n "3p")
-		json_add_string "mobility" "$(echo "$_flag"|awk -F, '{print $1}'|xargs -r printf)"
-		json_add_string "band" "$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf)"
-		json_add_string "arfcn" "$(echo "$_info"|awk -F, '{print $2}'|xargs -r printf)"
-		json_add_string "scstype" "$(echo "$_info"|awk -F, '{print $3}'|xargs -r printf)"
-		json_add_string "cellid" "$(echo "$_info"|awk -F, '{print $4}'|xargs -r printf)"
-	else
-		json_add_string "scstype" "$(echo "$_info"|awk -F, '{print $2}')"
-		json_add_string "band" "$(echo "$_info"|awk -F, '{print $3}'|xargs -r printf)"
-		json_add_string "arfcn" "$(echo "$_info"|awk -F, '{print $4}'|xargs -r printf)"
-		json_add_string "cellid" "$(echo "$_info"|awk -F, '{print $5}'|xargs -r printf)"
-	fi
-
-	json_dump
-	json_cleanup
-}
-_command_huawei_freq() {
-	local _freqcfg _enable _band
-	_ctl=$1
-	key=$2
-	if [ "$key" = "NRFREQLOCK" ];then
-		_freqcfg=$(_command_huawei_freq_get "$_ctl")
-		[ -z "$_freqcfg" ] && return 1
-		_enable=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-		_band=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-
-		if [ "$_enable" = "3" ];then
-			echo "$_band"
-		elif [ "$_enable" = "0" ];then
-			echo "$_enable"
-		else
-			echo "999"
-		fi
-	fi
-}
-
-_command_huawei_freq_set() {
-	local _ctl="$1"
-	local key="$2"
-	local freq="$3"
-	local _res
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-		_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=3,0,1,\"$freq\"" 2)
-	else
-		_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=3,1,$freq" 2)
-	fi
-	echo "$_res"
-	echo "$_res" |grep -qsw "OK"
-}
-command_huawei_freq_unlock(){
-	local _freqcfg _enable _band
-	_ctl=$1
-	local res=""
-	local code=0
-
-	_freqcfg=$(_command_huawei_freq_get "$_ctl")
-	[ -z "$_freqcfg" ] && return 1
-	_enable=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-	_band=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-	echo  "get NRFREQLOCK $_enable"
-
-	if [ "$_enable" != "0" ];then
-		echo "do set NRFREQLOCK 0"
-		command_generic_cfun_c "$_ctl"
-		res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0" 2)
-		echo "$res" | grep -qsw "OK" || code=1
-		command_generic_cfun_o "$_ctl" || code=1
-		echo "res:$res"
-	fi
-
-	return $code
-}
-command_huawei_freq() {
-	local _ctl="$1"
-	local freq="$2"
-	local _freq=""
-	local _key=""
-	local _set=0
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	freqArray=${freq//,/ }
-	for freq_item in $freqArray
-	do
-		local index=0
-		local label=""
-		local freq_data=""
-		dataArray=${freq_item//-/ }
-		for key in $dataArray;do
-			if [ "$index" = "0" ];then
-					label=$key
-			else
-					freq_data=$key
-			fi
-			index=$((index+1))
-		done
-		echo "mode $label,band $freq_data"
-		if [ "$label" = "sa" ];then
-			_key="NRFREQLOCK"
-		elif [ "$label" = "nsa" ];then
-			_key="NRFREQLOCK"
-		elif [ "$label" = "nr" ];then
-			_key="NRFREQLOCK"
-		elif [ "$label" = "lte" ];then
-			_key="LTEFREQLOCK"
-		elif [ "$label" = "wcdma" ];then
-			_key=""
-		fi
-		if [ -n "$_key" ];then
-			if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-				if [ "$_key" == "LTEFREQLOCK" ];then
-					_command_huawei_lte "$_ctl" "$_key" "$freq_data" || return 1
-				else
-					_command_huawei_nr "$_ctl" "$_key" "$freq_data" || return 1
-				fi
-			else
-				[ "$_key" == "LTEFREQLOCK" ] && continue
-				if [ -z "$freq_data" ];then
-					freq_data="0"
-				fi
-				_freq=$(_command_huawei_freq "$_ctl" "$_key")
-				if [ "$_freq" = "$freq_data" ]; then
-					continue
-				fi
-				command_generic_cfun_c
-				_command_huawei_freq_set "$_ctl" "$_key" "$freq_data" || {
-					command_generic_cfun_o
-					return 1
-				}
-				command_generic_cfun_o
-				_set=1
-			fi
-		fi
-	done
-
-	return 0
-}
-
-command_huawei_showmode() {
-	_command_huawei_syscfgex_get "$1"
-}
-
-command_huawei_iccid() {
-	local _res _info
-
-	_res=$(_command_private_exec "$1" "ICCID" "?")
-	[ -z "$_res" ] && return 1
-
-	_info="$(echo "$_res"|awk -F' ' '{print $2}')"
-
-	echo "$_info"
-}
-
-_command_huawei_roam() {
-	_val=$2
-	_alias="$3"
-	_syscfg=$(_command_huawei_syscfgex_get "$1")
-	_acqorder=$(echo "$_syscfg"|jsonfilter -e '$["ACQORDER"]')
-	_band=$(echo "$_syscfg"|jsonfilter -e '$["BAND"]')
-	_roam=$(echo "$_syscfg"|jsonfilter -e '$["ROAM"]')
-
-	[ -z "$_acqorder" ] && return 1
-	[ -z "$_band" ] && return 1
-
-	if [ "$_roam" = "$_val" ]; then
-		return 0
-	fi
-	echo "set roam"
-	if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-		_command_huawei_syscfgex_set "$_ctl" "$_syscfg" "ROAM" "$_val"
-	else
-		_command_private_generic_exec "$_ctl" "SYSCFGEX" "=$_acqorder,$_band,$_val"
-	fi
-}
-
-command_huawei_roam() {
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	local roam=""
-	if [ "$2" = "0" ];then		
-		if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-			roam="0"
-		else
-			roam="3"
-		fi
-		_command_huawei_roam "$1" "$roam" "$_alias"
-	else
-		if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-			roam="$2"
-		else
-			roam="0"
-		fi
-		_command_huawei_roam "$1" "$roam" "$_alias"
-	fi
-}
-
-command_huawei_model(){
-	local _ctl="$1"
-	local _info="$2"
-	local _res _model
-	local _cmd
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "mt5700" ];then
-		echo "MT5700M-CN"
-		return
-	fi
-
-	_cmd="ATI"
-
-	_res=$(_command_exec_raw "$_ctl" "$_cmd")
-	[ -z "$_res" ] && return 1
-
-	_model="$(echo "$_res"|grep 'Model:'|awk -F' ' '{print $2}')"
-	echo "$_model"
-}
-
-command_huawei_sn(){
-	local _ctl="$1"
-	echo "tdtech0000000000"
-}
-
-command_huawei_checkethen(){
-	local _ctl="$1"
-	local _val="1,1"
-	local _option
-	local _res
-
-	if ! _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}ETHEN=?"| grep "OK" ;then
-		return 0
-	fi
-	echo  "support ETHEN"
-	_res=$(_command_private_exec "$_ctl" "ETHEN" "?")
-	[ -z "$_res" ] && return 1
-
-	_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-	echo  "get ETHEN :$_option"
-	if [ "$_option" = "$_val" ]; then
-		return 0
-	fi
-
-	echo "do set ETHEN $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}ETHEN=$_val"
-	return 2
-}
-
-command_huawei_checkmode(){
-	local _ctl="$1"
-	local _val="1"
-	local _option
-	local _res
-
-	if ! _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}SETMODE=?"| grep "OK" ;then
-		return 0
-	fi
-
-	echo  "support SETMODE"
-	_res=$(_command_private_exec "$_ctl" "SETMODE" "?")
-	[ -z "$_res" ] && return 1
-
-	_option=$(echo "$_res"|awk -F' ' '{print $2}')
-	echo  "get SETMODE :$_option"
-	if [ "$_option" = "$_val" ]; then
-		return 0
-	fi
-
-	echo "do set setmode $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}SETMODE=$_val"
-	return 2
-}
-
-command_huawei_imssetstorage(){
-	local _ctl="$1"
-	local _data
-	local _res
-	local _val_cmgf="\"ME\",\"ME\",\"ME\""
-	local max_try=5
-	local error_response=0
-	local match_key="SM"
-	local _info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	
-	if [ "$_alias" == "redcap" ];then
-		_val_cmgf="\"SM\",\"SM\",\"SM\""
-		match_key="ME"
-	fi
-	
-	while true;do
-		_res=$(_command_generic_exec "$_ctl" "CPMS" "?")
-		if [ -n "$_res" ];then
-			_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-			if [ -n "$_data" ];then
-				echo  "get CPMS :$_data"
-				if echo "$_data" |grep -qEw "$match_key"; then
-					echo  "CPMS :set $_val_cmgf"
-					_res=$(_command_generic_exec "$_ctl" "CPMS" "=$_val_cmgf")
-					if [ -n "$_res" ];then
-						return 0
-					fi
-				fi
-			fi
-			break
-		fi
-		echo  "CPMS :get error $error_response"
-		error_response=$((error_response+1))
-		if [ $error_response -gt $max_try ];then
-			break
-		fi
-		sleep 1
-	done
-
-	return 1
-}
-
-command_huawei_forceims(){
-	local _ctl="$1"
-	local val="$2"
-	local ceus_val="1"
-	local _data
-	local _res
-	local _ims_apn=""
-
-	[ -z "$val" ] && val="1"
-	[ "$val" == "1" ] && ceus_val="0" && _ims_apn="ims"
-	local _val_forceims="$val,$val,$val"
-
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-		_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT=5,\"IPV4V6\",\"$_ims_apn\",\"\",0,0,0,0,1,1,1"
-	fi
-
-	_res=$(_command_generic_exec "$_ctl" "CEUS" "?")
-	if [ -n "$_res" ];then
-		_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-		if [ -n "$_data" ];then
-			echo  "get ceus :$_data"
-			if [ "$_data" != "$ceus_val" ]; then
-				echo  "ceus :set $ceus_val"
-				_command_generic_exec "$_ctl" "CEUS" "=$ceus_val"
-			fi
-		fi
-	fi
-
-	_res=$(_command_private_exec "$_ctl" "IMSSWITCH" "?")
-	if [ -n "$_res" ];then
-		_data=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf|sed -e 's/ //g')
-		if [ -n "$_data" ];then
-			echo  "get ims :$_data"
-			if [ "$_data" != "$_val_forceims" ]; then
-				echo  "ims :set $val"
-				_command_private_exec "$_ctl" "IMSSWITCH" "=$_val_forceims"
-				return 0
-			fi
-		fi
-	fi
-
-	return 1
-}
-
-command_huawei_check_pciephy(){
-	local _ctl="$1"
-	local _val="$2"
-	local _option
-	local _res
-
-	if ! _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}TDPCIELANCFG=?"| grep "OK" ;then
-		return 0
-	fi
-	echo  "support TDPCIELANCFG"
-	_res=$(_command_private_exec "$_ctl" "TDPCIELANCFG" "?")
-	[ -z "$_res" ] && return 1
-
-	_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-	echo  "get TDPCIELANCFG :$_option"
-	if [ "$_option" = "$_val" ]; then
-		return 0
-	fi
-
-	echo "do set TDPCIELANCFG $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}TDPCIELANCFG=$_val"
-	return 2
-}
-
-command_huawei_check_pciephytdp(){
-	local _ctl="$1"
-	local _val="1,0,0,0"
-	local _option
-	local _res
-
-	if ! _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}TDPMCFG=?"| grep "OK" ;then
-		return 0
-	fi
-	echo  "support TDPMCFG"
-	_res=$(_command_private_exec "$_ctl" "TDPMCFG" "?")
-	[ -z "$_res" ] && return 1
-
-	_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-	echo  "get TDPMCFG :$_option"
-	if [ "$_option" = "$_val" ]; then
-		return 0
-	fi
-
-	echo "do set TDPMCFG $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}TDPMCFG=$_val"
-	return 2
-}
-
-command_huawei_check_TDCFGMode(){
-	local _ctl="$1"
-	local _val="$2"
-	local _option
-	local _res
-	local max_try=5
-	local error_response=0
-
-	while true;do
-		_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}TDCFG?")
-		if [ -n "$_res" ];then
-			_option=$(echo "$_res"|grep "Mode:"|awk -F':' '{print $2}'|xargs -r printf)
-			if [ -n "$_option" ];then
-				echo  "get TDCFG Mode:$_option"
-				if [ "$_option" = "$_val" ]; then
-					return 0
-				else
-					echo "do set TDCFG Mode $_val"
-					_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}TDCFG="infcfg","mode",$_val"
-					return 2
-				fi
-			fi			
-		fi
-		echo  "TDCFG :get error $error_response"
-		error_response=$((error_response+1))
-		if [ $error_response -gt $max_try ];then
-			break
-		fi
-		sleep 1
-	done
-	return 1
-}
-
-command_huawei_check_autodail(){
-	local _ctl="$1"	
-	local dver="$2"
-	local _val="1,2"
-	local _option
-	local _res
-
-	if [ -z "$dver" ];then
-		_val="0"
-	fi
-	if ! _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}SETAUTODIAL=?"| grep "OK" ;then
-		return 0
-	fi
-	echo  "support SETAUTODIAL"
-	_res=$(_command_private_exec "$_ctl" "SETAUTODIAL" "?")
-	[ -z "$_res" ] && return 1
-
-	_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-	if [ -z "$dver" ];then
-		_data="$(echo "$_option"|awk -F',' '{print $1}')"
-	else
-		_data="$(echo "$_option"|awk -F',' '{print $1}'),$(echo "$_option"|awk -F',' '{print $2}')"
-	fi
-	echo  "$_data"
-	if [ "$_data" = "$_val" ]; then
-		return 0
-	fi
-
-	echo "do set SETAUTODIAL $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}SETAUTODIAL=$_val"
-	return 2
-}
-
-command_huawei_check_nrrc(){
-	local _ctl="$1"
-	local _val="$2"
-	local _option
-	local _res
-
-	_res=$(_command_private_exec "$_ctl" "NRRCCAPQRY" "=3")
-	[ -z "$_res" ] && return 1
-
-	_data=$(echo "$_res"|awk -F',' '{print $2}'|xargs -r printf)
-	echo  "NRRCCAPQRY:$_data"
-	if [ "$_data" = "$_val" ]; then
-		return 0
-	fi
-
-	echo "do set NRRCCAPCFG $_val"
-	_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRRCCAPCFG=3,$_val"
-	return 2
-}
-
-
-command_huawei_preinit(){
-	local model_autorestart=0
-	local res
-	local reset=0
-	local _phycap=$(uci -q get network.${gNet}.phycap)
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	[ -z "$simIndex" ] && simIndex="1"
-	local ippass="0"
-	local nrrc=$(uci -q get "cpecfg.${gNet}sim$simIndex.nrrc")
-	if uci -q get "network.$gNet.ippass"|grep -qs "1";then
-		ippass=$(uci -q get "cpecfg.${gNet}sim$simIndex.ippass")
-	fi
-	
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_driver=$(echo "$_info"|jsonfilter -e '$["driver"]')
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-
-	local _force_ims="0"
-	if _check_simslot ;then
-		_force_ims="1"
-	fi
-	[ -z "$nrrc" ] && nrrc="1"
-	[ -z "$_phycap" ] && _phycap=0
-	[ -z "$ippass" ] && ippass=0
-	if [ $_phycap -lt 1000 ];then
-		ippass=0
-	fi
-	command_generic_imsreport "$1"
-	if command_huawei_imssetstorage "$1" ;then
-		/etc/init.d/smsd restart
-	fi
-
-	command_generic_imsfmt "$1"
-	
-	if command_huawei_forceims "$1" "$_force_ims" ;then
-		model_autorestart=1
-	fi
-
-	if [ "$_alias" == "mt5700" ];then
-		if [ "$ippass" == "1" ];then
-			command_huawei_check_TDCFGMode "$1" "3"
-			res=$?
-		else
-			command_huawei_check_TDCFGMode "$1" "1"
-			res=$?
-		fi
-		if [ $res -eq 2 ];then
-			reset=1
-		elif [ $res -eq 1 ];then
-			return 1
-		fi
-		command_huawei_check_nrrc "$1" "$nrrc"
-		res=$?
-		if [ $res -eq 2 ];then
-			model_autorestart=1
-		elif [ $res -eq 1 ];then
-			return 1
-		fi
-		if [ "$_driver" != "odu" ];then
-			local pciephy=1
-			if [ $_phycap -ge 2500 ];then
-				pciephy=2
-			fi
-			command_huawei_check_pciephy "$1" "$pciephy"
-			res=$?
-			if [ $res -eq 2 ];then
-				reset=1
-			fi
-			command_huawei_check_pciephytdp "$1"
-			res=$?
-			if [ $res -eq 2 ];then
-				reset=1
-			fi
-			command_huawei_check_autodail "$1" "$dver"
-			res=$?
-			if [ $res -eq 2 ];then
-				reset=1
-			fi
-		fi
-	fi
-
-	if [ -z "$_alias"  ];then
-		command_huawei_checkethen "$1"
-		res=$?
-		if [ $res -eq 2 ];then
-			reset=1
-		elif [ $res -eq 1 ];then
-			return 1
-		fi
-
-		command_huawei_checkmode "$1"
-		res=$?
-		if [ $res -eq 2 ];then
-			model_autorestart=1
-		fi
-	fi
-
-	if [ $reset -eq 1 ];then
-		cpetools.sh -i "${gNet}" -r
-		return 1
-	fi
-
-	if [ $model_autorestart -eq 1 ];then
-		command_generic_reset "$1"
-	fi
-
-	return 0
-}
-
-command_huawei_usim_reset() {
-	local _res
-	local _ctl="$1"
-	local _info="$2"
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "redcap" ];then
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,0" "5"
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}SIMSWITCH=0,1" "5"
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,1" "5"
-		return 0
-	elif [ "$_alias" == "mt5700" ];then
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}SCICHG=0,1" "5"
-		return 0
-	fi
-	_res=$(command_huawei_model "$1" "$_info")
-	if [ "$_res" == "MH5000-82M" ];then
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}SIMSWITCH=0" "5"
-	fi
-	return 0
-}
-command_huawei_usim_get() {
-	local _ctl="$1"
-	local _info="$2"
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	[ "$_alias" != "redcap" -a "$_alias" != "mt5700" ] && return 1
-
-	if [ "$_alias" == "mt5700" ];then
-		_res=$(_command_private_exec "$_ctl" "SCICHG" "?")
-		[ -z "$_res" ] && return 1
-		_option=$(echo "$_res"|awk -F':' '{print $2}'|awk -F' ' '{print $1}')
-		_option=$(echo "$_option"|awk -F',' '{print $1}'|awk -F' ' '{print $1}')
-	else
-		_res=$(_command_private_exec "$_ctl" "SIMSWITCH" "?")
-		[ -z "$_res" ] && return 1
-		_option=$(echo "$_res"|awk -F':' '{print $2}'|awk -F' ' '{print $1}')
-	fi
-
-	[ -n "$_option" ] && echo $((_option+1))
-}
-
-command_huawei_usim_set() {
-	local _ctl="$1"
-	local _new="$2"
-	local _res
-
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	if [ "$_alias" == "redcap" ];then
-		local val=$((_new-1))
-		local _hvsst
-		_hvsst=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,0" "5")
-		echo "$_hvsst" | grep -qsw "OK" || return 1
-		_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}SIMSWITCH=${val},1" "5")
-		_hvsst=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,1" "5")
-		echo "$_hvsst" | grep -qsw "OK" || return 1
-	elif [ "$_alias" == "mt5700" ];then
-		local val=$((_new-1))
-		local val2="1"
-		if [ $val == "1" ];then
-			val2="0"
-		fi
-		_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}SCICHG=$val,$val2" "5")
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,0" "5"
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,1" "5"
-	else
-		_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}SIMSWITCH=${_new}" "5")
-	fi
-	echo  "command_huawei_usim_set $_res"
-	[ -z "$_res" ] && return 1
-	if echo "$_res"|grep "OK" ;then
-		command_generic_reset "$_ctl"
-		echo  "command_huawei_usim_set command_generic_reset"
-		return 0
-	fi
-	echo  "command_huawei_usim_set error"
-	return 1
-}
-
-command_huawei_rstsim() {
-	local _ctl="$1"
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" -o "$_alias" == "mt5700" -o "$_alias" == "redcap" ];then
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,0" "5"
-		_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}HVSST=1,1" "5"
-		return 0
-	fi
-	return 1
-}
-
-command_huawei_apn(){
-	local _ctl="$1"
-	local _info="$2"
-	local cid="2"
-	local apn=""
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		cid="7"
-	else
-		_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-		
-		[ "$_alias" == "redcap" ] && cid=1
-		[ "$_alias" == "mt5700" ] && cid=8
-		[ "$_alias" == "mt5700" ] && [ -z "$dver" ] && cid=1
-	fi
-
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT?"|grep "+CGDCONT:")
-	[ -z "$_res" ] && return 1
-	pdptype=$(echo $pdptype | tr 'a-z' 'A-Z')
-	[ -z "$auth" ] && auth="0"
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			_data="$(echo "$line"|awk -F: '{print $2}')"
-			_cur_cid="$(echo "$_data"|awk -F, '{print $1}'|sed 's/ //g')"
-			_cur_pdptype="$(echo "$_data"|awk -F, '{print $2}'|sed 's/"//g')"
-			_cur_apn="$(echo "$_data"|awk -F, '{print $3}'|sed 's/"//g'|xargs -r printf)"
-			_cur_pdptype=$(echo $_cur_pdptype | tr 'a-z' 'A-Z')
-			if [ "$cid" == "$_cur_cid" ];then
-				apn="$_cur_apn"
-				break
-			fi
-		fi
-	done
-	json_init
-	json_add_string "APN" "$apn"
-	json_dump
-	json_cleanup
-}
-
-command_huawei_dnn(){
-	local _ctl="$1"
-	local _info="$2"
-	local cid="7"
-	local cid2="8"
-	local apn=""
-	local apn2=""
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT?"|grep "+CGDCONT:")
-		[ -z "$_res" ] && return 1
-		pdptype=$(echo $pdptype | tr 'a-z' 'A-Z')
-		[ -z "$auth" ] && auth="0"
-		_cnt=$(echo "$_res"|wc -l)
-		i=0
-		while [ $i -lt $_cnt ];do
-			i=$((i+1))
-			line=$(echo "$_res" |sed -n "${i}p")
-			if [ -n "$line" ];then
-				_data="$(echo "$line"|awk -F: '{print $2}')"
-				_cur_cid="$(echo "$_data"|awk -F, '{print $1}'|sed 's/ //g')"
-				_cur_pdptype="$(echo "$_data"|awk -F, '{print $2}'|sed 's/"//g')"
-				_cur_apn="$(echo "$_data"|awk -F, '{print $3}'|sed 's/"//g'|xargs -r printf)"
-				_cur_pdptype=$(echo $_cur_pdptype | tr 'a-z' 'A-Z')
-				if [ "$cid" == "$_cur_cid" ];then
-					apn="$_cur_apn"
-				elif [ "$cid2" == "$_cur_cid" ];then
-					apn2="$_cur_apn"
-				fi
-			fi
-		done
-	fi
-
-	json_init
-	json_add_array "APN"
-	json_add_string "" "$apn"
-	json_add_string "" "$apn2"
-	json_dump
-	json_cleanup
-}
-
-command_huawei_ips(){
-	local _ctl="$1"
-	local _info="$2"
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		echo $(command_generic_ipaddr "$_ctl" "7")
-	else
-		_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-		if [ "$_alias" == "redcap" ];then
-			echo $(command_generic_ipaddr "$_ctl" "1")
-		elif [ "$_alias" == "mt5700" ];then
-			if [ -z "$dver" ];then
-				echo $(command_generic_ipaddr "$_ctl" "1")
-			else
-				echo $(command_generic_ipaddr "$_ctl" "8")
-			fi
-		else
-			echo $(command_generic_ipaddr "$_ctl" "2")
-		fi
-	fi
-}
-
-command_huawei_pdp(){
-	local _ctl="$1"
-	local _info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-	#local cid="$3"
-	local pdptype="$4"
-	local apn="$5"
-	local auth="$6"
-	local username="$7"
-	local password="$8"
-	local cid="2"
-	local change=0
-	local found=0
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-
-	[ "$apn" == "\"\"" ] && apn=""
-	[ "$auth" == "\"\"" ] && auth=""
-	[ "$username" == "\"\"" ] && username=""
-	[ "$password" == "\"\"" ] && password=""
-	
-	[ "$_alias" == "redcap" ] && cid=1
-	[ "$_alias" == "mt5700" ] && cid=8
-	[ "$_alias" == "mt5700" ] && [ -z "$dver" ] && cid=1
-	echo "setup_apn $cid,$pdptype,$apn,$auth,$username,$password"
-	_res=$(_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT?"|grep "+CGDCONT:")
-	[ -z "$_res" ] && return 1
-	pdptype=$(echo $pdptype | tr 'a-z' 'A-Z')
-	[ -z "$auth" ] && auth="0"
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			_data="$(echo "$line"|awk -F: '{print $2}')"
-			_cur_cid="$(echo "$_data"|awk -F, '{print $1}'|sed 's/ //g')"
-			_cur_pdptype="$(echo "$_data"|awk -F, '{print $2}'|sed 's/"//g')"
-			_cur_apn="$(echo "$_data"|awk -F, '{print $3}'|sed 's/"//g'|xargs -r printf)"
-			_cur_pdptype=$(echo $_cur_pdptype | tr 'a-z' 'A-Z')
-			if [ "$cid" == "$_cur_cid" ];then
-				found=1
-				if [ -z "$apn" ];then
-					apn="$_cur_apn"
-					if check_apn_disable ;then
-						apn=""
-					fi
-				fi 
-				if [ "$_cur_pdptype" != "$pdptype" -o "$_cur_apn" != "$apn" ];then
-					_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT=$cid,\"$pdptype\"${apn:+,\"$apn\"}"
-					change=1
-				fi
-				break
-			fi
-		fi
-	done
-
-	if [ $found -eq 0 ];then
-		_command_exec_raw "$1" "${AT_GENERIC_PREFIX}CGDCONT=$cid,\"$pdptype\"${apn:+,\"$apn\"}"
-		change=1
-	fi
-
-	_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}AUTHDATA?"|grep "\^AUTHDATA:")
-	[ -z "$_res" ] && return 1
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			_data="$(echo "$line"|awk -F: '{print $2}')"
-			_cur_cid="$(echo "$_data"|awk -F, '{print $1}'|sed 's/ //g')"
-			_cur_auth_type="$(echo "$_data"|awk -F, '{print $2}'|sed 's/"//g')"
-			_cur_password="$(echo "$_data"|awk -F, '{print $3}'|sed 's/"//g')"
-			_cur_username="$(echo "$_data"|awk -F, '{print $4}'|sed 's/"//g')"
-
-			if [ "$cid" == "$_cur_cid" ];then
-				if [ "$_cur_auth_type" != "$auth" -o "$_cur_password" != "$password" -o "$_cur_username" != "$username" ];then
-					_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}AUTHDATA=$cid,$auth,\"\",\"$password\",\"$username\""
-					#change=1
-				fi
-				break
-			fi
-		fi
-	done
-	if [ $change -eq 1 ];then
-		command_generic_reset "$1"
-	fi
-}
-get_mobility_cfg(){
-	local simIndex=$(uci -q get "cpesel.sim${gIndex}.cur")
-	[ -z "$simIndex" ] && simIndex="1"
-	local mobility=$(uci -q get "cpecfg.${gNet}sim$simIndex.mobility")
-	local freqfree=$(uci -q get "system.basic.freqfree")
-	if [ "$freqfree" == "1" ];then
-		[ -z "$mobility" ] && mobility="1"
-	else
-		[ -z "$mobility" ] && mobility="0"
-	fi
-	echo "$mobility"
-}
-_earfcn_huawei_5glock(){
-	local _freqcfg _enable _band
-	local _ctl="$1"
-	local _info="$2"
-	local earfcn="$3"
-	local pci="$4"
-	local band="$5"
-	local scs=1
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_freqcfg=$(_command_huawei_freq_get "$_ctl")
-	[ -z "$_freqcfg" ] && return 1
-	_enable=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')	
-
-	if [ -z "$earfcn" -o "$earfcn" == "0" -o  -z "$band" -o "$band" == "0" ];then
-		if [ "$_enable" != "0" ];then
-			echo "earfcn5 nr free"
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0" 2
-		fi
-		return 0
-	fi
-
-	if [ "$band" == "1" -o "$band" == "2" -o "$band" == "3" -o "$band" == "5" -o "$band" == "7" -o "$band" == "8" -o "$band" == "12" -o "$band" == "20" -o "$band" == "25" -o "$band" == "28" -o "$band" == "66" -o "$band" == "71" -o "$band" == "75" -o "$band" == "76" ];then
-		scs=0
-	elif [ "$band" == "38" -o "$band" == "40" -o "$band" == "41" -o "$band" == "48" -o "$band" == "77" -o "$band" == "78" -o "$band" == "79" ];then
-		scs=1
-	elif [ "$band" == "257" -o "$band" == "258" -o "$band" == "260" -o "$band" == "261" ];then
-		scs=3
-	fi
-	local mobility="0"
-	_scs=$(echo "$_freqcfg"|jsonfilter -e '$["scstype"]')
-	if [ -z "$pci" ];then
-		if [ "$_enable" == "1" ];then
-			_band=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-			_earfcn=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-			_mobility=$(echo "$_freqcfg"|jsonfilter -e '$["mobility"]')
-
-			if [ -z "$_mobility" -o "$mobility" == "$_mobility" ];then
-				if [ "$earfcn" == "$_earfcn" -a "$band" == "$_band" -a "$scs" == "$_scs" ];then
-					return 0
-				fi
-			fi
-		fi
-		echo "earfcn5 set nr earfcn:$earfcn,old_earfcn:$_earfcn|band:$band,old_band:$_band|scs:$scs,old_scs:$_scs|mobility:$mobility,old_mobility:$_mobility"
-		command_generic_cfun_c
-		[ "$_enable" != "0" ] && _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0" 2
-
-		if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=1,$mobility,1,\"$band\",\"$earfcn\",\"$scs\"" 2
-		else
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=1,$scs,$band,$earfcn" 2
-		fi
-		command_generic_cfun_o
-	else
-		if [ "$_enable" == "2" ];then
-			_band=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-			_earfcn=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-			_pci=$(echo "$_freqcfg"|jsonfilter -e '$["cellid"]')
-			_mobility=$(echo "$_freqcfg"|jsonfilter -e '$["mobility"]')
-
-			if [ -z "$_mobility" -o "$mobility" == "$_mobility" ];then
-				if [ "$earfcn" == "$_earfcn" -a "$band" == "$_band" -a "$pci" == "$_pci" -a "$scs" == "$_scs" ];then
-					return 0
-				fi
-			fi
-		fi
-		echo "earfcn5 set nr earfcn:$earfcn,old_earfcn:$_earfcn|band:$band,old_band:$_band|pci:$pci,old_pci:$_pci|scs:$scs,old_scs:$_scs|mobility:$mobility,old_mobility:$_mobility"
-		command_generic_cfun_c
-		[ "$_enable" != "0" ] && _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0" 2
-		if [ "$_alias" == "redcap" -o "$_alias" == "mt5700" ];then
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=2,$mobility,1,\"$band\",\"$earfcn\",\"$scs\",\"$pci\"" 2
-		else
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=2,$scs,$band,$earfcn,$pci" 2
-		fi
-		command_generic_cfun_o
-	fi
-}
-
-_command_huawei_earfcn_get() {
-	local _res _info
-	local _enable=""
-	local _mode=""
-	local _arfcn=""
-	local _band=""
-	local _cellid=""
-	local _alias="$2"
-
-	if [ "$_alias" == "redcap" -o "$_alias" == "mt5700"  ];then
-		local _res _info
-
-		_res=$(_command_exec_raw "$1" "${AT_PRIVATE_PREFIX}LTEFREQLOCK?")
-		nrfreq=$(echo "$_res" | grep "LTEFREQLOCK:")
-		[ -z "$nrfreq" ] && return 1
-
-		_info=$(echo "$nrfreq"|awk -F: '{print $2}')
-		_change_info=$(echo "$_info"|xargs -r printf)
-
-		json_init
-		if [ "$_change_info" = "0" ];then
-			json_add_string "enable" "$_change_info"
-		else
-			json_add_string "enable" "1"
-		fi
-
-		if [ "$_change_info" == "2" -o  "$_change_info" == "1" -o "$_change_info" == "3"  ];then
-			_info=$(echo "$_res"|sed -n "4p")
-			_flag=$(echo "$_res"|sed -n "3p")
-			json_add_string "mode" "04"
-			json_add_string "band" "$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf)"
-			json_add_string "arfcn" "$(echo "$_info"|awk -F, '{print $2}'|xargs -r printf)"
-			json_add_string "cellid" "$(echo "$_info"|awk -F, '{print $3}'|xargs -r printf)"
-			json_add_string "mobility" "$(echo "$_flag"|awk -F, '{print $1}'|xargs -r printf)"
-		fi
-
-		json_dump
-		json_cleanup
-		return 0
-	fi
-
-	_res=$(_command_private_exec "$1" "FREQLOCK" "?"|grep "\^FREQLOCK:")
-	[ -z "$_res" ] && return 1
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			_data="$(echo "$line"|awk -F: '{print $2}')"
-			_enable_tmp="$(echo "$_data"|awk -F, '{print $1}'|sed 's/ //g'|xargs -r printf)"
-			_mode_tmp="$(echo "$_data"|awk -F, '{print $2}'|sed 's/"//g')"
-			_arfcn_tmp="$(echo "$_data"|awk -F, '{print $3}')"
-			_band_tmp="$(echo "$_data"|awk -F, '{print $4}')"
-			_pci_tmp="$(echo "$_data"|awk -F, '{print $6}'|xargs -r printf)"
-
-			if [ $_cnt -gt 1 ];then
-				if [ "$_mode_tmp" == "04" ];then
-					_enable="$_enable_tmp"
-					_mode="$_mode_tmp"
-					_arfcn="$_arfcn_tmp"
-					_band="$_band_tmp"
-					_cellid="$_pci_tmp"
-					break
-				fi
-			else
-				if [ "$_mode_tmp" == "04" ];then
-					_enable="$_enable_tmp"
-					_mode="$_mode_tmp"
-					_arfcn="$_arfcn_tmp"
-					_band="$_band_tmp"
-					_cellid="$_pci_tmp"
-				else
-					_enable="0"
-				fi
-			fi
-		fi
-	done
-
-	json_init
-	json_add_string "enable" "$_enable"
-	json_add_string "mode" "$_mode"
-	json_add_string "arfcn" "$_arfcn"
-	json_add_string "band" "$_band"
-	json_add_string "cellid" "$_cellid"
-	json_dump
-	json_cleanup
-}
-
-
-_command_huawei_earfcn4g_get() {
-	local _res _info
-
-	_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK?"|grep "\^FreqLock")
-	[ -z "$_res" ] && return 1
-	_info=$(echo "$_res"|awk -F: '{print $2}')
-	_change_info=$(echo "$_info"|xargs -r printf)
-
-	json_init
-	if [ "$_change_info" = "0" ];then
-		json_add_string "enable" "$_change_info"
-	else
-		json_add_string "enable" "$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf|awk '$1= $1')"
-	fi
-
-	json_add_string "mode" "$(echo "$_info"|awk -F, '{print $2}'|sed 's/"//g')"
-	json_add_string "arfcn" "$(echo "$_info"|awk -F, '{print $3}'|xargs -r printf)"
-	json_dump
-	json_cleanup
-}
-
-
-_command_huawei_earfcncell4g_get() {
-	local _res _info
-
-	_res=$(_command_private_exec "$1" "CELLLOCK" "?")
-	[ -z "$_res" ] && return 1
-	_info=$(echo "$_res"|awk -F: '{print $2}')
-	_change_info=$(echo "$_info"|xargs -r printf)
-
-	json_init
-	if [ "$_change_info" = "0" ];then
-		json_add_string "enable" "$_change_info"
-	else
-		json_add_string "enable" "$(echo "$_info"|awk -F, '{print $1}'|xargs -r printf|awk '$1= $1')"
-	fi
-	_pci="$(echo "$_info"|awk -F, '{print $5}'|xargs -r printf|sed -e 's/^0*//g')"
-	[ -n "$_pci" ] && {
-		_pci=$(printf %d 0x$_pci)
-	}
-
-	json_add_string "mode" "$(echo "$_info"|awk -F, '{print $2}'|sed 's/"//g')"
-	json_add_string "arfcn" "$(echo "$_info"|awk -F, '{print $4}'|xargs -r printf)"
-	json_add_string "cellid" "$_pci"
-	json_dump
-	json_cleanup
-}
-
-
-
-_earfcn_huawei_4glock(){
-	local _freqcfg _cellcfg _enable _band
-	local _ctl="$1"
-	local _info="$2"
-	local earfcn="$3"
-	local pci="$4"
-
-	_freqcfg=$(_command_huawei_earfcn4g_get "$_ctl")
-	_cellcfg=$(_command_huawei_earfcncell4g_get "$_ctl")
-	[ -z "$_freqcfg" ] && return 1
-	_enable=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-	_enable_cell=$(echo "$_cellcfg"|jsonfilter -e '$["enable"]')
-
-	if [ -z "$earfcn" -o "$earfcn" == "0" ];then
-		if [ "$_enable" != "0" ];then
-			echo "earfcn4 free freqlock"
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=0" 2
-		fi
-		if [ "$_enable_cell" != "0" ];then
-			echo "earfcn4 free celllock"
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}CELLLOCK=0" 2
-		fi
-
-		return 0
-	fi
-	if [ -z "$pci" ];then
-		if [ "$_enable_cell" == "1" ];then
-			echo "earfcn4 free celllock"
-			 _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}CELLLOCK=0" 2
-		fi
-		if [ "$_enable" == "1" ];then
-			_mode=$(echo "$_freqcfg"|jsonfilter -e '$["mode"]')
-			_earfcn=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-
-			if [ "$_mode" == "04" -a "$earfcn" == "$_earfcn" ];then
-				return 0
-			fi
-		fi
-	else
-		if [ "$_enable" == "1" ];then
-			echo "earfcn4 free freqlock"
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=0" 2
-		fi
-		if [ "$_enable_cell" == "1" ];then
-			_mode=$(echo "$_cellcfg"|jsonfilter -e '$["mode"]')
-			_earfcn=$(echo "$_cellcfg"|jsonfilter -e '$["arfcn"]')
-			_pci=$(echo "$_cellcfg"|jsonfilter -e '$["cellid"]')
-
-			if [ "$_mode" == "04" -a "$earfcn" == "$_earfcn" -a "$_pci" == "$pci" ];then
-				return 0
-			fi
-		fi
-	fi
-	[ "$_enable" != "0" ] && _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=0" 2
-	[ "$_enable_cell" != "0" ] && _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}CELLLOCK=0" 2
-	[ -n "$pci" ] && {
-		pci=$(printf %x $pci)
-		pci=$(echo $pci | tr '[a-z]' '[A-Z]')
-	}
-	echo "earfcn4 set earfcn:$earfcn pci:$pci"
-	command_generic_cfun_c
-	if [ -z "$pci" ];then
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=1,\"04\",$earfcn" 2
-	else
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}CELLLOCK=1,\"04\",,$earfcn,$pci" 2
-	fi
-	command_generic_cfun_o
-}
-
-_earfcn_huawei_5g_4glock(){
-	local _freqcfg _enable _band
-	local _ctl="$1"
-	local _info="$2"
-	local earfcn="$3"
-	local pci="$4"
-	local band="$5"
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_freqcfg=$(_command_huawei_earfcn_get "$_ctl" "$_alias")
-	[ -z "$_freqcfg" ] && return 1
-	_enable=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-	local mobility="0"
-
-	if [ -z "$earfcn" -o "$earfcn" == "0" ];then
-		if [ "$_enable" != "0" ];then
-			_mode=$(echo "$_freqcfg"|jsonfilter -e '$["mode"]')
-			if [ "$_mode" == "04" ];then
-				echo "earfcn5 lte free"
-				if [ "$_alias" == "redcap"  -o "$_alias" == "mt5700" ];then
-					_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=0" 2
-				else
-					_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=0" 2
-				fi
-			fi
-		fi
-		return 0
-	fi
-
-	if [ "$_enable" == "1" ];then
-		_mode=$(echo "$_freqcfg"|jsonfilter -e '$["mode"]')
-		_earfcn=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-		_band=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-		_pci=$(echo "$_freqcfg"|jsonfilter -e '$["cellid"]')
-		_mobility=$(echo "$_freqcfg"|jsonfilter -e '$["mobility"]')
-
-		if [ "$_mode" == "04" ];then
-			if [ -z "$pci" ];then
-				if [ -z "$_mobility" -o "$mobility" == "$_mobility" ];then
-					if [ "$earfcn" == "$_earfcn" -a -z "$_pci" ];then
-						return 0
-					fi
-				fi
-			else
-				if [ -z "$_mobility" -o "$mobility" == "$_mobility" ];then
-					if [ "$earfcn" == "$_earfcn" -a "$_pci" == "$pci" -a "$_band" == "$band" ];then
-						return 0
-					fi
-				fi
-			fi
-		fi
-	fi
-	echo "earfcn5 old lte $_enable earfcn:$_earfcn pci:$_pci band:$_band mobility:$_mobility"
-	echo "earfcn5 set lte earfcn:$earfcn pci:$pci band:$band mobility:$mobility"
-
-	if [ "$_alias" == "redcap"  -o "$_alias" == "mt5700" ];then
-		[ "$_enable" != "0" ] && _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=0" 2
-		command_generic_cfun_c
-		if [ -z "$pci" ];then
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=1,$mobility,1,\"$band\",\"$earfcn\"" 2
-		else
-			_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=2,$mobility,1,\"$band\",\"$earfcn\",\"$pci\"" 2
-		fi
-		command_generic_cfun_o
-	else
-		[ "$_enable" != "0" ] && _command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=0" 2
-		command_generic_cfun_c
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}FREQLOCK=1,\"04\",$earfcn,,,$pci" 2
-		command_generic_cfun_o
-	fi
-}
-
-command_huawei_earfcn() {
-	local _ctl="$1"
-	local _info="$2"
-	local mode="$3"
-	local earfcn="$4"
-	local pci="$5"
-	local band="$6"
-	local _res _info
-	
-	_res=$(_command_private_exec "$1" "NRFREQLOCK" "?")
-
-	if [ "$mode" == "NR" ];then
-		if [ -z "$_res" ];then
-			return 0
-		else
-			_earfcn_huawei_5glock "$_ctl" "$_info" "$earfcn" "$pci" "$band"
-		fi
-	elif [ "$mode" == "LTE" ];then
-		if [ -z "$_res" ];then
-			_earfcn_huawei_4glock "$_ctl" "$_info" "$earfcn" "$pci"
-		else
-			_earfcn_huawei_5g_4glock "$_ctl" "$_info" "$earfcn" "$pci" "$band"
-		fi
-	else
-		return 0
-	fi
-}
-
-command_huawei_earfcn_info() {
-	local _ctl="$1"
-	local _info="$2"
-	local _res _info
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_res=$(_command_private_exec "$1" "NRFREQLOCK" "?")
-	if [ -n "$_res" ];then
-		_freqcfg=$(_command_huawei_earfcn_get "$_ctl" "$_alias")
-		[ -n "$_freqcfg" ] && {
-			_enable=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-			_mode=$(echo "$_freqcfg"|jsonfilter -e '$["mode"]')
-			_band=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-			_earfcn=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-			_pci=$(echo "$_freqcfg"|jsonfilter -e '$["cellid"]')
-			_mobility=$(echo "$_freqcfg"|jsonfilter -e '$["mobility"]')
-		}
-
-		_freqcfg=$(_command_huawei_freq_get "$_ctl")
-		[ -n "$_freqcfg" ] && {
-			_enable5=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-			_band5=$(echo "$_freqcfg"|jsonfilter -e '$["band"]')
-			_earfcn5=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-			_pci5=$(echo "$_freqcfg"|jsonfilter -e '$["cellid"]')
-			_mobility5=$(echo "$_freqcfg"|jsonfilter -e '$["mobility"]')
-		}
-
-		json_init
-		json_add_array "earfcn"
-		json_add_object
-
-		if [ "$_enable5" = "0" ];then
-			json_add_string "status" "0"
-		else
-			json_add_string "status" "1"
-			json_add_string "BAND" "$_band5"
-			json_add_string "EARFCN" "$_earfcn5"
-			json_add_string "PCI" "$_pci5"
-			json_add_string "MOBILITY" "$_mobility5"
-		fi
-		json_add_string "MODE" "NR"
-
-		json_close_object
-		json_add_object
-		if [ "$_enable" = "0" ];then
-			json_add_string "status" "0"
-		else
-			json_add_string "status" "1"
-			json_add_string "EARFCN" "$_earfcn"
-			json_add_string "BAND" "$_band"
-			json_add_string "PCI" "$_pci"
-			json_add_string "MOBILITY" "$_mobility"
-		fi
-		json_add_string "MODE" "LTE"
-		json_close_object
-		json_close_array
-		json_dump
-		json_cleanup
-	else
-		_cellcfg=$(_command_huawei_earfcncell4g_get "$_ctl")
-		if [ -n "$_cellcfg" ];then
-			_enable=$(echo "$_cellcfg"|jsonfilter -e '$["enable"]')
-			_mode=$(echo "$_cellcfg"|jsonfilter -e '$["mode"]')
-			_earfcn=$(echo "$_cellcfg"|jsonfilter -e '$["arfcn"]')
-			_pci=$(echo "$_cellcfg"|jsonfilter -e '$["cellid"]')
-		fi
-		_freqcfg=$(_command_huawei_earfcn4g_get "$_ctl")
-		if [ -n "$_freqcfg" ];then
-			_enable1=$(echo "$_freqcfg"|jsonfilter -e '$["enable"]')
-			_mode1=$(echo "$_freqcfg"|jsonfilter -e '$["mode"]')
-			_earfcn1=$(echo "$_freqcfg"|jsonfilter -e '$["arfcn"]')
-			if [ "$_enable1" == "1" ];then
-				_enable="$_enable1"
-			fi
-			if [  -n "$_mode1" ];then
-				_mode="$_mode1"
-			fi
-			if [ -n "$_earfcn1" ];then
-				_earfcn="$_earfcn1"
-			fi
-			_pci1=$(echo "$_freqcfg"|jsonfilter -e '$["cellid"]')
-		fi
-
-		json_init
-		json_add_array "earfcn"
-
-		json_add_object
-		if [ "$_enable" = "0" ];then
-			json_add_string "status" "0"
-		else
-			json_add_string "status" "1"
-			json_add_string "EARFCN" "$_earfcn"
-			json_add_string "PCI" "$_pci"
-		fi
-		json_add_string "MODE" "LTE"
-		json_close_object
-		json_close_array
-		json_dump
-		json_cleanup
-	fi
-}
-
-command_huawei_analysis(){
-	local _ctl="$1"
-	local _info="$2"
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-
-	echo $(command_huawei_basic "$_ctl" "$_info")
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		echo $(command_generic_ipaddr "$_ctl" "7")
-	else
-		if [ "$_alias" == "redcap" ];then
-			echo $(command_generic_ipaddr "$_ctl" "1")
-		elif  [ "$_alias" == "mt5700" ];then
-			if [ -z "$dver" ];then
-				echo $(command_generic_ipaddr "$_ctl" "1")
-			else
-				echo $(command_generic_ipaddr "$_ctl" "8")
-			fi
-		else
-			echo $(command_generic_ipaddr "$_ctl" "2")
-		fi
-	fi
-}
-command_huawei_compatibility(){
-	local _ctl="$1"
-	local _info="$2"
-	local compatibility="$3"
-	local blacklist_band="$4"
-	local band_skip=""
-	local black_list=""
-	local black_count=0
-	local _res _info
-	_nrcap=$(echo "$_info"|jsonfilter -e '$["nrcap"]')
-	[ -z "$blacklist_band" ] && return 1
-	[ "$_nrcap" != "1" ] && return 1
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	if  [ "$_alias" == "mt5700" ];then
-		return 1
-	fi
-
-	_res=$(_command_private_exec "$1" "NRBANDBLACKLIST" "?")
-	[ -z "$_res" ] && return 1
-	_data=$(echo "$_res"|awk -F: '{print $2}'|xargs -r printf)
-	local _data_list=${_data//,/ }
-	band_skip=${blacklist_band//:/,}
-	echo "blacklist_band:$band_skip"
-	local todo_data_list=${band_skip//,/ }
-	for todo_band_item in $todo_data_list
-	do
-		black_count=$((black_count+1))
-	done
-
-	local index=0
-	for band_item in $_data_list
-	do
-		index=$((index+1))
-		if [ $index -ge 3 ];then
-			black_list="${black_list:+$black_list,}$band_item"
-		fi
-	done
-
-	if [ "$compatibility" == "0" -a "$black_list" != "$band_skip" ];then
-		echo "compatibility blacklist $black_count:$band_skip"
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRBANDBLACKLIST=3,$black_count,\"$band_skip\""
-		command_generic_reset "$_ctl"
-	fi
-	if [ "$compatibility" == "1" -a $index -ge 3 ];then
-		local count=1
-		[ $index -ge 3 ] && count=$((index-2))
-		echo "compatibility erase blacklist $count:$black_list"
-		_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRBANDBLACKLIST=2,$count,\"$black_list\""
-		command_generic_reset "$_ctl"
-	fi
-}
-
-_command_huawei_nr(){
-	local _ctl="$1"
-	local freq="$3"
-	local verify_only="$4"
-	local lock_list=""
-	local freq_count=0
-	local _res
-	local _set_res
-	local _freq_lock_cnt=""
-	local _freq_lock_type=""
-	local _freq_mobility=""
-	_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK?" )
-	[ -z "$_res" ] && return 1
-	local mobility=$(get_mobility_cfg)
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			if echo "$line"|grep -q "OK" ;then
-				break
-			fi
-
-			if [ "$_freq_lock_type" == "3" ];then
-				if [ -n "$_freq_lock_cnt" ];then
-					lock_list="${lock_list:+$lock_list,}$line"
-				fi
-
-				if echo "$line"|grep -q "," ;then
-					_freq_lock_cnt=$(echo "$line"|awk -F, '{print $2}'|xargs -r printf)
-					_freq_mobility=$(echo "$line"|awk -F, '{print $1}'|xargs -r printf)
-				fi
-			elif [ "$_freq_lock_type" == "2" -o "$_freq_lock_type" == "1" ];then
-				lock_list="-"
-			fi
-			if echo "$line"|grep -q "NRFREQLOCK:" ;then
-				_freq_lock_type="$(echo "$line"|awk -F: '{print $2}'|xargs -r printf)"
-			fi
-		fi
-	done
-
-	local _data_list=${_data//,/ }
-	band_list=${freq//:/,}
-	echo "band_list:$band_list"
-	echo "lock_list:$lock_list"
-	echo "band mobility:$_freq_mobility"
-	echo "lock mobility:$mobility"
-
-	local todo_data_list=${band_list//,/ }
-	for todo_band_item in $todo_data_list
-	do
-		freq_count=$((freq_count+1))
-	done
-	[ "$freq_count" = "1" ] && mobility="0"
-
-	if [ "$lock_list" = "$band_list" ] && { [ -z "$band_list" ] || [ "$_freq_mobility" = "$mobility" ]; }; then
-		return 0
-	fi
-	[ "$verify_only" = "1" ] && return 1
-
-	if [ "$lock_list" != "$band_list" -o "$_freq_mobility" != "$mobility" ];then
-		echo "compatibility freq $freq_count $freq"
-		command_generic_cfun_c
-		if [ -z "$band_list" ];then
-			_set_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=0")
-		else
-			_set_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}NRFREQLOCK=3,$mobility,$freq_count,\"$band_list\"")
-		fi
-		echo "$_set_res"
-		if ! echo "$_set_res" |grep -qsw "OK"; then
-			command_generic_cfun_o
-			return 1
-		fi
-		command_generic_cfun_o
-		sleep 1
-		_command_huawei_nr "$_ctl" "$2" "$freq" "1"
-		return $?
-	fi
-	return 0
-}
-
-_command_huawei_lte(){
-	local _ctl="$1"
-	local freq="$3"
-	local verify_only="$4"
-	local lock_list=""
-	local freq_count=0
-	local _res
-	local _set_res
-	local _freq_lock_cnt=""
-	local _freq_lock_type=""
-	local _freq_mobility=""
-	_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK?" )
-	[ -z "$_res" ] && return 1
-	local mobility=$(get_mobility_cfg)
-	_cnt=$(echo "$_res"|wc -l)
-	i=0
-	while [ $i -lt $_cnt ];do
-		i=$((i+1))
-		line=$(echo "$_res" |sed -n "${i}p")
-		if [ -n "$line" ];then
-			if echo "$line"|grep -q "OK" ;then
-				break
-			fi
-
-			if [ "$_freq_lock_type" == "3" ];then
-
-				if [ -n "$_freq_lock_cnt" ];then
-					lock_list="${lock_list:+$lock_list,}$line"
-				fi
-
-				if echo "$line"|grep -q "," ;then
-					_freq_lock_cnt=$(echo "$line"|awk -F, '{print $2}'|xargs -r printf)
-					_freq_mobility=$(echo "$line"|awk -F, '{print $1}'|xargs -r printf)
-				fi
-			elif [ "$_freq_lock_type" == "2" -o "$_freq_lock_type" == "1" ];then
-				lock_list="-"
-			fi
-			if echo "$line"|grep -q "LTEFREQLOCK:" ;then
-				_freq_lock_type="$(echo "$line"|awk -F: '{print $2}'|xargs -r printf)"
-			fi
-		fi
-	done
-
-	local _data_list=${_data//,/ }
-	band_list=${freq//:/,}
-	echo "lte band_list:$band_list"
-	echo "lte lock_list:$lock_list"
-	echo "lte band mobility:$_freq_mobility"
-	echo "lte lock mobility:$mobility"
-
-	local todo_data_list=${band_list//,/ }
-	for todo_band_item in $todo_data_list
-	do
-		freq_count=$((freq_count+1))
-	done
-	[ "$freq_count" = "1" ] && mobility="0"
-
-	if [ "$lock_list" = "$band_list" ] && { [ -z "$band_list" ] || [ "$_freq_mobility" = "$mobility" ]; }; then
-		return 0
-	fi
-	[ "$verify_only" = "1" ] && return 1
-
-	if [ "$lock_list" != "$band_list" -o "$_freq_mobility" != "$mobility" ];then
-		echo "lte compatibility freq $freq_count $freq"
-		command_generic_cfun_c
-		if [ -z "$band_list" ];then
-			_set_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=0")
-		else
-			_set_res=$(_command_exec_raw "$_ctl" "${AT_PRIVATE_PREFIX}LTEFREQLOCK=3,$mobility,$freq_count,\"$band_list\"")
-		fi
-		echo "$_set_res"
-		if ! echo "$_set_res" |grep -qsw "OK"; then
-			command_generic_cfun_o
-			return 1
-		fi
-		command_generic_cfun_o
-		sleep 1
-		_command_huawei_lte "$_ctl" "$2" "$freq" "1"
-		return $?
-	fi
-	return 0
-}
-
-command_huawei_recovery_cgatt(){
-	local _ctl="$1"
-	local _res _info _attempt=0
-	while [ "$_attempt" -lt 10 ]; do
-		_attempt=$((_attempt+1))
-		_res=$(_command_exec_raw "$_ctl" "${AT_GENERIC_PREFIX}CGATT?" 2)
-		if [ -n "$_res" ];then
-			_info="$(echo "$_res"|awk -F: '{print $2}'|sed 's/ //g'|xargs -r printf)"
-			if [ "$_info" != "1" ];then
-				_command_generic_exec "$_ctl" "CGATT" "=1" > /dev/null
-			else
-				return 0
-			fi
-		fi
-
-		sleep 1
-	done
-	return 1
-}
-
-_command_huawei_getrgmii(){
-	local _ctl="$1"
-	local _pci_val="2"
-	local _option
-	local _res
-	local match_data=0
-	local _pmcfg_val="1,0,0,0"
-	local _auto_val="1,2"
-	json_init
-	_res=$(_command_private_exec "$_ctl" "TDPCIELANCFG" "?")
-	[ -n "$_res" ] && {
-		_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-		if [ "$_option" = "$_pci_val" ]; then
-			match_data=$((match_data+1))
-		fi
-	}
-
-	_res=$(_command_private_exec "$_ctl" "TDPMCFG" "?")
-	[ -n "$_res" ] && {
-		_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-		if [ "$_option" = "$_pmcfg_val" ]; then
-			match_data=$((match_data+1))
-		fi
-	}
-
-	_res=$(_command_private_exec "$_ctl" "SETAUTODIAL" "?")
-	[ -n "$_res" ] && {
-		_option=$(echo "$_res"|awk -F':' '{print $2}'|xargs -r printf)
-		_data="$(echo "$_option"|awk -F',' '{print $1}'),$(echo "$_option"|awk -F',' '{print $2}')"
-
-		if [ "$_data" = "$_auto_val" ]; then
-			match_data=$((match_data+1))
-		fi
-	}
-
-	if [ $match_data -eq 3 ];then
-		json_add_string "status" "open"
-	else
-		json_add_string "status" "close"
-	fi
-
-	json_dump
-	json_cleanup
-}
-
-command_huawei_getrgmii(){
-	local _ctl="$1"
-	local _info="$2"
-
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	if  [ "$_alias" == "mt5700" ];then
-		_data=$(_command_huawei_getrgmii "$_ctl")
-		_status=$(echo "$_data"|jsonfilter -e '$["status"]')
-	fi
-
-	json_init
-	json_add_string "status" $_status
-	json_add_string "model" $(command_huawei_model "$1" "$_info")
-	json_dump
-	json_cleanup
-}
-
-command_huawei_openrgmii(){
-	local _ctl="$1"
-	local _info="$2"
-	local _code=2
-
-	_data=$(command_huawei_getrgmii "$_ctl" "$_info")
-	_status=$(echo "$_data"|jsonfilter -e '$["status"]')
-	if [ "$_status" != "open" ];then
-		_data=$(command_huawei_check_pciephy "$1" "2")
-		_data=$(command_huawei_check_pciephytdp "$1")
-		_data=$(command_huawei_check_autodail "$1")
-		_code=0
-	fi
-
-	json_init
-	json_add_int "code" $_code
-	json_add_string "model" $(command_huawei_model "$1" "$_info")
-	json_dump
-	json_cleanup
-}
-
-command_huawei_connstat(){
-	local _ctl="$1"
-	local _info="$2"
-	local _cid="2"
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-	local _vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		_cid="7"
-	else
-		_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-		if [ "$_alias" == "redcap" ];then
-			_cid="1"
-		elif [ "$_alias" == "mt5700" ];then
-			if [ -z "$dver" ];then
-				_cid="1"
-			else
-				_cid="8"
-			fi
-		else
-			_cid="2"
-		fi
-	fi
-	_res=$(_command_private_exec "$1" "NDISSTATQRY" "=$_cid")
-	[ -z "$_res" ] && return 1
-	_res=$(echo "$_res"|awk -F: '{print $2}')
-	[ -z "$_res" ] && return 1
-	_stat=$(echo "$_res"|awk -F, '{print $1}'|sed 's/\"//g'|xargs -r printf)
-	_type=$(echo "$_res"|awk -F, '{print $4}'|sed 's/\"//g'|xargs -r printf)
-
-	_stat2=$(echo "$_res"|awk -F, '{print $5}'|sed 's/\"//g'|xargs -r printf)
-	_type2=$(echo "$_res"|awk -F, '{print $8}'|sed 's/\"//g'|xargs -r printf)
-
-	json_init
-	[ -n "$_stat" ] && json_add_string "$_type" "$_stat"
-	[ -n "$_stat2" ] && json_add_string "$_type2" "$_stat2"
-	json_dump
-	json_cleanup
-	return 0
-}
-
-
-command_huawei_temp(){
-	local _ctl="$1"
-	_vendor=$(check_soc_vendor)
-	_info=$(cat "/tmp/infocd/cache/${gNet}_dev" |jsonfilter -e '$["parameter"]')
-	_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-	_res=$(_command_private_exec "$_ctl" "CHIPTEMP" "?")
-	[ -z "$_res" ] && return 1
-	_res="$(echo "$_res"|awk -F: '{print $2}'|sed 's/"//g'|sed 's/ //g')"
-		
-	if [ "$_alias" == "redcap" -o "$_vendor" == "tdtech" ];then
-		_cur_type="$(echo "$_res"|awk -F, '{print $1}'|sed 's/"//g')"
-		echo "$_cur_type"|awk '{printf "%d",$1/10}'
-	elif [ "$_alias" == "mt5700" ];then
-		_cur_type="$(echo "$_res"|awk -F, '{print $8}'|sed 's/"//g')"
-		echo "$_cur_type"|awk '{printf "%d",$1/10}'
-	else
-		_cur_type="$(echo "$_res"|awk -F, '{print $1}'|sed 's/"//g')"
-		echo "$_cur_type"|awk '{printf "%d",$1}'
-	fi
-}
-
-command_huawei_dnsv6(){
-	local _ctl="$1"
-	local _info="$2"
-	local cid=""
-	local dver=$(echo "$_info"|jsonfilter -e '$["dver"]')
-	_vendor=$(check_soc_vendor)
-	if [ "$_vendor" == "tdtech" ];then
-		cid="7"
-	else
-		_alias=$(echo "$_info"|jsonfilter -e '$["alias"]')
-		if [ "$_alias" == "redcap" ];then
-			cid="1"
-		elif [ "$_alias" == "mt5700" ];then
-			if [ -z "$dver" ];then
-				cid="1"
-			else
-				cid="8"
-			fi
-		else
-			cid="2"
-		fi
-	fi
-
-	_res=$(_command_private_exec "$_ctl" "DHCPV6" "=$cid")
-	[ -z "$_res" ] && return 1
-	_dnsv6_1="$(echo "$_res"|awk -F, '{print $5}')"
-	_dnsv6_2="$(echo "$_res"|awk -F, '{print $6}')"
-
-	json_init
-	[ -n "$_dnsv6_1" ] && json_add_string "dns1" "$_dnsv6_1"
-	[ -n "$_dnsv6_2" ] && json_add_string "dns2" "$_dnsv6_2"
-	json_dump
-	json_cleanup
-}
-EOF_NRADIO_CPEOPT_HUAWEI
-
-    cat > "$cpeopt_payload_root/usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua" <<'EOF_NRADIO_CPEOPT_CPELOCK'
--- Copyright 2018 NRadio
--- Licensed to the public under the Apache License 2.0.
-
-local ut = require "luci.util"
-local uci = require "luci.model.uci"
-local nr = require "luci.nradio"
-
-local support_nr = false
-local support_lock_freq = false
-local support_earfcn4 = false
-local support_earfcn5 = false
-uci = uci.cursor()
-m = Map("cpecfg")
-
-cellular_header=Template("nradio_adv/cellular_header")
-function cellular_header.render(self)
-    luci.template.render(self.template)
-end
-m:append(cellular_header)
-cellular_section_redirect=Template("nradio_adv/cellular_section_redirect")
-function cellular_section_redirect.render(self)
-    luci.template.render(self.template,{model=arg[1]})
-end
-m:append(cellular_section_redirect)
-
-cellular_submenu=Template("nradio_adv/cellular_submenu")
-function cellular_submenu.render(self)
-    luci.template.render(self.template)
-end
-m:append(cellular_submenu)
-
-
-local model = arg[1] or ""
-local model_index = 1
-local model_str = ""
-local plat = nr.get_platform()
-local model_str,cpe_section,model_index = nr.get_cellular_last(model)
-local sim_section="sim"..model_str
-local sim_bdinfo="cpesel"..model_str
-local cellular_prefix,cellular_default = nr.get_cellular_prefix()
-local sim_index = m.uci:get("cpesel", sim_section, "cur") or "1"
-local cpesim_section= cpe_section.."sim"..sim_index
-local band_data = 0
-local earfreq_work_mode = uci:get("network",cpe_section,"earfreq_mode")
-local nettype = uci:get("network",cpe_section,"nettype")
-
-support_earfcn5 = uci:get("network",cpe_section,"earfcn5")
-support_earfcn4 = uci:get("network",cpe_section,"earfcn4")
-support_nr = nr.support_nr(cpe_section)
-support_lock_freq = nr.support_lock_freq(cpe_section)
-freqlock_free = uci:get("system","basic", "freqfree")
-
-freq_val = uci:get("network",cpe_section,"freq_val")
-
-m:chain("cpesel")
-m:chain("wanchk")
-
-cellular_scan_init=Template("nradio_cpecfg/cellular_scan_init")
-function cellular_scan_init.render(self)
-    luci.template.render(self.template,{cpe_section=cpe_section,sim_id=sim_index})
-end
-m:append(cellular_scan_init)
-
-local function get_band_data(band_buffer)
-    local band_result = {band5={},band4={}}
-    local band5_buffer = ""
-    local band4_buffer = ""
-    if not band_buffer or #band_buffer == 0 then
-        return band_result
+        "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv" \
+        "$cpeopt_payload_root/www/luci-static/nradio/images/icon" || die "创建监听插件目录失败"
+    cat > "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor-state.lua" <<'EOF_NRADIO_TOWER_STATE'
+-- V10: pure observation state machine; no system access or control commands.
+local M = {}
+local capacity = { ["NR:41"]=true, ["NR:77"]=true, ["NR:78"]=true, ["NR:79"]=true }
+function M.capacity(band) return capacity[band] == true end
+function M.step(s, sample, now, boot)
+    local events = {}
+    local function event(kind, detail, extra)
+        local e = extra or {}
+        e.at, e.kind, e.detail = now, kind, detail
+        events[#events+1] = e
     end
-    local band_kind = ut.split(band_buffer, ",")
-    for i=1,#band_kind do
-        local band_item = ut.split(band_kind[i], "-")
-        local band_kind = band_item[1]
-        local band_value = band_item[2]
-
-        if band_kind == "sa" or band_kind == "nsa" or band_kind == "nr" then
-            if #band5_buffer > 0 then
-                band5_buffer = band5_buffer..":"..band_value
-            else
-                band5_buffer = band_value
-            end
-        end
-        if band_kind == "lte" then
-            if #band4_buffer > 0 then
-                band4_buffer = band4_buffer..":"..band_value
-            else
-                band4_buffer = band_value
-            end
-        end
+    if s.boot ~= boot then
+        s.boot, s.pending, s.last_sample, s.high_since = boot, nil, nil, nil
+        if s.episode then s.episode.gap = true end
+        event("gap", "监听启动或重启；中断期间的切换时间未知")
     end
-    local band5_array = ut.split(band5_buffer, ":")
-    local band4_array = ut.split(band4_buffer, ":")
-
-    local band5_tmp={}
-    for key,val in pairs(band5_array) do
-        band5_tmp[tostring(val)]=true
+    if not sample or not sample.valid then
+        if not s.gap then event("gap", "采样中断，不能据此判断退频或基站恢复") end
+        s.gap, s.pending, s.high_since = true, nil, nil
+        return s, events
     end
-
-    for key,val in pairs(band5_tmp) do
-       table.insert(band_result.band5,key)
+    if s.identity and s.identity ~= sample.identity then
+        event("identity", "SIM 或运营商已变化，结束上一线路的连续统计")
+        s.band, s.target, s.episode, s.attempt, s.last_attempt = nil, nil, nil, nil, nil
+        s.target_ssb, s.target_pci, s.gap, s.last_sample = nil, nil, nil, nil
+        s.budget_date, s.budget_count = nil, 0
+        s.pending, s.high_since = nil, nil
     end
-
-    if #band_result.band5 > 0 then
-        table.sort(band_result.band5, function(a, b) return tonumber(a) < tonumber(b) end)
+    s.identity = sample.identity
+    if s.last_sample and (now < s.last_sample or now-s.last_sample > 45) then
+        if s.episode then s.episode.gap = true end
+        s.gap, s.pending, s.high_since = true, nil, nil
+        event("gap", "采样间隔或时钟变化，期间切换时间未知")
     end
-
-    local band4_tmp={}
-    for key,val in pairs(band4_array) do
-        band4_tmp[tostring(val)]=true
-    end
-    for key,val in pairs(band4_tmp) do
-        table.insert(band_result.band4,key)
-     end
-
-     if #band_result.band4 > 0 then
-        table.sort(band_result.band4, function(a, b) return tonumber(a) < tonumber(b) end)
-     end
-
-     return band_result
-end
-band_data = get_band_data(freq_val)
-
-local function validate_freq_value(value)
-    local valid_labels = {
-        nr = true,
-        sa = true,
-        nsa = true,
-        lte = true,
-        wcdma = true
-    }
-    local has_band = false
-    local item_count = 0
-
-    if type(value) ~= "string" or #value == 0 then
-        return nil, translate("Please select at least one band")
-    end
-    if value:sub(1, 1) == "," or value:sub(-1) == "," or value:find(",,", 1, true) then
-        return nil, translate("Invalid band selection")
-    end
-
-    for item in value:gmatch("[^,]+") do
-        item_count = item_count + 1
-        local label, data = item:match("^([a-z]+)%-(.*)$")
-        if not label or not valid_labels[label] then
-            return nil, translate("Invalid band selection")
-        end
-        if #data > 0 then
-            if data:sub(1, 1) == ":" or data:sub(-1) == ":" or data:find("::", 1, true) then
-                return nil, translate("Invalid band selection")
-            end
-            for band in data:gmatch("[^:]+") do
-                if not band:match("^%d+$") then
-                    return nil, translate("Invalid band selection")
-                end
-            end
-            has_band = true
-        end
-    end
-
-    if item_count == 0 or not has_band then
-        return nil, translate("Please select at least one band")
-    end
-
-    return value
-end
-
-local function initrw(object,option,depends_extra_buffer,depends_reverse)
-    local depends_table = {}
-    local form_cur_sim = sim_index
-
-    if option == "custom_earfcn5" then
-        depends_table["earfreq_mode"] = "earfcn5"
-        if earfreq_work_mode ~= "one" then
-            depends_table["earfreq_mode"] = ""
-        end
-    elseif option == "custom_earfcn4"then
-        depends_table["earfreq_mode"] = "earfcn4"
-        if earfreq_work_mode ~= "one" then
-            depends_table["earfreq_mode"] = ""
-        end
-    elseif option == "freq" then
-        depends_table["earfreq_mode"] = "band"
-    end
-
-    depends_extra = ut.split(depends_extra_buffer or "", " ")
-    depends_max = #depends_extra
-    for i = 1, depends_max do
-        if depends_extra[i] and #depends_extra[i] > 0 then
-            depends_table[depends_extra[i]] = "1"            
-        end
-    end
-    depends_extra = ut.split(depends_reverse or "", " ")
-    depends_max = #depends_extra
-    for i = 1, depends_max do
-        if depends_extra[i] and #depends_extra[i] > 0 then            
-            depends_table[depends_extra[i]] = not "1"            
-        end
-    end
-
-    object:depends(depends_table)
-    if option == "freq" then
-        function object.validate(self, value, section)
-            return validate_freq_value(value)
-        end
-    end
-    function object.parse(self, section, novld)
-        local fvalue = self:formvalue(section)
-        local cvalue = self:cfgvalue(section)
-
-        local custom_earfcn5_key = "cbid."..self.map.config.."."..section..".".."custom_earfcn5"
-        local custom_earfcn5_data = luci.http.formvalue(custom_earfcn5_key)
-        local custom_earfcn4_key = "cbid."..self.map.config.."."..section..".".."custom_earfcn4"
-        local custom_earfcn4_data = luci.http.formvalue(custom_earfcn4_key)
-        local earfreq_mode_key = "cbid."..self.map.config.."."..section..".".."earfreq_mode"
-        local earfreq_mode_data = luci.http.formvalue(earfreq_mode_key)
-        if cvalue and (not fvalue or #fvalue == 0 ) then
-            if self.option == option then
-                if (option == "freq") and (earfreq_mode_data ~= "band") then
-                    m:del(cpesim_section,option)
-                    m:del(cpesim_section,"custom_freq")
-                end
-                if option == "earfreq_mode" then
-                    m:del(cpesim_section,option)
-                    return
-                end
-                if custom_earfcn5_data ~= "1" then
-                    if option == "custom_earfcn5" or option == "band5" or option == "earfcn5" or option == "pci5" or option == "earfcn5_mode" then
-                        m:del(cpesim_section,option)
-                        return
-                    end
-                end
-                if custom_earfcn4_data ~= "1" then
-                    if option == "custom_earfcn4" or option == "band4" or option == "earfcn4" or option == "pci4" or option == "earfcn4_mode" then
-                        m:del(cpesim_section,option)
-                        return
-                    end
-                end
-            end
-            return
-        end
-
-        return Value.parse(self, section, novld)
-    end
-
-    function object.write(self, section, value)
-        if form_cur_sim then
-            m:set(cpesim_section,nil,"cpesim")
-            m:set(cpesim_section,option,value)
-            if (option == "freq") then
-                m:set(cpesim_section,"custom_freq","1")
-            end
-        end
-    end
-    
-end
-s = m:section(NamedSection, cpesim_section, "cpecfg")
-cellular_simmenu=Template("nradio_cpecfg/cellular_simmenu")
-function cellular_simmenu.render(self)
-    luci.template.render(self.template)
-end
-s:append(cellular_simmenu)
-
-local band_support=0
-local pci_support=0
-local work_mode=0
-local earfreq_mode_default=""
-local support_mobility = uci:get("network",cpe_section,"mobility")
-local mobile_lock = uci:get("luci","main","mobile_lock")
-
-if support_mobility == "1" and mobile_lock ~="1" then
-    mobility = s:option(ListValue, "mobility", translate("Band Lock Policy")," ")
-    mobility.default = "0"
-    mobility:value("1",translate("Smart Mode"))
-    mobility:value("0",translate("Lock Mode"))
-    mobility:value("2",translate("No Preference Mode"))
-    mobility.widget = "radio"
-    mobility.direction = "horizontal"
-    if freqlock_free == "1" then
-        mobility.default = "2"
-    end
-end
-
-earfreq_mode = s:option(ListValue, "earfreq_mode", translate("LockType"))
-if support_lock_freq then 
-    earfreq_mode:value("band", translate("LockBandType"))
-end
-
-if earfreq_work_mode == "one" then
-    if support_lock_freq then
-        earfreq_mode_default="band"
-    end
-    if support_earfcn4 then
-        earfreq_mode_default="earfcn4"
-        earfreq_mode:value("earfcn4", translate("LTELockCellType"))
-    end
-
-    if support_earfcn5 then
-        earfreq_mode_default="earfcn5"
-        earfreq_mode:value("earfcn5", translate("NRLockCellType"))
-    end
-else
-    if support_earfcn5 or support_earfcn4 then
-        earfreq_mode:value("", translate("LockCellType"))
-    end
-end
-earfreq_mode.widget = "radio"
-earfreq_mode.direction = "horizontal"
-earfreq_mode.default = earfreq_mode_default
-initrw(earfreq_mode,'earfreq_mode')
-
-if support_lock_freq then
-    freq = s:option(Value, "freq", translate("Band Select"),translate("*Manual band selection may prevent network registration. Use with caution."))
-    freq.template = "cbi/dlvalue"
-    freq.cpe_section= cpe_section
-    initrw(freq,"freq")
-end
-if support_earfcn5 then
-    custom_earfcn5 = s:option(Flag, "custom_earfcn5", translate("NRLockCellType"),
-    translate("*Manual lock may prevent network registration. Use with caution"))
-    custom_earfcn5.default = "0"
-    initrw(custom_earfcn5,'custom_earfcn5')
-
-    earfcn5_mode = s:option(ListValue, "earfcn5_mode", translate("FreqLockType"))
-    earfcn5_mode:value("0", translate("FreqLockScan"))
-    earfcn5_mode:value("1", translate("FreqLockManual"))
-    earfcn5_mode.template = "nradio_cpecfg/earfcn_scan_value"
-    earfcn5_mode.scan_type = 5    
-    earfcn5_mode.cpe_section = cpe_section
-    earfcn5_mode.default = "0"
-    initrw(earfcn5_mode,"earfcn5_mode","custom_earfcn5")
-
-    earfcn5_scan = s:option(DummyValue,"earfcn5_scan",translate(""))
-    earfcn5_scan.template = "nradio_cpecfg/earfcn_value"
-    earfcn5_scan.scan_type = 5
-    earfcn5_scan.sort_index = 7
-    earfcn5_scan.cpe_section = cpe_section
-    initrw(earfcn5_scan,"earfcn5_scan","custom_earfcn5","earfcn5_mode")
-
-    earfcn5_setting_array = ut.split(support_earfcn5, ",")
-    band_support = earfcn5_setting_array[1] or 0
-    pci_support = earfcn5_setting_array[2] or 0
-    work_mode = earfcn5_setting_array[3] or 0
-    work_mode = tonumber(work_mode) or 0
-    band_support = tonumber(band_support)
-    pci_support = tonumber(pci_support)
-
-    earfcn5 = s:option(Value, "earfcn5", translate("5G Earfcn"),translate("Please enter an integer between [0-875000]"))
-    earfcn5.datatype = "range(0,875000)"
-    earfcn5.rmempty = false
-    initrw(earfcn5,"earfcn5","custom_earfcn5 earfcn5_mode")
-
-    if pci_support == 1 then
-        pci5 = s:option(Value, "pci5", translate("5G PCI"),translate("Please enter an integer between [0-1007]"))
-        pci5.datatype = "range(0,1007)"
-        if work_mode == 0 or work_mode == 1 then
-            pci5.rmempty = false
-        end
-        initrw(pci5,"pci5","custom_earfcn5 earfcn5_mode")
-    end
-    local band5
-    if band_support == 1 then
-        if band_data.band5 and #band_data.band5 > 0 then
-            band5 = s:option( ListValue, "band5", translate("5G BAND"))
-            if work_mode == 5 then
-                band5:value("", translate("(empty)"))
-            end
-            for x=1,#band_data.band5 do
-                band5:value(band_data.band5[x], translate(band_data.band5[x]))
-            end
+    local was_gap = s.gap
+    s.gap = nil
+    s.current, s.backend, s.online = sample.band, sample.backend, sample.online
+    s.carriers = sample.carriers
+    s.sample_at, s.ssb, s.pci = now, sample.ssb, sample.pci
+    if sample.band ~= s.band then
+        if not s.pending or s.pending.band ~= sample.band then
+            s.pending = {band=sample.band, first=now, before=s.last_sample, count=1, gap=was_gap}
         else
-            band5 = s:option(Value, "band5", translate("5G BAND"),translate("Please enter an integer between [0-100]"))
-            band5.datatype = "range(0,261)"
-            if work_mode == 0 or work_mode == 1 or work_mode == 2 then
-                band5.rmempty = false
+            s.pending.count = s.pending.count+1
+        end
+        if s.pending.count >= 3 and now-s.pending.first >= 20 then
+            local p, old = s.pending, s.band
+            s.band, s.since, s.pending = sample.band, p.first, nil
+            event("band", (old or "初次记录").." → "..sample.band,
+                {first=p.first, before=p.before, from=old, to=sample.band, uncertain=p.gap})
+            if M.capacity(sample.band) then
+                s.target, s.target_ssb, s.target_pci = sample.band, sample.ssb, sample.pci
+                s.high_since = p.first
+            elseif s.target and not s.episode then
+                s.episode = {start=p.first, before=p.before, from=s.target, to=sample.band,
+                    gap=p.gap, notified=false}
+                event("fallback", "从 "..s.target.." 退到 "..sample.band.."；开始统计滞留时间",
+                    {first=p.first, before=p.before, from=s.target, to=sample.band, uncertain=p.gap})
             end
         end
-        initrw(band5,"band5","custom_earfcn5 earfcn5_mode")
+    else
+        s.pending = nil
     end
+    if M.capacity(sample.band) and s.band == sample.band then
+        s.high_since = s.high_since or now
+        if now-s.high_since >= 60 then
+            s.target, s.target_ssb, s.target_pci = sample.band, sample.ssb, sample.pci
+            if s.episode then
+                local ep = s.episode
+                event("returned", "已回到 "..sample.band.." 并连续保持至少 60 秒",
+                    {start=ep.start, first=s.high_since, duration=math.max(0,s.high_since-ep.start),
+                    to=sample.band, uncertain=ep.gap, assisted=s.attempt ~= nil})
+                s.episode, s.attempt = nil, nil
+            end
+        end
+    else
+        s.high_since = nil
+    end
+    if s.attempt and now-s.attempt.at >= 180 and not s.high_since then
+        event("not_returned", "自动搜网后仍未恢复原高频；继续记录，不锁频、不连续重启")
+        s.attempt = nil
+    end
+    s.last_sample = now
+    return s, events
 end
-
-if support_earfcn4 then
-    custom_earfcn4 = s:option(Flag, "custom_earfcn4", translate("LTELockCellType"),
-    translate("*Manual lock may prevent network registration. Use with caution"))
-    custom_earfcn4.default = "0"
-    initrw(custom_earfcn4,'custom_earfcn4')
-    earfcn4_setting_array = ut.split(support_earfcn4, ",")
-    band_support = earfcn4_setting_array[1] or 0
-    pci_support = earfcn4_setting_array[2] or 0
-    work_mode = earfcn4_setting_array[3] or 0
-    work_mode = tonumber(work_mode) or 0
-    band_support = tonumber(band_support)
-    pci_support = tonumber(pci_support)
-
-    earfcn4_mode = s:option(ListValue, "earfcn4_mode", translate("FreqLockType"))
-    earfcn4_mode:value("0", translate("FreqLockScan"))
-    earfcn4_mode:value("1", translate("FreqLockManual"))
-    earfcn4_mode.template = "nradio_cpecfg/earfcn_scan_value"
-    earfcn4_mode.scan_type = 4
-    earfcn4_mode.cpe_section = cpe_section
-    earfcn4_mode.default = "0"
-    initrw(earfcn4_mode,"earfcn4_mode","custom_earfcn4")
-
-    earfcn4_scan = s:option(DummyValue,"earfcn4_scan",translate(""))
-    earfcn4_scan.template = "nradio_cpecfg/earfcn_value"
-    earfcn4_scan.scan_type = 4
-    earfcn4_scan.cpe_section = cpe_section
-    initrw(earfcn4_scan,"earfcn4_scan","custom_earfcn4","earfcn4_mode")
-
-    earfcn4 = s:option(Value, "earfcn4", translate("4G Earfcn"),translate("Please enter an integer between [0-875000]"))
-    earfcn4.datatype = "range(0,875000)"
-    earfcn4.rmempty = false
-    initrw(earfcn4,"earfcn4","custom_earfcn4 earfcn4_mode")
-
-    if pci_support == 1 then
-        pci4 = s:option(Value, "pci4", translate("4G PCI"),translate("Please enter an integer between [0-503]"))
-        pci4.datatype = "range(0,503)"
-        if work_mode == 0 or work_mode == 1 then
-            pci4.rmempty = false
-        end
-        initrw(pci4,"pci4","custom_earfcn4 earfcn4_mode")
-    end
-
-    local band4
-    if band_support == 1 then
-        if band_data.band4 and #band_data.band4 > 0 then
-            band4 = s:option( ListValue, "band4", translate("4G BAND"))
-            for x=1,#band_data.band4 do
-                band4:value(band_data.band4[x], translate(band_data.band4[x]))
-            end
-        else
-            band4 = s:option(Value, "band4", translate("4G BAND"),translate("Please enter an integer between [0-100]"))
-            band4.datatype = "range(0,261)"
-            if work_mode == 0 or work_mode == 1 or work_mode == 2 then
-                band4.rmempty = false
-            end
-        end
-        initrw(band4,"band4","custom_earfcn4 earfcn4_mode")
-    end
+function M.decision(s, cfg, now, hour, date)
+    if s.gap or (s.last_sample and now-s.last_sample > 30) then return "gap" end
+    if not s.episode or not s.last_sample then return "observe" end
+    if s.pending or M.capacity(s.current) then return "confirm" end
+    if hour < cfg.day_start or hour >= cfg.day_end then return "night" end
+    if now-s.episode.start < cfg.delay_minutes*60 then return "delay" end
+    if s.attempt then return "verifying" end
+    if not cfg.auto_reselect then return "remind" end
+    if s.backend ~= "mt5700-at" then return "observe_backend" end
+    if s.last_attempt and now-s.last_attempt < 21600 then return "cooldown" end
+    if s.budget_date == date and (s.budget_count or 0) >= 2 then return "daily_limit" end
+    return "reselect"
 end
+return M
+EOF_NRADIO_TOWER_STATE
 
-function m.on_after_commit()
-    if m:submitstate() then
-        local cur_sim = m.uci:get("cpesel", "sim"..model_str, "cur") or "1"
-        if support_nr then
-        end
-        if sim_index == cur_sim then
-            local simcfg_section = cpe_section.."sim"..cur_sim
-            nr.app_write_earfcn(cpe_section,cur_sim,simcfg_section)
-            nr.app_write_cpecfg(cpe_section,cur_sim,simcfg_section)
-            nr.set_n79_relate(cpe_section)
-            if nr.support_vsim(cpe_section) then
-                os.execute("ubus call network.interface notify_proto \"{'interface':'"..cpe_section.."','action':5,'available':true}\"")
-            end
-
-            if plat == "quectel" and not nr.is_openwrt() then
-                nr.fork_exec("/etc/init.d/network restart")
-            else
-                ut.exec("ifup "..cpe_section)
-                if nr.support_dualdnn() then
-                    ut.exec("ifup cpe1")
-                end
-            end
-        end
-    end
-end
-
-return m
-EOF_NRADIO_CPEOPT_CPELOCK
-
-    cat > "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/index.htm" <<'EOF_NRADIO_CPEOPT_INDEX'
-<%#
--- Copyright 2017 NRadio
--%>
-
-<%+header%>
-<h2 name="content"><%:Advanced Feature%></h2>
-<%
-	local uci = require "luci.model.uci".cursor()
-	local disp = require "luci.dispatcher"
-	local t_category = 'nradioadv'
-	local t_cattree  = t_category and disp.node(t_category)
-	local t_childs = disp.node_childs(t_cattree)
-	local i, r
-
-	for i, r in ipairs(t_childs) do
-		local t_nnode = t_cattree.nodes[r]
-		local t_grandchildren = disp.node_childs(t_nnode)
-		local x, y
-		local t_count = 0
-
-		if #t_grandchildren ~= 0 then
-			for x, y in ipairs(t_grandchildren) do
-				local tt_nnode = t_nnode.nodes[y]
-				local t_href = controller .. t_category .. "/" .. r .. "/" .. y .. (tt_nnode.query and http.build_querystring(tt_nnode.query) or "")
-				local t_show = tt_nnode.show or false
-				local route = nil
-				if tt_nnode.full then
-					route = tt_nnode.full:gsub("/", ".")
-				end
-				if route and nixio.fs.access("/tmp/appcenter/luci/"..route) then
-					t_show = false
-				end 
-				repeat
-					if t_show then
-						t_count = t_count + 1
-					else
-						break
-					end
-
-					if t_count == 1 then
-%>
-<fieldset class="cbi-section">
-	<legend><%=pcdata(striptags(translate(t_nnode.title)))%></legend>
-	<div class="nav-funcs">
-		<ul class="nav-funcs-list">
-<%
-					end
-
-					if tt_nnode.icon then
-						t_icon = tt_nnode.icon
-					end
-
-					if not t_icon then
-						t_icon = "wrench"
-					end
-%>
-			<a href="<%=pcdata(t_href)%>">
-				<li>
-					<div class="func-icon">
-					<% if tt_nnode.image then %>
-						<img src="<%=pcdata(tt_nnode.image)%>" alt="" style="width:64px;height:64px;object-fit:contain;" />
-					<% else %>
-						<span class="far fa-fw fa-4x fa-<%=t_icon%>" aria-hidden="true"></span>
-					<% end %>
-					</div>
-					<div class="func-desc">
-						<span class="func-desc-text"><%=pcdata(striptags(translate(tt_nnode.title)))%></span>
-					</div>
-				</li>
-			</a>
-<%
-				until true
-			end
-
-			if t_count ~= 0 then
-%>
-		</ul>
-	</div>
-</fieldset>
-<%
-			end
-		end
-	end
-%>
-<%+footer%>
-EOF_NRADIO_CPEOPT_INDEX
-
-    cat > "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" <<'EOF_NRADIO_CPEOPT_MONITOR'
+    cat > "$cpeopt_payload_root/usr/libexec/nradio-cpe-monitor.lua" <<'EOF_NRADIO_TOWER_MONITOR'
 #!/usr/bin/lua
-
--- NRadio CPE background monitor 20260927-1
-
-local nixio = require "nixio"
-local fs = require "nixio.fs"
-local util = require "luci.util"
-
-local VERSION = "20260927-1"
-local INTERVAL = 10
-local LOG_LIMIT = 262144
-local LOG_PATH = "/etc/nradio-cpe-monitor/events.log"
-local LOG_ROTATED_PATH = "/etc/nradio-cpe-monitor/events.log.1"
-local STATUS_PATH = "/var/run/nradio-cpe-monitor/status"
-local allowed_cpe = { cpe = true, cpe1 = true }
-local previous = {}
-local observed = {}
-local pending = {}
-local overflow = {}
-local sample_gap = {}
-local PENDING_LIMIT = 128
-
-local function clean(value)
-	value = tostring(value or "")
-	value = value:gsub("[\r\n\t]", " ")
-	return value
+-- V10: independent tower-hours observer. Never writes native UCI or native programs.
+local fs, nixio = require "nixio.fs", require "nixio"
+local json, sys = require "luci.jsonc", require "luci.sys"
+local uci = require("luci.model.uci").cursor()
+local engine = dofile("/usr/libexec/nradio-cpe-monitor-state.lua")
+local ROOT, RUN = "/etc/nradio-cpe-monitor", "/var/run/nradio-cpe-monitor"
+local function read(path)
+    local ok, data = pcall(json.parse, fs.readfile(path) or "")
+    return ok and type(data)=="table" and data or {}
 end
-
-local function band_text(mode, band)
-	local value = clean(band):gsub("^[NnBb]", "")
-	local network = clean(mode):upper()
-	if value == "" then
-		return "-"
-	elseif network:find("NR", 1, true) or network:find("5G", 1, true) or
-		network == "SA" or network == "NSA" then
-		return "N" .. value
-	elseif network:find("LTE", 1, true) or network:find("4G", 1, true) then
-		return "B" .. value
-	end
-	return value
+local function atomic(path, data)
+    local text = json.stringify(data)
+    if not text or not fs.writefile(path..".tmp", text.."\n") then return false end
+    fs.chmod(path..".tmp", "0600")
+    return fs.rename(path..".tmp", path) and true or false
 end
-
-local function cell_text(state)
-	return (state.pci ~= "" and state.pci or "-") .. "/" ..
-		(state.earfcn ~= "" and state.earfcn or "-")
+local state = read(ROOT.."/state.json")
+state.lines = state.lines or {}
+local boot = (fs.readfile("/proc/sys/kernel/random/boot_id") or ""):gsub("%s","") ..
+    ":" .. tostring(nixio.getpid()) .. ":" .. tostring(os.time())
+local labels = {cpe="主线路", cpe1="副线路"}
+local last_save = 0
+local function config()
+    local c = read(ROOT.."/settings.json")
+    return {
+        auto_reselect=c.auto_reselect ~= false,
+        day_start=math.max(0,math.min(23,tonumber(c.day_start) or 8)),
+        day_end=math.max(1,math.min(24,tonumber(c.day_end) or 22)),
+        delay_minutes=math.max(5,math.min(180,tonumber(c.delay_minutes) or 30))
+    }
 end
-
-local function rotate_log()
-	local stat = fs.stat(LOG_PATH)
-	if stat and tonumber(stat.size or 0) >= LOG_LIMIT then
-		return os.rename(LOG_PATH, LOG_ROTATED_PATH) and true or false
-	end
-	return true
+local function append_now(e, name)
+    e.name, e.time = name, os.date("%Y-%m-%d %H:%M:%S",e.at)
+    local path = ROOT.."/events.jsonl"
+    local st = fs.stat(path)
+    if st and st.size >= 262144 then
+        for i=5,1,-1 do
+            local a,b=path.."."..i,path.."."..(i+1)
+            if fs.access(a) and not fs.rename(a,b) then return false end
+        end
+        if not fs.rename(path,path..".1") then return false end
+    end
+    local h=io.open(path,"a")
+    if not h then return false end
+    local written=h:write(json.stringify(e),"\n")
+    local closed=h:close()
+    fs.chmod(path,"0600")
+    return written ~= nil and closed ~= nil
 end
-
-local function append_event(event)
-	if not rotate_log() then
-		return false
-	end
-	local handle = io.open(LOG_PATH, "a")
-	if not handle then
-		return false
-	end
-	local written = handle:write(event.time, "\t", clean(event.name), "\t",
-		clean(event.level), "\t", clean(event.detail), "\n")
-	local closed = handle:close()
-	return written ~= nil and closed ~= nil
+local function flush()
+    state.queue=state.queue or {}
+    while #state.queue>0 do
+        local e=state.queue[1]
+        if not append_now(e,e.name) then return false end
+        table.remove(state.queue,1)
+    end
+    return true
 end
-
-local function flush_pending()
-	while #pending > 0 do
-		local event = pending[1]
-		if not append_event(event) then
-			return false
-		end
-		previous[event.name] = event.state
-		table.remove(pending, 1)
-	end
-	return true
+local function append(e,name)
+    state.queue=state.queue or {}
+    if #state.queue>=256 then
+        state.lost=state.lost or {}
+        state.lost[name]=true
+        if state.lines[name] and state.lines[name].episode then state.lines[name].episode.gap=true end
+        return false
+    end
+    state.sequence=(state.sequence or 0)+1
+    e.name,e.id=name,boot..":"..tostring(state.sequence)
+    state.queue[#state.queue+1]=e
+    return flush()
 end
-
-local function write_status(sample_state, line_count)
-	local tmp = STATUS_PATH .. ".tmp"
-	local handle = io.open(tmp, "w")
-	if not handle then
-		return false
-	end
-	local written = handle:write(tostring(os.time()), "\t", os.date("%Y-%m-%d %H:%M:%S"), "\t",
-		tostring(line_count or 0), "\t", clean(sample_state), "\t", VERSION, "\n")
-	local closed = handle:close()
-	if not written or not closed or not os.rename(tmp, STATUS_PATH) then
-		fs.unlink(tmp)
-		return false
-	end
-	return true
+local function at(name, command)
+    if name~="cpe" and name~="cpe1" then return "" end
+    -- These are the only modem commands in this plugin. COPS=0 is gated below.
+    local allowed={["AT^HFREQINFO?"]=true,["AT^RRCSTAT?"]=true,
+        ["AT+COPS?"]=true,["AT^NRFREQLOCK?"]=true,["AT+COPS=0"]=true}
+    if not allowed[command] then return "" end
+    -- name and command are selected exclusively from the fixed allowlists above.
+    return sys.exec("atsd_cli -i "..name.." -c '"..command.."' 2>/dev/null") or ""
 end
-
-local function normalize_state(item)
-	return {
-		up = tonumber(item.status) == 0,
-		mode = clean(item.mode),
-		band = clean(item.band),
-		pci = clean(item.pci),
-		earfcn = clean(item.earfcn),
-		sim = clean(item.simno)
-	}
+local function rows()
+    local path="/tmp/infocd/cache/cpestatus"
+    local st=fs.stat(path)
+    if not st or os.time()-st.mtime < 0 or os.time()-st.mtime > 45 then return {} end
+    local out={}
+    for _,row in ipairs(read(path).result or {}) do
+        local r=row.status or {}
+        if labels[r.name] then out[r.name]=r end
+    end
+    return out
 end
-
-local function keep_last_nonempty(now, old)
-	if not now.up or not old then
-		return
-	end
-	for _, key in ipairs({ "mode", "band", "pci", "earfcn", "sim" }) do
-		if now[key] == "" then
-			now[key] = old[key]
-		end
-	end
+local function snapshot(name, r)
+    if not r or tonumber(r.status)~=0 then return {valid=false} end
+    local dev=read("/tmp/infocd/cache/"..name.."_dev").parameter or {}
+    local backend=dev.driver=="odu" and "odu-cache" or
+        (dev.alias=="mt5700" and tostring(dev.control or ""):match("^/dev/") and "mt5700-at" or "cache")
+    local mode,band=tostring(r.mode or ""):upper(), tostring(r.band or ""):gsub("^[NnBb]","")
+    local carriers={}
+    local ssb,pci=tostring(r.earfcn or ""),tostring(r.pci or "")
+    if backend=="mt5700-at" then
+        local raw=at(name,"AT^HFREQINFO?")
+        local payload=raw:match("%^HFREQINFO:%s*([^\r\n]+)")
+        local fields={}
+        for v in (payload or ""):gmatch("[^,]+") do fields[#fields+1]=tonumber(v) end
+        local count=fields[2]
+        -- AT manual 13.13: seven fields per carrier; do not infer bands from ARFCN.
+        if not count or count<7 or count%7~=0 or #fields<2+count then return {valid=false} end
+        mode=fields[1]==0 and "NR" or (fields[1]==1 and "LTE" or "")
+        if mode=="" or not fields[3] or fields[3]<=0 then return {valid=false} end
+        band=tostring(fields[3])
+        for i=3,2+count,7 do
+            local key=mode..":"..tostring(fields[i])
+            carriers[#carriers+1]=key
+            if engine.capacity(key) then band=tostring(fields[i]) end
+        end
+    end
+    if not band:match("^%d+$") or not r.iccid or tostring(r.iccid)=="" or not r.isp then return {valid=false} end
+    local rat=(mode:find("NR",1,true) or mode:find("5G",1,true) or mode=="SA" or mode=="NSA") and "NR" or
+        ((mode:find("LTE",1,true) or mode:find("4G",1,true)) and "LTE" or "")
+    if rat=="" then return {valid=false} end
+    return {valid=true,online=true,band=rat..":"..band,backend=backend,ssb=ssb,pci=pci,
+        carriers=carriers,identity=tostring(r.iccid).."|"..tostring(r.isp).."|"..tostring(r.simno or "")}
 end
-
-local function record_state(name, now)
-	local old = observed[name] or previous[name]
-	keep_last_nonempty(now, old)
-	local changes = {}
-	local level = ""
-
-	if not old then
-		changes[#changes + 1] = "后台监听启动：" .. (now.up and "在线" or "离线") ..
-			"，" .. (now.mode ~= "" and now.mode or "未知网络") ..
-			"，" .. band_text(now.mode, now.band) .. "，小区 " .. cell_text(now)
-	else
-		if old.up ~= now.up then
-			changes[#changes + 1] = now.up and "线路恢复在线" or "线路掉线"
-			if not now.up then
-				level = "warn"
-			end
-		end
-		if old.sim ~= now.sim then
-			changes[#changes + 1] = "SIM " .. (old.sim ~= "" and old.sim or "-") ..
-				" → " .. (now.sim ~= "" and now.sim or "-")
-		end
-		if old.mode ~= now.mode then
-			changes[#changes + 1] = "网络 " .. (old.mode ~= "" and old.mode or "-") ..
-				" → " .. (now.mode ~= "" and now.mode or "-")
-		end
-		if old.band ~= now.band then
-			changes[#changes + 1] = "频段 " .. band_text(old.mode, old.band) ..
-				" → " .. band_text(now.mode, now.band)
-		end
-		if old.pci ~= now.pci or old.earfcn ~= now.earfcn then
-			changes[#changes + 1] = "小区 " .. cell_text(old) .. " → " .. cell_text(now)
-		end
-	end
-
-	if sample_gap[name] then
-		table.insert(changes, 1, "记录中断：采样异常后恢复，中间变化未知")
-		level = "warn"
-	end
-	if overflow[name] then
-		table.insert(changes, 1, "记录中断：写入失败期间缓冲已满，部分变化缺失")
-		level = "warn"
-	end
-	if #changes > 0 then
-		if #pending >= PENDING_LIMIT then
-			overflow[name] = true
-			return
-		end
-		pending[#pending + 1] = {
-			time = os.date("%Y-%m-%d %H:%M:%S"),
-			name = name, level = level, detail = table.concat(changes, "；"), state = now
-		}
-		overflow[name] = nil
-		sample_gap[name] = nil
-	end
-	observed[name] = now
+local function native_allows(name)
+    uci:unload("cpecfg"); uci:unload("cpesel"); uci:unload("network"); uci:unload("luci")
+    local idx=name=="cpe" and "" or "1"
+    local sim=uci:get("cpesel","sim"..idx,"cur")
+    if not sim or not tostring(sim):match("^%d+$") then return false end
+    local section=name.."sim"..sim
+    local mobility=uci:get("cpecfg",section,"mobility")
+    if mobility~="1" and mobility~="2" then return false end
+    if uci:get("network",name,"disabled")=="1" or uci:get("luci","main","mobile_lock")=="1" then return false end
+    for _,key in ipairs({"custom_freq","custom_earfcn4","custom_earfcn5"}) do
+        if uci:get("cpecfg",section,key)=="1" then return false end
+    end
+    local lock=at(name,"AT^NRFREQLOCK?")
+    local t=tonumber(lock:match("%^NRFREQLOCK:%s*(%d+)"))
+    if t==0 then return true end
+    local mobility2,count=lock:match("%^NRFREQLOCK:%s*3%s+([01]),(%d+)")
+    return mobility2=="1" and (tonumber(count) or 0)>1
 end
-
-local function sample()
-	flush_pending()
-	local ok, runtime = pcall(util.ubus, "infocd", "runtime")
-	if not ok or type(runtime) ~= "table" or type(runtime.cpe) ~= "table" then
-		sample_gap.cpe, sample_gap.cpe1 = true, true
-		write_status("read_error", 0)
-		return
-	end
-
-	local line_count = 0
-	local seen = {}
-	for _, item in ipairs(runtime.cpe) do
-		local name = clean(item.name)
-		if allowed_cpe[name] then
-			seen[name] = true
-			line_count = line_count + 1
-			record_state(name, normalize_state(item))
-		end
-	end
-	for name in pairs(allowed_cpe) do
-		if not seen[name] then sample_gap[name] = true end
-	end
-	local saved = flush_pending()
-	write_status(not saved and "write_error" or (line_count == 0 and "no_lines" or "ok"), line_count)
+local reasons={
+    gap="本线路采样中断，当前驻留待确认",
+    observe="记录驻留变化",confirm="确认频段变化",night="观察时段：记录退频，交由原厂自动连接",
+    delay="回落后等待，继续记录",verifying="自动搜网已发出，等待实际驻留结果",
+    remind="白天仍滞留回落频段",observe_backend="白天仍滞留回落频段；本线路仅支持观测",
+    cooldown="仍未恢复；等待下一次检查窗口",daily_limit="仍未恢复；今日自动搜网次数已用完",
+    policy="保留原厂或手动策略，不触发搜网",busy="等待模组进入空闲态后再检查",
+    manual="当前不是自动选网，保留原设置",changed="线路身份或频段已变化，取消本次搜网",
+    write_error="记录未持久保存，暂停自动搜网",rejected="模组未接受自动搜网，继续记录"
+}
+local function cycle()
+    local now,cfg,all=os.time(),config(),rows()
+    local hour,date=tonumber(os.date("%H",now)),os.date("%Y-%m-%d",now)
+    local dirty,output,write_ok=false,{},flush()
+    if state.lost and write_ok then
+        for name in pairs(state.lost) do
+            if append({at=now,kind="gap",detail="写入中断期间事件缓冲已满，部分时间缺失"},name) then
+                state.lost[name]=nil
+            else write_ok=false end
+        end
+        if not next(state.lost) then state.lost=nil end
+        dirty=true
+    end
+    for _,name in ipairs({"cpe","cpe1"}) do
+        if all[name] or state.lines[name] then
+            local s,events=engine.step(state.lines[name] or {},snapshot(name,all[name]),now,boot)
+            state.lines[name]=s
+            for _,e in ipairs(events) do write_ok=append(e,name) and write_ok; dirty=true end
+            local decision=engine.decision(s,cfg,now,hour,date)
+            if s.episode and decision~="gap" and decision~="night" and decision~="delay" and decision~="observe" and
+                decision~="confirm" and not s.episode.notified then
+                write_ok=append({at=now,kind="day_stuck",detail="进入白天检查窗口后仍滞留 "..(s.current or "未知")},name) and write_ok
+                s.episode.notified,dirty=true,true
+            end
+            if decision=="reselect" then
+                if not write_ok then decision="write_error"
+                elseif not native_allows(name) then decision="policy"
+                elseif tonumber(at(name,"AT+COPS?"):match("%+COPS:%s*(%d+)"))~=0 then decision="manual"
+                elseif tonumber(at(name,"AT^RRCSTAT?"):match("%^RRCSTAT:%s*%d+%s*,%s*(%d+)"))~=0 then decision="busy"
+                else
+                    local fresh=snapshot(name,rows()[name])
+                    if not fresh.valid or fresh.identity~=s.identity or fresh.band~=s.current then
+                        decision="changed"
+                    else
+                        s.budget_count=(s.budget_date==date and (s.budget_count or 0) or 0)+1
+                        s.budget_date,s.last_attempt=date,now
+                        -- Commit the attempt BEFORE the action: restarting cannot reset its budget.
+                        s.attempt={at=now}
+                        if not atomic(ROOT.."/state.json",state) then
+                            decision="write_error"; s.attempt=nil
+                        else
+                            local accepted=at(name,"AT+COPS=0"):match("[\r\n]OK[\r\n]")~=nil
+                            local detail=accepted and "已请求自动搜网；原频段列表与原厂策略保持，结果等待后续采样" or
+                                "模组未接受自动搜网；保留当前连接，不锁频或切飞"
+                            write_ok=append({at=now,kind="reselect",detail=detail},name) and write_ok
+                            if not accepted then s.attempt=nil end
+                            decision=accepted and "verifying" or "rejected"
+                            dirty=true
+                        end
+                    end
+                end
+            end
+            s.decision=decision
+            output[#output+1]={name=name,label=labels[name],band=s.current or "未知",target=s.target,valid=not s.gap,
+                carriers=s.carriers,sampled=s.sample_at,low_since=s.episode and s.episode.start,uncertain=s.episode and s.episode.gap,
+                reason=reasons[decision] or decision,backend=s.backend,identity_hidden=true}
+        end
+    end
+    if dirty or now-last_save>=300 then
+        write_ok=atomic(ROOT.."/state.json",state) and write_ok
+        if write_ok then last_save=now end
+    end
+    atomic(RUN.."/status.json",{version="V10",at=os.time(),lines=output,settings=cfg,write_ok=write_ok})
 end
-
-if arg and arg[1] == "--check" then
-	os.exit(0)
-end
-
+if arg and arg[1]=="--check" then os.exit(0) end
+if not arg or arg[1]~="--daemon" then io.stderr:write("请通过 nradio-cpe-monitor 服务运行\n"); os.exit(1) end
 while true do
-	local ok = pcall(sample)
-	if not ok then
-		sample_gap.cpe, sample_gap.cpe1 = true, true
-		write_status("runtime_error", 0)
-	end
-	nixio.nanosleep(INTERVAL)
+    local ok,err=pcall(cycle)
+    if not ok then
+        atomic(RUN.."/status.json",{version="V10",at=os.time(),error=tostring(err)})
+    end
+    nixio.nanosleep(10)
 end
-EOF_NRADIO_CPEOPT_MONITOR
+EOF_NRADIO_TOWER_MONITOR
 
-    cat > "$cpeopt_payload_root/etc/init.d/nradio-cpe-monitor" <<'EOF_NRADIO_CPEOPT_MONITOR_INIT'
+    cat > "$cpeopt_payload_root/etc/init.d/nradio-cpe-monitor" <<'EOF_NRADIO_TOWER_INIT'
 #!/bin/sh /etc/rc.common
-
 USE_PROCD=1
 START=95
 STOP=10
-
-PROG="/usr/libexec/nradio-cpe-monitor.lua"
-RUNTIME_DIR="/var/run/nradio-cpe-monitor"
-LOG_DIR="/etc/nradio-cpe-monitor"
-STATUS_FILE="$RUNTIME_DIR/status"
-
 start_service() {
-	mkdir -p "$RUNTIME_DIR" "$LOG_DIR" || return 1
-	chmod 700 "$RUNTIME_DIR" "$LOG_DIR" || return 1
-	rm -f "$STATUS_FILE" "$STATUS_FILE.tmp"
-
-	procd_open_instance
-	procd_set_param command /usr/bin/lua "$PROG"
-	procd_set_param respawn 3600 5 5
-	procd_set_param stdout 1
-	procd_set_param stderr 1
-	procd_close_instance
+    mkdir -p /etc/nradio-cpe-monitor /var/run/nradio-cpe-monitor || return 1
+    chmod 700 /etc/nradio-cpe-monitor /var/run/nradio-cpe-monitor || return 1
+    procd_open_instance
+    procd_set_param command /usr/bin/lua /usr/libexec/nradio-cpe-monitor.lua --daemon
+    procd_set_param respawn 3600 5 5
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
 }
-
 stop_service() {
-	rm -f "$STATUS_FILE" "$STATUS_FILE.tmp"
+    rm -f /var/run/nradio-cpe-monitor/status.json /var/run/nradio-cpe-monitor/status.json.tmp
 }
+EOF_NRADIO_TOWER_INIT
 
-status() {
-	local now last age
-	[ -r "$STATUS_FILE" ] || return 1
-	now="$(date +%s)"
-	last="$(cut -f1 "$STATUS_FILE" 2>/dev/null)"
-	case "$last" in
-		''|*[!0-9]*) return 1 ;;
-	esac
-	age=$((now - last))
-	[ "$age" -ge 0 ] && [ "$age" -le 30 ]
-}
-EOF_NRADIO_CPEOPT_MONITOR_INIT
-
-    cat > "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" <<'EOF_NRADIO_CPEOPT_CONTROLLER'
--- NRadio 5G connection monitoring page
-
-module("luci.controller.nradio_adv.cpeopt", package.seeall)
-
-local SMART_BAND_SCRIPT = "/root/nradio-smart-band.sh"
-local SMART_BAND_CRON = "/etc/crontabs/root"
-local SMART_BAND_CRON_LINE = "*/30 5-21 * * * sh /root/nradio-smart-band.sh >/dev/null 2>&1 # nradio-smart-band"
-local SMART_BAND_RUNTIME = "/var/run/nradio-smart-band"
-local SMART_BAND_STOP = SMART_BAND_RUNTIME .. "/stopping"
-local SMART_BAND_PENDING = SMART_BAND_RUNTIME .. "/pending_auto"
-local SMART_BAND_LOCK_PID = SMART_BAND_RUNTIME .. "/lock/pid"
-local SMART_BAND_LOCK_START = SMART_BAND_RUNTIME .. "/lock/starttime"
-local SMART_BAND_UI_TASK = SMART_BAND_RUNTIME .. "/ui-run"
-local SMART_BAND_UI_LAUNCH_LOCK = SMART_BAND_RUNTIME .. "/ui-run.lock"
-local SMART_BAND_UI_STATE = SMART_BAND_UI_TASK .. "/state"
-local SMART_BAND_UI_PID = SMART_BAND_UI_TASK .. "/pid"
-local SMART_BAND_UI_START = SMART_BAND_UI_TASK .. "/starttime"
-local SMART_BAND_UI_STARTED = SMART_BAND_UI_TASK .. "/started"
-local SMART_BAND_UI_FINISHED = SMART_BAND_UI_TASK .. "/finished"
-local SMART_BAND_UI_RC = SMART_BAND_UI_TASK .. "/rc"
-local SMART_BAND_UI_OUTPUT = SMART_BAND_UI_TASK .. "/output"
-
-local function trim(value)
-	local cleaned = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
-	return cleaned
+    cat > "$cpeopt_payload_root/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua" <<'EOF_NRADIO_TOWER_CONTROLLER'
+module("luci.controller.nradio_adv.cpeopt",package.seeall)
+local fs,json=require "nixio.fs",require "luci.jsonc"
+local ROOT,RUN="/etc/nradio-cpe-monitor","/var/run/nradio-cpe-monitor"
+local function read(path)
+    local ok,v=pcall(json.parse,fs.readfile(path) or "")
+    return ok and type(v)=="table" and v or {}
 end
-
-local function smart_band_supported(model)
-	return model == "HC-WT9126" or model == "NRadio_C5800-688"
-end
-
-local function run_smart_band(sys, mode)
-	local raw = sys.exec("sh " .. SMART_BAND_SCRIPT .. " " .. mode ..
-		" 2>&1; printf '\\n__NRADIO_RC__%s\\n' \"$?\"") or ""
-	local code = tonumber(raw:match("\n__NRADIO_RC__(%d+)\n?$") or "1") or 1
-	local output = raw:gsub("\n__NRADIO_RC__%d+\n?$", "")
-	return code, output
-end
-
-local function process_starttime(fs, pid)
-	local stat = fs.readfile("/proc/" .. tostring(pid or "") .. "/stat") or ""
-	local fields = stat:match("^%d+ %b() (.+)$") or ""
-	local index = 0
-	for field in fields:gmatch("%S+") do
-		index = index + 1
-		if index == 20 then
-			return field
-		end
-	end
-	return ""
-end
-
-local function process_matches(fs, pid, starttime, needle)
-	pid = trim(pid)
-	starttime = trim(starttime)
-	if not pid:match("^%d+$") or tonumber(pid) <= 1 or not starttime:match("^%d+$") then
-		return false
-	end
-	if process_starttime(fs, pid) ~= starttime then
-		return false
-	end
-	local cmdline = fs.readfile("/proc/" .. pid .. "/cmdline") or ""
-	return cmdline:find(needle, 1, true) ~= nil
-end
-
-local function smart_band_process_running(fs)
-	return process_matches(
-		fs,
-		fs.readfile(SMART_BAND_LOCK_PID),
-		fs.readfile(SMART_BAND_LOCK_START),
-		SMART_BAND_SCRIPT
-	)
-end
-
-local function smart_band_task_summary(fs)
-	local state = trim(fs.readfile(SMART_BAND_UI_STATE))
-	local pid = trim(fs.readfile(SMART_BAND_UI_PID))
-	local starttime = trim(fs.readfile(SMART_BAND_UI_START))
-	local started = tonumber(trim(fs.readfile(SMART_BAND_UI_STARTED))) or 0
-	local starting_grace = state == "starting" and started > 0 and os.time() - started <= 5
-	local task_running = starting_grace or ((state == "starting" or state == "running") and
-		process_matches(fs, pid, starttime, SMART_BAND_SCRIPT))
-	if (state == "starting" or state == "running") and not task_running then
-		state = "failed"
-	end
-	local task = {
-		source = "manual",
-		state = state ~= "" and state or "idle",
-		running = task_running,
-		started = started,
-		finished = tonumber(trim(fs.readfile(SMART_BAND_UI_FINISHED))) or 0,
-		rc = tonumber(trim(fs.readfile(SMART_BAND_UI_RC)))
-	}
-	local source, run_started, finished, run_state, rc = (fs.readfile(SMART_BAND_RUNTIME .. "/last_run") or ""):match(
-		"^([^\t]+)\t(%d+)\t(%d+)\t([^\t]+)\t(%d+)")
-	run_started = tonumber(run_started) or 0
-	if (source == "auto" or source == "manual") and run_started > 0 and
-		(run_started > task.started or (run_started == task.started and task.state ~= "busy")) then
-		local running = run_state == "running" and smart_band_process_running(fs)
-		if run_state == "running" and not running then run_state = "interrupted" end
-		return {
-			source = source, state = run_state, running = running,
-			started = run_started, finished = tonumber(finished) or 0, rc = tonumber(rc)
-		}
-	end
-	return task
-end
-
-local function smart_band_cron_state(cron)
-	local active_count = 0
-	local exact_count = 0
-	for line in (cron .. "\n"):gmatch("(.-)\n") do
-		local candidate = trim(line)
-		if candidate ~= "" and candidate:sub(1, 1) ~= "#" and
-			candidate:find(SMART_BAND_SCRIPT, 1, true) then
-			active_count = active_count + 1
-			if candidate == SMART_BAND_CRON_LINE then
-				exact_count = exact_count + 1
-			end
-		end
-	end
-	return active_count > 0, active_count == 1 and exact_count == 1, active_count
-end
-
-local function smart_band_summary(fs, model)
-	local cron = fs.readfile(SMART_BAND_CRON) or ""
-	local installed = fs.access(SMART_BAND_SCRIPT) and true or false
-	local source = installed and (fs.readfile(SMART_BAND_SCRIPT) or "") or ""
-	local version = source:match('SMART_BAND_VERSION="([^"]+)"') or
-		source:match("智能频段切换%s+(v[%w%._-]+)") or "未知"
-	local scheduled, schedule_valid, schedule_count = smart_band_cron_state(cron)
-	local task = smart_band_task_summary(fs)
-	local core_running = smart_band_process_running(fs)
-	local stopped = fs.access(SMART_BAND_STOP) and true or false
-	local pending_auto = fs.access(SMART_BAND_PENDING) and true or false
-	local enabled = installed and scheduled and not stopped
-	local phase
-	if stopped and core_running then
-		phase = "stopping"
-	elseif stopped and pending_auto then
-		phase = "restore-pending"
-	elseif stopped or not enabled then
-		phase = "disabled"
-	elseif core_running or task.running then
-		phase = "running"
-	else
-		phase = "idle"
-	end
-	return {
-		supported = smart_band_supported(model),
-		installed = installed,
-		scheduled = scheduled,
-		schedule_valid = schedule_valid,
-		schedule_count = schedule_count,
-		enabled = enabled,
-		stopped = stopped,
-		pending_auto = pending_auto,
-		running = core_running or task.running,
-		phase = phase,
-		version = version,
-		run_state = task.state,
-		last_started = task.started,
-		last_finished = task.finished,
-		last_rc = task.rc,
-		last_source = task.source
-	}
-end
-
-local function smart_band_cron_without_task(cron)
-	local kept = {}
-	for line in (cron .. "\n"):gmatch("(.-)\n") do
-		if not line:find(SMART_BAND_SCRIPT, 1, true) and
-			not line:find("# nradio-smart-band", 1, true) and
-			not line:find("#nradio-smart-band", 1, true) then
-			kept[#kept + 1] = line
-		end
-	end
-	while #kept > 0 and kept[#kept] == "" do
-		table.remove(kept)
-	end
-	return #kept > 0 and (table.concat(kept, "\n") .. "\n") or ""
-end
-
-local function write_smart_band_cron(fs, content, suffix)
-	local current = fs.readfile(SMART_BAND_CRON) or ""
-	if current == content then
-		return true
-	end
-	local tmp = SMART_BAND_CRON .. suffix
-	if not fs.writefile(tmp, content) then
-		return false
-	end
-	fs.chmod(tmp, "0600")
-	if not fs.rename(tmp, SMART_BAND_CRON) then
-		fs.unlink(tmp)
-		return false
-	end
-	return true
-end
-
-local function reload_smart_band_cron(fs, sys)
-	if fs.access("/etc/init.d/cron") then
-		return sys.call("/etc/init.d/cron restart >/dev/null 2>&1") == 0
-	end
-	return sys.call("killall -HUP crond >/dev/null 2>&1") == 0
-end
-
-local function disable_smart_band(fs, sys)
-	local cron = fs.readfile(SMART_BAND_CRON) or ""
-	local filtered = smart_band_cron_without_task(cron)
-
-	if sys.call("mkdir -p " .. SMART_BAND_RUNTIME .. " && chmod 700 " .. SMART_BAND_RUNTIME) ~= 0 or
-		not fs.writefile(SMART_BAND_STOP, "disabled\n") then
-		return false, "无法写入智能频段停止状态"
-	end
-
-	if not write_smart_band_cron(fs, filtered, ".nradio-disable") then
-		return false, "无法停用智能频段定时任务"
-	end
-
-	local pid = trim(fs.readfile(SMART_BAND_LOCK_PID))
-	local starttime = trim(fs.readfile(SMART_BAND_LOCK_START))
-	if process_matches(fs, pid, starttime, SMART_BAND_SCRIPT) then
-		sys.call("kill -TERM " .. pid .. " >/dev/null 2>&1")
-		for _ = 1, 12 do
-			if not process_matches(fs, pid, starttime, SMART_BAND_SCRIPT) then
-				break
-			end
-			sys.call("sleep 1")
-		end
-	end
-
-	if not reload_smart_band_cron(fs, sys) then
-		return false, "智能频段已停用，但 crond 刷新失败"
-	end
-	if process_matches(fs, pid, starttime, SMART_BAND_SCRIPT) then
-		return false, "自动任务已停用，但当前实例尚未退出，页面将继续跟踪"
-	end
-	if fs.access(SMART_BAND_PENDING) then
-		return false, "自动任务已停用，但自动频段恢复未完成；请重新启用后执行一次恢复"
-	end
-	return true, "智能频段已停用，5G 连接监听继续运行，频段交由系统管理"
-end
-
-local function enable_smart_band(fs, sys)
-	local cron = fs.readfile(SMART_BAND_CRON) or ""
-	local enabled_cron = smart_band_cron_without_task(cron) .. SMART_BAND_CRON_LINE .. "\n"
-	if not write_smart_band_cron(fs, enabled_cron, ".nradio-enable") then
-		return false, "无法恢复智能频段定时任务"
-	end
-	if fs.access(SMART_BAND_STOP) and not fs.unlink(SMART_BAND_STOP) then
-		return false, "定时任务已恢复，但无法解除智能频段停止状态"
-	end
-	if not reload_smart_band_cron(fs, sys) then
-		return false, "智能频段已启用，但 crond 刷新失败"
-	end
-	return true, "智能频段已启用，将按每 30 分钟执行；5G 连接监听继续运行"
-end
-
-local function start_smart_band_task(fs, sys)
-	if sys.call("mkdir -p " .. SMART_BAND_UI_TASK .. " && chmod 700 " .. SMART_BAND_UI_TASK) ~= 0 then
-		return false, "无法创建智能频段任务目录", "failed"
-	end
-	if sys.call("mkdir " .. SMART_BAND_UI_LAUNCH_LOCK .. " >/dev/null 2>&1") ~= 0 then
-		local existing = smart_band_task_summary(fs)
-		if existing.running then
-			return true, "智能频段已有任务运行，未重复启动", "running"
-		end
-		if existing.started == 0 or os.time() - existing.started < 300 then
-			return false, "智能频段任务正在收尾，请稍后重试", "failed"
-		end
-		if sys.call("rmdir " .. SMART_BAND_UI_LAUNCH_LOCK .. " >/dev/null 2>&1 && mkdir " .. SMART_BAND_UI_LAUNCH_LOCK .. " >/dev/null 2>&1") ~= 0 then
-			return false, "智能频段任务锁异常，请稍后重试", "failed"
-		end
-	end
-	for _, path in ipairs({ SMART_BAND_UI_PID, SMART_BAND_UI_START, SMART_BAND_UI_FINISHED, SMART_BAND_UI_RC, SMART_BAND_UI_OUTPUT }) do
-		fs.unlink(path)
-	end
-	if not fs.writefile(SMART_BAND_UI_STATE, "starting\n") or
-		not fs.writefile(SMART_BAND_UI_STARTED, tostring(os.time()) .. "\n") then
-		sys.call("rmdir " .. SMART_BAND_UI_LAUNCH_LOCK .. " >/dev/null 2>&1")
-		return false, "无法初始化智能频段任务状态", "failed"
-	end
-
-	local body =
-		"umask 077; " ..
-		"printf '%s\\n' \"$$\" > " .. SMART_BAND_UI_PID .. "; " ..
-		"sed 's/^[^)]*) //' /proc/$$/stat 2>/dev/null | awk '{print $20}' > " .. SMART_BAND_UI_START .. "; " ..
-		"printf '%s\\n' running > " .. SMART_BAND_UI_STATE .. "; " ..
-		"sh " .. SMART_BAND_SCRIPT .. " manual > " .. SMART_BAND_UI_OUTPUT .. " 2>&1; " ..
-		"rc=$?; printf '%s\\n' \"$rc\" > " .. SMART_BAND_UI_RC .. "; date +%s > " .. SMART_BAND_UI_FINISHED .. "; " ..
-		"if [ \"$rc\" -eq 0 ]; then state=success; elif [ \"$rc\" -eq 3 ]; then state=busy; " ..
-		"elif grep -Eq '=(UNHEALTHY WAIT|UNHEALTHY BLOCKED|WAIT |BLOCKED )' " .. SMART_BAND_UI_OUTPUT .. "; then state=attention; else state=failed; fi; " ..
-		"printf '%s\\n' \"$state\" > " .. SMART_BAND_UI_STATE .. "; " ..
-		"rm -f " .. SMART_BAND_UI_PID .. " " .. SMART_BAND_UI_START .. "; " ..
-		"rmdir " .. SMART_BAND_UI_LAUNCH_LOCK .. " >/dev/null 2>&1"
-	local command = "( sh -c '" .. body:gsub("'", "'\\''") .. "' ) >/dev/null 2>&1 </dev/null &"
-	if sys.call(command) ~= 0 then
-		fs.writefile(SMART_BAND_UI_STATE, "failed\n")
-		sys.call("rmdir " .. SMART_BAND_UI_LAUNCH_LOCK .. " >/dev/null 2>&1")
-		return false, "无法启动智能频段后台任务", "failed"
-	end
-	return true, "智能频段任务已启动，页面将持续显示运行状态", "starting"
-end
-
 function index()
-	local fs = require "nixio.fs"
-	local model = tostring(fs.readfile("/tmp/sysinfo/model") or "")
-	model = model:gsub("^%s+", ""):gsub("%s+$", "")
-	if model ~= "HC-WT9120" and model ~= "HC-WT9126" and model ~= "HC-WT9303" and
-		model ~= "NRadio_C5800-650" and model ~= "NRadio_C5800-688" and model ~= "NRadio_C2000MAX" then
-		return
-	end
-
-	local page = entry(
-		{"nradioadv", "cellular", "cpeopt"},
-		template("nradio_adv/cpeopt"),
-		_("5G 连接监听"),
-		18,
-		true
-	)
-	page.icon = "signal-4"
-	if fs.access("/www/luci-static/nradio/images/icon/cpeopt.png") then
-		page.image = "/luci-static/nradio/images/icon/cpeopt.png?v=20260927-1"
-	else
-		page.image = "/luci-static/nradio/images/icon/cpeopt.svg?v=20260927-1"
-	end
-	page.show = true
-	page.leaf = false
-
-	entry(
-		{"nradioadv", "cellular", "cpeopt", "status"},
-		call("action_status"), nil, nil, true
-	).leaf = true
-
-	local apply = entry(
-		{"nradioadv", "cellular", "cpeopt", "apply"},
-		call("action_apply"), nil, nil, true
-	)
-	apply.leaf = true
-	apply.post = true
-
-	local clear = entry(
-		{"nradioadv", "cellular", "cpeopt", "clear"},
-		call("action_clear"), nil, nil, true
-	)
-	clear.leaf = true
-	clear.post = true
-
-	entry(
-		{"nradioadv", "cellular", "cpeopt", "smart-status"},
-		call("action_smart_status"), nil, nil, true
-	).leaf = true
-
-	local smart_apply = entry(
-		{"nradioadv", "cellular", "cpeopt", "smart-apply"},
-		call("action_smart_apply"), nil, nil, true
-	)
-	smart_apply.leaf = true
-	smart_apply.post = true
-
-	local smart_disable = entry(
-		{"nradioadv", "cellular", "cpeopt", "smart-disable"},
-		call("action_smart_disable"), nil, nil, true
-	)
-	smart_disable.leaf = true
-	smart_disable.post = true
-
-	local smart_enable = entry(
-		{"nradioadv", "cellular", "cpeopt", "smart-enable"},
-		call("action_smart_enable"), nil, nil, true
-	)
-	smart_enable.leaf = true
-	smart_enable.post = true
+    local page=entry({"nradioadv","cellular","cpeopt"},template("nradio_adv/cpeopt"),_("基站时段"),18,true)
+    page.icon,page.show,page.leaf="nradio-cellular-signal",true,false
+    entry({"nradioadv","cellular","cpeopt","status"},call("action_status"),nil,nil,true).leaf=true
+    local save=entry({"nradioadv","cellular","cpeopt","settings"},call("action_settings"),nil,nil,true)
+    save.leaf,save.post=true,true
 end
-
-
--- Only join periods whose entry and exit are present in the retained log.
-local function event_epoch(stamp)
-	local y, m, d, h, minute, s = stamp:match("^(%d%d%d%d)%-(%d%d)%-(%d%d) (%d%d):(%d%d):(%d%d)$")
-	if not y then return nil end
-	return os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d),
-		hour = tonumber(h), min = tonumber(minute), sec = tonumber(s) })
+local function reply(value)
+    local http=require "luci.http"
+    http.prepare_content("application/json")
+    http.write_json(value)
 end
-
-local function band_periods(events, date_filter, line_filter)
-	local active, periods = {}, {}
-	for _, event in ipairs(events) do
-		local detail, name = event.detail, event.name
-		local epoch = event_epoch(event.time)
-		if (name == "cpe" or name == "cpe1") and epoch then
-			local old_band, new_band = detail:match("频段 ([NB]%d+) → ([NB]%d+)")
-			local gap = detail:find("后台监听启动", 1, true) or detail:find("记录中断", 1, true) or
-				detail:find("线路", 1, true) or detail:find("SIM ", 1, true) or
-				(detail:find("网络 ", 1, true) and not old_band) or
-				(detail:find("频段 ", 1, true) and not old_band)
-			if gap then active[name] = nil end
-			if old_band and not gap then
-				local start = active[name]
-				if start and start.band == old_band and epoch >= start.epoch then
-					if (line_filter == "" or name == line_filter) and
-						(date_filter == "" or (start.time:sub(1, 10) <= date_filter and event.time:sub(1, 10) >= date_filter)) then
-						periods[#periods + 1] = {
-							name = name, band = old_band, next_band = new_band,
-							entered = start.time, left = event.time, seconds = epoch - start.epoch
-						}
-					end
-				end
-				active[name] = { band = new_band, time = event.time, epoch = epoch }
-			end
-		end
-	end
-	local result = {}
-	for index = #periods, math.max(1, #periods - 49), -1 do
-		result[#result + 1] = periods[index]
-	end
-	return result
-end
-
 function action_status()
-	local fs = require "nixio.fs"
-	local http = require "luci.http"
-	local util = require "luci.util"
-	local uci = require "luci.model.uci".cursor()
-	local allowed_cpe = { cpe = true, cpe1 = true }
-	local date_filter = http.formvalue("event_date") or ""
-	local line_filter = http.formvalue("event_line") or ""
-	if not date_filter:match("^%d%d%d%d%-%d%d%-%d%d$") then date_filter = "" end
-	if not allowed_cpe[line_filter] then line_filter = "" end
-	local model = tostring(fs.readfile("/tmp/sysinfo/model") or "")
-	model = model:gsub("^%s+", ""):gsub("%s+$", "")
-
-	local function wan_ip(runtime, name)
-		for _, wan in ipairs(runtime.wans or {}) do
-			if wan.name == name and wan.ipaddrs and wan.ipaddrs[1] then
-				return wan.ipaddrs[1].ipaddr or ""
-			end
-		end
-		return ""
-	end
-
-	local function read_dial_logs()
-		local all = {}
-		local existing = 0
-		local read_error = false
-		for _, path in ipairs({ "/var/log/nradio-cpe-dial.log.1", "/var/log/nradio-cpe-dial.log" }) do
-			if fs.access(path) then
-				existing = existing + 1
-				local content = fs.readfile(path)
-				if content == nil then
-					read_error = true
-				else
-					for line in content:gmatch("[^\r\n]+") do
-						local stamp, source, name, detail = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t(.*)$")
-						if stamp and source and detail then
-							all[#all + 1] = {
-								time = stamp,
-								source = source,
-								name = name or "",
-								detail = detail
-							}
-						end
-					end
-				end
-			end
-		end
-
-		local result_logs = {}
-		local first = math.max(1, #all - 199)
-		for index = #all, first, -1 do
-			result_logs[#result_logs + 1] = all[index]
-		end
-		if read_error then
-			return result_logs, "read_error"
-		elseif existing == 0 then
-			return result_logs, "missing"
-		elseif #all == 0 then
-			return result_logs, "empty"
-		end
-		return result_logs, "ready"
-	end
-
-	local function read_event_logs()
-		local all = {}
-		local existing = 0
-		local read_error = false
-		for _, path in ipairs({ "/etc/nradio-cpe-monitor/events.log.1", "/etc/nradio-cpe-monitor/events.log" }) do
-			if fs.access(path) then
-				existing = existing + 1
-				local content = fs.readfile(path)
-				if content == nil then
-					read_error = true
-				else
-					for line in content:gmatch("[^\r\n]+") do
-						local stamp, name, level, detail = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t(.*)$")
-						if stamp and name and detail then
-							all[#all + 1] = {
-								time = stamp,
-								name = name,
-								level = level or "",
-								detail = detail
-							}
-						end
-					end
-				end
-			end
-		end
-
-		local events = {}
-		for index = #all, 1, -1 do
-			local event = all[index]
-			if (date_filter == "" or event.time:sub(1, 10) == date_filter) and
-				(line_filter == "" or event.name == line_filter) then
-				events[#events + 1] = event
-				if #events >= 100 then break end
-			end
-		end
-		local status = read_error and "read_error" or
-			(existing == 0 and "missing" or (#all == 0 and "empty" or "ready"))
-		return events, status, read_error and {} or band_periods(all, date_filter, line_filter), #all
-	end
-
-	local function read_monitor_status()
-		local content = fs.readfile("/var/run/nradio-cpe-monitor/status") or ""
-		local epoch, stamp, count, sample_state, version = content:match("^(%d+)\t([^\t]*)\t(%d+)\t([^\t]*)\t([^\r\n]*)")
-		epoch = tonumber(epoch or "0") or 0
-		local age = epoch > 0 and (os.time() - epoch) or 999999
-		local alive = age >= 0 and age <= 30
-		return {
-			alive = alive,
-			active = alive and sample_state == "ok" and tonumber(count or "0") > 0,
-			last_sample = stamp or "",
-			line_count = tonumber(count or "0") or 0,
-			sample_state = sample_state or "missing",
-			version = version or ""
-		}
-	end
-
-	local runtime = util.ubus("infocd", "runtime") or {}
-	local dial_logs, dial_log_status = read_dial_logs()
-	local events, event_log_status, periods, event_count = read_event_logs()
-	local monitor = read_monitor_status()
-	local smart_band = smart_band_summary(fs, model)
-	local result = {
-		ok = true,
-		version = "20260927-1",
-		model = model,
-		dial_logs = dial_logs,
-		dial_log_status = dial_log_status,
-		events = events,
-		event_log_status = event_log_status,
-		band_periods = periods,
-		event_count = event_count,
-		monitor = monitor,
-		smart_band = smart_band,
-		components = {
-			cpetools = fs.access("/usr/bin/cpetools.sh") and true or false,
-			cpesel = fs.access("/usr/bin/cpesel.sh") and true or false,
-			huawei = fs.access("/etc/cpetools/huawei.sh") and true or false,
-			cpelock = fs.access("/usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua") and true or false,
-			monitor = monitor.active,
-			smartband = smart_band.installed,
-			smartband_enabled = smart_band.enabled,
-			smartband_supported = smart_band.supported
-		},
-		lines = {}
-	}
-
-	for _, item in ipairs(runtime.cpe or {}) do
-		local name = tostring(item.name or "")
-		if allowed_cpe[name] then
-			local net = uci:get_all("network", name) or {}
-			local sim_id = tostring(item.simno or "1")
-			local sim_cfg = uci:get_all("cpecfg", name .. "sim" .. sim_id) or {}
-			local mobility = tostring(sim_cfg.mobility or "")
-			if mobility == "" then
-				mobility = uci:get("system", "basic", "freqfree") == "1" and "2" or "0"
-			end
-
-			result.lines[#result.lines + 1] = {
-				name = name,
-				label = name == "cpe" and "主线路" or "副线路",
-				up = tonumber(item.status) == 0,
-				default_route = tonumber(item.gateway_if) == 1,
-				mode = item.mode or "",
-				band = item.band or "",
-				earfcn = item.earfcn or "",
-				pci = item.pci or "",
-				rsrp = item.rsrp or "",
-				rsrq = item.rsrq or "",
-				sinr = item.sinr or "",
-				temperature = item.model_temp or "",
-				operator = item.sim_company or item.isp_company or "",
-				sim_name = item.sim_name or "",
-				ipaddr = wan_ip(runtime, name),
-				mobility = mobility,
-				mobility_supported = tostring(net.mobility or "") == "1" and uci:get("luci", "main", "mobile_lock") ~= "1",
-				nrrc = sim_cfg.nrrc or "1",
-				disabled = net.disabled or "0",
-				blacklist_band = net.blacklist_band or "",
-				compatibility = net.compatibility or "0",
-				freq_val = net.freq_val or "",
-				lock = {
-					custom_freq = sim_cfg.custom_freq or "0",
-					freq = sim_cfg.freq or "",
-					earfreq_mode = sim_cfg.earfreq_mode or "",
-					custom_earfcn5 = sim_cfg.custom_earfcn5 or "0",
-					earfcn5 = sim_cfg.earfcn5 or "",
-					pci5 = sim_cfg.pci5 or "",
-					band5 = sim_cfg.band5 or "",
-					custom_earfcn4 = sim_cfg.custom_earfcn4 or "0",
-					earfcn4 = sim_cfg.earfcn4 or "",
-					pci4 = sim_cfg.pci4 or "",
-					band4 = sim_cfg.band4 or ""
-				},
-				odu = tonumber(item.odu) == 1
-			}
-		end
-	end
-
-	http.prepare_content("application/json")
-	http.write_json(result)
+    local events,seen={},{}
+    for i=6,0,-1 do
+        local path=ROOT.."/events.jsonl"..(i>0 and "."..i or "")
+        local h=io.open(path,"r")
+        if h then
+            for line in h:lines() do
+                local ok,e=pcall(json.parse,line)
+                if ok and type(e)=="table" and tonumber(e.at) and (e.name=="cpe" or e.name=="cpe1") then
+                    local key=e.id or line
+                    if not seen[key] then events[#events+1]=e; seen[key]=true end
+                end
+            end
+            h:close()
+        end
+    end
+    table.sort(events,function(a,b) return a.at<b.at end)
+    local sessions,open={},{}
+    for _,e in ipairs(events) do
+        if e.kind=="fallback" then
+            local ep={name=e.name,start=e.first or e.at,before=e.before,from=e.from,to=e.to,uncertain=e.uncertain}
+            sessions[#sessions+1]=ep
+            open[e.name]=ep
+        elseif e.kind=="returned" and open[e.name] then
+            open[e.name].finish=e.first or e.at
+            open[e.name].result=e.detail
+            open[e.name].uncertain=open[e.name].uncertain or e.uncertain
+            open[e.name]=nil
+        elseif e.kind=="identity" then
+            if open[e.name] then open[e.name].result="线路身份变化，统计中止"; open[e.name].closed=true end
+            open[e.name]=nil
+        elseif e.kind=="gap" and open[e.name] then open[e.name].uncertain=true end
+    end
+    while #sessions>90 do table.remove(sessions,1) end
+    while #events>500 do table.remove(events,1) end
+    local status=read(RUN.."/status.json")
+    local age=os.time()-(tonumber(status.at) or 0)
+    status.alive=age>=0 and age<45
+    local now=os.time()
+    local offset=os.difftime(os.time(os.date("*t",now)),os.time(os.date("!*t",now)))
+    reply({ok=true,status=status,events=events,sessions=sessions,now=now,utc_offset=offset})
 end
-
-function action_smart_status()
-	local fs = require "nixio.fs"
-	local http = require "luci.http"
-	local sys = require "luci.sys"
-	local model = trim(fs.readfile("/tmp/sysinfo/model"))
-	local summary = smart_band_summary(fs, model)
-	local preview = {}
-	local code, output = 1, ""
-	local message = ""
-	local priority = {
-		["WOULD-RECOVER"] = 60,
-		["WOULD-SOFT-RECOVER-THEN-CFUN"] = 50,
-		["BLOCKED"] = 40,
-		["POLICY-HOLD"] = 35,
-		["WAIT"] = 30,
-		["UNHEALTHY"] = 20,
-		["HOLD"] = 10,
-		["DISABLED"] = 5
-	}
-
-	if summary.running then
-		message = "智能频段正在运行，暂不发起并行预览"
-	elseif summary.supported and summary.installed and summary.enabled then
-		code, output = run_smart_band(sys, "dry-run")
-		for line in output:gmatch("[^\r\n]+") do
-			local name, detail = line:match("^(cpe1)=(.*)$")
-			if not name then
-				name, detail = line:match("^(cpe)=(.*)$")
-			end
-			if name and detail then
-				local token = detail:match("^(%S+)") or ""
-				local current = preview[name]
-				local current_token = current and current:match("^(%S+)") or ""
-				if not current or (priority[token] or 0) > (priority[current_token] or 0) then
-					preview[name] = detail
-				end
-			end
-		end
-	elseif not summary.enabled then
-		message = "智能频段已停用，当前由系统管理频段"
-	end
-
-	http.prepare_content("application/json")
-	http.write_json({
-		ok = summary.running or (summary.supported and summary.installed and summary.enabled and code == 0),
-		installed = summary.installed,
-		scheduled = summary.scheduled,
-		enabled = summary.enabled,
-		running = summary.running,
-		message = message,
-		preview = preview
-	})
+function action_settings()
+    local http=require "luci.http"
+    if http.getenv("REQUEST_METHOD")~="POST" then http.status(405,"Method Not Allowed"); return end
+    -- LuCI's post=true route validates its CSRF token before reaching this handler.
+    local a,b,d=tonumber(http.formvalue("day_start")),tonumber(http.formvalue("day_end")),tonumber(http.formvalue("delay_minutes"))
+    local auto=http.formvalue("auto_reselect")
+    if not a or not b or not d or a%1~=0 or b%1~=0 or d%1~=0 or a<0 or b>24 or a>=b or
+        d<5 or d>180 or (auto~="1" and auto~="0") then
+        http.status(400,"Bad Request"); reply({ok=false,message="请填写有效的检查时段和等待分钟数"}); return
+    end
+    local path=ROOT.."/settings.json"
+    local data={day_start=a,day_end=b,delay_minutes=d,auto_reselect=auto=="1"}
+    if not fs.writefile(path..".tmp",json.stringify(data).."\n") then
+        http.status(500,"Internal Server Error"); reply({ok=false,message="插件参数保存失败"}); return
+    end
+    fs.chmod(path..".tmp","0600")
+    if not fs.rename(path..".tmp",path) then
+        http.status(500,"Internal Server Error"); reply({ok=false,message="插件参数保存失败"}); return
+    end
+    reply({ok=true,message="已保存插件参数，下个采样周期生效"})
 end
+EOF_NRADIO_TOWER_CONTROLLER
 
-function action_smart_apply()
-	local fs = require "nixio.fs"
-	local http = require "luci.http"
-	local sys = require "luci.sys"
-	local model = trim(fs.readfile("/tmp/sysinfo/model"))
-	local summary = smart_band_summary(fs, model)
-
-	if not summary.supported or not summary.installed then
-		http.prepare_content("application/json")
-		http.write_json({ ok = false, message = "智能频段未随连接监听安装" })
-		return
-	end
-	if not summary.enabled then
-		http.prepare_content("application/json")
-		http.write_json({ ok = false, message = "智能频段已停用，当前由系统管理频段" })
-		return
-	end
-
-	if summary.running then
-		http.prepare_content("application/json")
-		http.write_json({ ok = true, state = "running", message = "智能频段已有任务运行，未重复启动" })
-		return
-	end
-
-	local ok, message, state = start_smart_band_task(fs, sys)
-	if not ok then
-		http.status(500, "Internal Server Error")
-	end
-	http.prepare_content("application/json")
-	http.write_json({
-		ok = ok,
-		state = state,
-		message = message
-	})
-end
-
-function action_smart_disable()
-	local fs = require "nixio.fs"
-	local http = require "luci.http"
-	local sys = require "luci.sys"
-	local model = trim(fs.readfile("/tmp/sysinfo/model"))
-	local summary = smart_band_summary(fs, model)
-
-	http.prepare_content("application/json")
-	if not summary.supported then
-		http.write_json({ ok = false, message = "当前机型不支持智能频段" })
-		return
-	end
-	if not summary.installed then
-		http.write_json({ ok = true, message = "智能频段已停用，当前由系统管理频段" })
-		return
-	end
-	if not summary.enabled and not summary.running and not summary.pending_auto then
-		http.write_json({ ok = true, message = "智能频段已停用，当前由系统管理频段" })
-		return
-	end
-
-	local ok, message = disable_smart_band(fs, sys)
-	if not ok then
-		http.status(500, "Internal Server Error")
-	end
-	http.write_json({ ok = ok, message = message })
-end
-
-function action_smart_enable()
-	local fs = require "nixio.fs"
-	local http = require "luci.http"
-	local sys = require "luci.sys"
-	local model = trim(fs.readfile("/tmp/sysinfo/model"))
-	local summary = smart_band_summary(fs, model)
-
-	http.prepare_content("application/json")
-	if not summary.supported then
-		http.write_json({ ok = false, message = "当前机型不支持智能频段" })
-		return
-	end
-	if not summary.installed then
-		http.write_json({ ok = false, message = "智能频段脚本不存在，请先更新 5G 连接监听" })
-		return
-	end
-	if summary.enabled and summary.schedule_valid then
-		http.write_json({ ok = true, message = "智能频段已启用" })
-		return
-	end
-
-	local ok, message = enable_smart_band(fs, sys)
-	if not ok then
-		http.status(500, "Internal Server Error")
-	end
-	http.write_json({ ok = ok, message = message })
-end
-
-function action_clear()
-	local fs = require "nixio.fs"
-	local http = require "luci.http"
-	local ok = true
-	for _, path in ipairs({ "/etc/nradio-cpe-monitor/events.log", "/etc/nradio-cpe-monitor/events.log.1" }) do
-		if fs.access(path) and not fs.unlink(path) then
-			ok = false
-		end
-	end
-	http.prepare_content("application/json")
-	if ok then
-		http.write_json({ ok = true, message = "后台切换记录已清空" })
-	else
-		http.status(500, "Internal Server Error")
-		http.write_json({ ok = false, message = "后台切换记录清空失败" })
-	end
-end
-
-function action_apply()
-	local http = require "luci.http"
-	local sys = require "luci.sys"
-	local allowed_cpe = { cpe = true, cpe1 = true }
-	local name = tostring(http.formvalue("model") or "")
-	if not allowed_cpe[name] then
-		http.status(400, "Bad Request")
-		http.prepare_content("application/json")
-		http.write_json({ ok = false, message = "无效线路" })
-		return
-	end
-
-	local code = sys.call("/sbin/ifup " .. name .. " >/dev/null 2>&1")
-	http.prepare_content("application/json")
-	if code == 0 then
-		http.write_json({ ok = true, message = name .. " 已重新应用" })
-	else
-		http.status(500, "Internal Server Error")
-		http.write_json({ ok = false, message = name .. " 重新应用失败", code = code })
-	end
-end
-EOF_NRADIO_CPEOPT_CONTROLLER
-
-    cat > "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" <<'EOF_NRADIO_CPEOPT_VIEW'
+    cat > "$cpeopt_payload_root/usr/lib/lua/luci/view/nradio_adv/cpeopt.htm" <<'EOF_NRADIO_TOWER_VIEW'
 <%+header%>
-
 <style>
-.nr5g-wrap{--nr5g-cyan:#22d3ee;--nr5g-blue:#2563eb;--nr5g-green:#22c55e;--nr5g-amber:#f59e0b;--nr5g-red:#ef4444;--nr5g-text:#e8f2ff;--nr5g-muted:#8ba0bb;--nr5g-line:rgba(148,163,184,.18);max-width:1220px;margin:0 auto;color:var(--nr5g-text)}
-.nr5g-hero{position:relative;overflow:hidden;border:1px solid rgba(56,189,248,.24);border-radius:22px;padding:24px;margin-bottom:16px;background:radial-gradient(circle at 88% 15%,rgba(34,211,238,.18),transparent 28%),radial-gradient(circle at 8% 100%,rgba(37,99,235,.22),transparent 34%),linear-gradient(135deg,#071426 0%,#0b1d37 52%,#07111f 100%);box-shadow:0 22px 60px rgba(2,8,23,.28)}
-.nr5g-hero:before,.nr5g-hero:after{content:"";position:absolute;border:1px solid rgba(34,211,238,.15);border-radius:50%;pointer-events:none}.nr5g-hero:before{width:280px;height:280px;right:-118px;top:-166px}.nr5g-hero:after{width:190px;height:190px;right:-62px;top:-116px}
-.nr5g-head{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.nr5g-eyebrow{margin-bottom:7px;color:var(--nr5g-cyan);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.nr5g-head h2{margin:0;color:#fff;font-size:28px;line-height:1.12;letter-spacing:-.03em}.nr5g-subtitle{max-width:670px;margin-top:9px;color:#a9b9ce;font-size:13px;line-height:1.7}.nr5g-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:390px;max-width:100%}.nr5g-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-width:0;min-height:42px;margin:0!important;padding:0 16px!important;border-radius:11px!important;font-size:13px!important;font-weight:750!important;line-height:1.2!important;white-space:nowrap;text-align:center;text-decoration:none!important;transition:border-color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease}.nr5g-button-primary,.nr5g-button-stop{grid-column:1/-1;min-height:46px}.nr5g-hero .nr5g-button{border:1px solid rgba(125,211,252,.3)!important;background:rgba(15,35,60,.78)!important;color:#e6f7ff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 20px rgba(2,8,23,.2);backdrop-filter:blur(8px)}.nr5g-hero .nr5g-button-primary{border-color:rgba(34,211,238,.52)!important;background:linear-gradient(135deg,rgba(8,145,178,.9),rgba(37,99,235,.86))!important;color:#fff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 28px rgba(8,145,178,.23)}.nr5g-hero .nr5g-button-stop{border-color:rgba(245,158,11,.38)!important;background:rgba(120,53,15,.32)!important;color:#fde7b0!important}.nr5g-hero .nr5g-button:hover{border-color:rgba(125,211,252,.58)!important;background:rgba(20,47,79,.92)!important;transform:translateY(-1px)}.nr5g-hero .nr5g-button-primary:hover{background:linear-gradient(135deg,rgba(6,182,212,.95),rgba(37,99,235,.94))!important}.nr5g-hero .nr5g-button-stop:hover{border-color:rgba(251,191,36,.62)!important;background:rgba(146,64,14,.42)!important}.nr5g-hero .nr5g-button:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(34,211,238,.2),inset 0 1px 0 rgba(255,255,255,.08)}.nr5g-hero .nr5g-button:disabled{cursor:not-allowed;opacity:.55;transform:none}
-.nr5g-hero .nr5g-button-enable{border-color:rgba(34,197,94,.42)!important;background:linear-gradient(135deg,rgba(21,128,61,.72),rgba(5,150,105,.72))!important;color:#ecfdf5!important}.nr5g-hero .nr5g-button-enable:hover{border-color:rgba(74,222,128,.68)!important;background:linear-gradient(135deg,rgba(22,163,74,.86),rgba(5,150,105,.86))!important}
-.nr5g-hero-tags{position:relative;z-index:1;display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.nr5g-hero-tag{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(148,163,184,.16);border-radius:999px;padding:6px 10px;background:rgba(15,23,42,.42);color:#aebed1;font-size:11px}.nr5g-hero-tag:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--nr5g-cyan);box-shadow:0 0 12px var(--nr5g-cyan)}
-.nr5g-smart-overview{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px;padding:10px;border:1px solid rgba(34,211,238,.14);border-radius:14px;background:rgba(3,14,28,.38)}.nr5g-smart-cell{min-width:0;padding:7px 9px}.nr5g-smart-label{display:block;margin-bottom:4px;color:#7189a7;font-size:10px}.nr5g-smart-value{display:block;color:#dff7ff;font-size:12px;font-weight:700;overflow-wrap:anywhere}.nr5g-smart-value.ok{color:#6ee7a0}.nr5g-smart-value.warn{color:#fbbf24}.nr5g-smart-value.bad{color:#fb7185}
-.nr5g-summary{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.nr5g-summary-card{border:1px solid rgba(148,163,184,.15);border-radius:13px;padding:12px 13px;background:rgba(8,20,37,.64);backdrop-filter:blur(10px)}.nr5g-summary-label{display:block;color:#7890ad;font-size:11px;margin-bottom:5px}.nr5g-summary-value{display:block;color:#f4f9ff;font-size:15px;font-weight:750;overflow-wrap:anywhere}.nr5g-summary-value.ok{color:#6ee7a0}.nr5g-summary-value.warn{color:#fbbf24}
-.nr5g-message{display:none;margin:0 0 14px;padding:11px 13px;border:1px solid rgba(37,99,235,.22);border-radius:10px;background:rgba(37,99,235,.1)}.nr5g-message.error{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.1);color:#f87171}
-.nr5g-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.nr5g-card,.nr5g-panel,.nr5g-components{position:relative;overflow:hidden;border:1px solid var(--nr5g-line);border-radius:16px;background:linear-gradient(145deg,rgba(20,36,58,.96),rgba(9,20,35,.96));padding:17px;box-sizing:border-box;box-shadow:0 13px 34px rgba(2,8,23,.16)}.nr5g-card:before,.nr5g-panel:before,.nr5g-components:before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.7),transparent)}
-.nr5g-title{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.nr5g-title h3{margin:0;color:#eef7ff;font-size:17px;letter-spacing:-.01em}.nr5g-badge{display:inline-flex;align-items:center;border:1px solid rgba(148,163,184,.18);border-radius:999px;padding:4px 9px;font-size:11px;background:rgba(100,116,139,.18);color:#cbd5e1}.nr5g-badge.ok{border-color:rgba(34,197,94,.28);background:rgba(34,197,94,.15);color:#6ee7a0}.nr5g-badge.warn{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.14);color:#fbbf24}
-.nr5g-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.nr5g-item{min-width:0;border:1px solid rgba(148,163,184,.1);border-radius:10px;background:rgba(4,15,29,.46);padding:10px}.nr5g-key{display:block;color:#7890aa;font-size:11px;margin-bottom:4px}.nr5g-value{display:block;color:#e7f0fb;font-size:13px;font-weight:650;overflow-wrap:anywhere}.nr5g-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px}.nr5g-note{font-size:12px;color:var(--nr5g-muted)}.nr5g-signal-good,.nr5g-lock-ok{color:#4ade80}.nr5g-signal-mid{color:#fbbf24}.nr5g-signal-bad,.nr5g-lock-warn{color:#fb7185}.nr5g-lock-neutral{color:#94a3b8}.nr5g-empty{grid-column:1/-1;text-align:center;padding:28px;color:var(--nr5g-muted)}
-.nr5g-diagnostics{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(330px,.7fr);gap:14px;margin-top:14px}.nr5g-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.nr5g-chartbox{min-width:0;border:1px solid rgba(148,163,184,.1);border-radius:11px;background:rgba(3,13,26,.48);padding:9px}.nr5g-chart-title{display:flex;align-items:center;justify-content:space-between;color:#7890aa;font-size:11px;margin-bottom:4px}.nr5g-chart{display:block;width:100%;height:160px}.nr5g-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:#8da2bb}.nr5g-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;box-shadow:0 0 10px currentColor}
-.nr5g-events{list-style:none;margin:0;padding:0;max-height:438px;overflow:auto}.nr5g-event{position:relative;border:1px solid rgba(14,165,233,.14);border-left:3px solid #22d3ee;padding:9px 10px;margin:0 0 8px;background:rgba(8,25,43,.72);border-radius:0 9px 9px 0}.nr5g-event.warn{border-left-color:#f59e0b}.nr5g-event-time{display:block;color:#7890aa;font-size:10px;margin-bottom:3px}.nr5g-small-button{padding:3px 8px;min-height:28px;border-radius:8px!important}
-.nr5g-history-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}.nr5g-history-filter label{display:flex;align-items:center;gap:5px;color:#8ba0bb;font-size:12px}.nr5g-history-filter input,.nr5g-history-filter select{box-sizing:border-box;max-width:100%;min-height:36px;border:1px solid rgba(148,163,184,.25);border-radius:8px;padding:5px 8px;background:#0b1b2d;color:#e8f2ff;color-scheme:dark}.nr5g-periods{max-height:190px;margin-bottom:14px}.nr5g-history-note{color:#8ba0bb;font-size:11px;line-height:1.6;margin-bottom:10px}
-.nr5g-components{margin-top:14px}.nr5g-component-list{display:flex;gap:8px;flex-wrap:wrap}.nr5g-component{border:1px solid rgba(148,163,184,.13);border-radius:999px;padding:6px 10px;background:rgba(4,15,29,.42);color:#94a3b8;font-size:12px}.nr5g-component.ok{border-color:rgba(34,197,94,.22);color:#4ade80}.nr5g-component.bad{border-color:rgba(239,68,68,.22);color:#fb7185}.nr5g-component.disabled{border-color:rgba(245,158,11,.24);color:#fbbf24}
-.nr5g-loglist{display:block;max-height:420px;overflow:auto;border:1px solid rgba(148,163,184,.1);border-radius:10px;background:rgba(2,10,22,.58)}.nr5g-logrow{display:grid;grid-template-columns:145px 94px 70px minmax(0,1fr);gap:8px;padding:9px 10px;border-bottom:1px solid rgba(148,163,184,.11);font-family:monospace;font-size:12px;align-items:start}.nr5g-logrow:last-child{border-bottom:0}.nr5g-logtime,.nr5g-logsource,.nr5g-logline{color:#7890aa}.nr5g-logdetail{overflow-wrap:anywhere;color:#c9d6e5}
-@media(max-width:1000px){.nr5g-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.nr5g-diagnostics{grid-template-columns:1fr}.nr5g-events{max-height:300px}}
-@media(max-width:820px){.nr5g-head{flex-direction:column}.nr5g-actions{align-self:flex-start}.nr5g-grid{grid-template-columns:1fr}.nr5g-kv{grid-template-columns:repeat(2,minmax(0,1fr))}.nr5g-smart-overview{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.nr5g-charts{grid-template-columns:1fr}.nr5g-logrow{grid-template-columns:1fr;gap:2px}}
-@media(max-width:430px){.nr5g-hero{padding:18px;border-radius:16px}.nr5g-head h2{font-size:24px}.nr5g-summary{grid-template-columns:1fr 1fr}.nr5g-actions{width:100%;grid-template-columns:1fr}.nr5g-button-primary,.nr5g-button-stop{grid-column:auto}.nr5g-kv{grid-template-columns:1fr}.nr5g-foot{align-items:stretch;flex-direction:column}.nr5g-foot .cbi-button{width:100%}}
+#tower-watch{width:100%;max-width:1160px;margin:0 auto;padding:8px;color:#e8ebf1;line-height:1.65;font-size:14px}
+#tower-watch *{box-sizing:border-box}
+#tower-watch .tw-box{min-width:0;padding:20px;background:#2a2d37;border:1px solid #404552;border-radius:10px;margin:0 0 16px}
+#tower-watch .tw-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+#tower-watch .tw-title{display:block;position:static;width:auto;height:auto;float:none;margin:0;padding:0;color:#f5f7fa;font-size:24px;font-weight:600;line-height:1.4;overflow:visible;white-space:normal}
+#tower-watch .tw-subtitle{margin:0 0 14px;color:#f5f7fa;font-size:18px;font-weight:600;line-height:1.5}
+#tower-watch .tw-note{color:#adb6c5;font-size:13px}
+#tower-watch .tw-state{display:inline-block;padding:4px 10px;border-radius:6px;background:#193f46;color:#7de4ed;font-size:13px}
+#tower-watch .tw-state.tw-warn{background:#513d28;color:#ffd794}
+#tower-watch .tw-lines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#tower-watch .tw-time{font-size:30px;color:#66dce9;font-variant-numeric:tabular-nums;margin-bottom:8px}
+#tower-watch .tw-scroll{overflow:auto}#tower-watch table{width:100%;border-collapse:collapse;white-space:nowrap}
+#tower-watch th,#tower-watch td{text-align:left;padding:10px;border-bottom:1px solid #444957}
+#tower-watch .tw-log{max-height:300px;overflow:auto;padding:0;margin:0;list-style:none!important}
+#tower-watch .tw-log li{padding:9px 0;border-bottom:1px solid #414653;list-style:none!important}
+#tower-watch .tw-filters,#tower-watch .tw-settings{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}
+#tower-watch label{display:flex;position:static;align-items:center;gap:8px;width:auto;margin:0;color:#c8d0dc;font-weight:400}
+#tower-watch input,#tower-watch select{display:inline-block;position:static;float:none;width:auto;height:34px;margin:0;background:#222630;color:#e8ebf1;border:1px solid #667083;padding:5px 8px;border-radius:4px;color-scheme:dark}
+#tower-watch input[type=number]{width:72px}
+#tower-watch input[type=checkbox]{appearance:auto;-webkit-appearance:checkbox;width:16px;height:16px;padding:0}
+#tower-watch button{display:inline-block;position:static;float:none;width:auto;height:34px;margin:0;padding:5px 14px;border:1px solid #667083;border-radius:5px;background:#343b49;color:#eef3f9;cursor:pointer;font:inherit;line-height:22px}
+#tower-watch #tw-save{background:#087b9b;border-color:#119cbf}
+#tower-watch button:disabled,#tower-watch input:disabled{opacity:.5;cursor:not-allowed}
+#tower-watch .tw-message{color:#ffd794;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:8px}
+#tower-watch .tw-message:empty{display:none}
+#tower-watch p{margin:8px 0}
+@media(max-width:720px){#tower-watch .tw-lines{grid-template-columns:1fr}#tower-watch .tw-head{align-items:flex-start;flex-direction:column}#tower-watch .tw-box{padding:16px}#tower-watch .tw-title{font-size:21px}}
 </style>
-
-<div class="nr5g-wrap" data-nradio-cpeopt="20260927-1">
-	<div class="nr5g-hero">
-		<div class="nr5g-head">
-			<div>
-				<div class="nr5g-eyebrow">NRadio Cellular Observatory</div>
-				<h2>5G 连接监听</h2>
-				<div class="nr5g-subtitle">路由器后台持续捕获线路、网络、频段及基站变化。页面关闭后继续记录，重新打开即可查看真实切换时间线。</div>
-			</div>
-			<div class="nr5g-actions">
-				<button class="cbi-button cbi-button-action nr5g-button nr5g-button-primary" id="nr5g-smart-apply" type="button" style="display:none">立即执行智能频段</button>
-				<a class="cbi-button nr5g-button" href="<%=url('nradio','cellular','cpelock')%>">锁频设置</a>
-				<button class="cbi-button cbi-button-action nr5g-button" id="nr5g-refresh" type="button">刷新状态</button>
-				<button class="cbi-button nr5g-button nr5g-button-stop" id="nr5g-smart-toggle" type="button" style="display:none">停用智能频段（系统管理）</button>
-			</div>
-		</div>
-		<div class="nr5g-hero-tags"><span class="nr5g-hero-tag">10 秒后台采样</span><span class="nr5g-hero-tag">关页持续记录</span><span class="nr5g-hero-tag">256 KiB 自动轮转</span></div>
-		<div class="nr5g-smart-overview" id="nr5g-smart-overview" style="display:none">
-			<div class="nr5g-smart-cell"><span class="nr5g-smart-label">智能频段</span><strong class="nr5g-smart-value" id="nr5g-smart-state">检测中</strong></div>
-			<div class="nr5g-smart-cell"><span class="nr5g-smart-label">任务状态</span><strong class="nr5g-smart-value" id="nr5g-smart-run-state">待机</strong></div>
-			<div class="nr5g-smart-cell"><span class="nr5g-smart-label">最近执行</span><strong class="nr5g-smart-value" id="nr5g-smart-last-run">-</strong></div>
-			<div class="nr5g-smart-cell"><span class="nr5g-smart-label">自动计划</span><strong class="nr5g-smart-value" id="nr5g-smart-schedule">-</strong></div>
-		</div>
-		<div class="nr5g-summary">
-			<div class="nr5g-summary-card"><span class="nr5g-summary-label">后台服务</span><strong class="nr5g-summary-value" id="nr5g-monitor-service">检测中</strong></div>
-			<div class="nr5g-summary-card"><span class="nr5g-summary-label">最近采样</span><strong class="nr5g-summary-value" id="nr5g-monitor-sample">-</strong></div>
-			<div class="nr5g-summary-card"><span class="nr5g-summary-label">监听线路</span><strong class="nr5g-summary-value" id="nr5g-monitor-lines">-</strong></div>
-			<div class="nr5g-summary-card"><span class="nr5g-summary-label">后台事件</span><strong class="nr5g-summary-value" id="nr5g-monitor-events">-</strong></div>
-		</div>
-	</div>
-
-	<div id="nr5g-message" class="nr5g-message"></div>
-	<div id="nr5g-grid" class="nr5g-grid"><div class="nr5g-empty">正在读取双线路状态…</div></div>
-
-	<div class="nr5g-diagnostics">
-		<section class="nr5g-panel">
-			<div class="nr5g-title"><h3>页面实时信号</h3><span class="nr5g-badge">15 秒采样</span></div>
-			<div class="nr5g-legend"><span><i class="nr5g-dot" style="background:#00d5ff"></i>主线路 cpe</span><span><i class="nr5g-dot" style="background:#f59e0b"></i>副线路 cpe1</span></div>
-			<div class="nr5g-charts">
-				<div class="nr5g-chartbox"><div class="nr5g-chart-title"><span>RSRP</span><span>dBm</span></div><canvas class="nr5g-chart" id="nr5g-chart-rsrp"></canvas></div>
-				<div class="nr5g-chartbox"><div class="nr5g-chart-title"><span>SINR</span><span>dB</span></div><canvas class="nr5g-chart" id="nr5g-chart-sinr"></canvas></div>
-				<div class="nr5g-chartbox"><div class="nr5g-chart-title"><span>RSRQ</span><span>dB</span></div><canvas class="nr5g-chart" id="nr5g-chart-rsrq"></canvas></div>
-			</div>
-		</section>
-		<section class="nr5g-panel">
-			<div class="nr5g-title"><h3>后台切换时间线</h3><button class="cbi-button nr5g-small-button" id="nr5g-clear-events" type="button">清空记录</button></div>
-			<div class="nr5g-history-filter">
-				<label>日期 <input id="nr5g-event-date" type="date" aria-label="后台记录日期"></label>
-				<label>线路 <select id="nr5g-event-line"><option value="">全部</option><option value="cpe">主线路 cpe</option><option value="cpe1">副线路 cpe1</option></select></label>
-				<button class="cbi-button nr5g-small-button" id="nr5g-event-reset" type="button">全部日期</button>
-			</div>
-			<div class="nr5g-history-note">频段停留：仅统计保留日志中入段、离段均有记录的完整区间；跨日区间显示全程时长。</div>
-			<ul class="nr5g-events nr5g-periods" id="nr5g-periods"></ul>
-			<ul class="nr5g-events" id="nr5g-events"><li class="nr5g-note">正在读取后台记录…</li></ul>
-		</section>
-	</div>
-
-	<div class="nr5g-components">
-		<div class="nr5g-title"><h3>监听组件</h3><span class="nr5g-badge" id="nr5g-version">检测中</span></div>
-		<div class="nr5g-component-list" id="nr5g-components"></div>
-	</div>
-
-	<div class="nr5g-components">
-		<div class="nr5g-title"><h3>连接与智能频段日志</h3><span class="nr5g-badge ok">后台直接记录</span></div>
-		<div class="nr5g-loglist" id="nr5g-dial-logs"><div class="nr5g-empty">暂无拨号日志</div></div>
-	</div>
+<div id="tower-watch">
+  <section class="tw-box">
+    <div class="tw-head"><div class="tw-title" role="heading" aria-level="1">基站时段监听 <small>V10</small></div><span class="tw-state" id="tw-service">正在读取后台状态</span></div>
+    <p>夜间何时退频，白天何时恢复，低频滞留多久。</p>
+    <p class="tw-note">每 10 秒记录一次，关闭页面后继续运行。时间来自实际驻留变化，可观察当地基站休眠规律。</p>
+    <div class="tw-message" id="tw-error" role="status" aria-live="polite"></div>
+    <div class="tw-message" id="tw-message" role="status" aria-live="polite"></div>
+  </section>
+  <div class="tw-lines" id="tw-lines"></div>
+  <section class="tw-box">
+    <div class="tw-subtitle" role="heading" aria-level="2">退频与恢复时间</div>
+    <div class="tw-filters">
+      <label>退频日期 <input id="tw-date" type="date" value="<%=os.date('%Y-%m-%d')%>"></label>
+      <label>线路 <select id="tw-line"><option value="">全部</option><option value="cpe">主线路</option><option value="cpe1">副线路</option></select></label>
+      <button type="button" id="tw-reset">显示全部</button>
+    </div>
+    <div class="tw-note" id="tw-updated" aria-live="polite">最近采样时间：读取中</div>
+    <div class="tw-scroll"><table><thead><tr><th>线路</th><th>退频时间</th><th>变化</th><th>恢复时间</th><th>滞留时长</th><th>记录状态</th></tr></thead><tbody id="tw-periods"></tbody></table></div>
+    <p class="tw-note">记录连续确认后的首次观测时间；高频保持 60 秒才计为恢复。退频本身不能证实基站已经断电。</p>
+  </section>
+  <section class="tw-box">
+    <div class="tw-subtitle" role="heading" aria-level="2">白天低频滞留</div>
+    <p class="tw-note">在指定时段内，持续低频超过等待时间后尝试自动搜网。夜间只记录，保持系统自行切换。</p>
+    <div class="tw-settings">
+      <label><input type="checkbox" id="tw-auto" disabled>尝试自动搜网</label>
+      <label>开始 <input id="tw-start" type="number" min="0" max="23" disabled>时</label>
+      <label>结束 <input id="tw-end" type="number" min="1" max="24" disabled>时</label>
+      <label>低频等待 <input id="tw-delay" type="number" min="5" max="180" disabled>分钟</label>
+      <button type="button" id="tw-save" disabled>保存插件参数</button>
+    </div>
+    <p class="tw-note">需有本线路高频记录、原厂允许自动选网且模组空闲；每条线路每天最多 2 次，间隔至少 6 小时。保留原厂设置和频段列表，恢复以实际记录为准。</p>
+  </section>
+  <section class="tw-box"><div class="tw-subtitle" role="heading" aria-level="2">事件记录</div><ul class="tw-log" id="tw-events"></ul><p class="tw-note">展示最近 500 条，历史保存在设备上并按容量轮转。</p></section>
 </div>
-
-<script type="text/javascript">
+<script>
 (function(){
-	'use strict';
-	var statusUrl='<%=url("nradioadv","cellular","cpeopt","status")%>';
-	var applyUrl='<%=url("nradioadv","cellular","cpeopt","apply")%>';
-	var clearUrl='<%=url("nradioadv","cellular","cpeopt","clear")%>';
-	var smartStatusUrl='<%=url("nradioadv","cellular","cpeopt","smart-status")%>';
-	var smartApplyUrl='<%=url("nradioadv","cellular","cpeopt","smart-apply")%>';
-	var smartDisableUrl='<%=url("nradioadv","cellular","cpeopt","smart-disable")%>';
-	var smartEnableUrl='<%=url("nradioadv","cellular","cpeopt","smart-enable")%>';
-	var csrfToken='<%=token%>';
-	var grid=document.getElementById('nr5g-grid');
-	var message=document.getElementById('nr5g-message');
-	var refreshButton=document.getElementById('nr5g-refresh');
-	var smartApplyButton=document.getElementById('nr5g-smart-apply');
-	var smartToggleButton=document.getElementById('nr5g-smart-toggle');
-	var timelineEvents=[];
-	var eventDate=document.getElementById('nr5g-event-date');
-	var eventLine=document.getElementById('nr5g-event-line');
-	var watchSmartTask=false;
-	var smartPreview={};
-	var smartBand={};
-	var latestLines=[];
-	var signalHistory={cpe:[],cpe1:[]};
-	var lineColors={cpe:'#00d5ff',cpe1:'#f59e0b'};
-	var statusLoading=false;
-	var smartPreviewLoading=false;
-	var smartPreviewUpdated=0;
-	var smartPollTimer=null;
-	var messageSticky=false;
-
-	function text(value,fallback){
-		if(value===undefined||value===null||value===''){return fallback||'-';}
-		return String(value);
-	}
-
-	function showMessage(value,error,sticky){
-		messageSticky=!!sticky;
-		message.textContent=value||'';
-		message.className='nr5g-message'+(error?' error':'');
-		message.style.display=value?'block':'none';
-	}
-
-	function addItem(parent,key,value,className){
-		var item=document.createElement('div');
-		var k=document.createElement('span');
-		var v=document.createElement('span');
-		item.className='nr5g-item';
-		k.className='nr5g-key';
-		v.className='nr5g-value'+(className?' '+className:'');
-		k.textContent=key;
-		v.textContent=text(value);
-		item.appendChild(k);
-		item.appendChild(v);
-		parent.appendChild(item);
-	}
-
-	function signalClass(value){
-		var n=parseInt(value,10);
-		if(isNaN(n)){return '';}
-		if(n>=-85){return 'nr5g-signal-good';}
-		if(n>=-105){return 'nr5g-signal-mid';}
-		return 'nr5g-signal-bad';
-	}
-
-	function cleanValue(value){
-		return value===undefined||value===null?'':String(value);
-	}
-
-	function renderEvents(status){
-		var list=document.getElementById('nr5g-events');
-		list.textContent='';
-		if(!timelineEvents.length){
-			var empty=document.createElement('li');
-			empty.className='nr5g-note';
-			if(status==='missing'){
-				empty.textContent='后台事件日志正在初始化';
-			}else if(status==='read_error'){
-				empty.textContent='后台事件日志读取失败';
-			}else{
-				empty.textContent=eventDate.value||eventLine.value?'暂无符合筛选的切换记录':'暂无切换记录';
-			}
-			list.appendChild(empty);
-			return;
-		}
-		timelineEvents.slice(0,100).forEach(function(item){
-			var row=document.createElement('li');
-			var stamp=document.createElement('span');
-			var detail=document.createElement('span');
-			row.className='nr5g-event'+(item.level?' '+item.level:'');
-			stamp.className='nr5g-event-time';
-			stamp.textContent=cleanValue(item.time)+' · '+cleanValue(item.name);
-			detail.textContent=cleanValue(item.detail);
-			row.appendChild(stamp);
-			row.appendChild(detail);
-			list.appendChild(row);
-		});
-	}
-
-
-	function renderPeriods(periods){
-		var list=document.getElementById('nr5g-periods');
-		list.textContent='';
-		if(!periods.length){
-			var empty=document.createElement('li');
-			empty.className='nr5g-note';
-			empty.textContent='暂无完整的频段停留区间';
-			list.appendChild(empty);
-		}
-		periods.forEach(function(item){
-			var row=document.createElement('li');
-			var stamp=document.createElement('span');
-			var detail=document.createElement('span');
-			var seconds=Math.max(0,Number(item.seconds)||0);
-			var hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60);
-			row.className='nr5g-event';
-			stamp.className='nr5g-event-time';
-			stamp.textContent=cleanValue(item.name)+' · '+cleanValue(item.entered)+' → '+cleanValue(item.left);
-			detail.textContent=cleanValue(item.band)+' 停留 '+(hours?hours+'小时':'')+
-				(minutes?minutes+'分':'')+(seconds%60)+'秒 → '+cleanValue(item.next_band);
-			row.appendChild(stamp);
-			row.appendChild(detail);
-			list.appendChild(row);
-		});
-	}
-
-	function bandText(mode,band){
-		if(!band)return '-';
-		var name=String(mode||'').toUpperCase();
-		var isNr=name.indexOf('NR')!==-1||name.indexOf('5G')!==-1||name==='SA'||name==='NSA';
-		var isLte=name.indexOf('LTE')!==-1||name.indexOf('4G')!==-1;
-		return (isNr?'N':(isLte?'B':''))+String(band).replace(/^[NB]/i,'');
-	}
-	function parseBandList(value,kind){
-		var result=[];
-		String(value||'').split(',').forEach(function(part){
-			var bits=part.split('-');
-			var label=bits[0].toLowerCase();
-			if(bits.length>1&&(label===kind||(kind==='nr'&&(label==='sa'||label==='nsa')))){
-				result=bits.slice(1).join('-').split(':').filter(function(item){return item!==''&&item!=='0';});
-			}
-		});
-		return result;
-	}
-
-	function lockCheck(line){
-		var lock=line.lock||{};
-		var mode=cleanValue(line.mode).toUpperCase();
-		var kind=(mode.indexOf('NR')!==-1||mode.indexOf('5G')!==-1||mode==='SA'||mode==='NSA')?'nr':
-			((mode.indexOf('LTE')!==-1||mode.indexOf('4G')!==-1)?'lte':'');
-		var band=cleanValue(line.band).replace(/^[NB]/i,'');
-		var black=cleanValue(line.blacklist_band).split(/[:,;\s]+/).filter(function(item){return item!=='';});
-		var target;
-		var hit;
-
-		if(lock.custom_earfcn5==='1'){
-			target='NR '+(lock.band5?'N'+lock.band5+' / ':'')+'ARFCN '+text(lock.earfcn5)+' / PCI '+text(lock.pci5);
-			hit=kind==='nr'&&(!lock.band5||band===String(lock.band5))&&(!lock.earfcn5||String(line.earfcn)===String(lock.earfcn5))&&(!lock.pci5||String(line.pci)===String(lock.pci5));
-			return {label:hit?'精确锁定命中':'精确锁定偏离',detail:target,className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
-		}
-		if(lock.custom_earfcn4==='1'){
-			target='LTE '+(lock.band4?'B'+lock.band4+' / ':'')+'EARFCN '+text(lock.earfcn4)+' / PCI '+text(lock.pci4);
-			hit=kind==='lte'&&(!lock.band4||band===String(lock.band4))&&(!lock.earfcn4||String(line.earfcn)===String(lock.earfcn4))&&(!lock.pci4||String(line.pci)===String(lock.pci4));
-			return {label:hit?'精确锁定命中':'精确锁定偏离',detail:target,className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
-		}
-		if(line.mobility_supported&&line.mobility==='2'&&lock.custom_freq!=='1'){
-			return {label:'无偏好选网',detail:'当前频段由模组自行选择',className:'nr5g-lock-neutral'};
-		}
-		if(!kind||!band){return {label:'无法判断',detail:'当前网络或频段为空',className:'nr5g-lock-neutral'};}
-		if(kind==='nr'&&line.compatibility==='1'&&black.indexOf(band)!==-1){return {label:'黑名单未生效',detail:'当前频段 N'+band+' 在黑名单中',className:'nr5g-lock-warn'};}
-		var source=lock.custom_freq==='1'?lock.freq:line.freq_val;
-		var allowed=parseBandList(source,kind);
-		if(!allowed.length){return {label:'未限制频段',detail:'当前 '+bandText(line.mode,band),className:'nr5g-lock-neutral'};}
-		hit=allowed.indexOf(band)!==-1;
-		return {label:hit?'频段策略命中':'频段策略偏离',detail:(kind==='nr'?'NR N':'LTE B')+allowed.join(kind==='nr'?' / N':' / B'),className:hit?'nr5g-lock-ok':'nr5g-lock-warn'};
-	}
-
-	function smartPreviewText(value){
-		var raw=cleanValue(value);
-		if(!raw){return '等待策略分析';}
-		var token=raw.split(/\s+/)[0];
-		var labels={
-			'HOLD':'保持当前频段',
-			'POLICY-HOLD':'按固件锁频策略跳过频段干预',
-			'WAIT':'等待连续健康检查',
-			'WOULD-RECOVER':'预计恢复运营商优选频段',
-			'WOULD-SOFT-RECOVER-THEN-CFUN':'预计先软恢复再重连',
-			'BLOCKED':'当前已阻止执行',
-			'RECOVERED':'本轮已恢复',
-			'UNHEALTHY':'检测到线路异常'
-		};
-		return (labels[token]||token)+(raw.length>token.length?' · '+raw.slice(token.length).replace(/^\s+/, ''):'');
-	}
-	function smartPreviewClass(value){
-		var token=cleanValue(value).split(/\s+/)[0];
-		if(token==='HOLD'||token==='RECOVERED'){return 'nr5g-lock-ok';}
-		if(token==='WAIT'||token==='WOULD-RECOVER'||token==='WOULD-SOFT-RECOVER-THEN-CFUN'||token==='BLOCKED'||token==='UNHEALTHY'){return 'nr5g-lock-warn';}
-		return 'nr5g-lock-neutral';
-	}
-
-	function numberValue(value){
-		var n=parseFloat(value);
-		return isNaN(n)?null:n;
-	}
-
-	function sampleSignals(lines){
-		var now=Date.now();
-		lines.forEach(function(line){
-			var series=signalHistory[line.name];
-			if(!series){return;}
-			series.push({time:now,rsrp:numberValue(line.rsrp),sinr:numberValue(line.sinr),rsrq:numberValue(line.rsrq)});
-			if(series.length>40){series.shift();}
-		});
-		drawAllCharts();
-	}
-
-	function drawChart(id,metric,min,max){
-		var canvas=document.getElementById(id);
-		if(!canvas||!canvas.getContext){return;}
-		var box=canvas.getBoundingClientRect();
-		var width=Math.max(220,Math.floor(box.width||300));
-		var height=160;
-		var ratio=Math.min(window.devicePixelRatio||1,2);
-		canvas.width=Math.floor(width*ratio);
-		canvas.height=Math.floor(height*ratio);
-		var ctx=canvas.getContext('2d');
-		ctx.setTransform(ratio,0,0,ratio,0,0);
-		ctx.clearRect(0,0,width,height);
-		var left=31,right=8,top=10,bottom=18;
-		var plotW=width-left-right,plotH=height-top-bottom;
-		ctx.strokeStyle='rgba(127,135,152,.22)';
-		ctx.lineWidth=1;
-		ctx.fillStyle='#7c8798';
-		ctx.font='10px sans-serif';
-		for(var g=0;g<=4;g++){
-			var gy=top+plotH*g/4;
-			ctx.beginPath();ctx.moveTo(left,gy);ctx.lineTo(width-right,gy);ctx.stroke();
-			ctx.fillText(String(Math.round(max-(max-min)*g/4)),1,gy+3);
-		}
-		['cpe','cpe1'].forEach(function(name){
-			var points=signalHistory[name]||[];
-			var valid=[];
-			points.forEach(function(point,index){if(point[metric]!==null){valid.push({index:index,value:point[metric]});}});
-			if(!valid.length){return;}
-			ctx.strokeStyle=lineColors[name];ctx.fillStyle=lineColors[name];ctx.lineWidth=2;ctx.beginPath();
-			valid.forEach(function(point,index){
-				var x=left+(points.length===1?plotW:plotW*point.index/(points.length-1));
-				var value=Math.max(min,Math.min(max,point.value));
-				var y=top+plotH*(max-value)/(max-min);
-				if(index===0){ctx.moveTo(x,y);}else{ctx.lineTo(x,y);}
-			});
-			ctx.stroke();
-			var last=valid[valid.length-1];
-			var lx=left+(points.length===1?plotW:plotW*last.index/(points.length-1));
-			var ly=top+plotH*(max-Math.max(min,Math.min(max,last.value)))/(max-min);
-			ctx.beginPath();ctx.arc(lx,ly,3,0,Math.PI*2);ctx.fill();
-		});
-	}
-
-	function drawAllCharts(){
-		drawChart('nr5g-chart-rsrp','rsrp',-130,-60);
-		drawChart('nr5g-chart-sinr','sinr',-20,40);
-		drawChart('nr5g-chart-rsrq','rsrq',-30,0);
-	}
-
-	function renderLine(line){
-		var card=document.createElement('section');
-		var title=document.createElement('div');
-		var heading=document.createElement('h3');
-		var badge=document.createElement('span');
-		var kv=document.createElement('div');
-		var foot=document.createElement('div');
-		var note=document.createElement('span');
-		var apply=document.createElement('button');
-
-		card.className='nr5g-card';
-		title.className='nr5g-title';
-		heading.textContent=text(line.label)+' · '+text(line.name);
-		badge.className='nr5g-badge '+(line.up?'ok':'warn');
-		badge.textContent=line.up?'在线':'离线';
-		title.appendChild(heading);
-		title.appendChild(badge);
-		card.appendChild(title);
-
-		kv.className='nr5g-kv';
-		addItem(kv,'网络',line.mode);
-		addItem(kv,'频段',bandText(line.mode,line.band));
-		addItem(kv,'RSRP',line.rsrp?line.rsrp+' dBm':'-',signalClass(line.rsrp));
-		addItem(kv,'SINR',line.sinr?line.sinr+' dB':'-');
-		addItem(kv,'RSRQ',line.rsrq?line.rsrq+' dB':'-');
-		addItem(kv,'PCI / ARFCN',text(line.pci)+' / '+text(line.earfcn));
-		addItem(kv,'运营商',line.operator);
-		addItem(kv,'SIM 卡',line.sim_name);
-		addItem(kv,'IPv4',line.ipaddr);
-		addItem(kv,'模组温度',line.temperature?line.temperature+' °C':'-');
-		var lockPolicies={'0':'锁定模式','1':'智能模式','2':'无偏好模式'};
-		addItem(kv,'锁频策略',line.mobility_supported?(lockPolicies[String(line.mobility)]||'未知'):'当前模组不支持');
-		addItem(kv,'NR 重连',line.nrrc==='1'?'启用':'关闭');
-		addItem(kv,'频段黑名单',line.compatibility==='1'&&line.blacklist_band?('NR N'+line.blacklist_band):'未启用');
-		addItem(kv,'频段策略',line.freq_val);
-		var lockState=lockCheck(line);
-		addItem(kv,'锁频检查',lockState.label,lockState.className);
-		addItem(kv,'锁频目标',lockState.detail);
-		if(smartBand.supported){
-			if(!smartBand.installed){
-				addItem(kv,'智能策略','未随监听安装','nr5g-lock-warn');
-			}else if(!smartBand.enabled){
-				addItem(kv,'智能策略','已停用 · 系统自行管理','nr5g-lock-neutral');
-			}else{
-				addItem(kv,'智能策略',smartPreviewText(smartPreview[line.name]),smartPreviewClass(smartPreview[line.name]));
-			}
-		}
-		card.appendChild(kv);
-
-		foot.className='nr5g-foot';
-		note.className='nr5g-note';
-		note.textContent=(line.odu?'外置 ODU':'USB 模组')+(line.default_route?' · 当前出口':'');
-		apply.type='button';
-		apply.className='cbi-button cbi-button-apply nr5g-button';
-		apply.textContent='重新应用 '+line.name;
-		apply.onclick=function(){applyLine(line.name,apply);};
-		foot.appendChild(note);
-		foot.appendChild(apply);
-		card.appendChild(foot);
-		return card;
-	}
-
-	function renderComponents(components,version,monitor,eventCount){
-		var list=document.getElementById('nr5g-components');
-		var versionNode=document.getElementById('nr5g-version');
-		var names={monitor:'后台监听',cpetools:'cpetools.sh',cpesel:'cpesel.sh',huawei:'huawei.sh',cpelock:'锁频页面'};
-		if(components.smartband_supported){names.smartband='智能频段';}
-		monitor=monitor||{};
-		list.textContent='';
-		Object.keys(names).forEach(function(key){
-			var node=document.createElement('span');
-			var ok=!!components[key];
-			if(key==='smartband'&&ok&&!components.smartband_enabled){
-				node.className='nr5g-component disabled';
-				node.textContent='○ 智能频段已停用';
-			}else{
-				node.className='nr5g-component '+(ok?'ok':'bad');
-				node.textContent=(ok?'✓ ':'✕ ')+names[key];
-			}
-			list.appendChild(node);
-		});
-		var sampleLabels={read_error:'采样读取失败',runtime_error:'采样运行异常',write_error:'事件写入失败 · 等待补写',no_lines:'未读取到监听线路',missing:'等待首次采样'};
-		var health=monitor.active?'持续记录中':(monitor.alive?(sampleLabels[monitor.sample_state]||'采样状态异常'):'心跳中断');
-		versionNode.textContent=(version||'未知版本')+' · '+health;
-		versionNode.className='nr5g-badge '+(monitor.active?'ok':'warn');
-		var service=document.getElementById('nr5g-monitor-service');
-		service.textContent=health;
-		service.className='nr5g-summary-value '+(monitor.active?'ok':'warn');
-		document.getElementById('nr5g-monitor-sample').textContent=monitor.last_sample||'-';
-		document.getElementById('nr5g-monitor-lines').textContent=String(monitor.line_count||0)+' 路';
-		document.getElementById('nr5g-monitor-events').textContent=String(eventCount||0)+' 条';
-	}
-
-	function formatEpoch(value){
-		var epoch=parseInt(value,10);
-		if(!epoch){return '-';}
-		var date=new Date(epoch*1000);
-		var pad=function(v){return v<10?'0'+v:String(v);};
-		return pad(date.getMonth()+1)+'-'+pad(date.getDate())+' '+pad(date.getHours())+':'+pad(date.getMinutes())+':'+pad(date.getSeconds());
-	}
-
-	function queueSmartPoll(){
-		if(smartPollTimer||!smartBand.running){return;}
-		smartPollTimer=window.setTimeout(function(){
-			smartPollTimer=null;
-			loadStatus(false);
-		},2000);
-	}
-
-	function renderSmartOverview(){
-		var overview=document.getElementById('nr5g-smart-overview');
-		if(!smartBand.supported){
-			overview.style.display='none';
-			return;
-		}
-		overview.style.display='grid';
-		var state=document.getElementById('nr5g-smart-state');
-		var run=document.getElementById('nr5g-smart-run-state');
-		var last=document.getElementById('nr5g-smart-last-run');
-		var schedule=document.getElementById('nr5g-smart-schedule');
-		var phaseLabels={running:'运行中',stopping:'正在停用','restore-pending':'自动频段恢复待处理',disabled:'已停用 · 系统管理',idle:'已启用'};
-		var runLabels={starting:'正在启动',running:'执行中',success:'最近执行成功',busy:'已有任务，本次未重复执行',failed:'最近执行失败',attention:'线路异常 · 等待策略条件',stopped:'任务已停止',interrupted:'任务中断',idle:'待机'};
-		state.textContent=(phaseLabels[smartBand.phase]||'状态未知')+' · '+text(smartBand.version,'未知版本');
-		state.className='nr5g-smart-value '+(smartBand.enabled?'ok':(smartBand.pending_auto?'bad':'warn'));
-		run.textContent=smartBand.running?'执行中':(runLabels[smartBand.run_state]||text(smartBand.run_state,'待机'));
-		run.className='nr5g-smart-value '+(smartBand.running?'warn':(smartBand.run_state==='failed'||smartBand.run_state==='interrupted'?'bad':(smartBand.run_state==='success'?'ok':'warn')));
-		last.textContent=(smartBand.last_started?(smartBand.last_source==='auto'?'自动 · ':'手动 · '):'')+formatEpoch(smartBand.last_finished||smartBand.last_started);
-		last.className='nr5g-smart-value';
-		schedule.textContent=smartBand.enabled?(smartBand.schedule_valid?'每 30 分钟 · 05:00–21:30':'任务格式异常'):'未启用';
-		schedule.className='nr5g-smart-value '+(smartBand.enabled&&smartBand.schedule_valid?'ok':(smartBand.enabled?'bad':'warn'));
-		if(watchSmartTask&&!smartBand.running&&smartBand.run_state!=='starting'){
-			watchSmartTask=false;
-			showMessage(runLabels[smartBand.run_state]||'任务状态已更新',
-				smartBand.run_state==='failed'||smartBand.run_state==='interrupted',true);
-		}
-		queueSmartPoll();
-	}
-
-	function renderDialLogs(logs,status){
-		var list=document.getElementById('nr5g-dial-logs');
-		list.textContent='';
-		if(!logs||!logs.length){
-			var empty=document.createElement('div');
-			empty.className='nr5g-empty';
-			if(status==='missing'){
-				empty.textContent='拨号日志尚未创建；重新安装后会重启 SIM 选择服务并开始记录';
-			}else if(status==='read_error'){
-				empty.textContent='拨号日志读取失败';
-			}else if(status==='empty'){
-				empty.textContent='当前启动周期暂无拨号事件';
-			}else{
-				empty.textContent='暂无拨号日志';
-			}
-			list.appendChild(empty);
-			return;
-		}
-		logs.forEach(function(item){
-			var row=document.createElement('div');
-			var stamp=document.createElement('span');
-			var source=document.createElement('span');
-			var line=document.createElement('span');
-			var detail=document.createElement('span');
-			row.className='nr5g-logrow';
-			stamp.className='nr5g-logtime';
-			source.className='nr5g-logsource';
-			line.className='nr5g-logline';
-			detail.className='nr5g-logdetail';
-			stamp.textContent=text(item.time);
-			source.textContent=text(item.source);
-			line.textContent=text(item.name);
-			detail.textContent=text(item.detail);
-			row.appendChild(stamp);
-			row.appendChild(source);
-			row.appendChild(line);
-			row.appendChild(detail);
-			list.appendChild(row);
-		});
-	}
-
-	function renderLines(lines){
-		latestLines=lines||[];
-		grid.textContent='';
-		if(!latestLines.length){
-			var empty=document.createElement('div');
-			empty.className='nr5g-empty';
-			empty.textContent='未读取到 CPE 线路';
-			grid.appendChild(empty);
-		}else{
-			latestLines.forEach(function(line){grid.appendChild(renderLine(line));});
-		}
-	}
-
-	function render(data){
-		var lines=data.lines||[];
-		timelineEvents=data.events||[];
-		smartBand=data.smart_band||{};
-		renderEvents(data.event_log_status);
-		renderPeriods(data.band_periods||[]);
-		sampleSignals(lines);
-		renderLines(lines);
-		renderComponents(data.components||{},data.version,data.monitor||{},data.event_count===undefined?timelineEvents.length:data.event_count);
-		renderDialLogs(data.dial_logs||[],data.dial_log_status);
-		renderSmartOverview();
-		smartApplyButton.style.display=smartBand.supported&&smartBand.enabled?'inline-flex':'none';
-		smartApplyButton.disabled=!smartBand.enabled||smartBand.running;
-		smartApplyButton.textContent=smartBand.running?'智能频段执行中…':'立即执行智能频段';
-		smartToggleButton.style.display=smartBand.supported&&smartBand.installed?'inline-flex':'none';
-		smartToggleButton.disabled=smartBand.phase==='stopping';
-		smartToggleButton.className='cbi-button nr5g-button nr5g-button-stop'+(smartBand.enabled?'':' nr5g-button-enable');
-		smartToggleButton.textContent=smartBand.phase==='stopping'?'正在停用并恢复自动频段…':(smartBand.pending_auto?'重新启用以恢复自动频段':(smartBand.enabled?'停用智能频段（系统管理）':'启用智能频段'));
-	}
-
-	function loadSmartPreview(force){
-		if(!smartBand.supported||!smartBand.enabled||smartBand.running||smartPreviewLoading){return;}
-		if(!force&&Date.now()-smartPreviewUpdated<60000){return;}
-		smartPreviewLoading=true;
-		(new XHR()).get(smartStatusUrl,null,function(x){
-			smartPreviewLoading=false;
-			smartPreviewUpdated=Date.now();
-			try{
-				var data=JSON.parse(x.responseText||'{}');
-				if(!data.ok){throw new Error(data.message||'策略分析失败');}
-				smartPreview=data.preview||smartPreview;
-				renderLines(latestLines);
-			}catch(e){
-				if(!smartBand.running){showMessage(e.message||'策略分析失败',true,false);}
-			}
-		});
-	}
-
-	function loadStatus(refreshSmart){
-		if(statusLoading){return;}
-		statusLoading=true;
-		refreshButton.disabled=true;
-		var filters={event_date:eventDate.value,event_line:eventLine.value};
-		(new XHR()).get(statusUrl,filters,function(x){
-			statusLoading=false;
-			refreshButton.disabled=false;
-			if(filters.event_date!==eventDate.value||filters.event_line!==eventLine.value){
-				loadStatus(false);
-				return;
-			}
-			try{
-				var data=JSON.parse(x.responseText||'{}');
-				if(!data.ok){throw new Error(data.message||'状态读取失败');}
-				render(data);
-				loadSmartPreview(!!refreshSmart);
-				if(!messageSticky){showMessage('',false,false);}
-			}catch(e){
-				showMessage(e.message||'状态读取失败',true,false);
-			}
-		});
-	}
-
-	function applyLine(name,button){
-		if(!window.confirm('重新应用 '+name+' 网络配置？该线路可能短暂波动。')){return;}
-		button.disabled=true;
-		showMessage('正在重新应用 '+name+'…',false);
-		(new XHR()).post(applyUrl,{token:csrfToken,model:name},function(x){
-			button.disabled=false;
-			try{
-				var data=JSON.parse(x.responseText||'{}');
-				showMessage(data.message||'操作完成',!data.ok);
-			}catch(e){
-				showMessage('重新应用失败',true);
-			}
-			window.setTimeout(loadStatus,1800);
-		});
-	}
-
-	eventDate.onchange=eventLine.onchange=function(){loadStatus(false);};
-	document.getElementById('nr5g-event-reset').onclick=function(){eventDate.value='';loadStatus(false);};
-	refreshButton.onclick=function(){showMessage('',false,false);loadStatus(true);};
-	smartApplyButton.onclick=function(){
-		if(!window.confirm('立即执行一次智能频段？运行中可能调整频段或恢复异常线路。')){return;}
-		smartApplyButton.disabled=true;
-		showMessage('正在启动智能频段后台任务…',false,false);
-		(new XHR()).post(smartApplyUrl,{token:csrfToken},function(x){
-			try{
-				var data=JSON.parse(x.responseText||'{}');
-				watchSmartTask=!!data.ok;
-				showMessage(data.message||'操作完成',!data.ok,true);
-			}catch(e){showMessage('智能频段任务启动失败',true,true);}
-			window.setTimeout(function(){loadStatus(false);},300);
-		});
-	};
-	smartToggleButton.onclick=function(){
-		var enabling=!smartBand.enabled;
-		var prompt=enabling?'启用智能频段后，将恢复每 30 分钟自动任务。确认启用？':'停用智能频段后，将移除自动任务并停止当前运行；5G 连接监听继续工作，频段交由系统管理。确认停用？';
-		if(!window.confirm(prompt)){return;}
-		watchSmartTask=false;
-		smartToggleButton.disabled=true;
-		smartApplyButton.disabled=true;
-		showMessage(enabling?'正在启用智能频段…':'正在停用并恢复自动频段…',false,false);
-		(new XHR()).post(enabling?smartEnableUrl:smartDisableUrl,{token:csrfToken},function(x){
-			try{
-				var data=JSON.parse(x.responseText||'{}');
-				showMessage(data.message||'操作完成',!data.ok,true);
-			}catch(e){showMessage(enabling?'智能频段启用失败':'智能频段停用失败',true,true);}
-			window.setTimeout(function(){loadStatus(true);},300);
-		});
-	};
-	document.getElementById('nr5g-clear-events').onclick=function(){
-		var button=this;
-		if(!window.confirm('清空路由器后台保存的全部基站切换记录？')){return;}
-		button.disabled=true;
-		(new XHR()).post(clearUrl,{token:csrfToken},function(x){
-			button.disabled=false;
-			try{
-				var data=JSON.parse(x.responseText||'{}');
-				if(!data.ok){throw new Error(data.message||'清空失败');}
-				timelineEvents=[];
-				renderEvents('empty');
-				renderPeriods([]);
-				document.getElementById('nr5g-monitor-events').textContent='0 条';
-				showMessage(data.message||'后台切换记录已清空',false);
-			}catch(e){showMessage(e.message||'清空失败',true);}
-		});
-	};
-	window.addEventListener('resize',drawAllCharts);
-	renderEvents('missing');
-	loadStatus(true);
-	window.setInterval(function(){loadStatus(false);},15000);
+'use strict';
+var base='<%=url("nradioadv","cellular","cpeopt")%>', token='<%=token%>';
+var cache=null,configured=false,busy=false,saving=false;
+function el(id){return document.getElementById(id);}
+function node(tag,text){var n=document.createElement(tag);n.textContent=text;return n;}
+function name(n){return n==='cpe'?'主线路':'副线路';}
+function stamp(t){if(!t)return '尚未记录';var d=new Date((Number(t)+((cache||{}).utc_offset||0))*1000),p=function(n){return ('0'+n).slice(-2);};return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+' '+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds());}
+function duration(s){if(s<0)return '时钟变化';return Math.floor(s/3600)+'小时 '+Math.floor(s%3600/60)+'分';}
+function matches(x,t){return (!el('tw-line').value||el('tw-line').value===x.name)&&(!el('tw-date').value||stamp(t).slice(0,10)===el('tw-date').value);}
+function render(){
+ if(!cache)return;
+ var st=cache.status||{},now=cache.now;
+ var healthy=st.alive&&!st.error&&st.write_ok!==false;
+ var latest=0;
+ (st.lines||[]).forEach(function(l){if(l.sampled>latest)latest=l.sampled;});
+ el('tw-updated').textContent='最近采样时间：'+stamp(latest)+(healthy?'（设备时间）':'（后台状态异常）');
+ el('tw-service').textContent=st.error?'后台采样失败':st.alive?(st.write_ok===false?'记录写入失败':'后台监听中 · 10 秒采样'):'后台未运行或采样已中断';
+ el('tw-service').className='tw-state'+(healthy?'':' tw-warn');
+ el('tw-error').textContent=st.error?'后台错误：'+st.error:!st.alive?'当前没有持续采样。下方历史保留，不能据此判断当前是否退频。':st.write_ok===false?'记录无法保存，自动搜网已暂停。':'';
+ ['tw-auto','tw-start','tw-end','tw-delay','tw-save'].forEach(function(id){el(id).disabled=!healthy||!st.settings||saving;});
+ var cards=el('tw-lines');cards.textContent='';
+ (st.lines||[]).forEach(function(l){
+  var card=node('section','');card.className='tw-box';var heading=node('div',name(l.name));heading.className='tw-subtitle';card.appendChild(heading);
+  var fresh=healthy&&l.valid!==false&&l.sampled&&now-l.sampled<45;
+  var bands=fresh?(l.carriers&&l.carriers.length?l.carriers.join(' + '):(l.band||'未知')):'当前驻留待确认';
+  var band=node('div',bands.replace(/NR:/g,'N'));band.className='tw-time';card.appendChild(band);
+  card.appendChild(node('p',fresh?(l.reason||'记录中'):'采样缺失，暂停退频和恢复判定'));
+  card.appendChild(node('p',l.low_since?'从 '+stamp(l.low_since)+' 起回落，已 '+duration(now-l.low_since):
+   (l.target?'等待记录下一次退频':'正在建立本线路高频基准，尚不能判断此前退频时间')));
+  var sample=node('div','最近采样：'+stamp(l.sampled));sample.className='tw-note';card.appendChild(sample);cards.appendChild(card);
+ });
+ if(!(st.lines||[]).length){var empty=node('div',healthy?'后台已启动，等待线路数据。':'线路数据不可用；请查看上方后台状态。');empty.className='tw-box';cards.appendChild(empty);}
+ var body=el('tw-periods');body.textContent='';
+ (cache.sessions||[]).slice().reverse().filter(function(x){return matches(x,x.start);}).forEach(function(x){
+  var tr=node('tr','');
+  [name(x.name),stamp(x.start),(x.from||'?')+' → '+(x.to||'?'),x.finish?stamp(x.finish):(x.closed?'统计中止':'尚未恢复'),
+   x.closed?'不连续':duration((x.finish||now)-x.start),x.uncertain?'有记录中断，时长非连续实测':(x.finish?'已恢复':'持续观察')].forEach(function(v){tr.appendChild(node('td',v));});
+  body.appendChild(tr);
+ });
+ if(!body.children.length){var tr=node('tr',''),td=node('td',!healthy?'暂无符合条件的历史退频记录；后台当前未正常采样。':!(cache.sessions||[]).length?'截至 '+stamp(latest||now)+'，尚未记录退频事件；发生后显示实际退频和恢复时间。':'所选日期或线路没有退频记录。');td.colSpan=6;tr.appendChild(td);body.appendChild(tr);}
+ var log=el('tw-events'),top=log.scrollTop;log.textContent='';
+ (cache.events||[]).slice().reverse().filter(function(x){return matches(x,x.first||x.at);}).forEach(function(e){log.appendChild(node('li',stamp(e.first||e.at)+' · '+name(e.name)+' · '+e.detail));});
+ if(!log.children.length)log.appendChild(node('li',healthy?'暂无符合条件的事件。':'没有可展示的历史事件。'));
+ log.scrollTop=top;
+ if(!configured&&st.settings){el('tw-auto').checked=st.settings.auto_reselect;el('tw-start').value=st.settings.day_start;el('tw-end').value=st.settings.day_end;el('tw-delay').value=st.settings.delay_minutes;configured=true;}
+}
+function request(url,body,done){
+ var x=new XMLHttpRequest();x.open(body?'POST':'GET',url,true);x.timeout=10000;
+ if(body)x.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+ x.onload=function(){try{var data=JSON.parse(x.responseText);if(x.status>=400)throw Error(data.message||'请求失败');done(null,data);}catch(e){done(e);}};
+ x.onerror=x.ontimeout=function(){done(Error('页面请求失败，后台记录状态待确认'));};x.send(body||null);
+}
+function refresh(){if(busy)return;busy=true;request(base+'/status',null,function(err,data){busy=false;if(err||!data||!data.ok){el('tw-error').textContent=err?err.message:'后台返回了无效状态';el('tw-service').textContent='页面无法读取后台';el('tw-service').className='tw-state tw-warn';['tw-auto','tw-start','tw-end','tw-delay','tw-save'].forEach(function(id){el(id).disabled=true;});return;}cache=data;render();});}
+el('tw-save').onclick=function(){
+ if(!configured||saving)return;
+ var a=Number(el('tw-start').value),b=Number(el('tw-end').value),d=Number(el('tw-delay').value);
+ if(!el('tw-start').value||!el('tw-end').value||!el('tw-delay').value||a%1||b%1||d%1||a<0||a>23||b<1||b>24||a>=b||d<5||d>180){el('tw-message').textContent='开始须早于结束，等待时间为 5–180 分钟。';return;}
+ var values={token:token,auto_reselect:el('tw-auto').checked?'1':'0',day_start:el('tw-start').value,day_end:el('tw-end').value,delay_minutes:el('tw-delay').value};
+ var body=Object.keys(values).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(values[k]);}).join('&');
+ saving=true;el('tw-save').disabled=true;request(base+'/settings',body,function(err,data){saving=false;el('tw-message').textContent=err?err.message:data.message;if(!err)refresh();else render();});
+};
+el('tw-date').onchange=el('tw-line').onchange=render;
+el('tw-reset').onclick=function(){el('tw-date').value='';el('tw-line').value='';render();};
+refresh();setInterval(refresh,10000);
 })();
 </script>
-
 <%+footer%>
-EOF_NRADIO_CPEOPT_VIEW
+EOF_NRADIO_TOWER_VIEW
 
-    cat > "$cpeopt_payload_root/www/luci-static/nradio/images/icon/cpeopt.svg" <<'EOF_NRADIO_CPEOPT_ICON_SVG'
+    cat > "$cpeopt_payload_root/www/luci-static/nradio/images/icon/cpeopt.svg" <<'EOF_NRADIO_TOWER_ICON'
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="5G 连接监听">
   <defs>
     <linearGradient id="signal" x1="0" y1="0" x2="0" y2="1">
@@ -63305,1727 +57395,147 @@ EOF_NRADIO_CPEOPT_VIEW
     <path d="M5 43c18 13 39 8 49-7l-1 11 9-12-14-3" fill="none" stroke="url(#signal)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>
-EOF_NRADIO_CPEOPT_ICON_SVG
+EOF_NRADIO_TOWER_ICON
 
     NRADIO_CPEOPT_PAYLOAD_ROOT="$cpeopt_payload_root"
 }
+
 install_nradio_cpeopt_payload_file() {
     cpeopt_relative_path="$1"
     cpeopt_mode="$2"
+    # Only plugin-owned destinations may be installed.
+    case "$cpeopt_relative_path" in
+        usr/libexec/nradio-cpe-monitor.lua|usr/libexec/nradio-cpe-monitor-state.lua|etc/init.d/nradio-cpe-monitor|usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua|usr/lib/lua/luci/view/nradio_adv/cpeopt.htm|www/luci-static/nradio/images/icon/cpeopt.svg) ;;
+        *) die "拒绝写入非插件文件：$cpeopt_relative_path" ;;
+    esac
     cpeopt_source="$NRADIO_CPEOPT_PAYLOAD_ROOT/$cpeopt_relative_path"
     cpeopt_target="/$cpeopt_relative_path"
-    cpeopt_target_dir="$(dirname "$cpeopt_target")"
-    cpeopt_target_tmp="$cpeopt_target.nradio-cpeopt.$$"
+    [ -s "$cpeopt_source" ] || die "插件文件为空：$cpeopt_relative_path"
+    mkdir -p "$(dirname "$cpeopt_target")" || die "无法创建插件目录"
+    cp "$cpeopt_source" "$cpeopt_target.tmp.$$" &&
+        chmod "$cpeopt_mode" "$cpeopt_target.tmp.$$" &&
+        mv -f "$cpeopt_target.tmp.$$" "$cpeopt_target" || die "安装失败：$cpeopt_relative_path"
+}
 
-    [ -s "$cpeopt_source" ] || die "5G 连接监听源文件为空：$cpeopt_relative_path"
-    mkdir -p "$cpeopt_target_dir" || die "创建目标目录失败：$cpeopt_target_dir"
-    rm -f "$cpeopt_target_tmp" 2>/dev/null || true
-    cp "$cpeopt_source" "$cpeopt_target_tmp" || die "写入临时文件失败：$cpeopt_target"
-    chmod "$cpeopt_mode" "$cpeopt_target_tmp" || die "设置权限失败：$cpeopt_target"
-    mv -f "$cpeopt_target_tmp" "$cpeopt_target" || die "替换文件失败：$cpeopt_target"
+refresh_nradio_cpe_monitor_menu() {
+    # NROS caches controller bytecode separately from its menu index.
+    # Clear only this plugin's module cache; keep native controller caches.
+    rm -f /tmp/luci-modulecache/6C7563692E636F6E74726F6C6C65722E6E726164696F5F6164762E6370656F7074 \
+        /tmp/luci-indexcache
 }
 
 install_nradio_cpe_connection_monitoring() {
     nradio_cpeopt_require_capabilities
-
-    log_stage 1 5 "释放本地 5G 连接监听组件"
+    if [ -e /root/nradio-smart-band.sh ] ||
+       grep -Fq '/root/nradio-smart-band.sh' /etc/crontabs/root 2>/dev/null; then
+        die "检测到旧版智能频段任务；须先卸载旧版并恢复原厂组件。本版不会覆盖原厂组件或替旧版执行解锁。"
+    fi
+    log_stage 1 3 "准备独立基站时段监听 V10"
     extract_nradio_cpeopt_payload
-
-    log_stage 2 5 "更新拨号、SIM 与锁频执行链"
-    install_nradio_cpeopt_payload_file usr/bin/cpetools.sh 755
-    install_nradio_cpeopt_payload_file usr/bin/cpesel.sh 755
-    install_nradio_cpeopt_payload_file etc/cpetools/generic.sh 755
-    install_nradio_cpeopt_payload_file etc/cpetools/huawei.sh 755
-    install_nradio_cpeopt_payload_file usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua 644
-
-    log_stage 3 5 "安装并启动后台基站切换记录服务"
+    lua - "$NRADIO_CPEOPT_PAYLOAD_ROOT" <<'LUA_CHECK_TOWER' || die "插件 Lua 文件无法加载"
+local root=arg[1]
+for _,p in ipairs({
+    "/usr/libexec/nradio-cpe-monitor.lua",
+    "/usr/libexec/nradio-cpe-monitor-state.lua",
+    "/usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua"
+}) do assert(loadfile(root..p)) end
+LUA_CHECK_TOWER
+    log_stage 2 3 "安装插件自身文件"
+    if [ -x "$NRADIO_CPEOPT_MONITOR_INIT" ]; then "$NRADIO_CPEOPT_MONITOR_INIT" stop; fi
+    install_nradio_cpeopt_payload_file usr/libexec/nradio-cpe-monitor-state.lua 644
     install_nradio_cpeopt_payload_file usr/libexec/nradio-cpe-monitor.lua 755
     install_nradio_cpeopt_payload_file etc/init.d/nradio-cpe-monitor 755
-    "$NRADIO_CPEOPT_MONITOR_INIT" enable >/dev/null 2>&1 || die "启用 5G 后台监听服务失败"
-    "$NRADIO_CPEOPT_MONITOR_INIT" restart >/dev/null 2>&1 || die "启动 5G 后台监听服务失败"
-    cpeopt_wait=0
-    while ! "$NRADIO_CPEOPT_MONITOR_INIT" status >/dev/null 2>&1; do
-        cpeopt_wait=$((cpeopt_wait + 1))
-        [ "$cpeopt_wait" -lt 15 ] || die "5G 后台监听服务未在 15 秒内就绪"
-        sleep 1
-    done
-
-    log_stage 4 5 "安装 5G 连接监听页面与智能频段组件"
-    if nradio_smart_band_model_supported; then
-        install_nradio_smart_band
-    fi
-    install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/index.htm 644
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua 644
     install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/cpeopt.htm 644
     install_nradio_cpeopt_payload_file www/luci-static/nradio/images/icon/cpeopt.svg 644
-
-    log_stage 5 5 "重启 SIM 选择服务并刷新 LuCI"
-    if [ -x /etc/init.d/cpesel ]; then
-        /etc/init.d/cpesel restart >/dev/null 2>&1 || die "重启 SIM 选择服务失败"
-    fi
-    rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
-    /etc/init.d/uhttpd reload >/dev/null 2>&1 || die "重载 uhttpd 失败"
-    log "结果:   5G 连接监听 $NRADIO_CPEOPT_VERSION 已安装"
-    log "入口:   /cgi-bin/luci/$NRADIO_CPEOPT_ROUTE"
-    log "记录:   每 10 秒后台采样，事件持久保存到 $NRADIO_CPEOPT_EVENT_LOG"
-    log "范围:   NRadio_C5800-650 / NRadio_C5800-688 / NRadio_C2000MAX"
-    if nradio_smart_band_model_supported; then
-        log "集成:   智能频段 v7 已并入连接监听"
-    fi
-}
-
-nradio_cpeopt_require_uninstall_sources() {
-    require_nradio_cpe_monitoring_supported_model
-
-    for cpeopt_original in \
-        /usr/bin/cpetools.sh \
-        /usr/bin/cpesel.sh \
-        /etc/cpetools/generic.sh \
-        /etc/cpetools/huawei.sh \
-        /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua \
-        /usr/lib/lua/luci/view/nradio_adv/index.htm; do
-        [ -s "/rom$cpeopt_original" ] || die "无法卸载 5G 连接监听：缺少 NROS 原厂文件 /rom$cpeopt_original"
+    log_stage 3 3 "启动退频与恢复时间记录"
+    "$NRADIO_CPEOPT_MONITOR_INIT" enable || die "启用监听服务失败"
+    "$NRADIO_CPEOPT_MONITOR_INIT" start || die "启动监听服务失败"
+    cpeopt_wait=0
+    while [ ! -s /var/run/nradio-cpe-monitor/status.json ] && [ "$cpeopt_wait" -lt 20 ]; do
+        sleep 1
+        cpeopt_wait=$((cpeopt_wait + 1))
     done
-}
-
-restore_nradio_cpeopt_rom_file() {
-    cpeopt_target="$1"
-    cpeopt_mode="$2"
-    cpeopt_source="/rom$cpeopt_target"
-    cpeopt_tmp="$cpeopt_target.nradio-cpeopt-remove.$$"
-
-    rm -f "$cpeopt_tmp" 2>/dev/null || true
-    cp "$cpeopt_source" "$cpeopt_tmp" || die "恢复原厂文件失败：$cpeopt_target"
-    chmod "$cpeopt_mode" "$cpeopt_tmp" || die "设置原厂文件权限失败：$cpeopt_target"
-    mv -f "$cpeopt_tmp" "$cpeopt_target" || die "替换原厂文件失败：$cpeopt_target"
-}
-
-restore_or_remove_nradio_cpeopt_optional_file() {
-    cpeopt_target="$1"
-    cpeopt_mode="$2"
-
-    if [ -s "/rom$cpeopt_target" ]; then
-        restore_nradio_cpeopt_rom_file "$cpeopt_target" "$cpeopt_mode"
-    else
-        rm -f "$cpeopt_target" || die "删除 5G 连接监听文件失败：$cpeopt_target"
+    if ! lua - <<'LUA_TOWER_STARTED'
+local fs,json=require "nixio.fs",require "luci.jsonc"
+local s=json.parse(fs.readfile("/var/run/nradio-cpe-monitor/status.json") or "")
+assert(type(s)=="table","后台没有生成首次采样状态")
+assert(tonumber(s.at) and os.time()-s.at>=0 and os.time()-s.at<30,"后台采样状态已过期")
+assert(not s.error,s.error)
+assert(s.write_ok~=false,"后台记录写入失败")
+LUA_TOWER_STARTED
+    then
+        "$NRADIO_CPEOPT_MONITOR_INIT" stop
+        die "监听插件启动失败；原厂连接保持，未标记安装成功"
     fi
+    refresh_nradio_cpe_monitor_menu
+    log "结果:   基站时段监听 V10 已启动"
+    log "入口:   /cgi-bin/luci/$NRADIO_CPEOPT_ROUTE"
+    log "记录:   退频时间、白天滞留、自动搜网结果及稳定恢复时间"
+    log "设置:   保留原厂拨号、SIM、频段策略；参数仅保存在插件自身目录"
+    log "说明:   尚未积累夜间实况，安装成功不代表已经确定当地关站时间"
 }
 
 uninstall_nradio_cpe_connection_monitoring() {
-    NRADIO_CPEOPT_UNINSTALL_COMPLETED='0'
     require_root
     require_nradio_cpe_monitoring_supported_model
-    printf '确认卸载 5G 连接监听并恢复 NROS 原厂拨号组件？[y/N]: '
+    printf '确认卸载基站时段监听并删除其记录？[y/N]: '
     ui_read_line || die "input cancelled"
-    case "$UI_READ_RESULT" in
-        y|Y|yes|YES)
-            ;;
-        *)
-            log "已取消"
-            return 0
-            ;;
-    esac
-
-    nradio_cpeopt_require_uninstall_sources
-
-    if nradio_smart_band_model_supported; then
-        remove_nradio_smart_band
+    case "$UI_READ_RESULT" in y|Y|yes|YES) ;; *) log "已取消"; return 0 ;; esac
+    if [ -e /root/nradio-smart-band.sh ]; then
+        die "仍有旧版智能频段组件；本版不调用旧版回退或修改原厂设置，请先单独处理旧版。"
     fi
-
-    log_stage 1 4 "停止并禁用后台基站切换记录服务"
     if [ -x "$NRADIO_CPEOPT_MONITOR_INIT" ]; then
-        "$NRADIO_CPEOPT_MONITOR_INIT" stop >/dev/null 2>&1 || true
-        "$NRADIO_CPEOPT_MONITOR_INIT" disable >/dev/null 2>&1 || die "禁用 5G 后台监听服务失败"
+        "$NRADIO_CPEOPT_MONITOR_INIT" stop || die "停止插件失败"
+        "$NRADIO_CPEOPT_MONITOR_INIT" disable || die "禁用插件失败"
     fi
-
-    log_stage 2 4 "恢复 NROS 原厂拨号、SIM 与锁频组件"
-    restore_nradio_cpeopt_rom_file /usr/bin/cpetools.sh 755
-    restore_nradio_cpeopt_rom_file /usr/bin/cpesel.sh 755
-    restore_nradio_cpeopt_rom_file /etc/cpetools/generic.sh 755
-    restore_nradio_cpeopt_rom_file /etc/cpetools/huawei.sh 755
-    restore_nradio_cpeopt_rom_file /usr/lib/lua/luci/model/cbi/nradio_cpecfg/cpelock.lua 644
-    restore_nradio_cpeopt_rom_file /usr/lib/lua/luci/view/nradio_adv/index.htm 644
-
-    log_stage 3 4 "移除监听页面、后台服务与历史日志"
-    restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_CONTROLLER" 644
-    restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_VIEW" 644
-    restore_or_remove_nradio_cpeopt_optional_file "$NRADIO_CPEOPT_ICON" 644
-    restore_or_remove_nradio_cpeopt_optional_file /www/luci-static/nradio/images/icon/cpeopt.png 644
-    rm -f "$NRADIO_CPEOPT_MONITOR" "$NRADIO_CPEOPT_MONITOR_INIT" || die "删除 5G 后台监听服务失败"
-    rm -f "$NRADIO_CPEOPT_EVENT_LOG" "$NRADIO_CPEOPT_EVENT_LOG.1" || die "删除基站切换历史失败"
-    rm -f "$NRADIO_CPEOPT_MONITOR_STATUS" "$NRADIO_CPEOPT_MONITOR_STATUS.tmp" || die "删除后台监听状态失败"
-    rmdir /var/run/nradio-cpe-monitor /etc/nradio-cpe-monitor 2>/dev/null || true
-    rm -f /var/log/nradio-cpe-dial.log /var/log/nradio-cpe-dial.log.1 || die "删除 5G 连接监听拨号日志失败"
-
-    log_stage 4 4 "重启 SIM 选择服务并刷新 LuCI"
-    if [ -x /etc/init.d/cpesel ]; then
-        /etc/init.d/cpesel restart >/dev/null 2>&1 || die "重启 SIM 选择服务失败"
-    fi
-    rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
-    /etc/init.d/uhttpd reload >/dev/null 2>&1 || die "重载 uhttpd 失败"
-
-    NRADIO_CPEOPT_UNINSTALL_COMPLETED='1'
-    log "结果:   5G 连接监听已卸载，NROS 原厂拨号组件已恢复"
+    rm -f /usr/libexec/nradio-cpe-monitor.lua /usr/libexec/nradio-cpe-monitor-state.lua \
+        /etc/init.d/nradio-cpe-monitor \
+        /usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua \
+        /usr/lib/lua/luci/view/nradio_adv/cpeopt.htm \
+        /www/luci-static/nradio/images/icon/cpeopt.svg
+    rm -f /etc/nradio-cpe-monitor/state.json /etc/nradio-cpe-monitor/state.json.tmp \
+        /etc/nradio-cpe-monitor/settings.json /etc/nradio-cpe-monitor/settings.json.tmp \
+        /etc/nradio-cpe-monitor/events.jsonl /etc/nradio-cpe-monitor/events.jsonl.[1-6] \
+        /var/run/nradio-cpe-monitor/status.json /var/run/nradio-cpe-monitor/status.json.tmp
+    rmdir /etc/nradio-cpe-monitor /var/run/nradio-cpe-monitor 2>/dev/null || true
+    refresh_nradio_cpe_monitor_menu
+    log "结果:   基站时段监听已卸载；原厂设置和服务保持原样"
 }
 
 manage_nradio_cpe_connection_monitoring() {
     require_nradio_cpe_monitoring_supported_model
-
-    while :; do
-        print_menu_header '设备维护 > 5G 连接监听'
-        if nradio_smart_band_model_supported; then
-            print_menu_note 'C5800-688 · 已集成智能频段'
-        else
-            print_menu_note 'C5800-650 / C2000MAX'
-        fi
-        print_menu_item 1 '安装或更新'
-        print_menu_item 2 '卸载'
-        print_menu_item 0 '返回上级'
-        print_menu_prompt '0-2'
-        read_category_choice
-        case "$UI_READ_RESULT" in
-            0|3)
-                return 0
-                ;;
-            1)
-                cpe_monitoring_menu_path="${CURRENT_CPE_MONITORING_MENU_PATH:-5 > 10}"
-                run_recorded_menu_feature "$cpe_monitoring_menu_path > 1" "5G 连接监听安装或更新" install_nradio_cpe_connection_monitoring
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            2)
-                uninstall_nradio_cpe_connection_monitoring
-                if [ "${NRADIO_CPEOPT_UNINSTALL_COMPLETED:-0}" = '1' ]; then
-                    cpe_monitoring_menu_path="${CURRENT_CPE_MONITORING_MENU_PATH:-5 > 10}"
-                    record_action_history "$cpe_monitoring_menu_path > 2" "5G 连接监听卸载" "PASS" "disabled"
-                fi
-                MENU_ACTION_COMPLETED='1'
-                return 0
-                ;;
-            *)
-                die_menu_input_issue "$UI_READ_RESULT"
-                ;;
-        esac
-    done
-}
-
-nradio_smart_band_current_model() {
-    if [ -n "${CURRENT_DETECTED_MODEL:-}" ]; then
-        printf '%s\n' "$CURRENT_DETECTED_MODEL"
-        return 0
-    fi
-
-    normalize_nradio_model "$(detect_board_model_raw)" "$(detect_board_name_raw)" "$(detect_board_compatible_raw)" 2>/dev/null || true
-}
-
-nradio_smart_band_model_supported() {
-    case "$(nradio_smart_band_current_model 2>/dev/null || true)" in
-        NRadio_C5800-688)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
+    print_menu_header '设备维护 > 基站时段监听'
+    print_menu_note '记录夜间退频、白天滞留与恢复时间 · V10'
+    print_menu_item 1 '安装或更新'
+    print_menu_item 2 '卸载'
+    print_menu_item 0 '返回上级'
+    print_menu_prompt '0-2'
+    read_category_choice
+    case "$UI_READ_RESULT" in
+        0|3) return 0 ;;
+        1) install_nradio_cpe_connection_monitoring ;;
+        2) uninstall_nradio_cpe_connection_monitoring ;;
+        *) die_menu_input_issue "$UI_READ_RESULT" ;;
     esac
+    MENU_ACTION_COMPLETED='1'
 }
-
-require_nradio_smart_band_supported_model() {
-    smart_band_model="$(nradio_smart_band_current_model 2>/dev/null || true)"
-    [ "$smart_band_model" = 'NRadio_C5800-688' ] || die "智能频段管理当前仅支持已实测的 NRadio_C5800-688；当前机型: ${smart_band_model:-未知}"
+# Compatibility entries now use the independent observer, never the legacy radio controller.
+nradio_smart_band_model_supported() { return 1; }
+repair_nradio_smart_band_sampling() { install_nradio_cpe_connection_monitoring; }
+repair_nradio_cpe_monitor_ui() {
+    nradio_cpeopt_require_capabilities
+    [ -f /usr/libexec/nradio-cpe-monitor-state.lua ] ||
+        die "尚未安装基站时段监听 V10，请先从 5 > 10 安装"
+    extract_nradio_cpeopt_payload
+    install_nradio_cpeopt_payload_file usr/lib/lua/luci/controller/nradio_adv/cpeopt.lua 644
+    install_nradio_cpeopt_payload_file usr/lib/lua/luci/view/nradio_adv/cpeopt.htm 644
+    install_nradio_cpeopt_payload_file www/luci-static/nradio/images/icon/cpeopt.svg 644
+    refresh_nradio_cpe_monitor_menu
+    log "结果:   基站时段入口图标与时间显示已更新"
 }
-
-write_nradio_smart_band_script() {
-    smart_band_tmp="${NRADIO_SMART_BAND_SCRIPT}.tmp.$$"
-    rm -f "$smart_band_tmp" 2>/dev/null || true
-
-    cat > "$smart_band_tmp" <<'EOF_NRADIO_SMART_BAND_V7'
-#!/bin/sh
-# NRadio 智能频段切换 v7 - 运营商频段规则与同机模组确认
-SMART_BAND_VERSION="v7"
-LOG_TAG="nradio-band"
-RUNTIME_DIR="/var/run/nradio-smart-band"
-STATE_FILE="$RUNTIME_DIR/band_state"
-PREFERENCE_STATE_FILE="$RUNTIME_DIR/preference_state_v2"
-PENDING_AUTO_FILE="$RUNTIME_DIR/pending_auto"
-STOP_FILE="$RUNTIME_DIR/stopping"
-LOCK_DIR="$RUNTIME_DIR/lock"
-LOCK_PID_FILE="$LOCK_DIR/pid"
-LOCK_STARTTIME_FILE="$LOCK_DIR/starttime"
-RUNTIME_LOG="$RUNTIME_DIR/runtime.log"
-LAST_RUN_FILE="$RUNTIME_DIR/last_run"
-MIN_BW=20000
-MAX_RETRIES=1
-COOLDOWN=43200
-RETRY_WINDOW=86400
-HEALTH_FAILURE_LIMIT=3
-HEALTH_PROBE_COUNT=2
-HEALTH_PROBE_TIMEOUT=2
-HEALTH_TARGET_1="223.5.5.5"
-HEALTH_TARGET_2="119.29.29.29"
-SOFT_RECOVERY_WAIT=20
-IPV4_RECOVERY_WAIT=180
-IPV6_RECOVERY_WAIT=60
-IPV6_RECOVERY_COOLDOWN=21600
-DAY_START=5
-DAY_END=22
-PREFERENCE_DAY_START=8
-PREFERENCE_DAY_END=22
-PREFERENCE_CONFIRM_SAMPLES=2
-PREFERENCE_MAX_DAILY=2
-PREFERENCE_COOLDOWN=21600
-PREFERENCE_PROBE_WAIT=90
-PREFERENCE_RECOVERY_WAIT=180
-
-TMP_FILE=""
-BAND_STATUS="unknown"
-BAND_REASON="unknown"
-BAND_KEY="unknown"
-RETRY_COUNT=0
-RETRY_WINDOW_START=0
-RETRY_BLOCK_REASON=""
-OBS_PREVIOUS_BAND=""
-OBS_SINCE=0
-OBS_COUNT=0
-HEALTH_STATUS="unknown"
-HEALTH_REASON="not-checked"
-ACTIVE_DEVICE=""
-OPERATOR_NAME="unknown"
-OPERATOR_PROFILE="unknown"
-PREFERRED_BAND=""
-FALLBACK_BAND=""
-RECOVERY_TARGET=""
-RECOVERY_REASON=""
-PEER_BAND="unknown"
-PREFERENCE_ACTION="none"
-PREFERENCE_COUNT=0
-PREFERENCE_DATE=""
-PREFERENCE_LAST=0
-PREFERENCE_LOCK_IFACE=""
-PREFERENCE_LOCK_SIM="1"
-PREFERENCE_LOCK_SNAPSHOT=""
-IPV6_STATUS="unknown"
-EXEC_MODE="apply"
-MANUAL_RUN=0
-RUN_STARTED=0
-RUN_SOURCE="auto"
-RUN_STATE="failed"
-PROCESS_RESULT="failed"
-
-log() {
-    local _line _size _log_tmp
-    _line="$(date '+%Y-%m-%d %H:%M:%S') $1"
-    [ "$EXEC_MODE" = "apply" ] || { echo "$_line"; return 0; }
-    logger -t "$LOG_TAG" "$1"
-    printf '%s\n' "$_line" >> "$RUNTIME_LOG" || return 1
-    _size="$(wc -c < "$RUNTIME_LOG" 2>/dev/null || echo 0)"
-    if is_uint "$_size" && [ "$_size" -gt 65536 ]; then
-        _log_tmp="${RUNTIME_LOG}.tmp.$$"
-        tail -n 240 "$RUNTIME_LOG" > "$_log_tmp" 2>/dev/null || { rm -f "$_log_tmp"; return 1; }
-        chmod 600 "$_log_tmp" || { rm -f "$_log_tmp"; return 1; }
-        mv -f "$_log_tmp" "$RUNTIME_LOG" || { rm -f "$_log_tmp"; return 1; }
-    fi
-    echo "$_line"
-}
-
-is_uint() {
-    case "${1:-}" in
-        ''|*[!0-9]*) return 1 ;;
-        *) return 0 ;;
-    esac
-}
-
-process_starttime() {
-    local _pid="$1"
-    is_uint "$_pid" || return 1
-    [ -r "/proc/$_pid/stat" ] || return 1
-    sed 's/^[^)]*) //' "/proc/$_pid/stat" 2>/dev/null | awk '{print $20}'
-}
-
-ensure_runtime_dir() {
-    local _runtime_path
-    [ ! -L "$RUNTIME_DIR" ] || return 1
-    if [ -e "$RUNTIME_DIR" ] && [ ! -d "$RUNTIME_DIR" ]; then
-        return 1
-    fi
-    for _runtime_path in "$STATE_FILE" "$PREFERENCE_STATE_FILE" "$RUNTIME_LOG" "$PENDING_AUTO_FILE" "$STOP_FILE" "$LAST_RUN_FILE"; do
-        [ ! -L "$_runtime_path" ] || return 1
-        if [ -e "$_runtime_path" ] && [ ! -f "$_runtime_path" ]; then
-            return 1
-        fi
-    done
-    [ "$EXEC_MODE" = "apply" ] || return 0
-    mkdir -p "$RUNTIME_DIR" || return 1
-    chmod 700 "$RUNTIME_DIR" || return 1
-    (umask 077; : >> "$RUNTIME_LOG") || return 1
-    chmod 600 "$RUNTIME_LOG" || return 1
-}
-
-state_get() {
-    local _iface="$1" _key="$2"
-    [ -f "$STATE_FILE" ] || return 0
-    grep "^${_iface}_${_key}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2 | head -n 1
-}
-
-state_has() {
-    local _iface="$1"
-    [ -f "$STATE_FILE" ] && grep -q "^${_iface}_" "$STATE_FILE" 2>/dev/null
-}
-
-state_clear() {
-    local _iface="$1" _tmp
-    [ "$EXEC_MODE" = "apply" ] || return 0
-    state_has "$_iface" || return 0
-
-    _tmp="$(mktemp "$RUNTIME_DIR/state-clear.XXXXXX")" || return 1
-    TMP_FILE="$_tmp"
-    awk -v prefix="${_iface}_" 'index($0, prefix) != 1 { print }' "$STATE_FILE" > "$TMP_FILE" 2>/dev/null || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    chmod 600 "$TMP_FILE" || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    mv -f "$TMP_FILE" "$STATE_FILE" || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    TMP_FILE=""
-}
-
-state_write() {
-    local _iface="$1" _count="$2" _last="$3" _window="$4" _band="$5" _since="$6" _samples="$7" _failures="$8" _ipv6_last="$9" _tmp
-    [ "$EXEC_MODE" = "apply" ] || return 0
-
-    _tmp="$(mktemp "$RUNTIME_DIR/state-write.XXXXXX")" || return 1
-    TMP_FILE="$_tmp"
-    if [ -f "$STATE_FILE" ]; then
-        awk -v prefix="${_iface}_" 'index($0, prefix) != 1 && index($0, "format=") != 1 { print }' "$STATE_FILE" > "$TMP_FILE" 2>/dev/null || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    else
-        : > "$TMP_FILE" || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    fi
-    printf '%s\n' \
-        "format=5" \
-        "${_iface}_c=${_count}" \
-        "${_iface}_t=${_last}" \
-        "${_iface}_w=${_window}" \
-        "${_iface}_b=${_band}" \
-        "${_iface}_s=${_since}" \
-        "${_iface}_n=${_samples}" \
-        "${_iface}_f=${_failures}" \
-        "${_iface}_v=${_ipv6_last}" >> "$TMP_FILE" || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    chmod 600 "$TMP_FILE" || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    mv -f "$TMP_FILE" "$STATE_FILE" || { rm -f "$TMP_FILE"; TMP_FILE=""; return 1; }
-    TMP_FILE=""
-}
-
-state_write_retry() {
-    local _iface="$1" _count="$2" _last="$3" _window="$4" _failures="${5:-0}" _band _since _samples _ipv6_last
-
-    _band="$(state_get "$_iface" b)"
-    _since="$(state_get "$_iface" s)"
-    _samples="$(state_get "$_iface" n)"
-    _ipv6_last="$(state_get "$_iface" v)"
-    [ -n "$_band" ] || _band="$BAND_KEY"
-    is_uint "$_since" || _since="$(date +%s)"
-    is_uint "$_samples" || _samples=1
-    is_uint "$_failures" || _failures=0
-    is_uint "$_ipv6_last" || _ipv6_last=0
-    state_write "$_iface" "$_count" "$_last" "$_window" "$_band" "$_since" "$_samples" "$_failures" "$_ipv6_last"
-}
-
-record_band_observation() {
-    local _iface="$1" _now _count _last _window _previous _since _samples _failures _ipv6_last
-
-    _now="$(date +%s)"
-    _count="$(state_get "$_iface" c)"
-    _last="$(state_get "$_iface" t)"
-    _window="$(state_get "$_iface" w)"
-    _previous="$(state_get "$_iface" b)"
-    _since="$(state_get "$_iface" s)"
-    _samples="$(state_get "$_iface" n)"
-    _failures="$(state_get "$_iface" f)"
-    _ipv6_last="$(state_get "$_iface" v)"
-
-    is_uint "$_count" || _count=0
-    is_uint "$_last" || _last=0
-    is_uint "$_window" || _window="$_now"
-    is_uint "$_failures" || _failures=0
-    is_uint "$_ipv6_last" || _ipv6_last=0
-    OBS_PREVIOUS_BAND="$_previous"
-
-    if [ "$_previous" = "$BAND_KEY" ] && is_uint "$_since" && is_uint "$_samples"; then
-        if [ "$_now" -lt "$_since" ]; then
-            _since="$_now"
-            _samples=1
-        else
-            _samples=$((_samples + 1))
-        fi
-    else
-        _since="$_now"
-        _samples=1
-    fi
-
-    OBS_SINCE="$_since"
-    OBS_COUNT="$_samples"
-    state_write "$_iface" "$_count" "$_last" "$_window" "$BAND_KEY" "$_since" "$_samples" "$_failures" "$_ipv6_last"
-}
-
-state_set_health_failures() {
-    local _iface="$1" _failures="$2" _now _count _last _window _band _since _samples _ipv6_last
-    _now="$(date +%s)"
-    _count="$(state_get "$_iface" c)"
-    _last="$(state_get "$_iface" t)"
-    _window="$(state_get "$_iface" w)"
-    _band="$(state_get "$_iface" b)"
-    _since="$(state_get "$_iface" s)"
-    _samples="$(state_get "$_iface" n)"
-    _ipv6_last="$(state_get "$_iface" v)"
-    is_uint "$_count" || _count=0
-    is_uint "$_last" || _last=0
-    is_uint "$_window" || _window="$_now"
-    [ -n "$_band" ] || _band="$BAND_KEY"
-    is_uint "$_since" || _since="$_now"
-    is_uint "$_samples" || _samples=1
-    is_uint "$_failures" || _failures=0
-    is_uint "$_ipv6_last" || _ipv6_last=0
-    state_write "$_iface" "$_count" "$_last" "$_window" "$_band" "$_since" "$_samples" "$_failures" "$_ipv6_last"
-}
-
-state_set_ipv6_last() {
-    local _iface="$1" _ipv6_last="$2" _now _count _last _window _band _since _samples _failures
-    _now="$(date +%s)"
-    _count="$(state_get "$_iface" c)"
-    _last="$(state_get "$_iface" t)"
-    _window="$(state_get "$_iface" w)"
-    _band="$(state_get "$_iface" b)"
-    _since="$(state_get "$_iface" s)"
-    _samples="$(state_get "$_iface" n)"
-    _failures="$(state_get "$_iface" f)"
-    is_uint "$_count" || _count=0
-    is_uint "$_last" || _last=0
-    is_uint "$_window" || _window="$_now"
-    [ -n "$_band" ] || _band="$BAND_KEY"
-    is_uint "$_since" || _since="$_now"
-    is_uint "$_samples" || _samples=1
-    is_uint "$_failures" || _failures=0
-    is_uint "$_ipv6_last" || _ipv6_last=0
-    state_write "$_iface" "$_count" "$_last" "$_window" "$_band" "$_since" "$_samples" "$_failures" "$_ipv6_last"
-}
-
-preference_state_get() {
-    local _iface="$1" _key="$2"
-    [ -f "$PREFERENCE_STATE_FILE" ] || return 0
-    grep "^${_iface}_${_key}=" "$PREFERENCE_STATE_FILE" 2>/dev/null | cut -d'=' -f2 | head -n 1
-}
-
-preference_state_write() {
-    local _iface="$1" _date="$2" _count="$3" _last="$4" _result="$5" _tmp
-    [ "$EXEC_MODE" = "apply" ] || return 0
-    _tmp="$(mktemp "$RUNTIME_DIR/preference-write.XXXXXX")" || return 1
-    if [ -f "$PREFERENCE_STATE_FILE" ]; then
-        awk -v prefix="${_iface}_" 'index($0, prefix) != 1 { print }' "$PREFERENCE_STATE_FILE" > "$_tmp" 2>/dev/null || { rm -f "$_tmp"; return 1; }
-    else
-        : > "$_tmp" || { rm -f "$_tmp"; return 1; }
-    fi
-    printf '%s\n' \
-        "${_iface}_date=${_date}" \
-        "${_iface}_count=${_count}" \
-        "${_iface}_last=${_last}" \
-        "${_iface}_result=${_result}" >> "$_tmp" || { rm -f "$_tmp"; return 1; }
-    chmod 600 "$_tmp" || { rm -f "$_tmp"; return 1; }
-    mv -f "$_tmp" "$PREFERENCE_STATE_FILE" || { rm -f "$_tmp"; return 1; }
-}
-
-preference_retry_ok() {
-    local _iface="$1" _now _today _date _count _last _result _elapsed
-    _now="$(date +%s)"
-    _today="$(date +%Y%m%d)"
-    _date="$(preference_state_get "$_iface" date)"
-    _count="$(preference_state_get "$_iface" count)"
-    _last="$(preference_state_get "$_iface" last)"
-    _result="$(preference_state_get "$_iface" result)"
-    is_uint "$_count" || _count=0
-    is_uint "$_last" || _last=0
-
-    if [ "$_date" != "$_today" ] || [ "$_now" -lt "$_last" ]; then
-        _date="$_today"
-        _count=0
-        _last=0
-    elif [ "$_last" -gt 0 ]; then
-        _elapsed=$((_now - _last))
-        case "$_result" in
-            probing-*|recovering-*)
-                if [ "$_elapsed" -ge 600 ]; then
-                    [ "$_count" -gt 0 ] && _count=$((_count - 1))
-                    _last=0
-                    preference_state_write "$_iface" "$_date" "$_count" "$_last" "interrupted-refunded" || return 1
-                fi
-                ;;
-        esac
-    fi
-    if [ "$_count" -ge "$PREFERENCE_MAX_DAILY" ]; then
-        return 1
-    fi
-    if [ "$_last" -gt 0 ]; then
-        _elapsed=$((_now - _last))
-        [ "$_elapsed" -ge "$PREFERENCE_COOLDOWN" ] || return 1
-    fi
-
-    PREFERENCE_DATE="$_date"
-    PREFERENCE_COUNT="$_count"
-    PREFERENCE_LAST="$_last"
-    return 0
-}
-
-preference_record_attempt() {
-    local _iface="$1" _result="$2" _now _count
-    _now="$(date +%s)"
-    _count=$((PREFERENCE_COUNT + 1))
-    preference_state_write "$_iface" "$PREFERENCE_DATE" "$_count" "$_now" "$_result" || return 1
-    PREFERENCE_COUNT="$_count"
-    PREFERENCE_LAST="$_now"
-}
-
-preference_update_result() {
-    local _iface="$1" _result="$2"
-    preference_state_write "$_iface" "$PREFERENCE_DATE" "$PREFERENCE_COUNT" "$PREFERENCE_LAST" "$_result" || return 1
-}
-
-preference_refund_attempt() {
-    local _iface="$1" _result="$2"
-    [ "$PREFERENCE_COUNT" -gt 0 ] && PREFERENCE_COUNT=$((PREFERENCE_COUNT - 1))
-    PREFERENCE_LAST=0
-    preference_state_write "$_iface" "$PREFERENCE_DATE" "$PREFERENCE_COUNT" "$PREFERENCE_LAST" "$_result" || return 1
-}
-
-interface_disabled() {
-    local _iface="$1" _disabled
-    _disabled="$(uci -q get "network.${_iface}.disabled" 2>/dev/null || true)"
-    [ "$_disabled" = "1" ]
-}
-
-detect_operator() {
-    local _iface="$1" _line _name _upper
-    OPERATOR_NAME="unknown"
-    OPERATOR_PROFILE="unknown"
-    _line="$(atsd_cli -i "$_iface" -c 'AT+COPS?' 2>/dev/null | grep '+COPS:' | head -n 1)"
-    [ -n "$_line" ] || return 1
-    _name="$(printf '%s\n' "$_line" | cut -d'"' -f2 | tr -d '\r\n')"
-    [ -n "$_name" ] || _name="$(printf '%s\n' "$_line" | cut -d',' -f3 | tr -d ' "\r\n')"
-    [ -n "$_name" ] || return 1
-    OPERATOR_NAME="$_name"
-    _upper="$(printf '%s' "$_line $_name" | tr '[:lower:]' '[:upper:]')"
-    case "$_upper" in
-        *CHINA\ MOBILE*|*CMCC*|*BROADNET*|*CBN*|*46000*|*46002*|*46004*|*46007*|*46008*|*46015*)
-            OPERATOR_PROFILE="mobile-broadnet"
-            ;;
-        *UNICOM*|*46001*|*46006*|*46009*)
-            OPERATOR_PROFILE="unicom"
-            ;;
-        *TELECOM*|*46003*|*46005*|*46011*|*46012*)
-            OPERATOR_PROFILE="telecom"
-            ;;
-    esac
-    return 0
-}
-
-select_preferred_band() {
-    PREFERRED_BAND=""
-    FALLBACK_BAND=""
-    case "$OPERATOR_PROFILE" in
-        mobile-broadnet)
-            PREFERRED_BAND="41"
-            FALLBACK_BAND="28"
-            ;;
-        unicom|telecom)
-            PREFERRED_BAND="78"
-            FALLBACK_BAND="1"
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-    return 0
-}
-
-current_sim_id() {
-    local _iface="$1" _section _sim
-    case "$_iface" in
-        cpe) _section="sim" ;;
-        cpe[0-9]*) _section="sim${_iface#cpe}" ;;
-        *) return 1 ;;
-    esac
-    _sim="$(uci -q get "cpesel.${_section}.cur" 2>/dev/null || true)"
-    is_uint "$_sim" || return 1
-    printf '%s\n' "$_sim"
-}
-
-status_field() {
-    local _text="$1" _field="$2"
-    printf '%s\n' "$_text" | sed -n "s/^[[:space:]]*\"${_field}\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
-}
-
-ipv4_interface_status() {
-    local _iface="$1"
-    command -v ifstatus >/dev/null 2>&1 || return 1
-    ifstatus "${_iface}_4" 2>/dev/null
-}
-
-check_ipv4_health() {
-    local _iface="$1" _status _dev
-    HEALTH_STATUS="unhealthy"
-    HEALTH_REASON="interface-status-missing"
-    ACTIVE_DEVICE=""
-
-    _status="$(ipv4_interface_status "$_iface")"
-    [ -n "$_status" ] || return 1
-    printf '%s\n' "$_status" | grep -F '"up": true' >/dev/null 2>&1 || {
-        HEALTH_REASON="ipv4-interface-down"
-        return 1
-    }
-    printf '%s\n' "$_status" | grep -F '"address": "' >/dev/null 2>&1 || {
-        HEALTH_REASON="ipv4-address-missing"
-        return 1
-    }
-    _dev="$(status_field "$_status" l3_device)"
-    [ -n "$_dev" ] || _dev="$(status_field "$_status" device)"
-    case "$_dev" in
-        ''|*[!A-Za-z0-9_.:-]*)
-            HEALTH_REASON="ipv4-device-invalid"
-            return 1
-            ;;
-    esac
-    ACTIVE_DEVICE="$_dev"
-    if ping -I "$_dev" -c "$HEALTH_PROBE_COUNT" -W "$HEALTH_PROBE_TIMEOUT" "$HEALTH_TARGET_1" >/dev/null 2>&1; then
-        HEALTH_STATUS="healthy"
-        HEALTH_REASON="probe-${HEALTH_TARGET_1}-ok"
-        return 0
-    fi
-    if ping -I "$_dev" -c "$HEALTH_PROBE_COUNT" -W "$HEALTH_PROBE_TIMEOUT" "$HEALTH_TARGET_2" >/dev/null 2>&1; then
-        HEALTH_STATUS="healthy"
-        HEALTH_REASON="probe-${HEALTH_TARGET_2}-ok"
-        return 0
-    fi
-    HEALTH_REASON="both-probes-failed"
-    return 1
-}
-
-soft_ipv4_recover() {
-    local _iface="$1" _status _elapsed
-    log "${_iface}: IPv4 连续异常，先执行轻量续租，不重启模组"
-    _status="$(ipv4_interface_status "$_iface")"
-    if printf '%s\n' "$_status" | grep -F '"up": true' >/dev/null 2>&1; then
-        ubus call "network.interface.${_iface}_4" renew >/dev/null 2>&1 || true
-    elif command -v ifup >/dev/null 2>&1; then
-        ifup "${_iface}_4" >/dev/null 2>&1 || true
-    fi
-
-    _elapsed=0
-    while [ "$_elapsed" -lt "$SOFT_RECOVERY_WAIT" ]; do
-        sleep 5
-        _elapsed=$((_elapsed + 5))
-        if check_ipv4_health "$_iface"; then
-            log "${_iface}: 轻量续租后 IPv4 已恢复，用时 ${_elapsed}s"
-            return 0
-        fi
-    done
-    log "${_iface}: 轻量续租 ${SOFT_RECOVERY_WAIT}s 后仍异常；reason=${HEALTH_REASON}"
-    return 1
-}
-
-wait_for_ipv4_recovery() {
-    local _iface="$1" _elapsed
-    _elapsed=0
-    while [ "$_elapsed" -le "$IPV4_RECOVERY_WAIT" ]; do
-        if check_ipv4_health "$_iface"; then
-            log "${_iface}: CFUN 后 IPv4 已恢复，用时 ${_elapsed}s；${HEALTH_REASON}"
-            return 0
-        fi
-        [ "$_elapsed" -ge "$IPV4_RECOVERY_WAIT" ] && break
-        sleep 10
-        _elapsed=$((_elapsed + 10))
-    done
-    log "${_iface}: CFUN 后 ${IPV4_RECOVERY_WAIT}s 内 IPv4 未恢复；reason=${HEALTH_REASON}"
-    return 1
-}
-
-check_band() {
-    local _iface="$1" _info _mode _band _freq _bw _tech
-
-    BAND_STATUS="unknown"
-    BAND_REASON="query-failed"
-    BAND_KEY="unknown"
-    _info="$(atsd_cli -i "$_iface" -c 'AT^HFREQINFO?' 2>/dev/null | grep 'HFREQINFO:' | head -n 1)"
-    [ -n "$_info" ] || return 1
-
-    _mode="$(echo "$_info" | cut -d',' -f2 | tr -d ' \r\n')"
-    _band="$(echo "$_info" | cut -d',' -f3 | tr -d ' \r\n')"
-    _freq="$(echo "$_info" | cut -d',' -f5 | tr -d ' \r\n')"
-    _bw="$(echo "$_info" | cut -d',' -f6 | tr -d ' \r\n')"
-    is_uint "$_mode" && is_uint "$_band" && is_uint "$_freq" && is_uint "$_bw" || return 1
-
-    case "$_mode" in
-        7) _tech="NR" ;;
-        6) _tech="LTE" ;;
-        *) _tech="MODE${_mode}" ;;
-    esac
-    BAND_KEY="${_tech}:${_band}"
-    BAND_STATUS="${_tech} band=${_band} freq_field=${_freq} bw=${_bw}kHz"
-
-    if [ "$_mode" = "7" ]; then
-        case "$_band" in
-            28)
-                BAND_REASON="nr28-coverage-band"
-                return 0
-                ;;
-            5|8)
-                BAND_REASON="low-coverage-band"
-                return 0
-                ;;
-            1|3|41|78|79)
-                BAND_REASON="preferred-nr-band"
-                return 2
-                ;;
-        esac
-    fi
-
-    if [ "$_mode" = "6" ]; then
-        case "$_band" in
-            1|3|7|38|39|40|41|42|43)
-                BAND_REASON="preferred-lte-band"
-                return 2
-                ;;
-            5|8|12|17|20|26|28)
-                BAND_REASON="low-lte-coverage-band"
-                return 0
-                ;;
-        esac
-    fi
-
-    if [ "$_bw" -lt "$MIN_BW" ]; then
-        BAND_REASON="low-bandwidth"
-        return 0
-    fi
-
-    BAND_REASON="adequate-bandwidth"
-    return 2
-}
-
-read_band_policy() {
-    local _iface="$1" _sim="$2" _section
-    case "$_iface" in cpe|cpe1) ;; *) return 1 ;; esac
-    is_uint "$_sim" && [ "$_sim" -gt 0 ] || return 1
-    _section="${_iface}sim${_sim}"
-    BAND_POLICY_SUPPORTED="$(uci -q get "network.${_iface}.mobility")"
-    BAND_POLICY_BLOCKED="$(uci -q get "luci.main.mobile_lock")"
-    BAND_POLICY_MODE="$(uci -q get "cpecfg.${_section}.mobility")"
-    if [ -z "$BAND_POLICY_MODE" ]; then
-        if [ "$(uci -q get "system.basic.freqfree")" = "1" ]; then
-            BAND_POLICY_MODE="2"
-        else
-            BAND_POLICY_MODE="0"
-        fi
-    fi
-    BAND_POLICY_CUSTOM_FREQ="$(uci -q get "cpecfg.${_section}.custom_freq")"
-    BAND_POLICY_CUSTOM_EARFCN4="$(uci -q get "cpecfg.${_section}.custom_earfcn4")"
-    BAND_POLICY_CUSTOM_EARFCN5="$(uci -q get "cpecfg.${_section}.custom_earfcn5")"
-    BAND_POLICY_SNAPSHOT="$(printf '%s|' \
-        "$BAND_POLICY_SUPPORTED" "$BAND_POLICY_BLOCKED" "$BAND_POLICY_MODE" \
-        "$BAND_POLICY_CUSTOM_FREQ" "$(uci -q get "cpecfg.${_section}.freq")" \
-        "$(uci -q get "cpecfg.${_section}.earfreq_mode")" \
-        "$BAND_POLICY_CUSTOM_EARFCN4" "$(uci -q get "cpecfg.${_section}.earfcn4")" \
-        "$(uci -q get "cpecfg.${_section}.pci4")" "$(uci -q get "cpecfg.${_section}.band4")" \
-        "$BAND_POLICY_CUSTOM_EARFCN5" "$(uci -q get "cpecfg.${_section}.earfcn5")" \
-        "$(uci -q get "cpecfg.${_section}.pci5")" "$(uci -q get "cpecfg.${_section}.band5")")"
-    return 0
-}
-
-band_policy_allows_recovery() {
-    read_band_policy "$1" "$2" || return 1
-    [ "$BAND_POLICY_SUPPORTED" = "1" ] &&
-        [ "$BAND_POLICY_BLOCKED" != "1" ] &&
-        [ "$BAND_POLICY_MODE" = "1" ] &&
-        [ "$BAND_POLICY_CUSTOM_FREQ" != "1" ] &&
-        [ "$BAND_POLICY_CUSTOM_EARFCN4" != "1" ] &&
-        [ "$BAND_POLICY_CUSTOM_EARFCN5" != "1" ]
-}
-
-native_band_profile() {
-    local _iface="$1" _sim="$2" _target="$3" _out _rc _sim_before _sim_after
-    [ "$EXEC_MODE" = "apply" ] || return 1
-    [ -x /usr/bin/cpetools.sh ] || return 127
-    _sim_before="$(current_sim_id "$_iface" 2>/dev/null || true)"
-    if [ -z "$_sim_before" ] || [ "$_sim_before" != "$_sim" ]; then
-        log "${_iface}: SIM 状态已变化或无法确认；expected=${_sim}; current=${_sim_before:-unknown}; 拒绝执行频段命令"
-        return 3
-    fi
-    if ! band_policy_allows_recovery "$_iface" "$_sim"; then
-        log "${_iface}: 当前锁频策略或手动锁目标不允许智能频段改动；跳过 target=${_target}"
-        return 4
-    fi
-    if [ -n "$PREFERENCE_LOCK_SNAPSHOT" ] && [ "$BAND_POLICY_SNAPSHOT" != "$PREFERENCE_LOCK_SNAPSHOT" ]; then
-        log "${_iface}: 锁频配置在本轮执行期间已变化；跳过 target=${_target}"
-        return 4
-    fi
-    if [ "$_target" = "auto" ]; then
-        _out="$(/usr/bin/cpetools.sh -i "$_iface" -c freq_unlock -t 2 2>&1)"
-        _rc=$?
-    else
-        case "$_target" in
-            1|28|41|78) ;;
-            *) return 2 ;;
-        esac
-        _out="$(/usr/bin/cpetools.sh -i "$_iface" -c freq -t 2 "nr-${_target}" 2>&1)"
-        _rc=$?
-    fi
-    if [ "$_rc" -ne 0 ]; then
-        log "${_iface}: 原生频段接口失败 target=${_target}; rc=${_rc}; output=${_out}"
-        return 1
-    fi
-    _sim_after="$(current_sim_id "$_iface" 2>/dev/null || true)"
-    if [ -z "$_sim_after" ] || [ "$_sim_after" != "$_sim" ]; then
-        log "${_iface}: 频段命令执行期间 SIM 已变化；expected=${_sim}; current=${_sim_after:-unknown}; 停止后续控制"
-        return 3
-    fi
-    return 0
-}
-
-restore_auto_band() {
-    local _iface="$1" _sim="$2" _rc _current_sim
-    _current_sim="$(current_sim_id "$_iface" 2>/dev/null || true)"
-    if [ -z "$_current_sim" ] || [ "$_current_sim" != "$_sim" ]; then
-        log "${_iface}: 待恢复记录所属 SIM 已变化；expected=${_sim}; current=${_current_sim:-unknown}; 保留待恢复记录"
-        return 3
-    fi
-    read_band_policy "$_iface" "$_sim" || return 3
-    if [ "$BAND_POLICY_SUPPORTED" != "1" ] || [ "$BAND_POLICY_BLOCKED" = "1" ] ||
-       [ "$BAND_POLICY_MODE" != "1" ] || [ "$BAND_POLICY_CUSTOM_FREQ" = "1" ] ||
-       [ "$BAND_POLICY_CUSTOM_EARFCN4" = "1" ] || [ "$BAND_POLICY_CUSTOM_EARFCN5" = "1" ] ||
-       { [ -n "$PREFERENCE_LOCK_SNAPSHOT" ] && [ "$BAND_POLICY_SNAPSHOT" != "$PREFERENCE_LOCK_SNAPSHOT" ]; }; then
-        log "${_iface}: 锁频策略或目标已变化；保留当前设置，不执行自动解锁"
-        rm -f "$PENDING_AUTO_FILE" || return 1
-        PREFERENCE_LOCK_IFACE=""
-        PREFERENCE_LOCK_SIM=""
-        PREFERENCE_LOCK_SNAPSHOT=""
-        PREFERENCE_ACTION="policy-changed"
-        return 0
-    fi
-    native_band_profile "$_iface" "$_sim" auto
-    _rc=$?
-    if [ "$_rc" -eq 0 ]; then
-        log "${_iface}: 已恢复自动选频"
-        if [ "$PREFERENCE_LOCK_IFACE" = "$_iface" ]; then
-            rm -f "$PENDING_AUTO_FILE" || return 1
-            PREFERENCE_LOCK_IFACE=""
-            PREFERENCE_LOCK_SIM=""
-            PREFERENCE_LOCK_SNAPSHOT=""
-        fi
-    else
-        log "${_iface}: 恢复自动选频失败 rc=${_rc}"
-    fi
-    return "$_rc"
-}
-
-wait_preference_recovery() {
-    local _iface="$1" _elapsed=0
-    while [ "$_elapsed" -le "$PREFERENCE_RECOVERY_WAIT" ]; do
-        if check_ipv4_health "$_iface"; then
-            return 0
-        fi
-        [ "$_elapsed" -ge "$PREFERENCE_RECOVERY_WAIT" ] && break
-        sleep 10
-        _elapsed=$((_elapsed + 10))
-    done
-    return 1
-}
-
-peer_iface() {
-    case "$1" in
-        cpe) printf '%s\n' "cpe1" ;;
-        cpe1) printf '%s\n' "cpe" ;;
-        *) return 1 ;;
-    esac
-}
-
-band_key_for_iface() {
-    local _iface="$1"
-    (
-        check_band "$_iface" >/dev/null 2>&1 || true
-        printf '%s\n' "$BAND_KEY"
-    )
-}
-
-operator_profile_for_iface() {
-    local _iface="$1"
-    (
-        detect_operator "$_iface" >/dev/null 2>&1 || true
-        printf '%s\n' "$OPERATOR_PROFILE"
-    )
-}
-
-select_rule_recovery_target() {
-    local _iface="$1" _hour _peer _peer_operator
-    RECOVERY_TARGET=""
-    RECOVERY_REASON=""
-    PEER_BAND="unknown"
-    select_preferred_band || return 1
-
-    [ "$BAND_KEY" != "NR:${PREFERRED_BAND}" ] || return 1
-    case "$BAND_KEY" in
-        NR:*|LTE:*) ;;
-        *) return 1 ;;
-    esac
-
-    _peer="$(peer_iface "$_iface" 2>/dev/null || true)"
-    if [ -n "$_peer" ] && ! interface_disabled "$_peer"; then
-        _peer_operator="$(operator_profile_for_iface "$_peer")"
-        PEER_BAND="$(band_key_for_iface "$_peer")"
-    else
-        _peer_operator="unknown"
-    fi
-
-    _hour="$(date +%H)"
-    if [ "$_peer_operator" = "$OPERATOR_PROFILE" ] && \
-       [ "$PEER_BAND" = "NR:${PREFERRED_BAND}" ] && \
-       [ "$_hour" -ge "$PREFERENCE_DAY_START" ] && [ "$_hour" -lt "$PREFERENCE_DAY_END" ]; then
-        RECOVERY_TARGET="$PREFERRED_BAND"
-        RECOVERY_REASON="peer-confirmed-preferred"
-        return 0
-    fi
-
-    if [ "$BAND_KEY" = "NR:${FALLBACK_BAND}" ]; then
-        RECOVERY_REASON="valid-fallback-hold"
-        return 1
-    fi
-
-    RECOVERY_TARGET="$FALLBACK_BAND"
-    RECOVERY_REASON="off-policy-use-fallback"
-    return 0
-}
-
-recover_rule_band() {
-    local _iface="$1" _sim="$2" _target="$3" _elapsed _found _final_band
-    PREFERENCE_ACTION="control-failed"
-    if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
-        restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" || return 2
-        [ "$PREFERENCE_ACTION" != "policy-changed" ] || return 0
-    fi
-    if ! band_policy_allows_recovery "$_iface" "$_sim"; then
-        PREFERENCE_ACTION="policy-hold"
-        log "${_iface}: 固件锁频策略或手动锁目标已变化；跳过频段恢复"
-        return 0
-    fi
-    PREFERENCE_LOCK_SNAPSHOT="$BAND_POLICY_SNAPSHOT"
-    # 命令即使返回失败也可能已经改变模组；先记下同一 SIM 的回退责任。
-    (umask 077; printf '%s %s %s\n' "$_iface" "$_sim" "$PREFERENCE_LOCK_SNAPSHOT" > "$PENDING_AUTO_FILE") || return 1
-    PREFERENCE_LOCK_IFACE="$_iface"
-    PREFERENCE_LOCK_SIM="$_sim"
-    if ! native_band_profile "$_iface" "$_sim" "$_target"; then
-        restore_auto_band "$_iface" "$_sim" || { PREFERENCE_ACTION="auto-restore-failed"; return 2; }
-        [ "$PREFERENCE_ACTION" != "policy-changed" ] || return 0
-        return 1
-    fi
-
-    _elapsed=0
-    _found=0
-    while [ "$_elapsed" -le "$PREFERENCE_PROBE_WAIT" ]; do
-        sleep 10
-        _elapsed=$((_elapsed + 10))
-        check_band "$_iface" || true
-        if [ "$BAND_KEY" = "NR:${_target}" ] && check_ipv4_health "$_iface"; then
-            _found=1
-            log "${_iface}: 规则频段 N${_target} 恢复成功，用时 ${_elapsed}s；恢复自动模式"
-            break
-        fi
-    done
-
-    restore_auto_band "$_iface" "$_sim" || { PREFERENCE_ACTION="auto-restore-failed"; return 2; }
-    [ "$PREFERENCE_ACTION" != "policy-changed" ] || return 0
-    sleep 10
-    if ! wait_preference_recovery "$_iface"; then
-        PREFERENCE_ACTION="recovery-failed"
-        log "${_iface}: 规则恢复后自动模式 ${PREFERENCE_RECOVERY_WAIT}s 内未恢复 IPv4"
-        return 2
-    fi
-
-    check_band "$_iface" || true
-    _final_band="$BAND_KEY"
-    if [ "$_found" -eq 1 ] && [ "$_final_band" = "NR:${_target}" ]; then
-        PREFERENCE_ACTION="rule-restored"
-        log "${_iface}: 自动模式稳定驻留规则频段 N${_target}"
-        return 0
-    fi
-
-    PREFERENCE_ACTION="network-selected"
-    log "${_iface}: 规则目标 N${_target} 命中=${_found}，自动模式最终选择 ${_final_band}；本轮停止"
-    return 1
-}
-
-maybe_restore_preferred_band() {
-    local _iface="$1" _sim _rc
-    PREFERENCE_ACTION="none"
-    select_rule_recovery_target "$_iface" || return 0
-    is_uint "$OBS_COUNT" || OBS_COUNT=0
-    [ "$OBS_COUNT" -ge "$PREFERENCE_CONFIRM_SAMPLES" ] || return 0
-    preference_retry_ok "$_iface" || return 0
-    _sim="$(current_sim_id "$_iface" 2>/dev/null || true)"
-    if ! is_uint "$_sim"; then
-        PREFERENCE_ACTION="sim-unknown"
-        log "${_iface}: 无法确认当前 SIM，跳过本轮频段恢复"
-        return 0
-    fi
-    if ! band_policy_allows_recovery "$_iface" "$_sim"; then
-        PREFERENCE_ACTION="policy-hold"
-        if [ "$EXEC_MODE" != "apply" ]; then
-            echo "${_iface}=POLICY-HOLD mode=${EXEC_MODE} reason=firmware-lock-policy"
-        else
-            log "${_iface}: 当前锁频策略或手动锁目标由固件管理；跳过频段恢复"
-        fi
-        return 0
-    fi
-
-    if [ "$EXEC_MODE" != "apply" ]; then
-        PREFERENCE_ACTION="would-recover"
-        echo "${_iface}=WOULD-RECOVER target=N${RECOVERY_TARGET} reason=${RECOVERY_REASON} current=${BAND_KEY} peer=${PEER_BAND} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}"
-        return 0
-    fi
-
-    preference_record_attempt "$_iface" "recovering-N${RECOVERY_TARGET}" || { log "${_iface}: 写入频段偏好状态失败"; return 1; }
-    log "${_iface}: 运营商规则恢复 ${PREFERENCE_COUNT}/${PREFERENCE_MAX_DAILY}；operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}; current=${BAND_KEY}; target=N${RECOVERY_TARGET}; preferred=N${PREFERRED_BAND}; fallback=N${FALLBACK_BAND}; peer=${PEER_BAND}; reason=${RECOVERY_REASON}"
-    recover_rule_band "$_iface" "$_sim" "$RECOVERY_TARGET"
-    _rc=$?
-    if [ "$PREFERENCE_ACTION" = "control-failed" ] ||
-       [ "$PREFERENCE_ACTION" = "policy-hold" ] ||
-       [ "$PREFERENCE_ACTION" = "policy-changed" ]; then
-        preference_refund_attempt "$_iface" "$PREFERENCE_ACTION" || { log "${_iface}: 退还频段偏好计数写入失败"; return 1; }
-    else
-        preference_update_result "$_iface" "$PREFERENCE_ACTION" || { log "${_iface}: 更新频段偏好结果失败"; return 1; }
-    fi
-    return "$_rc"
-}
-
-ipv6_interface_status() {
-    local _iface="$1"
-    command -v ifstatus >/dev/null 2>&1 || return 1
-    ifstatus "${_iface}_6" 2>/dev/null
-}
-
-check_ipv6_ready() {
-    local _iface="$1" _status
-    IPV6_STATUS="unavailable"
-    _status="$(ipv6_interface_status "$_iface")"
-    [ -n "$_status" ] || return 1
-    if ! printf '%s\n' "$_status" | grep -F '"up": true' >/dev/null 2>&1; then
-        if printf '%s\n' "$_status" | grep -F '"pending": true' >/dev/null 2>&1; then
-            IPV6_STATUS="pending"
-        else
-            IPV6_STATUS="down"
-        fi
-        return 1
-    fi
-    if printf '%s\n' "$_status" | grep -F '"pending": true' >/dev/null 2>&1; then
-        IPV6_STATUS="pending"
-        return 1
-    fi
-    printf '%s\n' "$_status" | grep -F '"address": "' >/dev/null 2>&1 || {
-        IPV6_STATUS="address-missing"
-        return 1
-    }
-    IPV6_STATUS="ready"
-    return 0
-}
-
-device_has_link_local() {
-    local _dev="$1"
-    [ -n "$_dev" ] || return 1
-    ip -6 address show dev "$_dev" 2>/dev/null | grep -F 'inet6 fe80:' | grep -F ' scope link ' >/dev/null 2>&1
-}
-
-device_eui64_link_local() {
-    local _dev="$1" _mac _b1 _b2 _b3 _b4 _b5 _b6
-    [ -r "/sys/class/net/${_dev}/address" ] || return 1
-    _mac="$(tr 'A-F' 'a-f' < "/sys/class/net/${_dev}/address" 2>/dev/null)"
-    case "$_mac" in
-        [0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]) ;;
-        *) return 1 ;;
-    esac
-    _b1="$(printf '%s\n' "$_mac" | cut -d: -f1)"
-    _b2="$(printf '%s\n' "$_mac" | cut -d: -f2)"
-    _b3="$(printf '%s\n' "$_mac" | cut -d: -f3)"
-    _b4="$(printf '%s\n' "$_mac" | cut -d: -f4)"
-    _b5="$(printf '%s\n' "$_mac" | cut -d: -f5)"
-    _b6="$(printf '%s\n' "$_mac" | cut -d: -f6)"
-    printf 'fe80::%02x%02x:%02xff:fe%02x:%02x%02x\n' \
-        "$((0x$_b1 ^ 2))" "$((0x$_b2))" "$((0x$_b3))" \
-        "$((0x$_b4))" "$((0x$_b5))" "$((0x$_b6))"
-}
-
-ensure_device_link_local() {
-    local _dev="$1" _link_local
-    device_has_link_local "$_dev" && return 0
-    _link_local="$(device_eui64_link_local "$_dev")"
-    [ -n "$_link_local" ] || return 1
-    log "IPv6恢复: ${_dev} 缺少 link-local，补 ${_link_local}/64"
-    ip -6 address add "${_link_local}/64" dev "$_dev" >/dev/null 2>&1 || true
-    device_has_link_local "$_dev"
-}
-
-recover_ipv6_if_needed() {
-    local _iface="$1" _status _dev _now _last _elapsed
-    check_ipv6_ready "$_iface" && return 0
-    _status="$(ipv6_interface_status "$_iface")"
-    [ -n "$_status" ] || return 0
-
-    _now="$(date +%s)"
-    _last="$(state_get "$_iface" v)"
-    is_uint "$_last" || _last=0
-    if [ "$_now" -ge "$_last" ] && [ $((_now - _last)) -lt "$IPV6_RECOVERY_COOLDOWN" ]; then
-        return 1
-    fi
-    _dev="$(status_field "$_status" l3_device)"
-    [ -n "$_dev" ] || _dev="$(status_field "$_status" device)"
-    [ -n "$_dev" ] || _dev="$ACTIVE_DEVICE"
-    case "$_dev" in
-        ''|*[!A-Za-z0-9_.:-]*)
-            log "${_iface}: IPv6 ${IPV6_STATUS}，但设备名无效，跳过恢复"
-            return 1
-            ;;
-    esac
-
-    state_set_ipv6_last "$_iface" "$_now" || { log "${_iface}: 写入 IPv6 恢复状态失败"; return 1; }
-    log "${_iface}: IPv6 ${IPV6_STATUS}，开始独立恢复；不重启蜂窝模组"
-    ensure_device_link_local "$_dev" || true
-    ip -6 neigh flush dev "$_dev" >/dev/null 2>&1 || true
-    ifdown "${_iface}_6" >/dev/null 2>&1 || true
-    sleep 2
-    ensure_device_link_local "$_dev" || true
-    ifup "${_iface}_6" >/dev/null 2>&1 || true
-
-    _elapsed=0
-    while [ "$_elapsed" -le "$IPV6_RECOVERY_WAIT" ]; do
-        if check_ipv6_ready "$_iface"; then
-            log "${_iface}: IPv6 已恢复，用时 ${_elapsed}s"
-            [ -x /etc/init.d/odhcpd ] && /etc/init.d/odhcpd restart >/dev/null 2>&1 || true
-            return 0
-        fi
-        [ "$_elapsed" -ge "$IPV6_RECOVERY_WAIT" ] && break
-        sleep 10
-        _elapsed=$((_elapsed + 10))
-    done
-    log "${_iface}: IPv6 独立恢复 ${IPV6_RECOVERY_WAIT}s 后仍为 ${IPV6_STATUS}；6小时内不重复扰动"
-    return 1
-}
-
-retry_ok() {
-    local _iface="$1" _count _last _window _now _elapsed _remaining
-
-    RETRY_COUNT=0
-    RETRY_WINDOW_START=0
-    RETRY_BLOCK_REASON=""
-    _count="$(state_get "$_iface" c)"
-    _last="$(state_get "$_iface" t)"
-    _window="$(state_get "$_iface" w)"
-    _now="$(date +%s)"
-
-    is_uint "$_count" || _count=0
-    if ! is_uint "$_window"; then
-        _window="$_now"
-        _count=0
-    elif [ "$_now" -lt "$_window" ] || [ $((_now - _window)) -ge "$RETRY_WINDOW" ]; then
-        _window="$_now"
-        _count=0
-    fi
-
-    if is_uint "$_last"; then
-        if [ "$_now" -lt "$_last" ]; then
-            _last=0
-            _window="$_now"
-            _count=0
-        else
-            _elapsed=$((_now - _last))
-            if [ "$_elapsed" -lt "$COOLDOWN" ]; then
-                _remaining=$((COOLDOWN - _elapsed))
-                RETRY_BLOCK_REASON="cooldown ${_remaining}s"
-                return 1
-            fi
-        fi
-    fi
-
-    if [ "$_count" -ge "$MAX_RETRIES" ]; then
-        _remaining=$((RETRY_WINDOW - (_now - _window)))
-        [ "$_remaining" -lt 0 ] && _remaining=0
-        RETRY_BLOCK_REASON="budget ${_count}/${MAX_RETRIES}, reset in ${_remaining}s"
-        return 1
-    fi
-
-    RETRY_COUNT="$_count"
-    RETRY_WINDOW_START="$_window"
-    return 0
-}
-
-do_cfun() {
-    local _iface="$1" _count _now _window _rc
-
-    _now="$(date +%s)"
-    _count=$((RETRY_COUNT + 1))
-    _window="$RETRY_WINDOW_START"
-    is_uint "$_window" || _window="$_now"
-
-    log "${_iface}: IPv4 连续异常且轻量续租无效；执行最后手段 CFUN ${_count}/${MAX_RETRIES}; operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}; ${BAND_STATUS}; health=${HEALTH_REASON}"
-    if atsd_cli -i "$_iface" -c 'AT+CFUN=1,1' -w 5000 >/dev/null 2>&1; then
-        _rc=0
-    else
-        _rc=$?
-    fi
-    state_write_retry "$_iface" "$_count" "$_now" "$_window" 0 || { log "${_iface}: 写入 CFUN 重试状态失败"; return 1; }
-    if [ "$_rc" -ne 0 ]; then
-        log "${_iface}: AT+CFUN returned rc=${_rc}; retry budget retained"
-        return "$_rc"
-    fi
-    if wait_for_ipv4_recovery "$_iface"; then
-        state_set_health_failures "$_iface" 0 || { log "${_iface}: 清零健康失败计数写入失败"; return 1; }
-        recover_ipv6_if_needed "$_iface" || true
-        return 0
-    fi
-    return 1
-}
-
-process() {
-    local _iface="$1" _desc="$2" _health_rc _failures _next_failures _old_failures _count _last _ipv6 _stored_band _stored_samples
-
-    if interface_disabled "$_iface"; then
-        if [ "$EXEC_MODE" = "apply" ] && state_has "$_iface"; then
-            state_clear "$_iface" || { log "${_iface}(${_desc}): 清理旧状态失败"; return 1; }
-            log "${_iface}(${_desc}): 接口已禁用，旧状态已清理"
-        fi
-        echo "${_iface}=DISABLED"
-        return 0
-    fi
-
-    detect_operator "$_iface" >/dev/null 2>&1 || true
-    check_band "$_iface" || true
-    check_ipv4_health "$_iface"
-    _health_rc=$?
-
-    _failures="$(state_get "$_iface" f)"
-    _count="$(state_get "$_iface" c)"
-    _last="$(state_get "$_iface" t)"
-    is_uint "$_failures" || _failures=0
-    is_uint "$_count" || _count=0
-    is_uint "$_last" || _last=0
-    if check_ipv6_ready "$_iface"; then _ipv6="ready"; else _ipv6="$IPV6_STATUS"; fi
-
-    if [ "$EXEC_MODE" != "apply" ]; then
-        if [ "$_health_rc" -eq 0 ]; then
-            _stored_band="$(state_get "$_iface" b)"
-            _stored_samples="$(state_get "$_iface" n)"
-            if [ "$_stored_band" = "$BAND_KEY" ] && is_uint "$_stored_samples"; then
-                OBS_COUNT="$_stored_samples"
-            else
-                OBS_COUNT=1
-            fi
-            maybe_restore_preferred_band "$_iface" || true
-            echo "${_iface}=HOLD mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON} ipv6=${_ipv6} retries=${_count}/${MAX_RETRIES} last=${_last}"
-        else
-            _next_failures=$((_failures + 1))
-            [ "$_next_failures" -gt "$HEALTH_FAILURE_LIMIT" ] && _next_failures="$HEALTH_FAILURE_LIMIT"
-            if [ "$_next_failures" -lt "$HEALTH_FAILURE_LIMIT" ]; then
-                echo "${_iface}=WAIT mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON} failures=${_next_failures}/${HEALTH_FAILURE_LIMIT} ipv6=${_ipv6}"
-            elif retry_ok "$_iface"; then
-                echo "${_iface}=WOULD-SOFT-RECOVER-THEN-CFUN mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON}"
-            else
-                echo "${_iface}=BLOCKED mode=${EXEC_MODE} operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} health=${HEALTH_STATUS}:${HEALTH_REASON} block=${RETRY_BLOCK_REASON}"
-            fi
-        fi
-        return 0
-    fi
-
-    record_band_observation "$_iface" || { log "${_iface}(${_desc}): 频段观测状态写入失败"; return 1; }
-
-    if [ "$_health_rc" -eq 0 ]; then
-        maybe_restore_preferred_band "$_iface" || true
-        if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
-            echo "${_iface}=AUTO-RESTORE-PENDING sim=${PREFERENCE_LOCK_SIM}"
-            return 1
-        fi
-        if [ "$PREFERENCE_ACTION" != "none" ]; then
-            check_band "$_iface" || true
-            check_ipv4_health "$_iface"
-            _health_rc=$?
-            record_band_observation "$_iface" || { log "${_iface}(${_desc}): 恢复后频段状态写入失败"; return 1; }
-            if check_ipv6_ready "$_iface"; then _ipv6="ready"; else _ipv6="$IPV6_STATUS"; fi
-        fi
-    fi
-
-    if [ "$_health_rc" -eq 0 ]; then
-        _old_failures="$_failures"
-        state_set_health_failures "$_iface" 0 || { log "${_iface}(${_desc}): 清零健康状态失败"; return 1; }
-        if [ -n "$OBS_PREVIOUS_BAND" ] && [ "$OBS_PREVIOUS_BAND" != "$BAND_KEY" ]; then
-            log "${_iface}(${_desc}): 频段变化 ${OBS_PREVIOUS_BAND} -> ${BAND_KEY}；IPv4健康，保持不切换；operator=${OPERATOR_NAME}; ${BAND_STATUS}"
-        elif [ "$_old_failures" -gt 0 ]; then
-            log "${_iface}(${_desc}): IPv4 已恢复；失败计数 ${_old_failures} -> 0；保持当前频段 ${BAND_KEY}"
-        fi
-        echo "${_iface}=HEALTHY HOLD operator=${OPERATOR_NAME}/${OPERATOR_PROFILE} band=${BAND_KEY} ${HEALTH_REASON} ipv6=${_ipv6}"
-        recover_ipv6_if_needed "$_iface" || true
-        return 0
-    fi
-
-    _next_failures=$((_failures + 1))
-    [ "$_next_failures" -gt "$HEALTH_FAILURE_LIMIT" ] && _next_failures="$HEALTH_FAILURE_LIMIT"
-    state_set_health_failures "$_iface" "$_next_failures" || { log "${_iface}(${_desc}): 健康失败状态写入失败"; return 1; }
-    log "${_iface}(${_desc}): IPv4异常 ${_next_failures}/${HEALTH_FAILURE_LIMIT}; operator=${OPERATOR_NAME}/${OPERATOR_PROFILE}; band=${BAND_KEY}; reason=${HEALTH_REASON}"
-    if [ "$_next_failures" -lt "$HEALTH_FAILURE_LIMIT" ]; then
-        PROCESS_RESULT="attention"
-        echo "${_iface}=UNHEALTHY WAIT failures=${_next_failures}/${HEALTH_FAILURE_LIMIT} reason=${HEALTH_REASON}"
-        return 1
-    fi
-
-    if soft_ipv4_recover "$_iface"; then
-        state_set_health_failures "$_iface" 0 || { log "${_iface}(${_desc}): 恢复后健康状态写入失败"; return 1; }
-        recover_ipv6_if_needed "$_iface" || true
-        echo "${_iface}=RECOVERED WITHOUT-CFUN"
-        return 0
-    fi
-
-    if ! retry_ok "$_iface"; then
-        log "${_iface}(${_desc}): CFUN 已阻止；${RETRY_BLOCK_REASON}"
-        PROCESS_RESULT="attention"
-        echo "${_iface}=UNHEALTHY BLOCKED ${RETRY_BLOCK_REASON}"
-        return 1
-    fi
-
-    if do_cfun "$_iface"; then
-        echo "${_iface}=RECOVERED CFUN"
-        return 0
-    fi
-    echo "${_iface}=UNHEALTHY CFUN-FAILED"
-    return 1
-}
-
-if [ "${NRADIO_SMART_BAND_LIB_ONLY:-0}" = "1" ]; then
-    return 0 2>/dev/null || exit 0
-fi
-
-case "${1:-}" in
-    ''|apply|--apply) EXEC_MODE="apply" ;;
-    manual|--manual) EXEC_MODE="apply"; MANUAL_RUN=1 ;;
-    status|--status) EXEC_MODE="status" ;;
-    dry-run|--dry-run) EXEC_MODE="dry-run" ;;
-    *) echo "usage: $0 [apply|manual|status|dry-run]" >&2; exit 2 ;;
-esac
-
-ensure_runtime_dir || { echo "智能频段运行路径异常：$RUNTIME_DIR" >&2; exit 1; }
-
-acquire_lock() {
-    local _pid _stored_start _self_start
-    [ ! -e "$STOP_FILE" ] || return 1
-    _self_start="$(process_starttime "$$" 2>/dev/null || true)"
-    [ -n "$_self_start" ] || return 2
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        [ -d "$LOCK_DIR" ] && [ ! -L "$LOCK_DIR" ] || return 2
-        _pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
-        _stored_start="$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null || true)"
-        is_uint "$_pid" && [ "$_pid" -gt 1 ] && is_uint "$_stored_start" || return 2
-        if [ "$_stored_start" = "$(process_starttime "$_pid")" ] && kill -0 "$_pid" 2>/dev/null; then
-            log "已有实例运行 pid=${_pid}，跳过本轮"
-            return 1
-        fi
-        mkdir "$LOCK_DIR/reap" 2>/dev/null || return 2
-        if [ "$(cat "$LOCK_PID_FILE" 2>/dev/null)" != "$_pid" ] ||
-           [ "$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null)" != "$_stored_start" ] ||
-           { [ "$(process_starttime "$_pid")" = "$_stored_start" ] && kill -0 "$_pid" 2>/dev/null; }; then
-            rmdir "$LOCK_DIR/reap" 2>/dev/null
-            return 2
-        fi
-        rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE"
-        rmdir "$LOCK_DIR/reap" 2>/dev/null || return 2
-        rmdir "$LOCK_DIR" 2>/dev/null || return 2
-        mkdir "$LOCK_DIR" 2>/dev/null || return 2
-    fi
-    if ! { chmod 700 "$LOCK_DIR" &&
-           printf '%s\n' "$_self_start" > "$LOCK_STARTTIME_FILE" &&
-           printf '%s\n' "$$" > "$LOCK_PID_FILE"; }; then
-        rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE"
-        rmdir "$LOCK_DIR" 2>/dev/null
-        return 2
-    fi
-    return 0
-}
-
-release_lock() {
-    local _pid _stored_start _self_start _try
-    _pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
-    _stored_start="$(cat "$LOCK_STARTTIME_FILE" 2>/dev/null || true)"
-    _self_start="$(process_starttime "$$" 2>/dev/null || true)"
-    [ "$_pid" = "$$" ] && [ -n "$_stored_start" ] && [ "$_stored_start" = "$_self_start" ] || return 1
-    rm -f "$LOCK_PID_FILE" "$LOCK_STARTTIME_FILE" 2>/dev/null || return 1
-    for _try in 1 2 3; do
-        rmdir "$LOCK_DIR" 2>/dev/null && return 0
-        sleep 1
-    done
-    return 1
-}
-
-if [ "$EXEC_MODE" = "apply" ] && [ "$MANUAL_RUN" != "1" ]; then
-    HOUR="$(date +%H)"
-    if [ "$HOUR" -lt "$DAY_START" ] || [ "$HOUR" -ge "$DAY_END" ]; then
-        exit 0
-    fi
-fi
-
-if [ "$EXEC_MODE" = "apply" ]; then
-    acquire_lock
-    smart_band_lock_rc="$?"
-    case "$smart_band_lock_rc" in
-        0) ;;
-        1) [ "$MANUAL_RUN" = "1" ] && exit 3; exit 0 ;;
-        *) exit 1 ;;
-    esac
-fi
-
-write_run_result() {
-    local _tmp="$LAST_RUN_FILE.tmp.$$"
-    (umask 077; printf '%s\t%s\t%s\t%s\t%s\n' "$RUN_SOURCE" "$RUN_STARTED" "$2" "$1" "$3" > "$_tmp") &&
-        mv -f "$_tmp" "$LAST_RUN_FILE" && return 0
-    rm -f "$_tmp"
-    log "最近执行结果写入失败"
-    return 1
-}
-
-cleanup() {
-    local _rc="$?"
-    [ -n "$TMP_FILE" ] && rm -f "$TMP_FILE"
-    if [ "$EXEC_MODE" = "apply" ]; then
-        if [ -e "$STOP_FILE" ]; then RUN_STATE="stopped"; fi
-        if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
-            restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" ||
-                { RUN_STATE="failed"; _rc=1; }
-        fi
-        if [ "$RUN_STARTED" -gt 0 ]; then
-            write_run_result "$RUN_STATE" "$(date +%s)" "$_rc" || true
-        fi
-        release_lock
-    fi
-}
-trap cleanup EXIT
-trap 'RUN_STATE="interrupted"; exit 1' INT TERM HUP
-
-if [ "$EXEC_MODE" = "apply" ]; then
-    [ ! -e "$STOP_FILE" ] || exit 0
-    RUN_STARTED="$(date +%s)"
-    [ "$MANUAL_RUN" = "1" ] && RUN_SOURCE="manual"
-    write_run_result "running" 0 0 || true
-    if [ -e "$PENDING_AUTO_FILE" ]; then
-        read -r PREFERENCE_LOCK_IFACE PREFERENCE_LOCK_SIM PREFERENCE_LOCK_SNAPSHOT < "$PENDING_AUTO_FILE"
-        case "$PREFERENCE_LOCK_IFACE" in cpe|cpe1) ;; *) PREFERENCE_LOCK_IFACE=""; exit 1 ;; esac
-        is_uint "$PREFERENCE_LOCK_SIM" && [ "$PREFERENCE_LOCK_SIM" -gt 0 ] || { PREFERENCE_LOCK_IFACE=""; exit 1; }
-        restore_auto_band "$PREFERENCE_LOCK_IFACE" "$PREFERENCE_LOCK_SIM" || exit 1
-    fi
-fi
-
-RESULT=0
-RUN_STATE="success"
-for smart_band_iface in cpe1 cpe; do
-    if [ -n "$PREFERENCE_LOCK_IFACE" ]; then
-        RESULT=1
-        RUN_STATE="failed"
-        break
-    fi
-    PROCESS_RESULT="failed"
-    if [ "$smart_band_iface" = "cpe1" ]; then smart_band_desc="蜂窝接口2"; else smart_band_desc="蜂窝接口1"; fi
-    if ! process "$smart_band_iface" "$smart_band_desc"; then
-        RESULT=1
-        if [ "$RUN_STATE" != "failed" ]; then RUN_STATE="$PROCESS_RESULT"; fi
-    fi
-done
-exit "$RESULT"
-EOF_NRADIO_SMART_BAND_V7
-
-    if ! sh -n "$smart_band_tmp" >/dev/null 2>&1; then
-        rm -f "$smart_band_tmp" 2>/dev/null || true
-        die "内嵌智能频段脚本语法校验失败，拒绝覆盖"
-    fi
-
-    if [ -f "$NRADIO_SMART_BAND_SCRIPT" ] && command -v cmp >/dev/null 2>&1 && cmp -s "$smart_band_tmp" "$NRADIO_SMART_BAND_SCRIPT"; then
-        rm -f "$smart_band_tmp"
-        chmod 700 "$NRADIO_SMART_BAND_SCRIPT"
-        log "脚本:   已是内嵌最新版 v7"
-        return 0
-    fi
-
-    chmod 700 "$smart_band_tmp"
-    mv -f "$smart_band_tmp" "$NRADIO_SMART_BAND_SCRIPT"
-    log "脚本:   已从总脚本释放到 $NRADIO_SMART_BAND_SCRIPT"
-    log "校验:   Shell 语法通过"
-}
-
-restart_nradio_smart_band_cron() {
-    if [ -x /etc/init.d/cron ]; then
-        /etc/init.d/cron restart >/dev/null 2>&1 || die "crond 重启失败"
-        return 0
-    fi
-    if command -v killall >/dev/null 2>&1 && killall -HUP crond >/dev/null 2>&1; then
-        return 0
-    fi
-    die "未找到可用的 crond 重载方式"
-}
-
-update_nradio_smart_band_cron() {
-    smart_band_cron_mode="${1:-install}"
-    smart_band_cron_dir="$(dirname "$NRADIO_SMART_BAND_CRON_FILE")"
-    smart_band_cron_tmp="${NRADIO_SMART_BAND_CRON_FILE}.tmp.$$"
-    smart_band_existing_line=""
-
-    mkdir -p "$smart_band_cron_dir"
-    : > "$smart_band_cron_tmp"
-    if [ -f "$NRADIO_SMART_BAND_CRON_FILE" ]; then
-        while IFS= read -r smart_band_existing_line || [ -n "$smart_band_existing_line" ]; do
-            case "$smart_band_existing_line" in
-                *"$NRADIO_SMART_BAND_SCRIPT"*|*"$NRADIO_SMART_BAND_CRON_MARKER"*|*"$NRADIO_SMART_BAND_LEGACY_CRON_MARKER"*)
-                    continue
-                    ;;
-            esac
-            printf '%s\n' "$smart_band_existing_line" >> "$smart_band_cron_tmp"
-        done < "$NRADIO_SMART_BAND_CRON_FILE"
-    fi
-    if [ "$smart_band_cron_mode" = 'install' ]; then
-        printf '%s\n' "$NRADIO_SMART_BAND_CRON_LINE" >> "$smart_band_cron_tmp"
-    fi
-
-    if [ -f "$NRADIO_SMART_BAND_CRON_FILE" ] && command -v cmp >/dev/null 2>&1 && cmp -s "$smart_band_cron_tmp" "$NRADIO_SMART_BAND_CRON_FILE"; then
-        rm -f "$smart_band_cron_tmp"
-        log "定时:   配置未变化"
-        return 0
-    fi
-
-    backup_file "$NRADIO_SMART_BAND_CRON_FILE"
-    chmod 600 "$smart_band_cron_tmp"
-    mv -f "$smart_band_cron_tmp" "$NRADIO_SMART_BAND_CRON_FILE"
-    restart_nradio_smart_band_cron
-    if [ "$smart_band_cron_mode" = 'install' ]; then
-        log "定时:   每 30 分钟检查；脚本仅在 05:00-21:59 执行恢复"
-    else
-        log "定时:   已移除智能频段任务"
-    fi
-}
-
-install_nradio_smart_band() {
-    require_root
-    require_nradio_smart_band_supported_model
-    write_nradio_smart_band_script
-    rm -f /var/run/nradio-smart-band/stopping || die "无法清除智能频段停止标记"
-    update_nradio_smart_band_cron install
-    log "结果:   智能频段 v7 已安装并启用"
-}
-
-remove_nradio_smart_band() {
-    local _runtime_dir="/var/run/nradio-smart-band" _lock _pid _start _elapsed
-    require_root
-    require_nradio_smart_band_supported_model
-
-    [ ! -L "$_runtime_dir" ] || die "智能频段运行目录为符号链接，卸载中止"
-    mkdir -p "$_runtime_dir" || die "无法访问智能频段运行目录"
-    chmod 700 "$_runtime_dir" || die "无法保护智能频段运行目录"
-    [ ! -L "$_runtime_dir/stopping" ] || die "智能频段停止标记异常"
-    (umask 077; : > "$_runtime_dir/stopping") || die "无法写入智能频段停止标记"
-    update_nradio_smart_band_cron remove
-    for _lock in "$NRADIO_SMART_BAND_LOCK_DIR" /tmp/nradio-smart-band.lock; do
-        [ -e "$_lock" ] || [ -L "$_lock" ] || continue
-        [ -d "$_lock" ] && [ ! -L "$_lock" ] || die "智能频段锁路径异常: $_lock"
-        _pid="$(cat "$_lock/pid" 2>/dev/null || true)"
-        _start="$(cat "$_lock/starttime" 2>/dev/null || true)"
-        case "$_pid:$_start" in *[!0-9:]*|:*|*:) die "智能频段锁正在初始化或身份不完整；保留文件，请稍后重试" ;; esac
-        if [ "$_start" = "$(process_starttime "$_pid")" ] && kill -0 "$_pid" 2>/dev/null; then
-            tr '\000' '\n' < "/proc/$_pid/cmdline" | grep -Fxq "$NRADIO_SMART_BAND_SCRIPT" ||
-                die "锁内 PID 不是智能频段脚本，卸载中止: $_pid"
-            log "停止:   等待智能频段实例 $_pid 完成自动选频回退并退出"
-            kill -TERM "$_pid" 2>/dev/null || true
-            _elapsed=0
-            while [ "$_start" = "$(process_starttime "$_pid")" ] && kill -0 "$_pid" 2>/dev/null; do
-                [ "$_elapsed" -lt 120 ] || die "智能频段实例尚未退出；已停定时任务，保留脚本和状态，请稍后重试"
-                sleep 1
-                _elapsed=$((_elapsed + 1))
-            done
-        fi
-        if [ -d "$_lock" ]; then
-            reclaim_initialized_task_lock "$_lock" lock_pid_matches_owner ||
-                die "智能频段锁尚未释放或身份已变化；保留脚本和状态"
-        fi
-    done
-    [ ! -e "$_runtime_dir/pending_auto" ] || die "仍有未完成的自动选频回退；保留脚本和状态，请先核对原 SIM 并恢复"
-    # 在删文件期间持有有效运行锁，阻止并发控制。
-    mkdir "$NRADIO_SMART_BAND_LOCK_DIR" || die "智能频段锁被其他实例获取，卸载中止"
-    write_lock_identity "$NRADIO_SMART_BAND_LOCK_DIR" || die "无法写入智能频段卸载锁"
-    rm -f "$NRADIO_SMART_BAND_SCRIPT" "$NRADIO_SMART_BAND_STATE_FILE" "$NRADIO_SMART_BAND_PREFERENCE_STATE_FILE" "$NRADIO_SMART_BAND_LEGACY_PREFERENCE_STATE_FILE" "$NRADIO_SMART_BAND_RUNTIME_LOG" /tmp/nradio_band_state /tmp/nradio_band_preference_state_v2 /tmp/nradio-smart-band.log 2>/dev/null || true
-    rm -f "$NRADIO_SMART_BAND_LOCK_DIR/pid" "$NRADIO_SMART_BAND_LOCK_DIR/starttime" /tmp/nradio-smart-band.lock/pid /tmp/nradio-smart-band.lock/starttime 2>/dev/null || true
-    rmdir "$NRADIO_SMART_BAND_LOCK_DIR" 2>/dev/null || true
-    # 停止标记保留到重新安装，防止卸载前已载入内存的任务再次执行。
-    rmdir /tmp/nradio-smart-band.lock 2>/dev/null || true
-    log "结果:   智能频段脚本、定时任务及运行状态已移除；停止标记在重新安装时解除"
-}
-
 run_nradio_smart_band_selfcheck() {
-    smart_band_failures=0
-    smart_band_warnings=0
-    smart_band_cron_count=0
-    smart_band_legacy_cron_count=0
-
-    selfcheck_print_header "智能频段"
-    if [ ! -e "$NRADIO_SMART_BAND_SCRIPT" ] && \
-       ! grep -Fq "$NRADIO_SMART_BAND_SCRIPT" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null && \
-       ! grep -Fq "$NRADIO_SMART_BAND_CRON_MARKER" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null && \
-       ! grep -Fq "$NRADIO_SMART_BAND_LEGACY_CRON_MARKER" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null; then
-        log "summary:  SKIP (optional feature not installed)"
-        set_last_selfcheck_status SKIP 0 0
-        return 0
-    fi
-
-    if [ -x "$NRADIO_SMART_BAND_SCRIPT" ]; then
-        log "脚本:   $NRADIO_SMART_BAND_SCRIPT = 可执行"
-        if sh -n "$NRADIO_SMART_BAND_SCRIPT" >/dev/null 2>&1; then
-            log "语法:   PASS"
-        else
-            log "语法:   FAIL"
-            smart_band_failures=$((smart_band_failures + 1))
-        fi
-        log "版本:   v7"
-    else
-        log "脚本:   FAIL 缺失或不可执行"
-        smart_band_failures=$((smart_band_failures + 1))
-    fi
-
-    if [ -f "$NRADIO_SMART_BAND_CRON_FILE" ]; then
-        smart_band_cron_count="$(grep -Fc "$NRADIO_SMART_BAND_SCRIPT" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null || true)"
-        smart_band_legacy_cron_count="$(grep -Fc "$NRADIO_SMART_BAND_LEGACY_CRON_MARKER" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null || true)"
-    fi
-    case "$smart_band_cron_count" in
-        ''|*[!0-9]*) smart_band_cron_count=0 ;;
-    esac
-    case "$smart_band_legacy_cron_count" in
-        ''|*[!0-9]*) smart_band_legacy_cron_count=0 ;;
-    esac
-    if [ "$smart_band_cron_count" -eq 1 ] && \
-       [ "$smart_band_legacy_cron_count" -eq 0 ] && \
-       grep -Fxq "$NRADIO_SMART_BAND_CRON_LINE" "$NRADIO_SMART_BAND_CRON_FILE" 2>/dev/null; then
-        log "定时:   PASS 05:00-21:59 每 30 分钟"
-    else
-        log "定时:   FAIL task=$smart_band_cron_count legacy=$smart_band_legacy_cron_count"
-        smart_band_failures=$((smart_band_failures + 1))
-    fi
-
-    if [ -x "$NRADIO_SMART_BAND_SCRIPT" ]; then
-        if smart_band_status_output="$(sh "$NRADIO_SMART_BAND_SCRIPT" status 2>&1)"; then
-            log "状态:   PASS"
-        else
-            smart_band_status_rc="$?"
-            log "状态:   WARN 退出码=$smart_band_status_rc"
-            smart_band_warnings=$((smart_band_warnings + 1))
-        fi
-        [ -n "${smart_band_status_output:-}" ] && printf '%s\n' "$smart_band_status_output"
-    fi
-
-    if [ "$smart_band_failures" -gt 0 ]; then
-        log "summary:  FAIL ($smart_band_failures fail, $smart_band_warnings warn)"
-        set_last_selfcheck_status FAIL "$smart_band_failures" "$smart_band_warnings"
-    elif [ "$smart_band_warnings" -gt 0 ]; then
-        log "summary:  WARN ($smart_band_warnings)"
-        set_last_selfcheck_status WARN 0 "$smart_band_warnings"
-    else
-        log "summary:  PASS"
-        set_last_selfcheck_status PASS 0 0
-    fi
+    log "智能频段旧任务已退役；当前功能为独立基站时段监听。"
 }
 
 openwrt_luci_8080_current_model() {
@@ -65184,6 +57694,7 @@ fetch_openwrt_luci_8080_package() {
         log "复用安装包: $cache_key"
         cp "$cache_file" "$cache_dest" || die "读取 8080 安装包失败"
     else
+        require_c2000max_storage_ready
         download_from_urls "$cache_dest" "$@" || die "下载 8080 安装包失败: $cache_key"
         # Keep only completed downloads; a partial transfer is never a cache hit.
         cp "$cache_dest" "$cache_file.part" && mv -f "$cache_file.part" "$cache_file" || die "保存 8080 安装包失败"
@@ -66532,6 +59043,346 @@ EOF_ISTORE_ARGON_DEPENDENCY
     lua /usr/libexec/nradio-istore-8080/storage.lua --run "$OPENWRT_LUCI_8080_ROOT" opkg install "$istore_argon_fixed" || die "iStore Argon 依赖安装失败"
 }
 
+install_quickstart_8080_home() {
+    local qs_work qs_stage qs_data qs_kind qs_file qs_repo qs_live_work qs_wait qs_arch
+    require_c2000max_storage_ready
+    require_root
+    require_openwrt_luci_8080_supported_model
+    prepare_openwrt_luci_8080_storage
+    [ -s "$OPENWRT_LUCI_8080_CGI" ] || die "请先安装 8080 页面"
+    if [ "$OPENWRT_LUCI_8080_STORAGE_LABEL" = rootfs_2nd ]; then
+        qs_work="$ROOTFS_2ND_STORAGE_APPS_DIR/istore-root/.nradio-quickstart"
+        qs_data="$ROOTFS_2ND_STORAGE_APPS_DIR/quickstart-home"
+    else
+        qs_work="$OPENWRT_LUCI_8080_OVERLAY_APPS_DIR/quickstart-home/.install"
+        qs_data="$OPENWRT_LUCI_8080_OVERLAY_APPS_DIR/quickstart-home"
+        ensure_free_space_bytes /overlay 134217728 "QuickStart overlay"
+    fi
+    qs_arch="$(get_primary_arch)"
+    case "$qs_arch" in ''|*[!A-Za-z0-9_-]*) die "无法识别 QuickStart 软件包架构" ;; esac
+    qs_stage="$qs_work/build.$$"
+    mkdir -p "$qs_stage" "$qs_data/Configs" "$qs_data/Caches" "$qs_data/Public/Downloads"
+    log "QuickStart 首页适配：机型 $openwrt_luci_8080_storage_model，架构 $qs_arch"
+    log "安装位置: $OPENWRT_LUCI_8080_STORAGE_LABEL；数据及缓存: $qs_data"
+    for qs_kind in core luci zh; do
+        case "$qs_kind" in
+            core) qs_file="quickstart_0.13.0-1_${qs_arch}.ipk"; qs_repo="$qs_arch/nas" ;;
+            luci) qs_file='luci-app-quickstart_0.12.10-r1_all.ipk'; qs_repo='all/nas_luci' ;;
+            zh) qs_file='luci-i18n-quickstart-zh-cn_git-26.247.42887-c3af221_all.ipk'; qs_repo='all/nas_luci' ;;
+        esac
+        if [ ! -s "$qs_work/$qs_file" ]; then
+            curl -fL --connect-timeout 10 --max-time 60 -o "$qs_work/$qs_file.part" \
+                "https://repo.istoreos.com/repo/$qs_repo/$qs_file" ||
+            curl -fL --connect-timeout 10 --max-time 60 -o "$qs_work/$qs_file.part" \
+                "https://istore.istoreos.com/repo/$qs_repo/$qs_file" ||
+                die "下载 QuickStart 安装包失败：$qs_file"
+            mv -f "$qs_work/$qs_file.part" "$qs_work/$qs_file"
+        fi
+        mkdir -p "$qs_stage/$qs_kind/pkg" "$qs_stage/$qs_kind/control" "$qs_stage/$qs_kind/data"
+        extract_ipk_archive "$qs_work/$qs_file" "$qs_stage/$qs_kind/pkg"
+        tar -xzf "$qs_stage/$qs_kind/pkg/control.tar.gz" -C "$qs_stage/$qs_kind/control"
+        if [ "$qs_kind" = core ]; then
+            tar -xzf "$qs_stage/$qs_kind/pkg/data.tar.gz" -C "$qs_stage/$qs_kind/data" \
+                ./usr/sbin/quickstart ./usr/share/quickstart/manuf \
+                ./usr/libexec/quickstart/dhcpvalid.sh ./etc/config/quickstart ./etc/init.d/quickstart
+        else
+            tar -xzf "$qs_stage/$qs_kind/pkg/data.tar.gz" -C "$qs_stage/$qs_kind/data"
+        fi
+    done
+    lua - "$qs_stage" "$qs_data" <<'EOF_NRADIO_QUICKSTART_HOME'
+local fs = require "nixio.fs"
+local stage, data = assert(arg[1]), assert(arg[2])
+local function read(path) return assert(fs.readfile(path), path) end
+local function write(path, value) assert(fs.writefile(path, value), path) end
+local function replace(value, old, new)
+    local first, last = value:find(old, 1, true)
+    assert(first, "QuickStart 源码位置不符: " .. old)
+    return value:sub(1, first - 1) .. new .. value:sub(last + 1)
+end
+local names = {
+    core = { "quickstart", "nradio-quickstart-home" },
+    luci = { "luci-app-quickstart", "luci-app-nradio-quickstart-home" },
+    zh = { "luci-i18n-quickstart-zh-cn", "luci-i18n-nradio-quickstart-home-zh-cn" }
+}
+for kind, nameset in pairs(names) do
+    local path = stage .. "/" .. kind .. "/control/control"
+    local value = read(path)
+    value = replace(value, "Package: " .. nameset[1] .. "\n", "Package: " .. nameset[2] .. "\n")
+    value = value:gsub("\nVersion: ([^\n]+)", "\nVersion: %1+nradio6", 1)
+    local changed
+    value, changed = value:gsub("\nDepends: ([^\n]+)", function(deps)
+        local result, removed = {}, false
+        for dep in deps:gmatch("[^,]+") do
+            dep = dep:match("^%s*(.-)%s*$")
+            if kind == "core" and dep == "mdadm" then
+                removed = true
+            else
+                if kind == "luci" and dep == "quickstart" then dep = names.core[2] end
+                if kind == "zh" and dep == "luci-app-quickstart" then dep = names.luci[2] end
+                result[#result + 1] = dep
+            end
+        end
+        assert(kind ~= "core" or removed, "QuickStart RAID 依赖位置不符")
+        return "\nDepends: " .. table.concat(result, ", ")
+    end, 1)
+    assert(changed == 1, "QuickStart 依赖字段缺失")
+    value = value:gsub("\n+$", "") .. "\nConflicts: " .. nameset[1] ..
+        "\nX-NRadio-Edition: 8080-home-no-raid\n"
+    write(path, value)
+    if kind == "luci" or kind == "zh" then
+        -- Their postinst-pkg already runs the package's own uci-defaults.
+        -- default_postinst also commits EVERY config, including NROS marker
+        -- and lock files which are not UCI packages.
+        path = stage .. "/" .. kind .. "/control/postinst"
+        write(path, [[#!/bin/sh
+[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "${PKG_ROOT}" ] && [ "${PKG_ROOT}" != "/" ] && exit 0
+pkgname="$(basename "${0%.*}")"
+[ -f "/usr/lib/opkg/info/$pkgname.postinst-pkg" ] || exit 1
+. "/usr/lib/opkg/info/$pkgname.postinst-pkg"
+]])
+        assert(fs.chmod(path, "755"))
+    end
+end
+local core = stage .. "/core/data"
+write(core .. "/etc/config/quickstart", string.format([[
+config quickstart 'main'
+    option main_dir '%s'
+    option conf_dir '%s/Configs'
+    option tmp_dir '%s/Caches'
+    option pub_dir '%s/Public'
+    option dl_dir '%s/Public/Downloads'
+    option disable_update_check '1'
+
+config disabledisplay 'modules'
+    list module 'diskInfo'
+    list module 'storage'
+]], data, data, data, data, data))
+write(core .. "/etc/init.d/quickstart", [[#!/bin/sh /etc/rc.common
+START=92
+USE_PROCD=1
+start_service() {
+    local main_dir
+    config_load quickstart
+    config_get main_dir main main_dir
+    [ -n "$main_dir" ] || return 1
+    mkdir -p "$main_dir/Caches"
+    procd_open_instance
+    procd_set_param command /usr/sbin/quickstart serve --addr 127.0.0.1:3038 --unix /var/run/quickstart/local.sock
+    procd_set_param env TMPDIR="$main_dir/Caches"
+    procd_set_param stderr 1
+    procd_set_param respawn
+    procd_close_instance
+}
+]])
+assert(fs.chmod(core .. "/etc/init.d/quickstart", "755"))
+-- The home edition has no network/DHNS or disk hotplug defaults.
+local path = stage .. "/core/control/postinst-pkg"
+if fs.access(path) then write(path, "#!/bin/sh\nexit 0\n") end
+local lua_root = stage .. "/luci/data/usr/lib/lua/luci/"
+assert(fs.mkdirr(lua_root .. "model") or fs.stat(lua_root .. "model", "type") == "dir")
+path = lua_root .. "model/nradio_quickstart_network.lua"
+write(path, [=[local M = {}
+
+-- NROS cellular addresses belong to dynamic cpe[_4/_6] children. Its
+-- IPv4 default route may exist only in the kernel, not netifd's route list.
+function M.adapt(result)
+    local fs = require "nixio.fs"
+    local util = require "luci.util"
+    local dump = util.ubus("network.interface", "dump", {})
+    if type(dump) ~= "table" or type(dump.interface) ~= "table" then return end
+    local interfaces = dump.interface
+    local function device(item) return item.l3_device or item.device end
+    local function address(item, family)
+        if not item.up then return end
+        for _, addr in ipairs(item[family .. "-address"] or {}) do
+            if addr.address and (family == "ipv4" or addr.address:match("^[23]")) then
+                return addr
+            end
+        end
+    end
+    local function find(dev, family)
+        for _, item in ipairs(interfaces) do
+            if dev and device(item) == dev and address(item, family) then return item end
+        end
+    end
+    local ipv4, gateway, metric4
+    for line in (fs.readfile("/proc/net/route") or ""):gmatch("[^\n]+") do
+        local dev, dest, gw, flags, _, _, metric, mask =
+            line:match("^(%S+)%s+(%x+)%s+(%x+)%s+(%x+)%s+(%d+)%s+(%d+)%s+(%d+)%s+(%x+)")
+        local item = find(dev, "ipv4")
+        if item and dest == "00000000" and mask == "00000000" and
+           tonumber(flags, 16) % 2 == 1 and (not metric4 or tonumber(metric) < metric4) then
+            ipv4, metric4 = item, tonumber(metric)
+            local bytes = {}
+            for pos = 7, 1, -2 do bytes[#bytes + 1] = tonumber(gw:sub(pos, pos + 1), 16) end
+            gateway = table.concat(bytes, ".")
+        end
+    end
+    local ipv6, metric6
+    for line in (fs.readfile("/proc/net/ipv6_route") or ""):gmatch("[^\n]+") do
+        local fields = {}
+        for field in line:gmatch("%S+") do fields[#fields + 1] = field end
+        local item = find(fields[10], "ipv6")
+        local metric, flags = tonumber(fields[6], 16), tonumber(fields[9], 16)
+        if item and fields[1] == string.rep("0", 32) and fields[2] == "00" and
+           flags and flags % 2 == 1 and metric and
+           (not metric6 or metric < metric6 or
+            (metric == metric6 and ipv4 and device(item) == device(ipv4))) then
+            ipv6, metric6 = item, metric
+        end
+    end
+    if not ipv4 and not ipv6 then return end
+    if ipv4 then
+        local addr = address(ipv4, "ipv4")
+        result.defaultInterface = ipv4.interface
+        result.ipv4addr, result.ipv4mask = addr.address, addr.mask
+        result.proto, result.gateway = ipv4.proto, gateway
+        result.uptimeStamp = tonumber(ipv4.uptime) or 0
+    end
+    result.ipv6addr = ipv6 and address(ipv6, "ipv6").address or ""
+    local uci = require("luci.model.uci").cursor()
+    local dns, seen = {}, {}
+    local function add_dns(values)
+        if type(values) == "string" then
+            local list = {}
+            for value in values:gmatch("%S+") do list[#list + 1] = value end
+            values = list
+        end
+        for _, value in ipairs(values or {}) do
+            if not seen[value] then dns[#dns + 1], seen[value] = value, true end
+        end
+    end
+    local function dns_config(item)
+        if not item then return false end
+        local section = item.interface
+        if not uci:get("network", section) then section = section:gsub("_[46]$", "") end
+        local manual = item.proto == "static" or uci:get("network", section, "peerdns") == "0"
+        if manual then add_dns(uci:get("network", section, "dns")) end
+        add_dns(item["dns-server"])
+        return manual
+    end
+    local manual4, manual6 = dns_config(ipv4), dns_config(ipv6)
+    result.dnsList = dns
+    result.dnsProto = (manual4 or manual6) and "manual" or "auto"
+    -- Preserve QuickStart's real connectivity diagnosis; an address is not
+    -- evidence that DNS or Internet connectivity works.
+end
+
+return M
+]=])
+assert(loadfile(path))
+path = lua_root .. "controller/quickstart.lua"
+local source = replace(read(path), "function index()\n",
+    "function index()\n    if tostring(luci.http.getenv('SERVER_PORT')) ~= '8080' then return end\n")
+source = replace(source,
+    '        entry({"admin", "nas", "raid"}, call("quickstart_index", {index={"admin", "nas"}}), _("RAID"), 10).leaf = true\n', "")
+local count
+source, count = source:gsub("function auto_setup%(%)\n.-\nend", [[function auto_setup()
+    luci.http.status(409, "Unavailable")
+    luci.http.prepare_content("application/json")
+    luci.http.write_json({success=1, error="请通过 8080 iStore 安装软件，安装位置由机型和存储状态自动选择"})
+end]], 1)
+assert(count == 1, "QuickStart 自动安装入口位置不符")
+write(path, source)
+assert(loadfile(path))
+path = lua_root .. "controller/istore_backend.lua"
+source = replace(read(path), "function index()\n",
+    "function index()\n    if tostring(require('luci.http').getenv('SERVER_PORT')) ~= '8080' then return end\n")
+source = replace(source, "function istore_backend()", [[function istore_backend()
+  local uri = (http.getenv("REQUEST_URI") or ""):match("^[^?]*")
+  local parts = {}
+  for part in http.urldecode(uri):gmatch("[^/]+") do
+    if part == ".." then table.remove(parts)
+    elseif part ~= "." then parts[#parts+1] = part end
+  end
+  local path = "/" .. table.concat(parts, "/")
+  local function under(suffix)
+    local prefix = "/cgi-bin/luci/istore/" .. suffix
+    return path == prefix or path:sub(1, #prefix + 1) == prefix .. "/"
+  end
+  local reason
+  if under("raid") or under("nas/disk/erase") or under("nas/disk/init") or
+     under("nas/disk/initrest") or under("nas/disk/partition/format") or
+     under("nas/disk/partition/mount") then
+    reason = "当前 NRadio 首页版不支持 RAID 和磁盘初始化"
+  elseif under("app/install") or under("app/uninstall") or under("app/upgrade") then
+    reason = "请通过 8080 iStore 安装或管理软件，安装位置由机型和存储状态自动选择"
+  end
+  if reason then
+    http.status(409, "Unavailable")
+    http.prepare_content("application/json")
+    http.write_json({success=1, error=reason})
+    return
+  end
+]])
+source = replace(source, "  local body_buffer = linesrc(true)", [[  local body_buffer = linesrc(true)
+  if num == 200 and sdat ~= nil and http.getenv("REQUEST_METHOD") == "GET" and
+     path == "/cgi-bin/luci/istore/u/network/status" then
+    local body_source = chunked == 1 and chunksource(sock, body_buffer) or
+        ltn12.source.cat(ltn12.source.string(body_buffer), sock:blocksource())
+    local chunks = {}
+    local body_sink = ltn12.sink.table(chunks)
+    local complete = ltn12.pump.all(body_source, body_sink)
+    sock:close()
+    local body = table.concat(chunks)
+    local json = require "luci.jsonc"
+    local response = complete and json.parse(body)
+    if type(response) == "table" and (tonumber(response.success) or 0) == 0 and
+       type(response.result) == "table" then
+      local ok = pcall(require("luci.model.nradio_quickstart_network").adapt, response.result)
+      if ok then
+        http.write_json(response)
+        return
+      end
+    end
+    http.write(body)
+    return
+  end]])
+write(path, source)
+assert(loadfile(path))
+path = lua_root .. "view/quickstart/main.htm"
+source = replace(read(path), "<%+header%>", [[<%+header%>
+<div class="alert-message warning" style="margin:0 0 1em">
+QuickStart 首页版：磁盘管理及 RAID 功能已停用。安装软件请使用 <a href="/cgi-bin/luci/admin/store">iStore</a>。
+</div>]])
+write(path, source)
+assert(require("luci.template.parser").parse(path))
+EOF_NRADIO_QUICKSTART_HOME
+    [ "$?" -eq 0 ] || die "准备 QuickStart 首页适配包失败"
+    for qs_kind in core luci zh; do
+        tar -czf "$qs_stage/$qs_kind/pkg/control.tar.gz" -C "$qs_stage/$qs_kind/control" .
+        tar -czf "$qs_stage/$qs_kind/pkg/data.tar.gz" -C "$qs_stage/$qs_kind/data" .
+        (cd "$qs_stage/$qs_kind/pkg" && tar -czf "$qs_stage/$qs_kind.ipk" ./debian-binary ./data.tar.gz ./control.tar.gz)
+    done
+    if ! find /tmp/is-root/tmp/opkg-lists -type f 2>/dev/null | grep -q .; then
+        is-opkg update || die "更新 QuickStart 依赖软件源失败"
+    fi
+    if [ "$OPENWRT_LUCI_8080_STORAGE_LABEL" = rootfs_2nd ]; then
+        lua /usr/libexec/nradio-istore-8080/storage.lua --run "$OPENWRT_LUCI_8080_ROOT" opkg install \
+            "$qs_stage/core.ipk" "$qs_stage/luci.ipk" "$qs_stage/zh.ipk" || die "QuickStart 首页适配包安装失败"
+    else
+        mkdir -p "$qs_work/opkg-cache" "$qs_work/tmp"
+        is-opkg opkg --cache "$qs_work/opkg-cache" --tmp-dir "$qs_work/tmp" install \
+            "$qs_stage/core.ipk" "$qs_stage/luci.ipk" "$qs_stage/zh.ipk" || die "QuickStart 首页适配包安装失败"
+    fi
+    /etc/init.d/quickstart enable
+    /etc/init.d/quickstart restart
+    qs_wait=0
+    while ! /etc/init.d/quickstart running >/dev/null 2>&1; do
+        qs_wait=$((qs_wait + 1))
+        [ "$qs_wait" -lt 10 ] || die "QuickStart 后台启动失败，请查看 quickstart 服务日志"
+        sleep 1
+    done
+    qs_live_work="$WORKDIR"
+    WORKDIR="$qs_work/work.$$"
+    mkdir -p "$WORKDIR"
+    install_argon_8080 --yes
+    WORKDIR="$qs_live_work"
+    log "QuickStart 首页入口: http://$(openwrt_luci_8080_lan_ip):8080/cgi-bin/luci/admin/quickstart/"
+}
+
 write_openwrt_luci_8080_files() {
     local shared_static static_name
     prepare_openwrt_luci_8080_packages
@@ -66829,7 +59680,8 @@ end
 
 local main_menu = {
 	status = true, system = true, store = true,
-	services = true, network = true, logout = true
+	services = true, network = true, logout = true,
+	quickstart = true, network_guide = true, quickwifi = true
 }
 local system_menu_hidden = {
 	Secondsystem = true, clock_status = true, tasks = true,
@@ -67796,6 +60648,7 @@ configure_openwrt_luci_8080_uhttpd() {
 }
 
 install_openwrt_luci_8080() {
+    require_c2000max_storage_ready
     require_root
     require_openwrt_luci_8080_supported_model
     prepare_openwrt_luci_8080_storage
@@ -67902,6 +60755,7 @@ manage_openwrt_luci_8080() {
 
 install_argon_8080() {
     local configured_home argon_lan
+    require_c2000max_storage_ready
     require_root
     require_openwrt_luci_8080_supported_model
     prepare_openwrt_luci_8080_storage
@@ -68363,6 +61217,7 @@ ensure_argon_8080_istore() {
         log "iStore: 已安装，接入 8080 原生菜单"
         return 0
     fi
+    require_c2000max_storage_ready
     istore_installer="$WORKDIR/istore-reinstall.run"
     istore_url='https://raw.githubusercontent.com/linkease/openwrt-app-actions/main/applications/luci-app-systools/root/usr/share/systools/istore-reinstall.run'
     mkdir -p "$WORKDIR" || die "创建 iStore 安装临时目录失败"
@@ -87405,9 +80260,7 @@ run_menu_feature() {
             MENU_ACTION_COMPLETED='1'
             ;;
         4)
-            show_support_page_hint='1'
-            run_recorded_menu_feature "1 > 4" "AdGuardHome 安装" install_adguardhome
-            MENU_ACTION_COMPLETED='1'
+            adguardhome_install_menu
             ;;
         5)
             show_support_page_hint='1'
@@ -87532,6 +80385,10 @@ run_menu_feature() {
             run_recorded_menu_feature "4 > 4" "argon 主题（8080）" install_argon_8080
             MENU_ACTION_COMPLETED='1'
             ;;
+        36)
+            run_recorded_menu_feature "1 > 11" "OpenClash + AdGuard 联合设置" apply_openclash_adguard_preset
+            MENU_ACTION_COMPLETED='1'
+            ;;
         *)
             die_menu_input_issue "$feature_choice"
             ;;
@@ -87576,21 +80433,23 @@ common_plugin_menu() {
         print_menu_item 8 'Docker' 'C5800 系列 / C8-688 / C2000Ultra'
         print_menu_item 9 'MT5700 WebUI V3.0.0'
         print_menu_item 10 'Open-Box'
+        print_menu_item 11 'OpenClash + AdGuard 一键设置' '安装完成并导入 YAML 后使用'
         print_menu_item 0 '返回上级'
-        print_menu_prompt '0-10'
+        print_menu_prompt '0-11'
         read_category_choice
         case "$UI_READ_RESULT" in
             0) return 0 ;;
             1) submenu_feature='1' ;;
             2) submenu_feature='2' ;;
             3) submenu_feature='3' ;;
-            4) submenu_feature='4' ;;
+            4) adguardhome_install_menu; [ "${MENU_ACTION_COMPLETED:-0}" = '1' ] && return 0; continue ;;
             5) submenu_feature='5' ;;
             6) submenu_feature='17' ;;
             7) submenu_feature='18' ;;
             8) submenu_feature='22' ;;
             9) submenu_feature='30' ;;
             10) submenu_feature='34' ;;
+            11) submenu_feature='36' ;;
             *) die_menu_input_issue "$UI_READ_RESULT" ;;
         esac
         run_menu_feature "$submenu_feature"
@@ -89184,6 +82043,7 @@ verify_docker_install() {
 }
 
 install_docker_plugin() {
+    require_c2000max_storage_ready
     log_stage 1 6 "Docker 环境与存储盘检查"
     docker_require_supported_model
     game_accel_require_appcenter
@@ -89523,6 +82383,7 @@ qiyou_install_assets() {
 }
 
 qiyou_install_integrated() {
+    require_c2000max_storage_ready
     game_accel_require_appcenter
     confirm_or_exit "确认安装奇游联机宝官方脚本并接入 NRadio 应用商店吗？"
     command -v opkg >/dev/null 2>&1 || die "系统没有 opkg，无法按奇游官方方式安装依赖"
@@ -89887,6 +82748,7 @@ EOF_LEIGOD_INSTALL_COMPAT
 }
 
 leigod_install_integrated() {
+    require_c2000max_storage_ready
     game_accel_require_appcenter
     cat <<'EOF_LEIGOD_RISK'
 高风险提示：
@@ -90315,6 +83177,14 @@ if [ "${1:-}" = '--verify-argon8080-code' ]; then
     exit 0
 fi
 
+if [ "${1:-}" = '--install-quickstart8080' ]; then
+    require_root
+    acquire_script_lock
+    require_nradio_menu_environment
+    install_quickstart_8080_home
+    exit 0
+fi
+
 if [ "${1:-}" = '--install-argon8080' ]; then
     require_root
     acquire_script_lock
@@ -90350,6 +83220,60 @@ if [ "${1:-}" = '--repair-adguard-autostart' ]; then
         /etc/init.d/AdGuardHome start || die "AdGuardHome 启动失败"
     fi
     exit 0
+fi
+
+if [ "${1:-}" = '--repair-openclash-dns' ]; then
+    require_root
+    acquire_script_lock
+    require_nradio_oem_appcenter
+    mkdir -p "$WORKDIR" || die "无法创建工作目录"
+    ensure_hakimi_dns_antileak || die "哈基米 DNS 覆写应用失败，请查看 /tmp/openclash.log"
+    repair_dnsmasq_empty_upstream || die "dnsmasq 上游修复失败"
+    log "哈基米 DNS 安装修复已应用"
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-openclash-appcenter' ]; then
+    require_root
+    acquire_script_lock
+    require_nradio_oem_appcenter
+    oc_ver="$(get_installed_package_version luci-app-openclash 2>/dev/null || true)"
+    [ -n "$oc_ver" ] || die "哈基米尚未安装"
+    verify_file_exists /usr/lib/lua/luci/controller/openclash.lua "哈基米"
+    oc_list_sec="$(find_uci_section package_list luci-app-openclash)"
+    oc_size="$(uci -q get "appcenter.$oc_list_sec.size" 2>/dev/null || true)"
+    oc_size="${oc_size:-0}"
+    install_openclash_embedded_icon || die "哈基米图标写入失败"
+    refresh_openclash_appcenter_entry "$oc_ver" "$oc_size" "$OPENCLASH_ICON_NAME"
+    log "哈基米应用商店接入修补完成"
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-cpe-monitor-ui' ]; then
+    require_root
+    acquire_script_lock
+    repair_nradio_cpe_monitor_ui
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-smart-band-sampling' ]; then
+    require_root
+    acquire_script_lock
+    repair_nradio_smart_band_sampling
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-openclash-dashboard' ]; then
+    require_root
+    patch_openclash_dashboard_buttons || die "哈基米面板按钮修复失败"
+    log "哈基米面板与快捷操作按钮已修复，重新打开运行状态页生效"
+    exit 0
+fi
+
+if [ "${1:-}" = '--repair-openclash-mwan' ]; then
+    require_root
+    apply_openclash_adguard_preset --install-mwan
+    exit $?
 fi
 
 if [ "${1:-}" = '--repair-adguard-popup' ]; then
