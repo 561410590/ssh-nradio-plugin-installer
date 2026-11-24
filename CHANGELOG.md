@@ -1,5 +1,12 @@
 # Changelog
 
+## V3.3.5 - 2026-11-24（main 更新）
+
+- 适配 C5800-688 NROS 2.4.1，应用商店重装保留 `ext_effect`、`config_page` 等原厂字段。
+- 适配 Open-Box、EasyTier 和 DDNS-GO，修正 OpenList、MT5700 WebUI 和 AdGuardHome 的版本显示。
+- 修正 OpenVPN TUN 补装，首次设密可直接继续，无需重新挂载 `/proc`。
+- 更新国内域名清单下载源，并调整联合设置的同步与线路网关处理。
+
 ## V3.3.0 - 2026-10-19（main 更新，含 2026-10-20 修订）
 
 - 适配 C2000MAX NROS 2.3.5 的 SD 挂载路径 `/mnt/storage/data`，保留 MAX / Ultra 旧版路径与实际 SD 分区来源检查。
