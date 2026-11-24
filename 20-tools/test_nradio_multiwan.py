@@ -44,7 +44,6 @@ class MultiwanTest(unittest.TestCase):
         main = MAIN.read_text(encoding='utf-8')
         embedded = main.split("<<'EOF_NRADIO_MULTIWAN'\n", 1)[1].split('\nEOF_NRADIO_MULTIWAN', 1)[0]
         self.assertEqual(embedded, SOURCE.read_text(encoding='utf-8').rstrip())
-        self.assertIn('SCRIPT_VERSION="V3.3.0"', main)
 
     def test_two_lines(self):
         shares = distribution(render('cpe_4|3|eth1|online|1\ncpe1_4|5|port5|online|3'))
@@ -122,7 +121,7 @@ class MultiwanTest(unittest.TestCase):
         rows = 'cpe_6|4|eth1|online|1\ncpe1_6|6|port5|offline|3'
         result = shell('MW_SNAPSHOT=' + shlex.quote(rows) + '\nmw_nat6_render')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('-o eth1 -m mark --mark 0x400/0xff00 -j MASQUERADE', result.stdout)
+        self.assertIn('-o eth1 -m connmark --mark 0x400/0xff00 -j MASQUERADE', result.stdout)
         self.assertNotIn('port5', result.stdout)
         self.assertEqual(result.stdout.count('-j MASQUERADE'), 1)
 

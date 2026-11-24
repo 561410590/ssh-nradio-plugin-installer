@@ -131,6 +131,11 @@ mw_snapshot() {
 mw_native_policy() {
     local ipt="$1" policy="$2" marks mark id
     MW_NATIVE_RULES=$($ipt -w 5 -t mangle -S "$policy" 2>/dev/null) || return 1
+    # Native IPv6 overlap can bind source prefixes instead of using weights.
+    # That cannot implement a selected 1:3 (or N-WAN) distribution.
+    if [ "$ipt" = ip6tables ] && [ "$(uci -q get network.globals.net_kind)" = Overlap ]; then
+        case "$MW_NATIVE_RULES" in *' -s '*) return 1 ;; esac
+    fi
     marks=$(printf '%s\n' "$MW_NATIVE_RULES" | awk '{for(i=1;i<NF;i++) if($i=="--set-xmark") print $(i+1)}')
     [ -n "$marks" ] || return 1
     for mark in $marks; do
@@ -208,7 +213,9 @@ mw_nat6_render() {
         [ "$state" = online ] || continue
         case "$dev" in ''|-|*[!a-zA-Z0-9_.:-]*) return 1 ;; esac
         mark=$(printf '0x%x' "$((id * 256))")
-        printf -- '-A nr_mw_n6 -o %s -m mark --mark %s/0xff00 -j MASQUERADE\n' "$dev" "$mark"
+        # NROS forwarding statistics overwrite packet marks after routing;
+        # connmark retains the WAN selected for this connection.
+        printf -- '-A nr_mw_n6 -o %s -m connmark --mark %s/0xff00 -j MASQUERADE\n' "$dev" "$mark"
     done <<EOF_NAT6
 $MW_SNAPSHOT
 EOF_NAT6
@@ -261,7 +268,7 @@ mw_apply_family() {
         /^-A / && !/--comment "?nr-multiwan"? / {n++; if($0 ~ "--comment \"?" rule "\"? " && $NF==policy) {print n; exit}}')
     [ -n "$position" ] || return 1
     target=$(printf '%s\n' "$rules" | awk '/--comment "?nr-multiwan"? / {print $NF; exit}')
-    signature=$(printf 'native-policy-v1\n%s\n%s\n%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position" "$MW_NATIVE_POLICY" "$MW_NATIVE_RULES")
+    signature=$(printf 'native-policy-v2-connmark-nat6\n%s\n%s\n%s\n%s\n%s\n' "$MW_SNAPSHOT" "$MW_RULES" "$position" "$MW_NATIVE_POLICY" "$MW_NATIVE_RULES")
     if [ "$signature" = "$(cat "$MW_RUN/signature$af" 2>/dev/null)" ] &&
        $ipt -w 5 -t mangle -C mwan3_rules -m mark --mark 0/0xff00 -m comment --comment nr-multiwan -j "$target" 2>/dev/null &&
        $ipt -w 5 -t mangle -C "$target" -m mark --mark 0/0xff00 -j MARK --set-xmark 0xfe00/0xff00 2>/dev/null; then
